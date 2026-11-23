@@ -1359,13 +1359,19 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var handler = CreateTelemetryResourcesHandler(
-            new ResourceInfoJson { Name = "api", InstanceId = "abc", DisplayName = "api-abc", HasTraces = true },
-            new ResourceInfoJson { Name = "worker", HasLogs = true });
+            new ResourceInfoJson { Name = "api", InstanceId = "abc", HasTraces = true },
+            new ResourceInfoJson { Name = "worker", HasLogs = true },
+            // Persistent resources report their full runtime name as service.instance.id.
+            new ResourceInfoJson { Name = "persistent", InstanceId = "persistent-12345678", HasTraces = true },
+            new ResourceInfoJson { Name = "custom-service", InstanceId = "custom-instance", HasTraces = true });
         using var provider = CreateDescribeTestServices(workspace, outputWriter,
         [
             CreateOtlpResource("api-abc", "api"),
             CreateOtlpResource("frontend-xyz", "frontend"),
             CreateOtlpResource("worker-def", "worker"),
+            CreateOtlpResource("persistent-12345678", "persistent", serviceName: "persistent", resourceAttributes: "service.instance.id=persistent-12345678"),
+            CreateOtlpResource("renamed-1a2b", "renamed", serviceName: "custom-service", resourceAttributes: "deployment.environment=dev,service.instance.id=custom-instance"),
+            CreateOtlpResource("pending-9z8y", "pending", serviceName: "{{- index .Annotations \"otel-service-name\" -}}", resourceAttributes: "service.instance.id={{- index .Annotations \"otel-service-instance-id\" -}}"),
             new() { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Running" }
         ], configureConnection: ConfigureDashboardApi, httpClientFactory: new MockHttpClientFactory(handler));
 
@@ -1375,7 +1381,16 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         var output = JsonSerializer.Deserialize(string.Join("", outputWriter.Logs), ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
         Assert.NotNull(output);
         Assert.Equal(
-            new (string, bool?)[] { ("api-abc", true), ("cache", null), ("frontend-xyz", false), ("worker-def", true) },
+            new (string, bool?)[]
+            {
+                ("api-abc", true),
+                ("cache", null),
+                ("frontend-xyz", false),
+                ("pending-9z8y", false),
+                ("persistent-12345678", true),
+                ("renamed-1a2b", true),
+                ("worker-def", true)
+            },
             output.Resources.Select(r => (r.Name!, r.TelemetryReceived)).OrderBy(r => r.Item1, StringComparer.Ordinal));
     }
 
@@ -1403,6 +1418,29 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DescribeCommand_SpecificResourceWithoutOtlp_DoesNotQueryDashboard()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var requestCount = 0;
+        using var handler = new MockHttpMessageHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        });
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            CreateOtlpResource("frontend-xyz", "frontend"),
+            new() { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Running" }
+        ], configureConnection: ConfigureDashboardApi, httpClientFactory: new MockHttpClientFactory(handler));
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe cache --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(0, requestCount);
+    }
+
+    [Fact]
     public async Task DescribeCommand_JsonFormat_OmitsTelemetryStatusWhenDashboardApiFails()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1423,13 +1461,18 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Null(resource.TelemetryReceived);
     }
 
-    private static ResourceSnapshot CreateOtlpResource(string name, string displayName, string state = "Running") => new()
+    private static ResourceSnapshot CreateOtlpResource(string name, string displayName, string state = "Running", string? serviceName = null, string? resourceAttributes = null) => new()
     {
         Name = name,
         DisplayName = displayName,
         ResourceType = "Executable",
         State = state,
-        EnvironmentVariables = [new ResourceSnapshotEnvironmentVariable { Name = "OTEL_EXPORTER_OTLP_ENDPOINT", Value = "http://localhost:4318", IsFromSpec = true }]
+        EnvironmentVariables =
+        [
+            new() { Name = "OTEL_EXPORTER_OTLP_ENDPOINT", Value = "http://localhost:4318", IsFromSpec = true },
+            .. serviceName is null ? Array.Empty<ResourceSnapshotEnvironmentVariable>() : [new() { Name = "OTEL_SERVICE_NAME", Value = serviceName, IsFromSpec = true }],
+            .. resourceAttributes is null ? Array.Empty<ResourceSnapshotEnvironmentVariable>() : [new() { Name = "OTEL_RESOURCE_ATTRIBUTES", Value = resourceAttributes, IsFromSpec = true }]
+        ]
     };
 
     private static void ConfigureDashboardApi(TestAppHostAuxiliaryBackchannel connection)

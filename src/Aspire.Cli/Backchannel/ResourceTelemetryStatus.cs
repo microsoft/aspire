@@ -20,29 +20,21 @@ namespace Aspire.Cli.Backchannel;
 /// </remarks>
 internal sealed class ResourceTelemetryStatus
 {
+    private const string ServiceInstanceIdAttributeName = "service.instance.id";
+
     // Describe and list_resources are interactive, one-shot reads. Bound the extra dashboard request so an
     // unresponsive dashboard degrades to "status unknown" instead of delaying the resource listing.
     private static readonly TimeSpan s_queryTimeout = TimeSpan.FromSeconds(5);
 
-    private readonly HashSet<string> _compositeNames;
-    private readonly HashSet<string> _namesWithoutInstanceId;
+    // Composite names ("{service.name}-{service.instance.id}", or "{service.name}") of telemetry sources.
+    private readonly HashSet<string> _compositeNames = new(StringComparers.ResourceName);
+    private readonly HashSet<string> _namesWithoutInstanceId = new(StringComparers.ResourceName);
 
     private ResourceTelemetryStatus(IEnumerable<ResourceInfoJson> telemetryResources)
     {
-        _compositeNames = new HashSet<string>(StringComparers.ResourceName);
-        _namesWithoutInstanceId = new HashSet<string>(StringComparers.ResourceName);
-
         foreach (var resource in telemetryResources)
         {
-            // The dashboard reports each telemetry source as service.name plus service.instance.id, and its
-            // composite name ("{name}-{instanceId}", or just "{name}") matches the AppHost's runtime resource
-            // name because the AppHost sets both attributes from that name. This is the same mapping the
-            // dashboard uses to attach telemetry to app model resources.
-            var compositeName = resource.DisplayName is { Length: > 0 } displayName
-                ? displayName
-                : resource.InstanceId is null ? resource.Name : $"{resource.Name}-{resource.InstanceId}";
-            _compositeNames.Add(compositeName);
-
+            _compositeNames.Add(GetCompositeName(resource.Name, resource.InstanceId));
             if (resource.InstanceId is null)
             {
                 _namesWithoutInstanceId.Add(resource.Name);
@@ -58,20 +50,11 @@ internal sealed class ResourceTelemetryStatus
     /// <summary>
     /// Gets whether the AppHost configured an OTLP exporter endpoint for the resource.
     /// </summary>
-    internal static bool IsOtlpExporterConfigured(ResourceSnapshot snapshot)
-    {
-        foreach (var environmentVariable in snapshot.EnvironmentVariables)
-        {
-            // An explicitly empty endpoint disables export; a null value means the value wasn't captured.
-            if (string.Equals(environmentVariable.Name, KnownOtelConfigNames.ExporterOtlpEndpoint, StringComparison.Ordinal) &&
-                environmentVariable.Value is not { Length: 0 })
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    internal static bool IsOtlpExporterConfigured(ResourceSnapshot snapshot) =>
+        // An explicitly empty endpoint disables export; a null value means the value wasn't captured.
+        snapshot.EnvironmentVariables.Any(e =>
+            string.Equals(e.Name, KnownOtelConfigNames.ExporterOtlpEndpoint, StringComparison.Ordinal) &&
+            e.Value is not { Length: 0 });
 
     /// <summary>
     /// Gets whether the dashboard has received telemetry from the resource.
@@ -87,10 +70,20 @@ internal sealed class ResourceTelemetryStatus
             return null;
         }
 
-        // An app that keeps service.name but drops service.instance.id is reported without an instance ID.
-        // Attribute that telemetry to the resource rather than claiming nothing was received.
+        // The dashboard keys telemetry by the service.name and service.instance.id the app reports. Prefer
+        // the values the resource was started with: they differ from the runtime resource name for persistent
+        // resources (whose instance ID is the full runtime name) and when the app overrides them.
+        var serviceName = GetResolvedEnvironmentValue(snapshot, KnownOtelConfigNames.ServiceName);
+        var instanceId = GetServiceInstanceId(snapshot);
+        if (serviceName is not null && instanceId is not null && _compositeNames.Contains(GetCompositeName(serviceName, instanceId)))
+        {
+            return true;
+        }
+
+        // Fall back to the runtime name, which is the composite name for session-lifetime resources. An app that
+        // keeps service.name but drops service.instance.id is reported without an instance ID.
         return _compositeNames.Contains(snapshot.Name) ||
-            (snapshot.DisplayName is { } displayName && _namesWithoutInstanceId.Contains(displayName));
+            ((serviceName ?? snapshot.DisplayName) is { } name && _namesWithoutInstanceId.Contains(name));
     }
 
     /// <summary>
@@ -118,32 +111,58 @@ internal sealed class ResourceTelemetryStatus
         try
         {
             var dashboardInfo = await connection.GetDashboardInfoV2Async(timeoutCts.Token).ConfigureAwait(false);
-            if (dashboardInfo?.ApiBaseUrl is null || dashboardInfo.ApiToken is null)
+            if (dashboardInfo?.ApiToken is not { } apiToken ||
+                DashboardUrls.NormalizeDashboardRequestUrl(dashboardInfo.ApiBaseUrl, stripLoginPath: false) is not { } apiBaseUrl)
             {
                 logger.LogDebug("Dashboard telemetry API is not available; resource telemetry status is unknown.");
                 return null;
             }
 
-            var apiBaseUrl = DashboardUrls.NormalizeDashboardRequestUrl(dashboardInfo.ApiBaseUrl, stripLoginPath: false);
-            if (apiBaseUrl is null)
-            {
-                return null;
-            }
-
-            using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, dashboardInfo.ApiToken);
-            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, timeoutCts.Token).ConfigureAwait(false);
-            return Create(resources);
+            using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, apiToken);
+            return Create(await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, timeoutCts.Token).ConfigureAwait(false));
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            logger.LogDebug("Timed out reading resource telemetry status from the dashboard.");
-            return null;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // The status is supplementary: a missing, older, or failing dashboard must not fail the listing.
+            // The status is supplementary: a missing, older, slow, or failing dashboard must not fail the listing.
             logger.LogDebug(ex, "Unable to read resource telemetry status from the dashboard.");
             return null;
         }
+    }
+
+    private static string GetCompositeName(string name, string? instanceId) =>
+        instanceId is null ? name : $"{name}-{instanceId}";
+
+    private static string? GetResolvedEnvironmentValue(ResourceSnapshot snapshot, string name)
+    {
+        var value = snapshot.EnvironmentVariables
+            .FirstOrDefault(e => string.Equals(e.Name, name, StringComparison.Ordinal))?.Value;
+
+        // Before DCP reports the effective environment, the snapshot carries the spec value, which is an
+        // unresolved DCP template such as {{- index .Annotations "otel-service-name" -}}.
+        return string.IsNullOrEmpty(value) || value.Contains("{{", StringComparison.Ordinal) ? null : value;
+    }
+
+    private static string? GetServiceInstanceId(ResourceSnapshot snapshot)
+    {
+        // OTEL_RESOURCE_ATTRIBUTES is a comma-separated list of percent-encoded key=value pairs, for example
+        //   deployment.environment=dev,service.instance.id=worker-x7k2
+        // https://opentelemetry.io/docs/specs/otel/resource/sdk/#specifying-resource-information-via-an-environment-variable
+        if (GetResolvedEnvironmentValue(snapshot, KnownOtelConfigNames.ResourceAttributes) is not { } attributes)
+        {
+            return null;
+        }
+
+        foreach (var attribute in attributes.Split(',', StringSplitOptions.TrimEntries))
+        {
+            var separator = attribute.IndexOf('=');
+            if (separator > 0 &&
+                string.Equals(attribute[..separator].Trim(), ServiceInstanceIdAttributeName, StringComparison.Ordinal) &&
+                Uri.UnescapeDataString(attribute[(separator + 1)..].Trim()) is { Length: > 0 } instanceId)
+            {
+                return instanceId;
+            }
+        }
+
+        return null;
     }
 }
