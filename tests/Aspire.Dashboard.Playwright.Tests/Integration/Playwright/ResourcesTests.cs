@@ -641,7 +641,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
         await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
         await page.GotoAsync("/legacy/resources");
-        await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = Dashboard.Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
+        await page.GetByRole(AriaRole.Tab, new() { Name = Dashboard.Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
         await Assertions.Expect(page.Locator(".main-grid .resource-row").First).ToBeVisibleAsync();
     }
 }

@@ -429,7 +429,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
             await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
             await page.GotoAsync("/legacy/resources");
-            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
             await page.WaitForFunctionAsync("() => !!window.releaseGridInitialization");
             await page.GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuConsoleLogsTab, Exact = true }).ClickAsync();
             await page.WaitForFunctionAsync("() => !window.delayedGridElement.isConnected");
@@ -439,7 +439,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
             // A second server-handled navigation proves the circuit survived, rather than only checking an error banner.
             await page.GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuResourcesTab, Exact = true }).ClickAsync();
-            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator(".main-grid .resource-row").First).ToBeVisibleAsync();
             await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "fluentui-grid-disposal-regression.png") });
         });
@@ -572,7 +572,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
             await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
             await page.GotoAsync("/legacy/resources");
-            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
 
             var grid = page.Locator(".main-grid").First;
             await Assertions.Expect(grid.Locator(".resource-row").First).ToBeVisibleAsync();
