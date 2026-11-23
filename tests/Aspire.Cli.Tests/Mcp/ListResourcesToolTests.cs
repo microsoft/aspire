@@ -362,6 +362,8 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
     [InlineData("""{"limit":"1"}""", "limit")]
     [InlineData("""{"limit":null}""", "limit")]
     [InlineData("""{"limit":[]}""", "limit")]
+    [InlineData("""{"includeCommandDetails":"true"}""", "includeCommandDetails")]
+    [InlineData("""{"includeCommandDetails":null}""", "includeCommandDetails")]
     [InlineData("""{"unexpected":"value"}""", "unexpected")]
     public async Task ListResourcesTool_RejectsInvalidPaginationBeforeReadingResources(string json, string invalidArgument)
     {
@@ -378,7 +380,8 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         {
             "offset" => "Argument 'offset' must be an integer from 0 through 2147483647.",
             "limit" => "Argument 'limit' must be an integer from 1 through 64.",
-            _ => "Arguments may contain only 'offset' and 'limit'."
+            "includeCommandDetails" => "Argument 'includeCommandDetails' must be a boolean.",
+            _ => "Arguments may contain only 'offset', 'limit' and 'includeCommandDetails'."
         }, exception.Message);
     }
 
@@ -560,11 +563,44 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
             ]
         }));
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var context = CallToolContextTestHelper.Create(new Dictionary<string, JsonElement>
+        {
+            ["includeCommandDetails"] = JsonSerializer.SerializeToElement(true)
+        });
+
+        var result = await tool.CallToolAsync(context, CancellationToken.None).DefaultTimeout();
+
+        using var json = GetResourceData(result);
+        await Verify(json.RootElement[0].GetProperty("commands").GetRawText(), "json");
+    }
+
+    [Fact]
+    public async Task ListResourcesTool_ListsOnlyCommandNamesAndStatesByDefault()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(new ResourceSnapshot
+        {
+            Name = "api",
+            Commands =
+            [
+                new ResourceSnapshotCommand
+                {
+                    Name = "reload",
+                    State = "Enabled",
+                    Description = "Reload configuration.",
+                    ArgumentInputs = [new ResourceSnapshotCommandArgument { Name = "configuration", InputType = "Text", Description = "Configuration name." }]
+                },
+                new ResourceSnapshotCommand { Name = "restart", State = "Disabled", Description = "Restart the resource." }
+            ]
+        }));
+        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         using var json = GetResourceData(result);
-        await Verify(json.RootElement[0].GetProperty("commands").GetRawText(), "json");
+        Assert.Equal(
+            """{"reload":{"state":"Enabled","has_arguments":true},"restart":{"state":"Disabled"}}""",
+            JsonSerializer.Serialize(json.RootElement[0].GetProperty("commands")));
     }
 
     [Fact]
@@ -593,7 +629,8 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
         var context = CallToolContextTestHelper.Create(new Dictionary<string, JsonElement>
         {
-            ["limit"] = JsonSerializer.SerializeToElement(1)
+            ["limit"] = JsonSerializer.SerializeToElement(1),
+            ["includeCommandDetails"] = JsonSerializer.SerializeToElement(true)
         });
 
         var result = await tool.CallToolAsync(context, CancellationToken.None).DefaultTimeout();

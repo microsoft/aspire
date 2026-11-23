@@ -84,7 +84,7 @@ public class ListTracesToolTests
     }
 
     [Fact]
-    public async Task ListTracesTool_ReturnsFormattedTraces_WhenApiReturnsData()
+    public async Task ListTracesTool_ReturnsAllSpans_WhenFormatIsFull()
     {
         // Local function to create OtlpResourceSpansJson with service name and instance ID
         static OtlpResourceSpansJson CreateResourceSpans(string serviceName, string? serviceInstanceId, params OtlpSpanJson[] spans)
@@ -209,10 +209,13 @@ public class ListTracesToolTests
         var monitor = CreateMonitorWithDashboard(dashboardUrls: ["http://localhost:18888/login?t=authtoken123"]);
         var tool = CreateTool(monitor, mockHttpClientFactory);
 
-        // Act
-        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["format"] = JsonSerializer.SerializeToElement("full")
+        };
 
-        // Assert
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
         Assert.True(result.IsError is null or false);
         Assert.NotNull(result.Content);
         Assert.Single(result.Content);
@@ -590,5 +593,230 @@ public class ListTracesToolTests
         Assert.True(properties.TryGetProperty("search", out var search));
         Assert.True(search.TryGetProperty("type", out var type));
         Assert.Equal("string", type.GetString());
+    }
+
+    [Fact]
+    public async Task ListTracesTool_SummarizesEachTrace_ByDefault()
+    {
+        const string traceId = "0af7651916cd43dd8448eb211c80319c";
+        var apiResponse = CreateTracesResponse(
+            CreateResourceSpans("frontend",
+                new OtlpSpanJson
+                {
+                    TraceId = traceId,
+                    SpanId = "1000000000000001",
+                    Name = "GET /orders",
+                    Kind = 2,
+                    StartTimeUnixNano = 1706540400000000000,
+                    EndTimeUnixNano = 1706540401200000000,
+                    Status = new OtlpSpanStatusJson { Code = 2 },
+                    Attributes = [new OtlpKeyValueJson { Key = "http.response.status_code", Value = new OtlpAnyValueJson { IntValue = 500 } }]
+                },
+                new OtlpSpanJson
+                {
+                    TraceId = traceId,
+                    SpanId = "1000000000000002",
+                    ParentSpanId = "1000000000000001",
+                    Name = "GET",
+                    Kind = 3,
+                    StartTimeUnixNano = 1706540400010000000,
+                    EndTimeUnixNano = 1706540401150000000,
+                    Status = new OtlpSpanStatusJson { Code = 2 },
+                    Attributes = [new OtlpKeyValueJson { Key = "aspire.destination", Value = new OtlpAnyValueJson { StringValue = "api" } }]
+                }),
+            CreateResourceSpans("api",
+                new OtlpSpanJson
+                {
+                    TraceId = traceId,
+                    SpanId = "2000000000000001",
+                    ParentSpanId = "1000000000000002",
+                    Name = "postgres",
+                    Kind = 3,
+                    StartTimeUnixNano = 1706540400020000000,
+                    EndTimeUnixNano = 1706540400920000000,
+                    Status = new OtlpSpanStatusJson { Code = 1 },
+                    Attributes = [new OtlpKeyValueJson { Key = "db.query.text", Value = new OtlpAnyValueJson { StringValue = "SELECT * FROM orders WHERE customer_id = $1" } }]
+                },
+                new OtlpSpanJson
+                {
+                    TraceId = traceId,
+                    SpanId = "2000000000000002",
+                    ParentSpanId = "1000000000000002",
+                    Name = "postgres",
+                    Kind = 3,
+                    StartTimeUnixNano = 1706540400930000000,
+                    EndTimeUnixNano = 1706540401000000000,
+                    Status = new OtlpSpanStatusJson { Code = 2, Message = "permission denied" },
+                    Attributes = [new OtlpKeyValueJson { Key = "db.statement", Value = new OtlpAnyValueJson { StringValue = "UPDATE orders SET status = 'seen'" } }],
+                    Events =
+                    [
+                        new OtlpSpanEventJson
+                        {
+                            Name = "exception",
+                            TimeUnixNano = 1706540401000000000,
+                            Attributes =
+                            [
+                                new OtlpKeyValueJson { Key = "exception.type", Value = new OtlpAnyValueJson { StringValue = "Npgsql.PostgresException" } },
+                                new OtlpKeyValueJson { Key = "exception.message", Value = new OtlpAnyValueJson { StringValue = "25006: cannot execute UPDATE in a read-only transaction" } },
+                                new OtlpKeyValueJson { Key = "exception.stacktrace", Value = new OtlpAnyValueJson { StringValue = "at Npgsql.NpgsqlConnector.ReadMessage()" } }
+                            ]
+                        }
+                    ]
+                }));
+        using var handler = CreateHandler(apiResponse, ["frontend", "api"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        await Verify(Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text, "txt");
+    }
+
+    [Fact]
+    public async Task ListTracesTool_ReturnsLatestTracesUpToLimit()
+    {
+        var apiResponse = CreateTracesResponse(CreateResourceSpans("api", Enumerable.Range(0, 5).Select(index => new OtlpSpanJson
+        {
+            TraceId = $"trace{index}",
+            SpanId = $"span{index}",
+            Name = $"GET /items/{index}",
+            StartTimeUnixNano = 1706540400000000000 + (ulong)index,
+            EndTimeUnixNano = 1706540400100000000 + (ulong)index
+        }).ToArray()));
+        using var handler = CreateHandler(apiResponse, ["api"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["limit"] = JsonSerializer.SerializeToElement(2)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith("Returned latest 2 traces. Earlier 3 traces not returned because of size limits.", text, StringComparison.Ordinal);
+        var traces = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["trace3", "trace4"], traces.Select(trace => trace!["traceId"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task ListTracesTool_DefaultResponseStaysCompact_WhenManyLargeTracesExist()
+    {
+        var largeValue = new string('x', 1500);
+        var spans = Enumerable.Range(0, 300).SelectMany(traceIndex => Enumerable.Range(0, 10).Select(spanIndex => new OtlpSpanJson
+        {
+            TraceId = $"trace{traceIndex:D3}",
+            SpanId = $"span{traceIndex:D3}{spanIndex:D2}",
+            ParentSpanId = spanIndex == 0 ? null : $"span{traceIndex:D3}00",
+            Name = $"operation {spanIndex}",
+            StartTimeUnixNano = 1706540400000000000 + (ulong)(traceIndex * 1000 + spanIndex),
+            EndTimeUnixNano = 1706540400100000000 + (ulong)(traceIndex * 1000 + spanIndex),
+            Attributes = [new OtlpKeyValueJson { Key = "db.query.text", Value = new OtlpAnyValueJson { StringValue = largeValue } }]
+        })).ToArray();
+        using var handler = CreateHandler(CreateTracesResponse(CreateResourceSpans("api", spans)), ["api"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(text.Length, 1, 20_000);
+        Assert.StartsWith("Returned latest ", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ListTracesTool_ReturnsEverySpanOfTrace_WhenTraceIdProvided()
+    {
+        var apiResponse = CreateTracesResponse(CreateResourceSpans("api",
+            new OtlpSpanJson { TraceId = "trace1", SpanId = "root", Name = "GET /orders", StartTimeUnixNano = 1706540400000000000, EndTimeUnixNano = 1706540400100000000 },
+            new OtlpSpanJson { TraceId = "trace1", SpanId = "child", ParentSpanId = "root", Name = "SELECT orders", StartTimeUnixNano = 1706540400010000000, EndTimeUnixNano = 1706540400090000000 }));
+        var requestedPaths = new List<string>();
+        using var handler = CreateHandler(apiResponse, ["api"], request => requestedPaths.Add(request.RequestUri!.AbsolutePath));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["traceId"] = JsonSerializer.SerializeToElement("trace1"),
+            ["search"] = JsonSerializer.SerializeToElement("ignored")
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.Equal(["/api/telemetry/resources", "/api/telemetry/traces/trace1"], requestedPaths);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith("Returned trace trace1 with 2 spans.", text, StringComparison.Ordinal);
+        var trace = JsonNode.Parse(text[text.IndexOf('{')..(text.LastIndexOf('}') + 1)])!.AsObject();
+        Assert.Equal(["root", "child"], trace["spans"]!.AsArray().Select(span => span!["spanId"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task ListTracesTool_ReturnsError_WhenTraceIdNotFound()
+    {
+        var resourcesResponse = JsonSerializer.Serialize(Array.Empty<ResourceInfoJson>(), OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+        using var handler = new MockHttpMessageHandler(request => request.RequestUri!.AbsolutePath.EndsWith("/resources", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(resourcesResponse, System.Text.Encoding.UTF8, "application/json") }
+            : new HttpResponseMessage(HttpStatusCode.NotFound));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["traceId"] = JsonSerializer.SerializeToElement("missing")
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError);
+        Assert.Equal("Trace 'missing' not found.", Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text);
+    }
+
+    [Theory]
+    [InlineData("""{"limit":0}""", "Argument 'limit' must be an integer from 1 through 800.")]
+    [InlineData("""{"limit":"5"}""", "Argument 'limit' must be an integer from 1 through 800.")]
+    [InlineData("""{"format":"compact"}""", "Argument 'format' must be one of: summary, full.")]
+    public async Task ListTracesTool_RejectsInvalidArguments(string json, string expectedMessage)
+    {
+        using var arguments = JsonDocument.Parse(json);
+        var tool = CreateTool(CreateMonitorWithDashboard());
+        var context = CallToolContextTestHelper.Create(
+            arguments.RootElement.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone()));
+
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(context, CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.Equal(ModelContextProtocol.McpErrorCode.InvalidParams, exception.ErrorCode);
+        Assert.Equal(expectedMessage, exception.Message);
+    }
+
+    private static OtlpResourceSpansJson CreateResourceSpans(string serviceName, params OtlpSpanJson[] spans)
+    {
+        return new OtlpResourceSpansJson
+        {
+            Resource = new OtlpResourceJson
+            {
+                Attributes = [new OtlpKeyValueJson { Key = "service.name", Value = new OtlpAnyValueJson { StringValue = serviceName } }]
+            },
+            ScopeSpans = [new OtlpScopeSpansJson { Scope = new OtlpInstrumentationScopeJson { Name = "OpenTelemetry" }, Spans = spans }]
+        };
+    }
+
+    private static string CreateTracesResponse(params OtlpResourceSpansJson[] resourceSpans)
+    {
+        return JsonSerializer.Serialize(
+            new TelemetryApiResponse { Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans } },
+            OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+    }
+
+    private static MockHttpMessageHandler CreateHandler(string tracesResponse, string[] resourceNames, Action<HttpRequestMessage>? onRequest = null)
+    {
+        var resourcesResponse = JsonSerializer.Serialize(
+            resourceNames.Select(name => new ResourceInfoJson { Name = name, HasLogs = true, HasTraces = true, HasMetrics = true }).ToArray(),
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+
+        return new MockHttpMessageHandler(request =>
+        {
+            onRequest?.Invoke(request);
+            var content = request.RequestUri!.AbsolutePath.EndsWith("/resources", StringComparison.Ordinal) ? resourcesResponse : tracesResponse;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content, System.Text.Encoding.UTF8, "application/json")
+            };
+        });
     }
 }

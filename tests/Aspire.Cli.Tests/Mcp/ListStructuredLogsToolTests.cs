@@ -461,7 +461,7 @@ public class ListStructuredLogsToolTests
     {
         var tool = CreateTool();
 
-        Assert.Equal("List structured logs for resources.", tool.Description);
+        Assert.Equal("List structured logs for resources. Returns the most recent log entries; use severity, search, resourceName and limit to narrow the results.", tool.Description);
     }
 
     [Fact]
@@ -631,5 +631,123 @@ public class ListStructuredLogsToolTests
         Assert.Equal(
             DashboardUrls.RemoveDashboardLoginToken(expected),
             DashboardUrls.RemoveDashboardLoginToken(actual));
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_WithSeverity_PassesMinimumSeverityToUrl()
+    {
+        Uri? logsRequestUri = null;
+        using var handler = CreateHandler(CreateLogsResponse(), request => logsRequestUri = request.RequestUri);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["severity"] = JsonSerializer.SerializeToElement("warning")
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(logsRequestUri);
+        Assert.Equal($"?severity=Warning&limit={TelemetryCommandHelpers.MaxTelemetryLimit}", logsRequestUri.Query);
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_ReturnsLatestLogsUpToLimit()
+    {
+        using var handler = CreateHandler(CreateLogsResponse(Enumerable.Range(0, 5).Select(index => $"message {index}").ToArray()));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["limit"] = JsonSerializer.SerializeToElement(2)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith("Returned latest 2 log entries. Earlier 3 log entries not returned because of size limits.", text, StringComparison.Ordinal);
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["message 3", "message 4"], logs.Select(log => log!["message"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_DefaultResponseStaysCompact_WhenManyLargeLogsExist()
+    {
+        using var handler = CreateHandler(CreateLogsResponse(Enumerable.Range(0, 800).Select(index => $"{index} {new string('x', 1500)}").ToArray()));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(text.Length, 1, 20_000);
+        Assert.StartsWith("Returned latest ", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{"severity":"Fatal"}""", "Argument 'severity' must be one of: Trace, Debug, Information, Warning, Error, Critical.")]
+    [InlineData("""{"limit":801}""", "Argument 'limit' must be an integer from 1 through 800.")]
+    public async Task ListStructuredLogsTool_RejectsInvalidArguments(string json, string expectedMessage)
+    {
+        using var arguments = JsonDocument.Parse(json);
+        var tool = CreateTool(CreateMonitorWithDashboard());
+        var context = CallToolContextTestHelper.Create(
+            arguments.RootElement.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone()));
+
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(context, CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.Equal(ModelContextProtocol.McpErrorCode.InvalidParams, exception.ErrorCode);
+        Assert.Equal(expectedMessage, exception.Message);
+    }
+
+    private static string CreateLogsResponse(params string[] messages)
+    {
+        var logRecords = messages.Select((message, index) => new OtlpLogRecordJson
+        {
+            TimeUnixNano = 1706540400000000000 + (ulong)index,
+            SeverityText = "Information",
+            Body = new OtlpAnyValueJson { StringValue = message },
+            Attributes = [new OtlpKeyValueJson { Key = "aspire.log_id", Value = new OtlpAnyValueJson { IntValue = index } }]
+        }).ToArray();
+
+        return JsonSerializer.Serialize(
+            new TelemetryApiResponse
+            {
+                Data = new OtlpTelemetryDataJson
+                {
+                    ResourceLogs =
+                    [
+                        new OtlpResourceLogsJson
+                        {
+                            Resource = new OtlpResourceJson
+                            {
+                                Attributes = [new OtlpKeyValueJson { Key = "service.name", Value = new OtlpAnyValueJson { StringValue = "api" } }]
+                            },
+                            ScopeLogs = [new OtlpScopeLogsJson { Scope = new OtlpInstrumentationScopeJson { Name = "Api" }, LogRecords = logRecords }]
+                        }
+                    ]
+                }
+            },
+            OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+    }
+
+    private static MockHttpMessageHandler CreateHandler(string logsResponse, Action<HttpRequestMessage>? onLogsRequest = null)
+    {
+        var resourcesResponse = JsonSerializer.Serialize(
+            [new ResourceInfoJson { Name = "api", HasLogs = true, HasTraces = true, HasMetrics = true }],
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+
+        return new MockHttpMessageHandler(request =>
+        {
+            var isResourcesRequest = request.RequestUri!.AbsolutePath.EndsWith("/resources", StringComparison.Ordinal);
+            if (!isResourcesRequest)
+            {
+                onLogsRequest?.Invoke(request);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(isResourcesRequest ? resourcesResponse : logsResponse, System.Text.Encoding.UTF8, "application/json")
+            };
+        });
     }
 }

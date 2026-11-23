@@ -48,7 +48,8 @@ internal sealed class McpResourceCommandJson
 {
     public required string State { get; init; }
     public string? Description { get; init; }
-    public McpResourceCommandArgumentJson[] ArgumentInputs { get; init; } = [];
+    public bool? HasArguments { get; init; }
+    public McpResourceCommandArgumentJson[]? ArgumentInputs { get; init; }
 }
 
 internal sealed record McpResourcePageJson(int Offset, int Limit, int Total, int? NextOffset);
@@ -125,6 +126,11 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
               "maximum": {{MaxResources}},
               "default": {{MaxResources}},
               "description": "Maximum number of resources to return in this page."
+            },
+            "includeCommandDetails": {
+              "type": "boolean",
+              "default": false,
+              "description": "Include command descriptions and argument inputs. By default only command names and states are listed."
             }
           },
           "additionalProperties": false
@@ -133,7 +139,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
 
     public override string Name => KnownMcpTools.ListResources;
 
-    public override string Description => "List the application resources for the selected AppHost. Includes runtime information such as resource type, state, source, endpoints, health status, relationships, and API-visible command metadata without current or default argument values. Returns up to 64 resources ordered by runtime name; use offset and limit to page through all visible resources.";
+    public override string Description => "List the application resources for the selected AppHost. Includes runtime information such as resource type, state, source, endpoints, health status, relationships, and API-visible command names. Set includeCommandDetails to get command descriptions and argument inputs, without current or default argument values. Returns up to 64 resources ordered by runtime name; use offset and limit to page through all visible resources.";
 
     public override JsonElement GetInputSchema()
     {
@@ -142,7 +148,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
 
     public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
-        var (offset, limit) = ParseArguments(context.Arguments);
+        var (offset, limit, includeCommandDetails) = ParseArguments(context.Arguments);
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(
             auxiliaryBackchannelMonitor,
             logger,
@@ -221,7 +227,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                     IsInternal = url.IsInternal
                 }).ToArray(),
                 Relationships = GetBoundedRelationships(snapshot, relationshipTargets),
-                Commands = GetCommandMetadata(snapshot)
+                Commands = GetCommandMetadata(snapshot, includeCommandDetails)
             }).ToArray();
             var resourceGraphData = JsonSerializer.Serialize(boundedResources, ListResourcesToolJsonContext.RelaxedEscaping.McpResourceJsonArray);
             int? nextOffset = offset < visibleSnapshots.Count - boundedResources.Length
@@ -235,6 +241,9 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
             resource_name is the identifier of resources.
             Console logs for a resource can provide more information about why a resource is not in a running state.
             Command names and argument names can be passed to execute_resource_command. Current and default argument values are never included.
+            {(includeCommandDetails
+                ? "Command descriptions and argument inputs are included."
+                : "Command descriptions and argument inputs are omitted. Call list_resources with includeCommandDetails set to true before executing a command that has arguments.")}
             Use next_offset with the same limit to retrieve the next page. An absent next_offset means there are no more resources.
             Each page reads current state; restart from offset 0 if resource membership changes while paging.
 
@@ -264,14 +273,14 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
         }
     }
 
-    private static (int Offset, int Limit) ParseArguments(IReadOnlyDictionary<string, JsonElement>? arguments)
+    private static (int Offset, int Limit, bool IncludeCommandDetails) ParseArguments(IReadOnlyDictionary<string, JsonElement>? arguments)
     {
-        // MCP pagination arguments use { "offset": 64, "limit": 64 }. Omitted fields retain
+        // MCP arguments use { "offset": 64, "limit": 64, "includeCommandDetails": true }. Omitted fields retain
         // the first-page defaults; strings, nulls, fractions, and out-of-range values are errors.
-        if (arguments?.Keys.Any(static name => name is not ("offset" or "limit")) == true)
+        if (arguments?.Keys.Any(static name => name is not ("offset" or "limit" or "includeCommandDetails")) == true)
         {
             throw new McpProtocolException(
-                "Arguments may contain only 'offset' and 'limit'.",
+                "Arguments may contain only 'offset', 'limit' and 'includeCommandDetails'.",
                 McpErrorCode.InvalidParams);
         }
 
@@ -295,15 +304,30 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                 McpErrorCode.InvalidParams);
         }
 
-        return (offset, limit);
+        var includeCommandDetails = false;
+        if (arguments?.TryGetValue("includeCommandDetails", out var includeCommandDetailsElement) == true)
+        {
+            includeCommandDetails = includeCommandDetailsElement.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => throw new McpProtocolException(
+                    "Argument 'includeCommandDetails' must be a boolean.",
+                    McpErrorCode.InvalidParams)
+            };
+        }
+
+        return (offset, limit, includeCommandDetails);
     }
 
-    private static Dictionary<string, McpResourceCommandJson> GetCommandMetadata(ResourceSnapshot snapshot)
+    private static Dictionary<string, McpResourceCommandJson> GetCommandMetadata(ResourceSnapshot snapshot, bool includeCommandDetails)
     {
         // The general CLI mapper retains non-secret input values. MCP instead exposes only
         // invocation metadata, including disabled API commands but never hidden or UI-only ones.
         // Keep identifiers and choice keys exact, and keep their complete collections: truncating
         // them would advertise a different command or an incomplete invocation contract.
+        // Descriptions and argument inputs are most of a resource's size, so the default listing
+        // keeps only names and states and flags the commands that take arguments.
         return snapshot.Commands
             .Where(command => ResourceSnapshotMapper.IsCommandVisibleToApi(command.Visibility) &&
                 ResourceSnapshotMapper.IsCommandVisibleToConsumer(command.State, includeDisabledCommands: true))
@@ -315,8 +339,9 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                     State = string.Equals(command.State, KnownCommandState.Enabled, StringComparison.OrdinalIgnoreCase)
                         ? KnownCommandState.Enabled
                         : KnownCommandState.Disabled,
-                    Description = GetBoundedText(command.Description),
-                    ArgumentInputs = command.ArgumentInputs.Select(input => new McpResourceCommandArgumentJson
+                    Description = includeCommandDetails ? GetBoundedText(command.Description) : null,
+                    HasArguments = !includeCommandDetails && command.ArgumentInputs.Length > 0 ? true : null,
+                    ArgumentInputs = !includeCommandDetails ? null : command.ArgumentInputs.Select(input => new McpResourceCommandArgumentJson
                     {
                         Name = input.Name,
                         InputType = GetBoundedText(input.InputType)!,

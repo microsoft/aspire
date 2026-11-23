@@ -23,7 +23,22 @@ internal static class SharedAIHelpers
     public const int StructuredLogsLimit = 800;
     public const int ConsoleLogsLimit = 2000;
     public const int MaximumListTokenLength = 8192;
+
+    /// <summary>
+    /// Token budget for compact list responses, such as the default MCP telemetry tool responses.
+    /// </summary>
+    /// <remarks>
+    /// Agent harnesses commonly replace tool results larger than about 20 KB with a pointer to a
+    /// spill file (for example, Copilot CLI writes them to disk and shows only the first 500 characters),
+    /// so the model reads the data through extra file reads instead of the tool result.
+    /// <see cref="EstimateTokenCount"/> uses four characters per token, so this keeps the list itself
+    /// at about 16 KB and leaves room for the response header.
+    /// See https://github.com/microsoft/aspire/issues/22507.
+    /// </remarks>
+    public const int CompactListTokenLength = 4096;
+
     public const int MaximumStringLength = 2048;
+    private const int MaximumSummaryStringLength = 512;
 
     internal static readonly JsonSerializerOptions s_jsonSerializerOptions = new JsonSerializerOptions
     {
@@ -52,11 +67,15 @@ internal static class SharedAIHelpers
     /// Converts OTLP resource logs to structured logs JSON for AI processing.
     /// </summary>
     /// <param name="resourceLogs">The OTLP resource logs containing log records.</param>
+    /// <param name="limit">The maximum number of log entries to return.</param>
+    /// <param name="maximumTokenLength">The estimated token budget for the returned log entries.</param>
     /// <param name="getResourceName">Optional function to resolve resource names.</param>
     /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     /// <returns>A tuple containing the JSON string and a limit message.</returns>
     public static (string json, string limitMessage) GetStructuredLogsJson(
         IList<OtlpResourceLogsJson>? resourceLogs,
+        int limit,
+        int maximumTokenLength,
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
@@ -65,7 +84,9 @@ internal static class SharedAIHelpers
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
             logRecords,
-            StructuredLogsLimit,
+            logRecords.Count,
+            limit,
+            maximumTokenLength,
             "log entry",
             "log entries",
             i => GetLogEntryDto(i, promptContext, getResourceName, dashboardBaseUrl),
@@ -101,11 +122,15 @@ internal static class SharedAIHelpers
     /// Converts OTLP resource spans to traces JSON for AI processing.
     /// </summary>
     /// <param name="resourceSpans">The OTLP resource spans containing trace data.</param>
+    /// <param name="limit">The maximum number of traces to return.</param>
+    /// <param name="maximumTokenLength">The estimated token budget for the returned traces.</param>
     /// <param name="getResourceName">Optional function to resolve resource names.</param>
     /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     /// <returns>A tuple containing the JSON string and a limit message.</returns>
     public static (string json, string limitMessage) GetTracesJson(
         IList<OtlpResourceSpansJson>? resourceSpans,
+        int limit,
+        int maximumTokenLength,
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
@@ -114,7 +139,9 @@ internal static class SharedAIHelpers
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
             traces,
-            TracesLimit,
+            traces.Count,
+            limit,
+            maximumTokenLength,
             "trace",
             "traces",
             t => GetTraceDto(t, promptContext, getResourceName, dashboardBaseUrl),
@@ -124,6 +151,168 @@ internal static class SharedAIHelpers
         var tracesData = jsonArray.ToJsonString(s_jsonSerializerOptions);
 
         return (tracesData, limitMessage);
+    }
+
+    /// <summary>
+    /// Converts OTLP resource spans to one compact summary per trace for AI processing.
+    /// Each summary names the root span, the slowest span and the first failed span instead of listing every span.
+    /// </summary>
+    /// <param name="resourceSpans">The OTLP resource spans containing trace data.</param>
+    /// <param name="limit">The maximum number of traces to return.</param>
+    /// <param name="getResourceName">Function to resolve resource names.</param>
+    /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
+    /// <returns>A tuple containing the JSON string and a limit message.</returns>
+    public static (string json, string limitMessage) GetTraceSummariesJson(
+        IList<OtlpResourceSpansJson>? resourceSpans,
+        int limit,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl = null)
+    {
+        var traces = GetTracesFromOtlpData(resourceSpans);
+
+        var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
+            traces,
+            traces.Count,
+            limit,
+            CompactListTokenLength,
+            "trace",
+            "traces",
+            t => GetTraceSummaryDto(t, getResourceName, dashboardBaseUrl),
+            EstimateSerializedJsonTokenSize);
+
+        var jsonArray = new JsonArray(trimmedItems.ToArray());
+        return (jsonArray.ToJsonString(s_jsonSerializerOptions), limitMessage);
+    }
+
+    /// <summary>
+    /// Creates a compact JsonObject summarizing a trace for AI processing.
+    /// </summary>
+    /// <remarks>
+    /// The summary keeps what is needed to pick a trace to investigate: the root span, the child span
+    /// with the most self time and its database statement (the usual cause of a slow request), and the first failed
+    /// span with its exception. The full span list is available by requesting the trace by ID.
+    /// </remarks>
+    public static JsonObject GetTraceSummaryDto(
+        OtlpTraceDto trace,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl = null)
+    {
+        var rootSpan = GetRootSpan(trace);
+        var spansByStart = trace.Spans.OrderBy(s => s.Span.StartTimeUnixNano ?? 0).ToList();
+
+        // Rank child spans by self time (duration not covered by their own children). Ranking by duration
+        // would pick the span that wraps everything, such as the outgoing HTTP call, instead of the database
+        // call inside it where the time was actually spent. Overlapping (parallel) children make the
+        // subtraction negative; those spans count as having no self time.
+        var childDurationsBySpanId = trace.Spans
+            .Where(s => !string.IsNullOrEmpty(s.Span.ParentSpanId))
+            .GroupBy(s => s.Span.ParentSpanId!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Sum(s => (long)(CalculateDurationMs(s.Span.StartTimeUnixNano, s.Span.EndTimeUnixNano) ?? 0)), StringComparer.Ordinal);
+        var slowestSpan = trace.Spans
+            .Where(s => !ReferenceEquals(s, rootSpan))
+            .MaxBy(s => (CalculateDurationMs(s.Span.StartTimeUnixNano, s.Span.EndTimeUnixNano) ?? -1)
+                - (s.Span.SpanId is { } spanId ? childDurationsBySpanId.GetValueOrDefault(spanId) : 0));
+
+        // A failure usually propagates to its parents, which then also end with an error status.
+        // The failed span that ended first is the closest to the origin of the failure; among spans
+        // ending together, prefer the one that started last because it is the deepest.
+        var firstErrorSpan = trace.Spans
+            .Where(s => s.Span.Status?.Code == 2)
+            .OrderBy(s => s.Span.EndTimeUnixNano ?? ulong.MaxValue)
+            .ThenByDescending(s => s.Span.StartTimeUnixNano ?? 0)
+            .FirstOrDefault();
+
+        var timestamp = rootSpan?.Span.StartTimeUnixNano is { } startNano
+            ? OtlpHelpers.UnixNanoSecondsToDateTime(startNano)
+            : (DateTime?)null;
+
+        var resources = spansByStart
+            .Select(s => getResourceName(s.Resource))
+            .Distinct(StringComparer.Ordinal)
+            .Select(name => (JsonNode)name)
+            .ToArray();
+
+        var summary = new JsonObject
+        {
+            ["traceId"] = trace.TraceId,
+            ["title"] = rootSpan?.Span.Name,
+            ["timestamp"] = timestamp,
+            ["durationMs"] = CalculateTraceDurationMs(trace.Spans),
+            ["spanCount"] = trace.Spans.Count,
+            ["resources"] = new JsonArray(resources),
+            ["hasError"] = firstErrorSpan is not null,
+            ["rootSpan"] = rootSpan is null ? null : GetSpanSummaryDto(rootSpan, getResourceName),
+            ["slowestSpan"] = slowestSpan is null ? null : GetSpanSummaryDto(slowestSpan, getResourceName),
+            ["firstErrorSpan"] = firstErrorSpan is null ? null : GetSpanSummaryDto(firstErrorSpan, getResourceName)
+        };
+
+        if (dashboardBaseUrl is not null)
+        {
+            summary["dashboardUrl"] = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.TraceDetailUrl(trace.TraceId));
+        }
+
+        return StripNullProperties(summary);
+    }
+
+    private static OtlpSpanDto? GetRootSpan(OtlpTraceDto trace)
+    {
+        return trace.Spans.FirstOrDefault(s => string.IsNullOrEmpty(s.Span.ParentSpanId)) ?? trace.Spans.FirstOrDefault();
+    }
+
+    private static JsonObject GetSpanSummaryDto(OtlpSpanDto spanDto, Func<IOtlpResource, string> getResourceName)
+    {
+        var span = spanDto.Span;
+        var httpStatus = span.Attributes?.FirstOrDefault(a => a.Key is "http.response.status_code" or "http.status_code") is { } statusAttribute
+            && int.TryParse(GetAttributeValue(statusAttribute), CultureInfo.InvariantCulture, out var statusCode)
+                ? GetHttpStatusName(statusCode)
+                : null;
+
+        // Database client spans carry the executed statement under the current semantic convention
+        // (db.query.text) or the deprecated one (db.statement).
+        // See https://opentelemetry.io/docs/specs/semconv/database/database-spans/
+        var statement = GetAttributeStringValue(span.Attributes, "db.query.text")
+            ?? GetAttributeStringValue(span.Attributes, "db.statement");
+
+        var spanObj = new JsonObject
+        {
+            ["spanId"] = span.SpanId,
+            ["name"] = LimitLength(span.Name, MaximumSummaryStringLength),
+            ["kind"] = GetSpanKindName(span.Kind),
+            ["source"] = getResourceName(spanDto.Resource),
+            ["destination"] = GetAttributeStringValue(span.Attributes, OtlpHelpers.AspireDestinationNameAttribute),
+            ["durationMs"] = CalculateDurationMs(span.StartTimeUnixNano, span.EndTimeUnixNano),
+            ["status"] = span.Status?.Code switch
+            {
+                1 => "Ok",
+                2 => "Error",
+                _ => null
+            },
+            ["statusMessage"] = LimitLength(span.Status?.Message, MaximumSummaryStringLength),
+            ["httpStatus"] = httpStatus,
+            ["statement"] = LimitLength(statement, MaximumSummaryStringLength),
+            ["exception"] = LimitLength(GetSpanExceptionText(span), MaximumSummaryStringLength)
+        };
+
+        return StripNullProperties(spanObj);
+    }
+
+    private static string? GetSpanExceptionText(OtlpSpanJson span)
+    {
+        // Exceptions are recorded as span events named "exception" with exception.type and exception.message attributes.
+        // See https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/
+        var exceptionEvent = span.Events?.FirstOrDefault(e => e.Name == "exception");
+        if (exceptionEvent is null)
+        {
+            return null;
+        }
+
+        var type = GetAttributeStringValue(exceptionEvent.Attributes, ExceptionTypeField);
+        var message = GetAttributeStringValue(exceptionEvent.Attributes, ExceptionMessageField);
+        return (type, message) switch
+        {
+            (not null, not null) => $"{type}: {message}",
+            _ => type ?? message
+        };
     }
 
     /// <summary>
@@ -391,7 +580,7 @@ internal static class SharedAIHelpers
 
         var spanArray = new JsonArray(spanObjects.ToArray());
         var traceId = trace.TraceId;
-        var rootSpan = trace.Spans.FirstOrDefault(s => string.IsNullOrEmpty(s.Span.ParentSpanId)) ?? trace.Spans.FirstOrDefault();
+        var rootSpan = GetRootSpan(trace);
         var hasError = trace.Spans.Any(s => s.Span.Status?.Code == 2);
         var timestamp = rootSpan?.Span.StartTimeUnixNano is { } startNano
             ? OtlpHelpers.UnixNanoSecondsToDateTime(startNano)
@@ -789,29 +978,21 @@ internal static class SharedAIHelpers
     /// </summary>
     public static string LimitLength(string value)
     {
-        if (value.Length <= MaximumStringLength)
+        return LimitLength(value, MaximumStringLength)!;
+    }
+
+    [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(value))]
+    private static string? LimitLength(string? value, int maximumLength)
+    {
+        if (value is null || value.Length <= maximumLength)
         {
             return value;
         }
 
         return
             $"""
-            {value.AsSpan(0, MaximumStringLength)}...[TRUNCATED]
+            {value.AsSpan(0, maximumLength)}...[TRUNCATED]
             """;
-    }
-
-    /// <summary>
-    /// Gets items from the end of a list with a summary message, applying count and token limits.
-    /// </summary>
-    public static (List<TResult> items, string message) GetLimitFromEndWithSummary<T, TResult>(
-        List<T> values,
-        int limit,
-        string itemName,
-        string pluralItemName,
-        Func<T, TResult> convertToDto,
-        Func<TResult, int> estimateTokenSize)
-    {
-        return GetLimitFromEndWithSummary(values, values.Count, limit, itemName, pluralItemName, convertToDto, estimateTokenSize);
     }
 
     /// <summary>
@@ -821,6 +1002,7 @@ internal static class SharedAIHelpers
         List<T> values,
         int totalValues,
         int limit,
+        int maximumTokenLength,
         string itemName,
         string pluralItemName,
         Func<T, TResult> convertToDto,
@@ -842,7 +1024,7 @@ internal static class SharedAIHelpers
             var obj = dtos[i];
             var tokenCount = estimateTokenSize(obj);
 
-            if (currentTokenCount + tokenCount > MaximumListTokenLength)
+            if (currentTokenCount + tokenCount > maximumTokenLength)
             {
                 break;
             }
@@ -855,6 +1037,45 @@ internal static class SharedAIHelpers
         dtos = dtos[^serializedValuesCount..];
 
         return (dtos, GetLimitSummary(totalValues, dtos.Count, itemName, pluralItemName));
+    }
+
+    /// <summary>
+    /// Gets items from the start of a list with a summary message, applying count and token limits.
+    /// </summary>
+    public static (List<TResult> items, string message) GetLimitFromStartWithSummary<T, TResult>(
+        List<T> values,
+        int totalValues,
+        int limit,
+        int maximumTokenLength,
+        string itemName,
+        string pluralItemName,
+        Func<T, TResult> convertToDto,
+        Func<TResult, int> estimateTokenSize)
+    {
+        Debug.Assert(totalValues >= values.Count, "Total values should be large or equal to the values passed into the method.");
+
+        var currentTokenCount = 0;
+        var dtos = new List<TResult>();
+
+        foreach (var value in values.Take(limit))
+        {
+            var dto = convertToDto(value);
+            var tokenCount = estimateTokenSize(dto);
+
+            if (currentTokenCount + tokenCount > maximumTokenLength)
+            {
+                break;
+            }
+
+            dtos.Add(dto);
+            currentTokenCount += tokenCount;
+        }
+
+        var message = totalValues == dtos.Count
+            ? $"Returned {ToQuantity(dtos.Count, itemName, pluralItemName)}."
+            : $"Returned first {ToQuantity(dtos.Count, itemName, pluralItemName)}. Later {ToQuantity(totalValues - dtos.Count, itemName, pluralItemName)} not returned because of size limits.";
+
+        return (dtos, message);
     }
 
     /// <summary>

@@ -16,53 +16,65 @@ namespace Aspire.Cli.Mcp.Tools;
 /// </summary>
 internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, ILogger<ListConsoleLogsTool> logger) : CliMcpTool
 {
+    internal const int DefaultLimit = 100;
+    internal const string TailPosition = "tail";
+    internal const string HeadPosition = "head";
+
+    private static readonly string[] s_positions = [TailPosition, HeadPosition];
+
+    private static readonly JsonElement s_inputSchema = JsonDocument.Parse(
+        $$"""
+        {
+          "type": "object",
+          "properties": {
+            "resourceName": {
+              "type": "string",
+              "description": "The resource name."
+            },
+            "search": {
+              "type": "string",
+              "description": "Full-text search to filter log content."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": {{SharedAIHelpers.ConsoleLogsLimit}},
+              "default": {{DefaultLimit}},
+              "description": "Maximum number of log lines to return. Responses are also capped by size."
+            },
+            "from": {
+              "type": "string",
+              "enum": ["{{TailPosition}}", "{{HeadPosition}}"],
+              "default": "{{TailPosition}}",
+              "description": "'tail' returns the latest log lines. 'head' returns the first log lines, which usually explain why a resource failed to start."
+            }
+          },
+          "required": ["resourceName"]
+        }
+        """).RootElement;
+
     public override string Name => KnownMcpTools.ListConsoleLogs;
 
-    public override string Description => "List console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'start', 'stop' and 'restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.";
+    public override string Description => "List console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'start', 'stop' and 'restart' which are used to start and stop resources. Returns the latest log lines by default; use from, limit and search to choose which lines are returned. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.";
 
     public override JsonElement GetInputSchema()
     {
-        return JsonDocument.Parse("""
-            {
-              "type": "object",
-              "properties": {
-                "resourceName": {
-                  "type": "string",
-                  "description": "The resource name."
-                },
-                "search": {
-                  "type": "string",
-                  "description": "Full-text search to filter log content."
-                }
-              },
-              "required": ["resourceName"]
-            }
-            """).RootElement;
+        return s_inputSchema;
     }
 
     public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
         var arguments = context.Arguments;
 
-        // Get the resource name from arguments
-        string? resourceName = null;
-        if (arguments is not null && arguments.TryGetValue("resourceName", out var resourceNameElement) &&
-            resourceNameElement.ValueKind == JsonValueKind.String)
-        {
-            resourceName = resourceNameElement.GetString();
-        }
-
+        var resourceName = McpToolHelpers.GetOptionalString(arguments, "resourceName");
         if (string.IsNullOrEmpty(resourceName))
         {
             throw new McpProtocolException("The resourceName parameter is required.", McpErrorCode.InvalidParams);
         }
 
-        string? search = null;
-        if (arguments is not null && arguments.TryGetValue("search", out var searchElement) &&
-            searchElement.ValueKind == JsonValueKind.String)
-        {
-            search = searchElement.GetString();
-        }
+        var search = McpToolHelpers.GetOptionalString(arguments, "search");
+        var limit = McpToolHelpers.GetOptionalInt32(arguments, "limit", minimum: 1, maximum: SharedAIHelpers.ConsoleLogsLimit, defaultValue: DefaultLimit);
+        var from = McpToolHelpers.GetOptionalChoice(arguments, "from", s_positions, defaultValue: TailPosition);
 
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
         if (connection is null)
@@ -82,49 +94,75 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
         try
         {
             var logParser = new LogParser(ConsoleColor.Black);
-            var logEntries = new LogEntries(maximumEntryCount: SharedAIHelpers.ConsoleLogsLimit) { BaseLineNumber = 1 };
+            var fragments = SearchTextParser.ParseFragments(search);
 
-            // Collect logs from the backchannel
-            await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
+            List<string> trimmedItems;
+            string limitMessage;
+            if (from == HeadPosition)
             {
-                logEntries.InsertSorted(logParser.CreateLogEntry(logLine.Content, logLine.IsError, resourceName));
+                // Keep only the first matching lines, but read the whole stream so the summary can report
+                // how many later lines were not returned. The tail buffer below can't be reused here because
+                // it evicts the oldest lines once it is full.
+                var headEntries = new List<LogEntry>();
+                var totalLogsCount = 0;
+                await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
+                {
+                    var entry = logParser.CreateLogEntry(logLine.Content, logLine.IsError, resourceName);
+                    if (!Matches(entry, fragments))
+                    {
+                        continue;
+                    }
+
+                    totalLogsCount++;
+                    if (headEntries.Count < limit)
+                    {
+                        headEntries.Add(entry);
+                    }
+                }
+
+                (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromStartWithSummary(
+                    headEntries,
+                    totalLogsCount,
+                    limit,
+                    SharedAIHelpers.CompactListTokenLength,
+                    "console log",
+                    "console logs",
+                    SharedAIHelpers.SerializeLogEntry,
+                    SharedAIHelpers.EstimateTokenCount);
             }
-
-            var entries = logEntries.GetEntries().ToList();
-
-            // Console logs have no structured attributes, so all search text is treated as
-            // free-text fragments matched against the log content and resource name.
-            if (!string.IsNullOrEmpty(search))
+            else
             {
-                var fragments = SearchTextParser.ParseFragments(search);
+                var logEntries = new LogEntries(maximumEntryCount: SharedAIHelpers.ConsoleLogsLimit) { BaseLineNumber = 1 };
+
+                // Collect logs from the backchannel
+                await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
+                {
+                    logEntries.InsertSorted(logParser.CreateLogEntry(logLine.Content, logLine.IsError, resourceName));
+                }
+
+                var entries = logEntries.GetEntries().ToList();
                 if (fragments.Length > 0)
                 {
-                    entries = entries.Where(e =>
-                        SearchTextParser.MatchesAllFragments(
-                            fragments,
-                            (e.Content ?? string.Empty, e.RawContent ?? string.Empty, e.ResourcePrefix ?? string.Empty),
-                            static (state, fragment) =>
-                                state.Item1.Contains(fragment, StringComparisons.FullTextSearch) ||
-                                state.Item2.Contains(fragment, StringComparisons.FullTextSearch) ||
-                                state.Item3.Contains(fragment, StringComparisons.FullTextSearch)))
-                        .ToList();
+                    entries = entries.Where(e => Matches(e, fragments)).ToList();
                 }
+
+                // When search is applied, total reflects matching entries. Otherwise, use the
+                // last line number which represents the total lines collected by the LogEntries buffer.
+                var totalLogsCount = string.IsNullOrEmpty(search)
+                    ? (entries.Count == 0 ? 0 : entries.Last().LineNumber)
+                    : entries.Count;
+
+                (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromEndWithSummary(
+                    entries,
+                    totalLogsCount,
+                    limit,
+                    SharedAIHelpers.CompactListTokenLength,
+                    "console log",
+                    "console logs",
+                    SharedAIHelpers.SerializeLogEntry,
+                    SharedAIHelpers.EstimateTokenCount);
             }
 
-            // When search is applied, total reflects matching entries. Otherwise, use the
-            // last line number which represents the total lines collected by the LogEntries buffer.
-            var totalLogsCount = string.IsNullOrEmpty(search)
-                ? (entries.Count == 0 ? 0 : entries.Last().LineNumber)
-                : entries.Count;
-
-            var (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromEndWithSummary(
-                entries,
-                totalLogsCount,
-                SharedAIHelpers.ConsoleLogsLimit,
-                "console log",
-                "console logs",
-                SharedAIHelpers.SerializeLogEntry,
-                SharedAIHelpers.EstimateTokenCount);
             var consoleLogsText = SharedAIHelpers.SerializeConsoleLogs(trimmedItems);
 
             var consoleLogsData = $"""
@@ -151,5 +189,18 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                 IsError = true
             };
         }
+    }
+
+    // Console logs have no structured attributes, so all search text is treated as
+    // free-text fragments matched against the log content and resource name.
+    private static bool Matches(LogEntry entry, string[] fragments)
+    {
+        return fragments.Length == 0 || SearchTextParser.MatchesAllFragments(
+            fragments,
+            (entry.Content ?? string.Empty, entry.RawContent ?? string.Empty, entry.ResourcePrefix ?? string.Empty),
+            static (state, fragment) =>
+                state.Item1.Contains(fragment, StringComparisons.FullTextSearch) ||
+                state.Item2.Contains(fragment, StringComparisons.FullTextSearch) ||
+                state.Item3.Contains(fragment, StringComparisons.FullTextSearch));
     }
 }
