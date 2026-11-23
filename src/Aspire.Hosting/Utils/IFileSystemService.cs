@@ -17,7 +17,7 @@ public interface IFileSystemService
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Use this instead of calling <see cref="Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(string?)"/> directly
+    /// Use this instead of calling system temporary directory APIs directly
     /// to ensure consistent temp file management and enable testability.
     /// </para>
     /// </remarks>
@@ -40,7 +40,7 @@ public interface ITempFileSystemService
     /// The directory is created immediately. Dispose the returned object to delete the directory.
     /// </para>
     /// <para>
-    /// Use this instead of calling <see cref="Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(string?)"/> directly.
+    /// Use this instead of calling system temporary directory APIs directly.
     /// </para>
     /// </remarks>
     TempDirectory CreateTempSubdirectory(string? prefix = null);
