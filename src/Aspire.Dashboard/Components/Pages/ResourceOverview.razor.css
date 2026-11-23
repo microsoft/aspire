@@ -325,18 +325,42 @@
     list-style: none;
 }
 
-.overview-list li {
+.overview-list li,
+.overview-list-row-link {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-2);
     min-width: 0;
     padding: 6px 0;
+}
+
+.overview-list li {
     border-top: 1px solid var(--colorNeutralStroke3);
     font-size: var(--aspire-font-size-body);
 }
 
 .overview-list li:first-child {
     border-top: 0;
+}
+
+.overview-list li:has(> .overview-list-row-link) {
+    padding: 0;
+    border-top-color: var(--property-grid-row-divider-color, var(--colorNeutralStroke3));
+}
+
+.overview-list-row-link {
+    flex: 1;
+    color: inherit;
+    text-decoration: none;
+}
+
+.overview-list-row-link:hover,
+.overview-list-row-link:focus-visible {
+    background-color: var(--property-grid-row-hover-color);
+}
+
+.overview-list-row-link:focus-visible {
+    outline-offset: -2px;
 }
 
 .overview-list-label {
@@ -376,15 +400,6 @@
     color: var(--colorNeutralForeground1);
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-a.overview-list-value {
-    color: var(--colorBrandForegroundLink);
-    text-decoration: none;
-}
-
-a.overview-list-value:hover {
-    text-decoration: underline;
 }
 
 .overview-list-time {
@@ -456,18 +471,24 @@ a.overview-endpoint-name:hover,
 }
 
 .overview-level {
-    flex: 0 0 auto;
-    min-width: 58px;
-    font-size: var(--aspire-font-size-secondary);
-    font-weight: var(--aspire-font-weight-semibold);
+    display: inline-grid;
+    flex: 0 0 12px;
+    place-items: center;
 }
 
-.overview-level.error {
-    color: var(--error);
+.overview-log-level-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--colorNeutralForeground3);
 }
 
-.overview-level.warning {
-    color: var(--warning);
+.overview-log-level-dot[data-log-level="Information"] {
+    background-color: var(--colorPaletteBlueBorderActive);
+}
+
+.overview-log-level-dot[data-log-level="Debug"] {
+    background-color: var(--success);
 }
 
 .overview-dot {
@@ -486,6 +507,17 @@ a.overview-endpoint-name:hover,
     margin-bottom: 8px;
 }
 
+.overview-stats:has(> a.overview-stat) {
+    flex-wrap: wrap;
+    gap: var(--aspire-space-2);
+    /* Offset the whole group so its scroll container doesn't clip the hover background. */
+    margin-inline-start: -2px;
+}
+
+.overview-stats:has(> a.overview-stat) > .overview-stat {
+    padding: var(--aspire-space-1);
+}
+
 .overview-stat {
     display: flex;
     flex-direction: column;
@@ -493,8 +525,18 @@ a.overview-endpoint-name:hover,
     text-decoration: none;
 }
 
-a.overview-stat:hover .overview-stat-label {
-    text-decoration: underline;
+a.overview-stat {
+    box-sizing: border-box;
+    min-width: 35px;
+    border-radius: var(--aspire-control-radius);
+}
+
+a.overview-stat:is(:hover, :focus-visible) {
+    background-color: var(--colorNeutralBackground3);
+}
+
+a.overview-stat:focus-visible {
+    outline-offset: -2px;
 }
 
 .overview-stat-value {

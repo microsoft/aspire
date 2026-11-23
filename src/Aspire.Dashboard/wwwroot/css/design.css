@@ -242,6 +242,7 @@
     --layout-right-padding: 12px;
     --layout-top-padding: 12px;
     --datagrid-hover-color: #efefef;
+    --property-grid-row-hover-color: var(--datagrid-hover-color);
     --datagrid-selected-color: var(--colorNeutralBackground3);
     --datagrid-border-color: #e5e5e5;
     --fluent-multi-splitter-background-color: var(--colorNeutralStroke1);
@@ -393,6 +394,8 @@
     --colorNeutralBackground4: var(--aspire-shell-background);
     --colorNeutralBackgroundDisabled: var(--colorNeutralBackground1);
     --datagrid-hover-color: var(--colorNeutralBackground1);
+    --property-grid-row-hover-color: var(--colorNeutralBackground3);
+    --property-grid-row-divider-color: #3f3c4a;
     --datagrid-border-color: #363241;
     --colorNeutralForeground1: #ffffff;
     --colorNeutralForeground3: #96929e;
