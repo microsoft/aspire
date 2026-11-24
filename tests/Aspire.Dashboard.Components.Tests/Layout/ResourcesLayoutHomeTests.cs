@@ -214,7 +214,7 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         Assert.Equal([Resources.Layout.ResourceTabHome], GetActiveEntries());
 
         MobileNavMenuEntry GetEntry(string text) => layout.Instance.GetMobileNavMenuEntries().Single(e => e.Text == text);
-        IEnumerable<string> GetActiveEntries() => layout.Instance.GetMobileNavMenuEntries().Where(e => e.IsActive == true).Select(e => e.Text);
+        IEnumerable<string> GetActiveEntries() => layout.Instance.GetMobileNavMenuEntries().Where(e => e.IsActive).Select(e => e.Text);
     }
 
     [Fact]

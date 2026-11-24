@@ -406,8 +406,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private Task LaunchHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.KeyboardShortcuts);
 
-    // The help dialog has a tab for AI agents, so launching the agents help opens it on that tab.
-    public Task LaunchAIAgentsAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.AIAgents);
+    private Task LaunchDocumentationHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.Documentation);
 
     private async Task LaunchHelpAsync(string? returnFocusElementId, HelpDialogTab tab)
     {
