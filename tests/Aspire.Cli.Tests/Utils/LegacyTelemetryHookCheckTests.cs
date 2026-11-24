@@ -102,6 +102,8 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
     [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash /work/project/hooks/track-telemetry.sh"}],"PostToolUse":[{"hooks":[{"command":"bash","args":["/work/project/hooks/track-telemetry.sh"]}]}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"powershell":"pwsh -File 'C:\\work\\hooks\\track-telemetry.ps1'"}],"PostToolUse":[{"hooks":[{"command":"pwsh -File 'C:\\work\\hooks\\track-telemetry.ps1'"}]}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '{sh}.backup'"}],"PostToolUse":[{"hooks":[{"command":"pwsh","args":["-File","{ps1}.old"]}]}]}}""")]
+    // An exec-form hook that passes a legacy script path as data does not run the script.
+    [InlineData("""{"hooks":{"PostToolUse":[{"hooks":[{"command":"cat","args":["{sh}"]},{"command":"bash","args":["/work/hooks/log.sh","{sh}"]},{"command":"pwsh","args":["-Command","Get-Content","{ps1}"]}]}]}}""")]
     // A later repeated property replaces the legacy registration for Copilot. The Claude hook writer rejects
     // repeated properties, so `aspire agent init` could not replace a Claude registration in such a file.
     [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '{sh}'"}]},"hooks":{}}""")]

@@ -244,6 +244,31 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         Assert.Equal(4, groups.Count);
     }
 
+    [Theory]
+    [InlineData("""{"type":"command","command":"cat","args":["{sh}"]}""")]
+    [InlineData("""{"type":"command","command":"bash","args":["/work/hooks/log.sh","{sh}"]}""")]
+    [InlineData("""{"type":"command","command":"pwsh","args":["-Command","Get-Content","{ps1}"]}""")]
+    public async Task ConfigureAsync_PreservesHookThatPassesLegacyScriptPathAsData(string userHookJson)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var legacyHooks = Path.Combine(home.FullName, ".aspire", "hooks");
+        userHookJson = userHookJson
+            .Replace("{sh}", JsonEncodedText.Encode(Path.Combine(legacyHooks, "track-telemetry.sh")).ToString())
+            .Replace("{ps1}", JsonEncodedText.Encode(Path.Combine(legacyHooks, "track-telemetry.ps1")).ToString());
+        var claude = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
+        await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"),
+            $$$"""{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{{{userHookJson}}}]}]}}""").DefaultTimeout();
+        var configurator = CreateConfigurator(workspace, home);
+
+        await configurator.ConfigureAsync([ClaudeCodeAgentClient.ClientId], CancellationToken.None).DefaultTimeout();
+
+        var groups = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
+        Assert.Equal(4, groups.Count);
+        var userHook = Assert.Single(groups[0]!["hooks"]!.AsArray());
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(userHookJson), userHook));
+    }
+
     [Fact]
     public async Task ConfigureAsync_MigratesAllToolClaudeHookToScopedGroups()
     {

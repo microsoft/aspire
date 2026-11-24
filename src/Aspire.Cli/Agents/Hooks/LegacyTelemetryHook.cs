@@ -19,7 +19,10 @@ internal sealed class LegacyTelemetryHook
     // Shared by both IsMatch overloads so doctor detection and agent init removal inspect the same fields.
     private static readonly string[] s_commandPropertyNames = ["command", "bash", "powershell"];
 
-    // Every accepted spelling of each script path, normalized to forward slashes.
+    // Each script path, normalized to forward slashes.
+    private readonly string[] _scriptPaths;
+
+    // Every accepted shell-command spelling of each script path, normalized to forward slashes.
     private readonly string[] _scriptReferences;
 
     /// <summary>
@@ -36,13 +39,19 @@ internal sealed class LegacyTelemetryHook
                 environment.GetEnvironmentVariable(AspireHomeDirectory.EnvironmentVariable), context.HomeDirectory.FullName),
         };
 
-        // Aspire 13.5 and 13.6 wrote the script path as a discrete exec-form argument, or single-quoted as the
-        // final token of a shell command, escaping apostrophes for bash ('\'') or PowerShell (''):
-        //   ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\Users\\me\\.aspire\\hooks\\track-telemetry.ps1"]
+        var scriptPaths = homes
+            .SelectMany(home => s_scriptNames.Select(name => Path.Combine(home, "hooks", name)))
+            .ToArray();
+        _scriptPaths = scriptPaths
+            .Select(Normalize)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        // Aspire 13.5 and 13.6 wrote shell-command hooks with the script path single-quoted as the final token,
+        // escaping apostrophes for bash ('\'') or PowerShell (''):
         //   bash '/home/me/.aspire/hooks/track-telemetry.sh'
         //   pwsh -NoProfile -ExecutionPolicy Bypass -File 'C:\Users\me\.aspire\hooks\track-telemetry.ps1'
-        _scriptReferences = homes
-            .SelectMany(home => s_scriptNames.Select(name => Path.Combine(home, "hooks", name)))
+        _scriptReferences = scriptPaths
             .SelectMany(path => new[] { path, $"'{path.Replace("'", "'\\''")}'", $"'{path.Replace("'", "''")}'" })
             .Select(Normalize)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -115,12 +124,34 @@ internal sealed class LegacyTelemetryHook
     /// Reports whether a hook runs one of the legacy scripts this matcher owns.
     /// </summary>
     internal bool IsMatch(JsonObject hook)
-        => s_commandPropertyNames.Any(name => ReferencesScript(hook[name]))
-            || (hook["args"] is JsonArray args && args.Any(ReferencesScript));
+        => s_commandPropertyNames.Any(name => ReferencesScript(GetString(hook[name])))
+            || IsExecFormMatch(
+                GetString(hook["command"]),
+                hook["args"] is JsonArray args ? [.. args.Select(GetString)] : null);
 
     private bool IsMatch(JsonElement hook)
-        => s_commandPropertyNames.Any(name => ReferencesScript(GetProperty(hook, name)))
-            || (GetProperty(hook, "args") is { ValueKind: JsonValueKind.Array } args && args.EnumerateArray().Any(arg => ReferencesScript(arg)));
+        => s_commandPropertyNames.Any(name => ReferencesScript(GetString(GetProperty(hook, name))))
+            || IsExecFormMatch(
+                GetString(GetProperty(hook, "command")),
+                GetProperty(hook, "args") is { ValueKind: JsonValueKind.Array } args ? [.. args.EnumerateArray().Select(arg => GetString(arg))] : null);
+
+    // Aspire 13.5 and 13.6 wrote Claude hooks in exec form, with the script as bash's only argument or as the
+    // value of pwsh's final -File option:
+    //   {"command":"bash","args":["/home/me/.aspire/hooks/track-telemetry.sh"]}
+    //   {"command":"pwsh","args":["-NoProfile","-ExecutionPolicy","Bypass","-File","C:\\Users\\me\\.aspire\\hooks\\track-telemetry.ps1"]}
+    // Any other shape, such as {"command":"cat","args":["/home/me/.aspire/hooks/track-telemetry.sh"]}, passes
+    // the path as data rather than running the script, so it is left alone.
+    private bool IsExecFormMatch(string? command, string?[]? args)
+        => args switch
+        {
+            [var script] when string.Equals(command, "bash", StringComparison.OrdinalIgnoreCase) => IsScriptPath(script),
+            [.., var option, var script] when string.Equals(command, "pwsh", StringComparison.OrdinalIgnoreCase)
+                => string.Equals(option, "-File", StringComparison.OrdinalIgnoreCase) && IsScriptPath(script),
+            _ => false,
+        };
+
+    private bool IsScriptPath(string? value)
+        => value is not null && _scriptPaths.Contains(Normalize(value), StringComparer.OrdinalIgnoreCase);
 
     // Returns the last value for a repeated name, matching JSON.parse. A strictly parsed document has at most one.
     private static JsonElement? GetProperty(JsonElement element, string name)
@@ -142,14 +173,19 @@ internal sealed class LegacyTelemetryHook
         return value;
     }
 
-    private bool ReferencesScript(JsonElement? element)
-        => element is { ValueKind: JsonValueKind.String } value && ReferencesScript(value.GetString()!);
+    private static string? GetString(JsonElement? element)
+        => element is { ValueKind: JsonValueKind.String } value ? value.GetString() : null;
 
-    private bool ReferencesScript(JsonNode? node)
-        => node is JsonValue value && value.TryGetValue<string>(out var text) && ReferencesScript(text);
+    private static string? GetString(JsonNode? node)
+        => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
-    private bool ReferencesScript(string text)
+    private bool ReferencesScript(string? text)
     {
+        if (text is null)
+        {
+            return false;
+        }
+
         // Require an Aspire-owned script path as the whole value or as its final whitespace-separated token, so
         // user hooks such as `bash /work/project/hooks/track-telemetry.sh` or
         // `bash '/home/me/.aspire/hooks/track-telemetry.sh.backup'` are left alone. Paths compare without regard
