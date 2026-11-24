@@ -29,10 +29,12 @@ public sealed class TestLocalStorage : ILocalStorage
 
     public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
     {
+        // Match the browser snapshot: every key is requested before any of those reads completes.
+        var reads = keys.Select(key => (key, task: GetUnprotectedAsync<object>(key))).ToArray();
         var values = new Dictionary<string, StorageResult<object>>(StringComparer.Ordinal);
-        foreach (var key in keys)
+        foreach (var (key, task) in reads)
         {
-            values[key] = await GetUnprotectedAsync<object>(key);
+            values[key] = await task;
         }
 
         return new UnprotectedSnapshot(values);
