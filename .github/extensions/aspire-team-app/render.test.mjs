@@ -49,9 +49,271 @@ test("render keeps the current dashboard visible and surfaces later load errors"
   assert.match(app.innerHTML, /GitHub accounts/);
 });
 
+test("layout selector saves rows without rebuilding cards and can switch back to grid", async () => {
+  const requests = [];
+  const select = {
+    value: "grid", disabled: false, listeners: {},
+    addEventListener(event, handler) { this.listeners[event] = handler; },
+  };
+  const { app, api } = createRendererHarness({
+    elements: { "layout-select": select },
+    fetch: async (path, options) => {
+      if (String(path) !== "api/layout") return new Promise(() => {});
+      requests.push({ path: String(path), body: JSON.parse(options.body) });
+      return jsonResponse({ prefs: { ...rendererPrefs(), layout: requests.at(-1).body.layout } });
+    },
+  });
+  api.setState(reviewDashboard(12));
+  api.setPrefs(rendererPrefs());
+  api.render();
+  const cards = app.innerHTML;
+  assert.match(cards, /aria-label="Dashboard layout"/);
+  assert.equal(app.classList.contains("rows-view"), false);
+  select.value = "rows";
+  await select.listeners.change();
+  assert.equal(app.classList.contains("rows-view"), true);
+  assert.equal(select.value, "rows");
+  assert.equal(select.disabled, false);
+  assert.equal(app.innerHTML, cards, "switching layout preserves card nodes and action state");
+  select.value = "grid";
+  await select.listeners.change();
+  assert.equal(app.classList.contains("rows-view"), false);
+  assert.deepEqual(requests, [
+    { path: "api/layout", body: { layout: "rows" } },
+    { path: "api/layout", body: { layout: "grid" } },
+  ]);
+});
+
+test("saved and pushed layouts apply in every mode without replacing the current view", () => {
+  const { app, api } = createRendererHarness();
+  for (const mode of ["review", "issues", "ship", "health"]) {
+    const dashboard = mode === "health" ? healthDashboard([], emptyHealthCounts(), true)
+      : { ...reviewDashboard(12), mode, lanes: [] };
+    api.setState(dashboard);
+    api.setPrefs({ ...rendererPrefs(), layout: "rows" });
+    api.render();
+    assert.equal(app.classList.contains("rows-view"), true);
+    assert.match(app.innerHTML, /value="rows" selected/);
+    const markup = app.innerHTML;
+    api.onPreferences({ ...rendererPrefs(), layout: "grid" });
+    assert.equal(app.classList.contains("rows-view"), false);
+    assert.equal(app.innerHTML, markup);
+  }
+  api.setView("settings");
+  api.render();
+  const settings = app.innerHTML;
+  api.onPreferences({ ...rendererPrefs(), layout: "rows" });
+  assert.equal(app.innerHTML, settings, "shared layout updates must not discard unsaved settings");
+});
+
+test("rows preserve the complete grid content, item counts, ordering, limits, and actions in every mode", () => {
+  const review = reviewDashboard(25);
+  const items = [...review.attention.focus, ...review.attention.focusRemainder];
+  for (const [index, item] of items.entries()) {
+    item.pr.number = 100 - index;
+    item.reason = "Reason for " + item.pr.number;
+    item.signals = [{ label: "CI failing", tone: "danger" }];
+  }
+  review.attention.forMe = items.slice(0, 9);
+  review.attention.focusExclusions = items.slice(10, 23);
+  review.attention.community = items.slice(20);
+  review.attention.buckets = [{ label: "CI failing", tone: "danger", items: items.slice(0, 4) }];
+  const issues = {
+    ...review, mode: "issues",
+    lanes: [{
+      id: "assigned", label: "Assigned to you",
+      items: items.slice(0, 5).map((item) => ({
+        issue: { ...item.pr, linkedPullRequests: [{ ...items[6].pr, state: "OPEN" }] },
+        signals: item.signals,
+      })),
+    }],
+  };
+  const ship = {
+    ...review, mode: "ship",
+    lanes: [{ id: "ready", label: "Ready to ship", items: items.slice(5, 12) }],
+  };
+  const health = healthDashboard(items.slice(0, 3).map((item) => ({
+    id: "github:" + item.pr.number, provider: "github", state: "failing",
+    name: item.pr.title, repository: "example/repo-" + item.pr.number,
+    url: item.pr.url, branch: "main", daysSinceSuccess: 2, failureStreak: 3,
+    reasons: [{ summary: item.reason }],
+    evidence: [{ label: "Build", detail: "Failed validation", url: item.pr.url }],
+  })), { ...emptyHealthCounts(), total: 3, failing: 3 }, true);
+
+  for (const dashboard of [review, issues, ship, health]) {
+    const renderLayout = (layout) => {
+      const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+      api.setState(dashboard);
+      api.setPrefs({ ...rendererPrefs(), layout });
+      api.render();
+      return app.innerHTML.slice(app.innerHTML.indexOf('<div class="viewport">'));
+    };
+    const grid = renderLayout("grid");
+    const rows = renderLayout("rows");
+    const count = dashboard.mode === "review" ? 6 + 10 + 10 + 5 + 4
+      : dashboard.mode === "issues" ? 5 : dashboard.mode === "ship" ? 7 : 3;
+    const cardPattern = dashboard.mode === "health" ? /<article class="health-card /g : /<div class="card">/g;
+    assert.equal([...grid.matchAll(cardPattern)].length, count, dashboard.mode + " must exercise populated sections");
+    assert.equal(rows, grid, dashboard.mode + " must change presentation only, including after reload");
+  }
+});
+
+test("failed layout saves restore the previous layout and display the error", async () => {
+  let rejectSave;
+  const select = { value: "grid", addEventListener() {} };
+  const { app, api } = createRendererHarness({
+    elements: { "layout-select": select },
+    fetch: () => new Promise((_, reject) => { rejectSave = reject; }),
+  });
+  api.setState(reviewDashboard(2));
+  api.setPrefs(rendererPrefs());
+  api.render();
+  const saving = api.setLayout("rows");
+  assert.equal(select.disabled, true);
+  assert.equal(app.classList.contains("rows-view"), true);
+  await api.setLayout("grid");
+  rejectSave(new Error("Could not save layout"));
+  await saving;
+  assert.equal(select.disabled, false);
+  assert.equal(select.value, "grid");
+  assert.equal(app.classList.contains("rows-view"), false);
+  assert.match(app.innerHTML, /role="alert">Could not save layout/);
+});
+
+test("reconnecting applies a layout change even when dashboard data has not changed", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  api.setPrefs({ ...rendererPrefs(), layout: "grid" });
+  api.applyPushedState({ dashboard: { ...reviewDashboard(3), seq: 1 }, prefs: rendererPrefs() });
+  const markup = app.innerHTML;
+  api.onSnapshot({ seq: 1, prefs: { ...rendererPrefs(), layout: "rows" } });
+  assert.equal(app.classList.contains("rows-view"), true);
+  assert.equal(app.innerHTML, markup);
+  assert.equal(api.getAppliedSeq(), 1);
+});
+
+test("returning from a form keeps newer layout preferences when applying a deferred dashboard", () => {
+  for (const view of ["settings", "accounts"]) {
+    for (const event of ["preferences", "snapshot"]) {
+      const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+      api.applyPushedState({ dashboard: { ...reviewDashboard(3), seq: 1 }, prefs: rendererPrefs() });
+      api.goView(view);
+      api.applyPushedState({ dashboard: { ...reviewDashboard(4), seq: 2 }, prefs: rendererPrefs() });
+      const form = app.innerHTML;
+      const nextPrefs = { ...rendererPrefs(), layout: "rows" };
+      if (event === "preferences") api.onPreferences(nextPrefs);
+      else api.onSnapshot({ seq: 1, prefs: nextPrefs });
+      assert.equal(app.innerHTML, form);
+      api.goView("queue");
+      assert.equal(api.getAppliedSeq(), 2);
+      assert.equal(api.getPrefs().layout, "rows", view + ": " + event);
+      assert.equal(app.classList.contains("rows-view"), true);
+      assert.match(app.innerHTML, /value="rows" selected/);
+    }
+  }
+});
+
+test("failed layout saves preserve settings edits made while the request was pending", async () => {
+  const draft = {
+    "release-input": { value: "13.4-preview" },
+    "s-drafts": { checked: true },
+    "s-detached": { checked: true },
+    "n-review": { checked: false },
+    "n-ready": { checked: true },
+    "n-changes": { checked: false },
+    "n-ci": { checked: false },
+  };
+  const elements = structuredClone(draft);
+  const app = {
+    html: "",
+    get innerHTML() { return this.html; },
+    set innerHTML(value) {
+      this.html = value;
+      if (value.includes("<h2>Settings</h2>")) {
+        for (const [id, field] of Object.entries(elements)) {
+          if (id === "release-input") field.value = "13.1";
+          else field.checked = false;
+        }
+      }
+    },
+    removeAttribute() {},
+    classList: classList(),
+  };
+  let rejectSave;
+  const { api } = createRendererHarness({
+    app, elements,
+    fetch: (path) => String(path) === "api/layout"
+      ? new Promise((_, reject) => { rejectSave = reject; })
+      : new Promise(() => {}),
+  });
+  api.setState(reviewDashboard(3));
+  api.setPrefs(rendererPrefs());
+  api.render();
+  const saving = api.setLayout("rows");
+  api.goView("settings");
+  api.applyPushedState({
+    dashboard: { ...reviewDashboard(4), seq: 2 },
+    prefs: { ...rendererPrefs(), layout: "rows" },
+  });
+  for (const [id, field] of Object.entries(draft)) Object.assign(elements[id], field);
+  rejectSave(new Error("Could not save layout"));
+  await saving;
+  assert.deepEqual(elements, draft);
+  assert.match(app.innerHTML, /<h2>Settings<\/h2>/);
+  assert.match(app.innerHTML, /role="alert">Could not save layout/);
+  assert.equal(app.classList.contains("rows-view"), false);
+  assert.equal(api.getPrefs().layout, "grid");
+  api.goView("queue");
+  assert.equal(api.getAppliedSeq(), 2);
+  assert.equal(api.getPrefs().layout, "grid");
+  assert.equal(app.classList.contains("rows-view"), false);
+});
+
+test("row layout flattens masonry columns in queue order and restores grid columns", () => {
+  function node(isCard = false) {
+    return {
+      children: [], clientWidth: 900, classList: classList(),
+      get firstChild() { return this.children[0]; },
+      appendChild(child) {
+        child.parent?.removeChild(child);
+        this.children.push(child);
+        child.parent = this;
+      },
+      removeChild(child) {
+        this.children.splice(this.children.indexOf(child), 1);
+        child.parent = null;
+      },
+      isCard,
+    };
+  }
+  const cards = Array.from({ length: 12 }, () => node(true));
+  cards.forEach((card) => card.classList.add("card"));
+  const grid = node();
+  cards.forEach((card) => grid.appendChild(card));
+  const { api, document } = createRendererHarness({
+    querySelectorAll: (selector) => selector === ".grid" ? [grid] : [],
+  });
+  document.createElement = () => node();
+  api.setPrefs({ layout: "grid" });
+  api.layoutGrids();
+  assert.equal(grid.children.length, 3);
+  assert.equal(grid.classList.contains("mcol"), true);
+  for (const width of [280, 600, 900, 1400]) {
+    grid.clientWidth = width;
+    api.onPreferences({ layout: "rows" });
+    assert.deepEqual(grid.children, cards, "every original card must become a row in the same order");
+    assert.equal(grid.classList.contains("mcol"), false);
+    api.onPreferences({ layout: "grid" });
+    const columns = Math.max(1, Math.floor((width + 12) / 292));
+    assert.equal(grid.children.length, columns === 1 ? cards.length : columns);
+    const restored = columns === 1 ? grid.children : grid.children.flatMap((column) => column.children);
+    assert.deepEqual(restored, cards, "switching back must preserve every original card and its position");
+  }
+});
+
 test("Needs attention renders only its prefix and offers a collapsed, action-free remainder for position lookup", () => {
   const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
-  for (const count of [0, 4, 10, 11, 25]) {
+  for (const [layout, count] of ["grid", "rows"].flatMap((layout) => [0, 4, 10, 11, 25].map((count) => [layout, count]))) {
+    api.setPrefs({ ...rendererPrefs(), layout });
     api.setState(reviewDashboard(count));
     api.render();
     const queue = app.innerHTML.match(/<ol class="focus-queue"[^>]*>([\s\S]*?)<\/ol>/);
@@ -1916,7 +2178,7 @@ function createRendererHarness(overrides = {}) {
   vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
-  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill })", sandbox));
+  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill, setLayout, goView })", sandbox));
   return { app, api: sandbox.__test, events, document };
 }
 

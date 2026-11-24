@@ -167,7 +167,7 @@ button { font-family: inherit; cursor: pointer; }
 /* Header */
 .topbar {
   position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; gap: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
   padding: 10px 16px;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px);
@@ -191,6 +191,11 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .tab.active { color: var(--fg); background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border); }
 .spacer { flex: 1; }
 .tb-actions { display: inline-flex; align-items: center; gap: 6px; }
+.layout-select {
+  height: 30px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--fg); font: inherit; font-size: 12px;
+}
+.layout-select:disabled { opacity: .65; }
 .refresh-pref {
   height: 30px; display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
@@ -335,6 +340,21 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 }
 .focus-queue > li { min-width: 0; }
 .focus-queue .card { margin-bottom: 0; }
+.rows-view .grid { column-width: auto; }
+.rows-view .focus-queue { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.rows-view .focus-queue > li { display: flex; align-items: baseline; gap: 10px; }
+.rows-view .focus-queue > li > .queue-position { min-width: 3ch; flex: none; }
+.rows-view .focus-queue .card { flex: 1; min-width: 0; }
+.rows-view .card { margin-bottom: 8px; padding: 10px 12px; }
+.rows-view .card-main { min-width: 0; gap: 4px; }
+.rows-view .card-sub { flex-wrap: wrap; }
+@media (min-width: 821px) {
+  .rows-view .card { flex-direction: row; align-items: center; gap: 16px; }
+  .rows-view .card > .card-main:first-child { flex: 2 1 320px; }
+  .rows-view .card > .pills { flex: 1 1 180px; }
+  .rows-view .card > .card-actions { flex: 1 1 220px; margin-top: 0; }
+  .rows-view .card > .linked-pr { flex: 1 1 180px; }
+}
 .queue-position { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
 .queue-remainder { margin: 10px 0 0; padding: 0; list-style: none; }
 .queue-remainder > li { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
@@ -559,6 +579,9 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   gap: 10px; align-items: stretch;
 }
 .health-source-group .health-card { min-height: 252px; box-shadow: none; }
+.rows-view .health-grid, .rows-view .health-group-cards { grid-template-columns: minmax(0, 1fr); }
+.rows-view .health-source-group { grid-column: auto; }
+.rows-view .health-card { min-height: 0; }
 .health-source-group .health-card:hover {
   border-color: var(--border-strong);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--fg) 7%, transparent);
@@ -1091,6 +1114,7 @@ let pendingState = null;
 let updateAvailable = null;
 let applyingUpdate = false;
 let savingAutoApply = false;
+let savingLayout = false;
 let nextPollAt = null;
 let pollCountdownTimer = null;
 // Monotonic revision of the snapshot currently applied. fetchedAt is a wall-clock display
@@ -1443,7 +1467,9 @@ function onPreferences(nextPrefs) {
   if (!nextPrefs || typeof nextPrefs !== "object") return;
   const wasEnabled = autoApplyEnabled();
   prefs = nextPrefs;
+  reconcilePendingLayout();
   updateRefreshControls();
+  applyLayout();
   if (!wasEnabled && autoApplyEnabled() && updateAvailable) {
     applyAvailableUpdate();
   }
@@ -1451,8 +1477,13 @@ function onPreferences(nextPrefs) {
 
 function onSnapshot(payload) {
   onPollSchedule(payload);
+  // Display preferences can change without advancing the dashboard revision.
+  if (payload?.prefs && typeof payload.prefs === "object") {
+    prefs = payload.prefs;
+    reconcilePendingLayout();
+    applyLayout();
+  }
   if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
-  if (payload.prefs && typeof payload.prefs === "object") prefs = payload.prefs;
   // Initial load already reads the complete cache. On reconnect, replay either applies the missed
   // state automatically or restores the pending-update affordance without touching the board.
   if (!state) return;
@@ -1514,6 +1545,47 @@ async function toggleAutoApply() {
   } finally {
     savingAutoApply = false;
     updateRefreshControls();
+  }
+}
+
+function reconcilePendingLayout() {
+  // Deferred dashboard data must not restore a layout superseded by a preference update.
+  if (pendingState) {
+    pendingState = { ...pendingState, prefs: { ...pendingState.prefs, layout: prefs?.layout } };
+  }
+}
+
+function applyLayout() {
+  app.classList.toggle("rows-view", prefs?.layout === "rows");
+  const select = document.getElementById("layout-select");
+  if (select) {
+    select.value = prefs?.layout === "rows" ? "rows" : "grid";
+    select.disabled = savingLayout;
+  }
+  layoutGrids();
+}
+
+async function setLayout(layout) {
+  if (savingLayout || (layout !== "grid" && layout !== "rows")) return;
+  const previous = prefs?.layout === "rows" ? "rows" : "grid";
+  if (layout === previous) return;
+  prefs = { ...(prefs || {}), layout };
+  reconcilePendingLayout();
+  savingLayout = true;
+  applyLayout();
+  try {
+    const data = await postJSON("api/layout", { layout });
+    onPreferences(data.prefs);
+  } catch (e) {
+    prefs = { ...(prefs || {}), layout: previous };
+    reconcilePendingLayout();
+    loadError = String((e && e.message) || e);
+    const settingsDraft = captureSettingsDraft();
+    render();
+    restoreSettingsDraft(settingsDraft);
+  } finally {
+    savingLayout = false;
+    applyLayout();
   }
 }
 
@@ -2843,6 +2915,9 @@ function topbarHtml() {
   const right =
     (state ? accountChip() : "") +
     '<div class="tb-actions">' +
+    (view === "queue" ? '<select class="layout-select" id="layout-select" aria-label="Dashboard layout">' +
+      '<option value="grid"' + (prefs?.layout !== "rows" ? " selected" : "") + '>Grid</option>' +
+      '<option value="rows"' + (prefs?.layout === "rows" ? " selected" : "") + '>Rows</option></select>' : "") +
     '<button class="iconbtn live-tooltip ' + (refreshing ? "spin" : "") + '" id="refresh-btn" aria-label="' + refreshTooltip() +
       '" data-tooltip="' + refreshTooltip() + '">' + ICONS.refresh + "</button>" +
     '<button class="update-ready ' + (applyingUpdate ? "busy" : "") + '" id="apply-update-btn" type="button" ' +
@@ -3424,7 +3499,7 @@ function render(forward) {
   }
   wire();
   updateRefreshControls();
-  layoutGrids();
+  applyLayout();
 }
 
 /* ---- masonry: fill the left column first, top-to-bottom ----
@@ -3466,7 +3541,8 @@ function layoutGrid(grid) {
   var w = grid.clientWidth;
   if (!w) return; // not visible yet; the observer fires again when it is
   var COLW = 280, GAP = 12;
-  var cols = Math.max(1, Math.floor((w + GAP) / (COLW + GAP)));
+  // Row mode must also bypass masonry's DOM redistribution, not just its CSS columns.
+  var cols = prefs?.layout === "rows" ? 1 : Math.max(1, Math.floor((w + GAP) / (COLW + GAP)));
   if (cols > cards.length) cols = cards.length || 1;
   if (grid.__cols === cols) return; // responsive column count unchanged
   grid.__cols = cols;
@@ -3670,6 +3746,7 @@ function isSettingsSaveShortcut(event) {
 
 function wire() {
   document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  const layout = document.getElementById("layout-select"); if (layout) layout.addEventListener("change", () => setLayout(layout.value));
   const rb = document.getElementById("refresh-btn"); if (rb) rb.addEventListener("click", refresh);
   const applyUpdate = document.getElementById("apply-update-btn"); if (applyUpdate) applyUpdate.addEventListener("click", applyAvailableUpdate);
   const autoApply = document.getElementById("auto-apply-btn"); if (autoApply) autoApply.addEventListener("click", toggleAutoApply);
