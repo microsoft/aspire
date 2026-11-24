@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Backport; CLI channel update and restore diagnostics fixes",
+  "mergedAt": "2026-11-23T20:51:53Z",
+  "number": 22219,
+  "runDate": "2026-11-24T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix AppHost channel updates and restore diagnostics"
+}

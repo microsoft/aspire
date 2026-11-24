@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire update now honors the configured channel for C# AppHosts, applies channel updates without requiring a validation restore, and shows native restore diagnostics with best-effort credential redaction.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-11-23T20:51:53Z",
+  "lastMergedAt": "2026-11-23T20:51:53Z",
+  "name": "AppHost channel updates and restore diagnostics",
+  "owner": "danegsta",
+  "prs": [
+    22219
+  ]
+}

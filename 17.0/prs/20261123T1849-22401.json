@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backport; VS debugging fix for Azure Functions",
+  "mergedAt": "2026-11-23T18:49:12Z",
+  "number": 22401,
+  "runDate": "2026-11-24T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix Visual Studio debugging for Azure Functions projects"
+}
