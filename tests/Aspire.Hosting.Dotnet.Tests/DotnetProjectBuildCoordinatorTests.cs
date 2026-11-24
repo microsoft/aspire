@@ -33,6 +33,8 @@ namespace Aspire.Hosting.Dotnet.Tests;
 
 public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 {
+    private static string CoordinatedProjectBuildMode => OperatingSystem.IsWindows() ? "-mt:false" : "-mt";
+
     static DotnetProjectBuildCoordinatorTests()
     {
         EmptyFiles.FileExtensions.AddTextExtension("proj");
@@ -89,7 +91,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.StartsWith(buildResource.BuildDirectory, buildProjectPath, StringComparison.Ordinal);
         Assert.True(File.Exists(buildProjectPath));
 
-        var expected = new List<string> { "build", buildProjectPath, "-mt" };
+        var expected = new List<string> { "build", buildProjectPath, CoordinatedProjectBuildMode };
         AddExpectedConfiguration(builder, expected);
         Assert.Equal(expected, args);
         Assert.Equal(1, versionProvider.CallCount);
@@ -167,7 +169,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var firstExpected = new List<string> { "build", Assert.IsType<string>(firstArgs[1]) };
         if (firstSupportsMultiThreadedBuild)
         {
-            firstExpected.Add("-mt");
+            firstExpected.Add(CoordinatedProjectBuildMode);
         }
 
         AddExpectedConfiguration(builder, firstExpected);
@@ -184,7 +186,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var secondExpected = new List<string> { "build", Assert.IsType<string>(secondArgs[1]) };
         if (secondSupportsMultiThreadedBuild)
         {
-            secondExpected.Add("-mt");
+            secondExpected.Add(CoordinatedProjectBuildMode);
         }
 
         AddExpectedConfiguration(builder, secondExpected);
@@ -228,7 +230,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var buildArguments = await ArgumentEvaluator.GetArgumentListAsync(
             buildResource,
             app.Services);
-        Assert.Equal(1, buildArguments.Count(argument => argument == "-mt"));
+        var expectedBuildArguments = new List<string> { "build", projectPath, "-mt" };
+        AddExpectedConfiguration(builder, expectedBuildArguments);
+        Assert.Equal(expectedBuildArguments, buildArguments.Where(argument => !argument.StartsWith('@')));
         await app.ResourceNotifications.PublishUpdateAsync(
             buildResource,
             snapshot => snapshot with
@@ -245,7 +249,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var rebuildArguments = await ArgumentEvaluator.GetArgumentListAsync(
             rebuilder,
             app.Services);
-        Assert.Equal(0, rebuildArguments.Count(argument => argument == "-mt"));
+        var expectedRebuildArguments = new List<string> { "build", projectPath };
+        AddExpectedConfiguration(builder, expectedRebuildArguments);
+        Assert.Equal(expectedRebuildArguments, rebuildArguments.Where(argument => !argument.StartsWith('@')));
         await app.ResourceNotifications.PublishUpdateAsync(
             rebuilder,
             snapshot => snapshot with
@@ -886,7 +892,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             new BeforeResourceStartedEvent(fileBuild, app.Services),
             TestContext.Current.CancellationToken);
         var projectBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(projectBuild, app.Services);
-        var expectedProjectBuildArgs = new List<string> { "build", projectBuildTarget, "-mt" };
+        var expectedProjectBuildArgs = new List<string> { "build", projectBuildTarget, CoordinatedProjectBuildMode };
         AddExpectedConfiguration(builder, expectedProjectBuildArgs);
         Assert.Equal(expectedProjectBuildArgs, projectBuildArgs);
         var fileBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(fileBuild, app.Services);
