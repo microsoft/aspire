@@ -5,7 +5,9 @@ import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { ResourceAttachConfigurationError, type ResourceAttachProvider, type ResourceDebugResourceSnapshot } from '../resourceDebugContracts';
 import {
-    launchedChildProcessResolver,
+    LaunchedChildProcessResolver,
+    SystemLaunchedChildProcessQuery,
+    findDescendantProcessIds,
     type LaunchedChildProcess,
     type LaunchedChildProcessIdentity,
 } from '../launchedChildProcessDiscovery';
@@ -132,10 +134,7 @@ export function createGoResourceAttachProvider(processResolver: GoApplicationPro
 export const goResourceAttachProvider: ResourceAttachProvider =
     createGoResourceAttachProvider({
         resolveApplicationPid: async (goProcessId, cancellationToken) =>
-            await launchedChildProcessResolver.resolveProcessId(
-                goProcessId,
-                createGoRunProcessIdentity(),
-                cancellationToken),
+            await resolveGoApplicationPidWithDiagnostics(goProcessId, cancellationToken),
     });
 
 export function createGoRunProcessIdentity(): LaunchedChildProcessIdentity {
@@ -242,4 +241,67 @@ function isGoToolProcess(process: LaunchedChildProcess): boolean {
 function isGoRunApplicationPath(path: string | undefined): boolean {
     return path !== undefined &&
         (goBuildExecutablePattern.test(path) || cachedGoRunExecutablePattern.test(path));
+}
+
+async function resolveGoApplicationPidWithDiagnostics(
+    launcherPid: number,
+    cancellationToken?: vscode.CancellationToken,
+): Promise<number> {
+    const query = new SystemLaunchedChildProcessQuery();
+    const identity = createGoRunProcessIdentity();
+    const started = Date.now();
+    let attempt = 0;
+    const describe = (process: LaunchedChildProcess) => ({
+        pid: process.pid,
+        parentPid: process.parentPid,
+        executableName: process.executable.split(/[\\/]/).at(-1),
+        executableTail: process.executable.split(/[\\/]/).slice(-4).join('/'),
+        commandPresent: process.command.length > 0,
+        launcherMatch: identity.isLauncher(process),
+        candidateMatch: identity.isCandidate(process),
+    });
+    const log = (event: string, details: object) =>
+        extensionLogOutputChannel.info(`Go discovery diagnostic: ${JSON.stringify({
+            event, launcherPid, elapsedMs: Date.now() - started, ...details,
+        })}`);
+    const resolver = new LaunchedChildProcessResolver({
+        canTrustListedProcessIdentity: query.canTrustListedProcessIdentity,
+        async listProcesses(token, timeoutMs) {
+            const queryStarted = Date.now();
+            attempt++;
+            try {
+                const processes = await query.listProcesses(token, timeoutMs);
+                const descendants = findDescendantProcessIds(launcherPid, false, processes);
+                log('list', {
+                    attempt, durationMs: Date.now() - queryStarted, timeoutMs,
+                    total: processes.length, topologyValid: descendants !== undefined,
+                    launcher: processes.filter(process => process.pid === launcherPid).map(describe),
+                    descendants: processes.filter(process => descendants?.includes(process.pid)).slice(0, 20).map(describe),
+                });
+                return processes;
+            } catch (error) {
+                log('list-failed', { attempt, durationMs: Date.now() - queryStarted, timeoutMs });
+                throw error;
+            }
+        },
+        async getProcess(pid, token, timeoutMs) {
+            const queryStarted = Date.now();
+            try {
+                const process = await query.getProcess(pid, token, timeoutMs);
+                log('get', { pid, durationMs: Date.now() - queryStarted, timeoutMs, process: process && describe(process) });
+                return process;
+            } catch (error) {
+                log('get-failed', { pid, durationMs: Date.now() - queryStarted, timeoutMs });
+                throw error;
+            }
+        },
+    });
+    try {
+        const pid = await resolver.resolveProcessId(launcherPid, identity, cancellationToken);
+        log('resolved', { pid, attempt });
+        return pid;
+    } catch (error) {
+        log('failed', { attempt });
+        throw error;
+    }
 }

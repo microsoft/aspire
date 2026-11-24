@@ -1,22 +1,11 @@
-name: Temporary VS Code CLI lifecycle and Go attach stress
+name: Temporary Windows full-shard Go discovery capture
 'on':
-  workflow_dispatch:
-    inputs:
-      scope:
-        type: choice
-        default: all
-        options:
-          - all
-          - lifecycle
-          - windows-lifecycle
-          - windows-e2e
-        description: Run the full comparison or selected completed-cell retries
+  workflow_dispatch: {}
 permissions:
   contents: read
   actions: read
 jobs:
   verify_prerequisites:
-    if: github.repository == 'microsoft/aspire' && (inputs.scope == 'all' || inputs.scope == 'windows-e2e')
     name: Verify extension E2E prerequisites
     runs-on: ubuntu-latest
     env:
@@ -27,9 +16,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
-      - name: Select baseline one-shot implementation
-        if: matrix.variant == 'baseline'
-        run: git --no-pager show 8aadc2b05baec78e3dd10062759cbabb39d670f4:extension/src/data/appHostCliRunner.ts > extension/src/data/appHostCliRunner.ts
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -111,145 +97,9 @@ jobs:
       fail-fast: false
       matrix:
         variant:
-          - baseline
           - fixed
-  lifecycle:
-    name: CLI lifecycle (${{ matrix.os }}, runner ${{ matrix.index }})
-    if: github.repository == 'microsoft/aspire' && inputs.scope != 'windows-e2e'
-    runs-on: ${{ matrix.os }}
-    env:
-      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
-      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
-    defaults:
-      run:
-        working-directory: ./extension
-        shell: pwsh
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-      - name: Setup Node.js environment
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: 22.23.5
-      - name: Install Corepack
-        run: |
-          # Scope Corepack's cache to this job so prepareCorepackYarn.mjs cannot
-          # collide with any other build sharing the runner's user profile.
-          # Cannot be set at job-level env: the `runner` context is unavailable
-          # in job env evaluation, so we forward it through $GITHUB_ENV instead.
-          $CorepackHome = Join-Path $env:RUNNER_TEMP 'corepack'
-          $env:COREPACK_HOME = $CorepackHome
-          "COREPACK_HOME=$CorepackHome" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-          $CorepackVersion = (Get-Content -Raw -Path 'scripts/corepack-version.txt').Trim()
-          # The hosted Windows image already has a yarn shim in npm's global
-          # prefix. The npm Corepack package owns that shim too, so force only
-          # in CI where the tool install is isolated to this ephemeral job.
-          npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          $npmGlobalBin = (npm prefix --global).Trim()
-          if ($IsLinux -or $IsMacOS) { $npmGlobalBin = Join-Path $npmGlobalBin 'bin' }
-          $env:PATH = "$npmGlobalBin$([IO.Path]::PathSeparator)$env:PATH"
-          $npmGlobalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-          $installed = (corepack --version).Trim()
-          if ($installed -ne $CorepackVersion) {
-            Write-Error "corepack version mismatch: expected $CorepackVersion, got '$installed'. The bundled Corepack on PATH may be taking precedence over the npm-global install."
-            exit 1
-          }
-
-          corepack enable
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          # Seed Corepack's cache from the internal dnceng npm feed. Corepack's
-          # built-in `corepack prepare --activate` would download Yarn 1.x from
-          # its hardcoded upstream endpoint rather than the configured internal
-          # feed, bypassing the dependency source this workflow is supposed to
-          # validate. The shared prepareCorepackYarn.mjs script does the
-          # equivalent via `npm pack` against $NPM_REGISTRY, then drops the same
-          # on-disk layout Corepack would have written.
-          node ./scripts/prepareCorepackYarn.mjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          corepack yarn --version
-      - name: Validate lockfile registries
-        run: |
-          node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
-      - name: Install dependencies
-        run: |
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            corepack yarn install --frozen-lockfile --non-interactive
-            if ($LASTEXITCODE -eq 0) {
-              exit 0
-            }
-
-            $exitCode = $LASTEXITCODE
-            if ($attempt -eq 3) {
-              Write-Error "corepack yarn install failed after $attempt attempts."
-              exit $exitCode
-            }
-
-            $delay = $attempt * 30
-            Write-Host "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $($attempt + 1) of 3)."
-            Start-Sleep -Seconds $delay
-          }
-      - name: Compile tests
-        run: corepack yarn compile-tests
-      - name: Compare baseline and fixed output races
-        run: |
-
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $false
-          node scripts/ci-output-stress.cjs baseline
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to prepare baseline stress tests.' }
-          $env:ASPIRE_CLI_STRESS_REPORT = Join-Path (Get-Location).Path '.stress/baseline.json'
-          $reporter = Join-Path (Get-Location).Path 'out/test/cli-output-reporter.cjs'
-          $arguments = @('yarn', 'unit-test', '--run', 'out/test/repeated-cli-output.js', '--grep', 'drains one-shot JSON|retains failure diagnostics|real subprocess', '--reporter', $reporter)
-          if ($IsLinux) { xvfb-run -a corepack @arguments *>&1 | Tee-Object -FilePath '.stress/baseline.log' }
-          else { corepack @arguments *>&1 | Tee-Object -FilePath '.stress/baseline.log' }
-          if ($LASTEXITCODE -ne 1) { throw "Expected baseline test failure exit 1, got $LASTEXITCODE." }
-          node scripts/ci-output-stress.cjs assess-baseline
-          if ($LASTEXITCODE -ne 0) { throw 'Baseline did not reproduce the intended assertion failures.' }
-          node scripts/ci-output-stress.cjs fixed
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to restore fixed implementation.' }
-          $env:ASPIRE_CLI_STRESS_REPORT = Join-Path (Get-Location).Path '.stress/fixed.json'
-          if ($IsLinux) { xvfb-run -a corepack @arguments *>&1 | Tee-Object -FilePath '.stress/fixed.log' }
-          else { corepack @arguments *>&1 | Tee-Object -FilePath '.stress/fixed.log' }
-          if ($LASTEXITCODE -ne 0) { throw "Fixed stress tests failed: exit $LASTEXITCODE." }
-          node scripts/ci-output-stress.cjs assess-fixed
-          if ($LASTEXITCODE -ne 0) { throw 'Fixed stress result counts or assertions failed.' }
-      - name: Run affected unit suites
-        run: |
-
-          $arguments = @('yarn', 'unit-test', '--run', 'out/test/appHostCliRunner.test.js', '--run', 'out/test/appHostDataRepository.test.js', '--run', 'out/test/resourceDebugService.test.js')
-          if ($IsLinux) { xvfb-run -a corepack @arguments } else { corepack @arguments }
-          if ($LASTEXITCODE -ne 0) { throw "Affected unit suites failed: exit $LASTEXITCODE." }
-      - name: Upload lifecycle trial evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: cli-lifecycle-${{ matrix.os }}-${{ matrix.index }}
-          path: extension/.stress
-          include-hidden-files: true
-          if-no-files-found: warn
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      max-parallel: 10
-      matrix:
-        os: ${{ inputs.scope == 'windows-lifecycle' && fromJSON('["windows-latest"]') || fromJSON('["windows-latest","ubuntu-latest","macos-latest"]') }}
-        index:
-          - 1
-          - 2
-          - 3
-          - 4
-          - 5
   extension_e2e:
-    if: github.repository == 'microsoft/aspire' && (inputs.scope == 'all' || inputs.scope == 'windows-e2e')
-    name: Go attach (${{ matrix.name }}, ${{ matrix.variant }}, runner ${{ matrix.index }})
+    name: Resource debug discovery (Windows, host ${{ matrix.index }})
     needs: verify_prerequisites
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
@@ -258,9 +108,69 @@ jobs:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 3
       matrix:
-        include: ${{ inputs.scope == 'windows-e2e' && fromJSON('[{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":5},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":5}]') || fromJSON('[{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":5},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":5},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":5},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":5}]') }}
+        include:
+          - installdeno: false
+            installdotnetdebugger: false
+            installazurefunctions: false
+            installazurefunctionscoretools: false
+            installwinui: false
+            installjava: false
+            browser: ''
+            advisoryissue: ''
+            unsetclistarttimeout: false
+            name: Windows
+            shardname: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivepattern: aspire-cli-win-x64*.zip
+            clibinary: aspire.exe
+            usexvfb: false
+            installresourcedebug: true
+            variant: fixed
+            index: 1
+          - installdeno: false
+            installdotnetdebugger: false
+            installazurefunctions: false
+            installazurefunctionscoretools: false
+            installwinui: false
+            installjava: false
+            browser: ''
+            advisoryissue: ''
+            unsetclistarttimeout: false
+            name: Windows
+            shardname: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivepattern: aspire-cli-win-x64*.zip
+            clibinary: aspire.exe
+            usexvfb: false
+            installresourcedebug: true
+            variant: fixed
+            index: 2
+          - installdeno: false
+            installdotnetdebugger: false
+            installazurefunctions: false
+            installazurefunctionscoretools: false
+            installwinui: false
+            installjava: false
+            browser: ''
+            advisoryissue: ''
+            unsetclistarttimeout: false
+            name: Windows
+            shardname: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivepattern: aspire-cli-win-x64*.zip
+            clibinary: aspire.exe
+            usexvfb: false
+            installresourcedebug: true
+            variant: fixed
+            index: 3
     defaults:
       run:
         shell: pwsh
@@ -739,13 +649,12 @@ jobs:
           & $cli.FullName --version
       - name: Compile extension E2E tests
         working-directory: extension
-        run: |
+        run: |+
           corepack yarn compile
           corepack yarn compile-e2e
           # run-e2e.js validates compiled spec matches, including brace globs that
           # PowerShell Test-Path does not expand.
 
-          node -e "const fs=require('fs'); const file='.mocharc.e2e.js'; fs.appendFileSync(file, '\nmodule.exports.grep = /attaches to a Go resource launched with Run Without Debugging, hits a breakpoint, and detaches/;\n');"
       - name: Install Deno
         if: ${{ matrix.installdeno }}
         shell: pwsh
@@ -837,7 +746,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $false
           $records = @()
           New-Item -ItemType Directory -Path '.test-results/trials' -Force | Out-Null
-          for ($iteration = 1; $iteration -le 5; $iteration++) {
+          for ($iteration = 1; $iteration -le 2; $iteration++) {
             # MSBuild can retain task DLLs after an iteration. A unique shard gives each
             # trial its own package cache, avoiding attempts to delete a loaded Windows DLL.
             $shard = "resource-debug-tools-trial-$iteration"
@@ -861,8 +770,8 @@ jobs:
             $records += [pscustomobject]@{ iteration=$iteration; exitCode=$exitCode; executed=$executed; failures=$failures }
             $records | ConvertTo-Json -Depth 10 | Set-Content '.test-results/trials/results.json'
           }
-          if (@($records | Where-Object { $_.exitCode -ne 0 -or $_.executed -ne 1 -or $_.failures -ne 0 }).Count -gt 0) {
-            throw 'At least one Go attach trial failed or did not execute exactly one test. Inspect results.json and per-iteration artifacts.'
+          if (@($records | Where-Object { $_.exitCode -ne 0 -or $_.executed -lt 1 -or $_.failures -ne 0 }).Count -gt 0) {
+            throw 'At least one full resource-debug shard failed or executed zero tests. Inspect results.json and per-iteration artifacts.'
           }
       - name: Stop resource monitor (Windows)
         if: ${{ always() && runner.os == 'Windows' }}
@@ -875,7 +784,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: go-attach-${{ matrix.rid }}-${{ matrix.variant }}-${{ matrix.index }}
+          name: discovery-full-shard-${{ matrix.index }}
           path: |
             extension/.test-results/**
             extension/.test-storage/**
