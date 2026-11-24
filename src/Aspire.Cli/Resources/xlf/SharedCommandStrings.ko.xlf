@@ -22,10 +22,30 @@
         <target state="translated">현재 작업 트리에서 실행 중인 AppHost를 찾을 수 없습니다. '--apphost &lt;path&gt;'를 사용하여 직접 대상으로 지정하거나, '--all'을 사용하여 다른 작업 트리의 AppHost를 포함하세요.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FetchingSource">
+        <source>Fetching {0} from {1} using Git...</source>
+        <target state="translated">{0}을(를) {1}에서 Git을 사용하여 가져오는 중...</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
+      <trans-unit id="FetchingSourceWithAuthentication">
+        <source>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</source>
+        <target state="translated">Git을 사용하여 {1}에서 {0} 가져옵니다. Git에서 인증하라는 메시지가 표시될 수 있습니다.</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="translated">분리된 AppHost 결과에 대한 출력 형식</target>
         <note />
+      </trans-unit>
+      <trans-unit id="GitFetchConfigurationSource">
+        <source>configuration source</source>
+        <target state="translated">구성 원본</target>
+        <note>The content inserted into the Git-fetch notice.</note>
+      </trans-unit>
+      <trans-unit id="GitFetchTemplates">
+        <source>templates</source>
+        <target state="translated">템플릿</target>
+        <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
@@ -124,12 +144,12 @@
       </trans-unit>
       <trans-unit id="NuGetSearchLimitWarning">
         <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
-        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <target state="translated">피드당 검색되는 패키지 수가 제한({0}개)에 도달하여 NuGet 검색 결과가 불완전할 수 있습니다. 더 구체적인 통합 원본 패턴을 사용하세요.</target>
         <note>{0} is the maximum number of packages searched per feed.</note>
       </trans-unit>
       <trans-unit id="NuGetSearchSourceFailedWarning">
         <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
-        <target state="new">Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</target>
+        <target state="translated">NuGet 소스 '{0}'을(를) 검색하지 못했습니다. 일부 통합이 누락되었을 수 있습니다. 원본 구성 및 인증을 확인하세요. 자세한 내용은 CLI 로그를 참조하세요.</target>
         <note>{0} is the redacted NuGet source name or URL.</note>
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
@@ -182,9 +202,64 @@
         <target state="translated">{0}에 대한 AppHost 선택:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceFeed">
+        <source>Package feed</source>
+        <target state="translated">패키지 피드</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitPath">
+        <source>Git path</source>
+        <target state="translated">Git 경로</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitRepository">
+        <source>Git source</source>
+        <target state="translated">Git 원본</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceMarketplace">
+        <source>Marketplace</source>
+        <target state="translated">마켓플레이스</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceName">
+        <source>Name</source>
+        <target state="translated">이름</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV1Catalog">
+        <source>OpenCode V1 catalog</source>
+        <target state="translated">OpenCode V1 카탈로그</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV2Catalog">
+        <source>OpenCode V2 catalog</source>
+        <target state="translated">OpenCode V2 카탈로그</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePath">
+        <source>Path</source>
+        <target state="translated">경로</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePatterns">
+        <source>Package patterns</source>
+        <target state="translated">패키지 패턴</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePlugins">
+        <source>Plugins</source>
+        <target state="translated">플러그인</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceRef">
+        <source>Git ref</source>
+        <target state="translated">Git 참조</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SourceTrustWarning">
         <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
-        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
+        <target state="translated">신뢰할 수 있는 원본만 사용하세요. 이러한 원본의 콘텐츠는 컴퓨터에서 코드를 실행할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">

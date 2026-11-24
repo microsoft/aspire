@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BuiltInTemplates">
         <source>Built-in templates</source>
-        <target state="new">Built-in templates</target>
+        <target state="translated">Modèles intégrés</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelOptionDescription">
@@ -17,14 +17,9 @@
         <target state="translated">Canal à utiliser pour les modèles (stable, gestion intermédiaire, quotidien)</target>
         <note />
       </trans-unit>
-      <trans-unit id="CloningTemplateRepository">
-        <source>Cloning template repository...</source>
-        <target state="new">Cloning template repository...</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfiguredTemplateConflictingOptions">
         <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
-        <target state="new">Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</target>
+        <target state="translated">Les modèles provenant de sources configurées ne peuvent pas être combinés avec « --source », « --version », « --channel » ou « --language ».</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -54,7 +49,7 @@
       </trans-unit>
       <trans-unit id="InvalidConfiguredTemplateSource">
         <source>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</source>
-        <target state="new">Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</target>
+        <target state="translated">Un objet source avec un « path » absolu, ou un « repository » et éventuellement un « ref »/« path », était attendu. Utilisez « aspire template source add » pour configurer une source.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -69,17 +64,17 @@
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
         <source>Could not create the local template ({0}): {1}</source>
-        <target state="new">Could not create the local template ({0}): {1}</target>
+        <target state="translated">Impossible de créer le modèle local ({0}) : {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateLoadFailed">
         <source>Could not load the local template: {0}</source>
-        <target state="new">Could not load the local template: {0}</target>
+        <target state="translated">Impossible de charger le modèle local : {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateSelectionRequiresInteraction">
         <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
-        <target state="new">The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</target>
+        <target state="translated">Le répertoire contient plusieurs modèles. Exécutez la commande en mode interactif pour en sélectionner un, ou indiquez avec --template-path le chemin d’un répertoire contenant un seul modèle.</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
@@ -94,12 +89,12 @@
       </trans-unit>
       <trans-unit id="NoConfiguredTemplateSources">
         <source>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</source>
-        <target state="new">No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</target>
+        <target state="translated">Aucune source de modèle utilisable n’est configurée. Utilisez « aspire template source add &lt;name&gt; » avec « --path » ou « --repository ». Les sources sont stockées au niveau global.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
-        <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <target state="translated">Aucun modèle .NET n’a été trouvé dans '{0}'. Fichier .template.config/template.json attendu dans le répertoire ou l’un de ses sous-répertoires.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
@@ -142,19 +137,9 @@
         <target state="translated">Le chemin de sortie «{0}» contient des caractères non valides.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResolvingTemplateRepository">
-        <source>Resolving template repository ref...</source>
-        <target state="new">Resolving template repository ref...</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
         <source>Resolving template version...</source>
         <target state="translated">Résolution en cours de la version du modèle…</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchingTemplateSource">
-        <source>Searching template source '{0}'...</source>
-        <target state="new">Searching template source '{0}'...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -189,212 +174,212 @@
       </trans-unit>
       <trans-unit id="TemplateCommandDescription">
         <source>Manage project templates.</source>
-        <target state="new">Manage project templates.</target>
+        <target state="translated">Gérez les modèles de projets.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
         <source>The template directory '{0}' does not exist.</source>
-        <target state="new">The template directory '{0}' does not exist.</target>
+        <target state="translated">Le répertoire de modèles « {0} » n’existe pas.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathConflictingOptions">
         <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
-        <target state="new">--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</target>
+        <target state="translated">--template-path et --template-repository nécessitent des valeurs non vides et ne peuvent pas être combinés avec une sous-commande de modèle, --source, --version, --channel ou --language.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathOptionDescription">
         <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
-        <target state="new">Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</target>
+        <target state="translated">Chemin vers un répertoire contenant un package de modèles .NET décompressé (relatif au dépôt lorsque --template-repository est spécifié)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitExited">
         <source>Git failed with exit code {0}: {1}</source>
-        <target state="new">Git failed with exit code {0}: {1}</target>
+        <target state="translated">Échec de Git avec le code de sortie {0} : {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitFailed">
         <source>Could not access the template repository: {0}</source>
-        <target state="new">Could not access the template repository: {0}</target>
+        <target state="translated">Impossible d’accéder au dépôt de modèles : {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Git n’a pas pu démarrer. Installez Git et vérifiez qu’il figure dans la variable d’environnement PATH.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryOptionDescription">
         <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
-        <target state="new">Clone a Git repository containing templates; --template-path is relative to its root</target>
+        <target state="translated">Clonez un dépôt Git contenant des modèles ; --template-path est relatif à sa racine</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
         <source>Template repository paths must be relative and stay within the repository without traversing symbolic links.</source>
-        <target state="new">Template repository paths must be relative and stay within the repository without traversing symbolic links.</target>
+        <target state="translated">Les chemins d’accès du dépôt de modèle doivent être relatifs et rester au sein du dépôt sans traverser de liens symboliques.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">
         <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
-        <target state="new">Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</target>
+        <target state="translated">Impossible de résoudre la référence du dépôt de modèles « {0} » en SHA de commit. Spécifiez une branche, une balise ou un SHA de commit complet.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefOptionDescription">
         <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
-        <target state="new">Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</target>
+        <target state="translated">Branche, balise ou SHA de commit complet du dépôt de modèles (nécessite --template-repository ; par défaut, HEAD distant)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
-        <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <target state="translated">--template-repository-ref nécessite --template-repository et une valeur de référence non vide.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAddDescription">
         <source>Add a named template source to global configuration after confirming you trust it.</source>
-        <target state="new">Add a named template source to global configuration after confirming you trust it.</target>
+        <target state="translated">Ajoutez une source de modèle nommée à la configuration globale après avoir confirmé que vous lui faites confiance.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAdded">
         <source>Template source '{0}' added to global configuration.</source>
-        <target state="new">Template source '{0}' added to global configuration.</target>
+        <target state="translated">Nous avons ajouté la source de modèle « {0} » à la configuration globale.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAlreadyExists">
         <source>A template source with this name already exists. Remove it before adding a replacement.</source>
-        <target state="new">A template source with this name already exists. Remove it before adding a replacement.</target>
+        <target state="translated">Une source de modèle portant ce nom existe déjà. Supprimez-le avant d’ajouter un remplacement.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceCannotExtendString">
         <source>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</source>
-        <target state="new">This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</target>
+        <target state="translated">Cette source est une chaîne. Supprimez-la avec « aspire config delete {0} --global » avant de définir les champs d’objet.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceCommandDescription">
         <source>Manage global template sources.</source>
-        <target state="new">Manage global template sources.</target>
+        <target state="translated">Gérez les sources de modèles globales.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceConfigurationHeader">
         <source>Configuration</source>
-        <target state="new">Configuration</target>
+        <target state="translated">Configuration</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceDisplayNameInvalid">
         <source>Expected a display name string without control characters, or null to use the source alias.</source>
-        <target state="new">Expected a display name string without control characters, or null to use the source alias.</target>
+        <target state="translated">Une chaîne de nom d’affichage sans caractères de contrôle est attendue, ou null pour utiliser l’alias source.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceExplanation">
+        <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
+        <target state="translated">Une ou plusieurs sources de modèle sont configurées. Une source de modèle permet à une organisation de partager des modèles Aspire pour personnaliser votre expérience de développement.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceInvalidRepository">
         <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
-        <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
+        <target state="translated">Une URL de dépôt Git HTTPS ou SSH sans mot de passe, jeton, requête ni fragment est attendue. Les noms d’utilisateur SSH sont autorisés.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceLegacyConfiguration">
         <source>Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</source>
-        <target state="new">Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</target>
+        <target state="translated">Les sources de modèle nécessitent aspire.config.json. Exécutez « Aspire Config Info » pour migrer votre configuration globale héritée, puis réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListDescription">
         <source>List named template sources without discovering templates.</source>
-        <target state="new">List named template sources without discovering templates.</target>
+        <target state="translated">Répertoriez les sources de modèles nommées sans rechercher de modèles.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListEmpty">
         <source>No template sources are configured. Use 'aspire template source add' to add one.</source>
-        <target state="new">No template sources are configured. Use 'aspire template source add' to add one.</target>
+        <target state="translated">Aucune source de modèle n’est configurée. Utilisez « aspire template source add » pour en ajouter une.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceMissingLocation">
         <source>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</source>
-        <target state="new">Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</target>
+        <target state="translated">Spécifiez un « path » absolu pour une source locale ou un « repository » pour une source Git. « ref » nécessite « repository ».</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameDescription">
         <source>The name of the template source.</source>
-        <target state="new">The name of the template source.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TemplateSourceNameHeader">
-        <source>Name</source>
-        <target state="new">Name</target>
+        <target state="translated">Nom de la source de modèle.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">
         <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
-        <target state="new">Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <target state="translated">Les noms des sources de modèles doivent comporter de 1 à 64 caractères ASCII (lettres, chiffres, points, traits d’union ou traits de soulignement) et commencer par une lettre ou un chiffre.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNotFound">
         <source>Template source '{0}' was not found in global configuration.</source>
-        <target state="new">Template source '{0}' was not found in global configuration.</target>
+        <target state="translated">Le '{0}' source du modèle est introuvable dans la configuration globale.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcePathDescription">
         <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
-        <target state="new">An absolute local template directory, or a repository-relative directory when --repository is specified.</target>
+        <target state="translated">Répertoire de modèle local absolu ou répertoire relatif au dépôt lorsque « --repository » est spécifié.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceReadFailed">
         <source>Could not read global template sources. Check the configuration file's JSON format and file permissions.</source>
-        <target state="new">Could not read global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <target state="translated">Impossible de lire les sources de modèle globales. Vérifiez le format JSON et les autorisations de fichier du fichier de configuration.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRefDescription">
         <source>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</source>
-        <target state="new">A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</target>
+        <target state="translated">Branche ou balise Git, ou valeur SHA complète d’un commit (nécessite --repository, HEAD par défaut).</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRemoveDescription">
         <source>Remove a named template source from global configuration.</source>
-        <target state="new">Remove a named template source from global configuration.</target>
+        <target state="translated">Supprimez une source de modèle nommée de la configuration globale.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRemoved">
         <source>Template source '{0}' removed from global configuration.</source>
-        <target state="new">Template source '{0}' removed from global configuration.</target>
+        <target state="translated">Nous avons supprimé la source de modèle « {0} » de la configuration globale.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRepositoryDescription">
         <source>An HTTPS or SSH Git repository URL containing templates.</source>
-        <target state="new">An HTTPS or SSH Git repository URL containing templates.</target>
+        <target state="translated">URL de dépôt Git HTTPS ou SSH contenant des modèles.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceSearchFailed">
         <source>Could not search template source '{0}': {1}</source>
-        <target state="new">Could not search template source '{0}': {1}</target>
+        <target state="translated">Nous n’avons pas pu rechercher la source de modèle « {0} » : {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceSettingInvalid">
         <source>Invalid template setting '{0}': {1}</source>
-        <target state="new">Invalid template setting '{0}': {1}</target>
+        <target state="translated">Paramètre du modèle « {0} » : {1} non valide</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceStringRequired">
         <source>Expected a nonempty string without control characters.</source>
-        <target state="new">Expected a nonempty string without control characters.</target>
+        <target state="translated">Une chaîne non vide, sans caractères de contrôle, était attendue.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceTrustPrompt">
         <source>Do you trust template source '{0}' ({1})?</source>
-        <target state="new">Do you trust template source '{0}' ({1})?</target>
+        <target state="translated">Faites-vous confiance à la source du modèle « {0} » ({1}) ?</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceUnknownField">
         <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
-        <target state="new">Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</target>
+        <target state="translated">Champ de source inconnu. Utilisez « path », « repository », « ref » ou « displayName ».</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceWriteFailed">
         <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
-        <target state="new">Could not update global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <target state="translated">Impossible de mettre à jour les sources de modèle globales. Vérifiez le format JSON et les autorisations de fichier du fichier de configuration.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceYesOptionDescription">
         <source>Trust the template source and skip confirmation.</source>
-        <target state="new">Trust the template source and skip confirmation.</target>
+        <target state="translated">Approuvez la source du modèle et ignorez la confirmation.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcesMustBeObject">
         <source>The global 'templateSources' setting must be an object containing named template sources.</source>
-        <target state="new">The global 'templateSources' setting must be an object containing named template sources.</target>
+        <target state="translated">Le paramètre global 'templateSources' doit être un objet contenant des sources de modèle nommées.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

@@ -8,10 +8,10 @@ import { CapabilityStatus, ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 import { CliPathResolutionTarget, windowCliPathTarget } from './cliPathVariables';
+import { cliVersionProbeTimeoutMs } from './cliPath';
 import { nonInteractiveCliEnvironment } from './environment';
 
 const configInfoTimeoutMs = 30_000;
-const cliVersionProbeTimeoutMs = 30_000;
 // The only available structured update status is part of `aspire doctor`, whose complete
 // environment-check budget is two minutes. Keep enough time for that transport; a future narrow
 // update-status command should use a substantially smaller bound.

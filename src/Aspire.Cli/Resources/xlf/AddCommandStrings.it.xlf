@@ -92,6 +92,11 @@
         <target state="translated">La query di ricerca per le integrazioni.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="translated">Sono configurate una o più origini di integrazione. Un'origine di integrazione consente a un'organizzazione di condividere le integrazioni per personalizzare l'esperienza di sviluppo.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Non sono stati trovati pacchetti di integrazione. Controlla la connessione Internet o la configurazione dell'origine NuGet.</target>
@@ -124,7 +129,7 @@
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresIntegrationName">
         <source>An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</source>
-        <target state="new">An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</target>
+        <target state="translated">In modalità non interattiva è necessario specificare un nome per l'integrazione. Specificare un ID pacchetto esatto o un nome descrittivo, ad esempio 'aspire add redis'.</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">

@@ -120,7 +120,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         Directory.CreateDirectory(brewPrefix);
 
         var brewPath = Path.Combine(mockBinDir, "brew");
-        await File.WriteAllTextAsync(brewPath, $$"""
+        await FileHelper.WriteExecutableFileAsync(brewPath, $$"""
             #!/usr/bin/env bash
             set -euo pipefail
             echo "$*" >> "{{brewLog}}"
@@ -165,7 +165,14 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 echo "# generated tap" > "$tap_root/README.md"
                 exit 0
                 ;;
-              style|info)
+              style)
+                if [[ $# -ne 3 || "$2" != "--cask" || "$3" != "local/aspire/aspire" ]]; then
+                  echo "Expected brew style to target the qualified cask name: $*" >&2
+                  exit 1
+                fi
+                exit 0
+                ;;
+              info)
                 exit 0
                 ;;
               trust)
@@ -222,23 +229,20 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
             echo "unexpected brew command: $*" >&2
             exit 1
             """);
-        FileHelper.MakeExecutable(brewPath);
 
         var curlPath = Path.Combine(mockBinDir, "curl");
-        await File.WriteAllTextAsync(curlPath, """
+        await FileHelper.WriteExecutableFileAsync(curlPath, """
             #!/usr/bin/env bash
             printf '404'
             exit 0
             """);
-        FileHelper.MakeExecutable(curlPath);
 
         var codesignPath = Path.Combine(mockBinDir, "codesign");
-        await File.WriteAllTextAsync(codesignPath, $$"""
+        await FileHelper.WriteExecutableFileAsync(codesignPath, $$"""
             #!/usr/bin/env bash
             echo "$*" >> "{{codesignLog}}"
             exit {{codesignExitCode}}
             """);
-        FileHelper.MakeExecutable(codesignPath);
 
         return mockBinDir;
     }

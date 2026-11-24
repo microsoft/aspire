@@ -1,3 +1,0 @@
-﻿Configured sources:
-  Sources: https://github.com/microsoft/aspire-skills, https://github.com/example/team
-  Locations: .github/copilot/settings.json (GitHub Copilot), .claude/settings.json (Claude Code)

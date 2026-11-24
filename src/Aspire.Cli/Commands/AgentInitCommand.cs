@@ -6,6 +6,7 @@ using System.CommandLine.Completions;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Copilot;
@@ -64,6 +65,7 @@ internal sealed class AgentInitCommand : BaseCommand
         _projectLocator = projectLocator;
         Options.Add(s_workspaceRootOption);
         Options.Add(s_mcpOption);
+        Options.Add(s_removeSkillCopiesOption);
         Options.Add(AgentsOption);
         Options.Add(s_scopeOption);
         Options.Add(s_skillsOption);
@@ -89,6 +91,17 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<bool?> s_mcpOption = new("--mcp")
     {
         Description = AgentCommandStrings.InitCommand_McpOptionDescription,
+        Recursive = true
+    };
+
+    /// <summary>
+    /// Authorizes deleting copied Aspire skill folders that the Aspire skills plugin replaces at the
+    /// selected scope. Those folders can contain user edits, so omitting the option asks interactively
+    /// (defaulting to "no") and keeps them in non-interactive runs.
+    /// </summary>
+    internal static readonly Option<bool?> s_removeSkillCopiesOption = new("--remove-skill-copies")
+    {
+        Description = AgentCommandStrings.InitCommand_RemoveSkillCopiesOptionDescription,
         Recursive = true
     };
 
@@ -215,6 +228,7 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
         PromptBinding<AgentConfigurationScope> scopeBinding,
+        PromptBinding<bool> removeSkillCopiesBinding,
         CancellationToken cancellationToken)
     {
         if (previousResultExitCode != CliExitCodes.Success)
@@ -234,7 +248,7 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             return await ExecuteAgentInitAsync(
                 workspaceRoot, configurationDirectory, agentsBinding, skillsBinding,
-                scopeBinding, mcpBinding: null, cancellationToken);
+                scopeBinding, mcpBinding: null, removeSkillCopiesBinding, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -250,6 +264,7 @@ internal sealed class AgentInitCommand : BaseCommand
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, s_scopeOption, AgentConfigurationScope.Project),
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
+            PromptBinding.CreateBoolConfirm(parseResult, s_removeSkillCopiesOption, defaultValue: false),
             cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
@@ -265,13 +280,16 @@ internal sealed class AgentInitCommand : BaseCommand
                 ExecutionContext.WorkingDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken, skipValidation: true);
             appHost = candidates.Count switch
             {
-                0 => null,
                 1 => candidates[0],
-                _ => await InteractionService.PromptForSelectionAsync(
+                > 1 when _hostEnvironment.SupportsInteractiveInput => await InteractionService.PromptForSelectionAsync(
                     InteractionServiceStrings.SelectAppHostToUse,
                     candidates,
                     file => $"{file.Name.EscapeMarkup()} ({Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, file.FullName).EscapeMarkup()})",
-                    cancellationToken: cancellationToken)
+                    cancellationToken: cancellationToken),
+                // Without interactive input there is no way to choose between several AppHosts, and
+                // agent init has no AppHost option. The AppHost only supplies optional skill-source
+                // settings, so fall back to the working directory as when no AppHost is found.
+                _ => null
             };
         }
 
@@ -315,16 +333,9 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<string?> skillsBinding,
         PromptBinding<AgentConfigurationScope> scopeBinding,
         PromptBinding<bool>? mcpBinding,
+        PromptBinding<bool> removeSkillCopiesBinding,
         CancellationToken cancellationToken)
     {
-        var context = new AgentEnvironmentScanContext
-        {
-            WorkingDirectory = ExecutionContext.WorkingDirectory,
-            RepositoryRoot = workspaceRoot
-        };
-
-        AgentEnvironment? detectedEnvironments = null;
-
         var (agentsProvided, requestedAgents) = agentsBinding.Resolve();
         IReadOnlyList<IAgentClient> selectedClients;
         if (agentsProvided && requestedAgents is not null)
@@ -342,7 +353,12 @@ internal sealed class AgentInitCommand : BaseCommand
         }
         else
         {
-            detectedEnvironments = await InteractionService.ShowStatusAsync(
+            var context = new AgentEnvironmentScanContext
+            {
+                WorkingDirectory = ExecutionContext.WorkingDirectory,
+                RepositoryRoot = workspaceRoot
+            };
+            var detectedEnvironments = await InteractionService.ShowStatusAsync(
                 McpCommandStrings.InitCommand_DetectingAgentEnvironments,
                 async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
                 emoji: KnownEmojis.Robot);
@@ -350,7 +366,7 @@ internal sealed class AgentInitCommand : BaseCommand
             // Shared discovery does not authorize configuring another agent. Defaults
             // express detected agent use, independently of assets and their destinations.
             var defaultClients = _clients
-                .Where(client => (client.Environments & detectedEnvironments.Value) != AgentEnvironment.None).ToArray();
+                .Where(client => (client.Environments & detectedEnvironments) != AgentEnvironment.None).ToArray();
             if (defaultClients.Length == 0)
             {
                 defaultClients = [_clients.Single(client => string.Equals(client.Id, CopilotAgentClient.ClientId, StringComparisons.AgentClientId))];
@@ -394,42 +410,49 @@ internal sealed class AgentInitCommand : BaseCommand
                 skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
                 var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
                 var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
-                var sourceUrls = new List<string>();
+                List<IReadOnlyList<(string Label, string Value)>> sourceDetails = [];
                 foreach (var skillSource in skillSources)
                 {
+                    var sourceName = skillSource.GetName();
+                    List<(string Label, string Value)> details = [(SharedCommandStrings.SourceName, sourceName)];
                     if (usesPlugins)
                     {
-                        sourceUrls.Add(skillSource.GetRepositoryUrl());
+                        details.Add((SharedCommandStrings.SourceGitRepository, skillSource.GetRepositoryUrl()));
+                        if (skillSource.Ref is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceRef, skillSource.Ref));
+                        }
+                        if (!string.Equals(skillSource.Marketplace, sourceName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            details.Add((SharedCommandStrings.SourceMarketplace, skillSource.Marketplace!));
+                        }
+                        details.Add((SharedCommandStrings.SourcePlugins, string.Join(", ", skillSource.GetPluginNames())));
                     }
                     if (usesOpenCode)
                     {
-                        sourceUrls.AddRange(new[] { skillSource.OpenCodeV1Catalog, skillSource.OpenCodeV2Catalog }.OfType<string>());
+                        if (skillSource.OpenCodeV1Catalog is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceOpenCodeV1Catalog, skillSource.OpenCodeV1Catalog));
+                        }
+                        if (skillSource.OpenCodeV2Catalog is not null)
+                        {
+                            details.Add((SharedCommandStrings.SourceOpenCodeV2Catalog, skillSource.OpenCodeV2Catalog));
+                        }
+                    }
+                    if (details.Count > 1)
+                    {
+                        sourceDetails.Add(details);
                     }
                 }
 
-                if (sourceUrls.Count > 0)
+                if (sourceDetails.Count > 0)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture,
-                        AgentCommandStrings.InitCommand_SkillSources,
-                        string.Join(System.Environment.NewLine, sourceUrls.Distinct(StringComparer.Ordinal))));
-                    InteractionService.DisplaySourceTrustWarning(ExecutionContext);
-                    InteractionService.DisplayEmptyLine();
-                }
-
-                var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
-                    selectedClients, cancellationToken);
-                if (local.Files.Count > 0)
-                {
-                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight,
-                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                            string.Join(System.Environment.NewLine, local.Files
-                                .Select(path => $"  {AgentPath.GetDisplayPath(path, workspaceRoot, ExecutionContext)}")
-                                .Order(StringComparer.Ordinal))));
-                    InteractionService.DisplayEmptyLine();
-                }
-                if (local.HasFileErrors)
-                {
-                    skillConfigurationError = string.Join(System.Environment.NewLine, local.Errors);
+                    InteractionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_SkillSourcesExplanation);
+                    InteractionService.DisplaySourceDetails(sourceDetails);
+                    if (InteractionService.DisplaySourceTrustWarning(ExecutionContext))
+                    {
+                        InteractionService.DisplayEmptyLine();
+                    }
                 }
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -475,14 +498,19 @@ internal sealed class AgentInitCommand : BaseCommand
                 cancellationToken: cancellationToken);
         }
 
+        var (scopeProvided, requestedScope) = scopeBinding.Resolve();
+        var scope = scopeProvided ? requestedScope : scopeBinding.DefaultValue;
+
         if (!configureAspire && !playwright && !dotnetInspect && !configureMcp)
         {
+            // Nothing is installed, so scope is not prompted for. The re-run still refreshes hooks for
+            // clients whose Aspire setup already exists at the resolved scope.
+            await ConfigureTelemetryHooksForAspireSetupAsync(selectedClients, [], workspaceRoot, scope, cancellationToken);
+
+            DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
             InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
             return new(CliExitCodes.Success, selectedClients, []);
         }
-
-        var (scopeProvided, requestedScope) = scopeBinding.Resolve();
-        var scope = scopeProvided ? requestedScope : scopeBinding.DefaultValue;
 
         if (!scopeProvided && _hostEnvironment.SupportsInteractiveInput)
         {
@@ -493,15 +521,6 @@ internal sealed class AgentInitCommand : BaseCommand
                     ? AgentCommandStrings.InitCommand_ProjectScope
                     : AgentCommandStrings.InitCommand_GlobalScope,
                 cancellationToken: cancellationToken);
-        }
-
-        if (scope is AgentConfigurationScope.Global && detectedEnvironments is null)
-        {
-            // Capture hook evidence before configuration can create new detection markers.
-            detectedEnvironments = await InteractionService.ShowStatusAsync(
-                McpCommandStrings.InitCommand_DetectingAgentEnvironments,
-                async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
-                emoji: KnownEmojis.Robot);
         }
 
         List<SkillDefinition> selectedSkills = [];
@@ -528,7 +547,39 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
-            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, skillSources, workspaceRoot);
+
+            var aspireSkillsReplaceCopies = AspireSkillsReplaceSkillCopies(registrationResults, selectedClients, workspaceRoot, scope);
+            var skillCopiesToRemove = aspireSkillsReplaceCopies
+                ? FindSkillCopiesAtSelectedScope(selectedClients, workspaceRoot, scope, cancellationToken)
+                : [];
+            var deleteSkillCopies = skillCopiesToRemove.Length > 0 &&
+                await ConfirmSkillCopyDeletionAsync(skillCopiesToRemove, workspaceRoot, removeSkillCopiesBinding, cancellationToken);
+            var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(deleteSkillCopies ? skillCopiesToRemove : [], workspaceRoot);
+            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
+            if (removedSkillCopies.Count > 0)
+            {
+                // The folders were listed just before deletion, so only summarize here.
+                InteractionService.DisplayMessage(KnownEmojis.FileFolder, removedSkillCopies.Count == 1
+                    ? AgentCommandStrings.InitCommand_RemovedSkillCopy
+                    : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, removedSkillCopies.Count));
+            }
+            else if (skillCopiesToRemove.Length > 0 && !deleteSkillCopies)
+            {
+                DisplaySkillCopiesKept(skillCopiesToRemove, workspaceRoot, explainPluginRequirement: false);
+            }
+            foreach (var failure in skillCopyFailures)
+            {
+                InteractionService.DisplayError(failure);
+                hasErrors = true;
+            }
+            if (!aspireSkillsReplaceCopies)
+            {
+                DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
+            }
+        }
+        else
+        {
+            DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
@@ -602,6 +653,7 @@ internal sealed class AgentInitCommand : BaseCommand
         DisplayInstalledSkillsSummary(installedSkills, scope, workspaceRoot);
 
         // --- Phase 5: Apply MCP server configuration if the user confirmed ---
+        var mcpConfiguredClients = new List<IAgentClient>();
         if (configureMcp)
         {
             var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -647,6 +699,11 @@ internal sealed class AgentInitCommand : BaseCommand
                     {
                         InteractionService.DisplayMessage(emoji, message);
                     }
+
+                    // Repair-only targets don't add the Aspire server, so they don't count as configured.
+                    mcpConfiguredClients.AddRange(targets
+                        .Where(static target => target.ConfigureServer)
+                        .Select(static target => target.Client));
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
                 {
@@ -662,15 +719,23 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Global setup instruments selected, detected supported environments only. Whether telemetry is actually
-        // transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the
-        // hook scripts and the `aspire agent telemetry` command path re-check at runtime.
-        if (scope is AgentConfigurationScope.Global)
-        {
-            var selectedEnvironments = selectedClients.Aggregate(AgentEnvironment.None,
-                static (environments, client) => environments | client.Environments);
-            await ConfigureTelemetryHooksAsync(detectedEnvironments.GetValueOrDefault() & selectedEnvironments, cancellationToken);
-        }
+        // Setup at either scope registers one user-level hook per selected client. Hooks are never written
+        // to project configuration because Copilot runs hooks from every source, including a repository's
+        // .claude/settings.json, and ignores Claude's `if` filter. A project-level hook would launch the
+        // CLI on every matching tool call, or twice alongside the user-level hook. Whether telemetry is
+        // actually transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both
+        // the hook scripts and the `aspire agent telemetry` command path re-check at runtime.
+        // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
+        // hook only when this run registered that plugin or configured the Aspire MCP server for it at the
+        // requested scope, or either is already set up there. The latter keeps re-runs that skip both
+        // choices refreshing the hook. Selecting the aspire skill choice is not enough: skill sources can
+        // disable the default source or replace its plugins.
+        await ConfigureTelemetryHooksForAspireSetupAsync(
+            selectedClients,
+            GetAspireSkillsRegisteredClients(registrationResults, skillSources).Concat(mcpConfiguredClients).ToHashSet(),
+            workspaceRoot,
+            scope,
+            cancellationToken);
 
         if (hasErrors)
         {
@@ -691,12 +756,115 @@ internal sealed class AgentInitCommand : BaseCommand
         };
     }
 
-    private async Task ConfigureTelemetryHooksAsync(AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
+    private async Task ConfigureTelemetryHooksForAspireSetupAsync(
+        IReadOnlyList<IAgentClient> selectedClients,
+        ICollection<IAgentClient> aspireConfiguredClients,
+        DirectoryInfo workspaceRoot,
+        AgentConfigurationScope scope,
+        CancellationToken cancellationToken)
     {
-        TelemetryHookConfigurationResult result;
+        var telemetryHookClients = new List<IAgentClient>();
+        foreach (var client in selectedClients)
+        {
+            // The configurator owns hook eligibility; the guard only avoids reading config it would ignore.
+            if (aspireConfiguredClients.Contains(client) ||
+                (client.SupportsTelemetryHooks && await HasExistingAspireSetupAsync(client, workspaceRoot, scope, cancellationToken)))
+            {
+                telemetryHookClients.Add(client);
+            }
+        }
+
+        if (telemetryHookClients.Count > 0)
+        {
+            await ConfigureTelemetryHooksAsync(telemetryHookClients, cancellationToken);
+        }
+    }
+
+    private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(
+        IReadOnlyList<AgentTargetResult> registrationResults,
+        IReadOnlyList<SkillSource> skillSources)
+    {
+        var registersAspireSkillsPlugin = skillSources.Any(static source =>
+            source.GetPluginNames().Contains(AspireSkillsRemoteConfiguration.PluginName, StringComparer.Ordinal));
+        if (!registersAspireSkillsPlugin)
+        {
+            return [];
+        }
+
+        return registrationResults
+            .Where(static result => result.Status is not AgentConfigurationStatus.Failed)
+            .SelectMany(static result => result.Clients);
+    }
+
+    private static async Task<bool> HasExistingAspireSetupAsync(
+        IAgentClient client, DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
+    {
+        // Invalid plugin settings report no registration, so a valid MCP registration is still found.
+        if (HasAspireSkillsRegistration(client, workspaceRoot, scope))
+        {
+            return true;
+        }
+
         try
         {
-            result = await _telemetryHookConfigurator.ConfigureAsync(detectedEnvironments, cancellationToken);
+            foreach (var (path, configureServer) in client.GetMcpConfigPaths(scope, workspaceRoot).Where(static target => target.ConfigureServer))
+            {
+                // Probe a discarded in-memory copy with the client's own update logic, so each client's
+                // server container and nesting rules apply. Nothing to add means the server already exists.
+                // This relies on UpdateMcpConfig only mutating the passed JsonObject; files are written
+                // only when an AgentConfiguration edit is published, and this one never is.
+                var (config, configFilePath) = await client.ReadMcpConfigAsync(
+                    path, workspaceRoot, scope, new AgentConfiguration(), cancellationToken);
+                if (!client.UpdateMcpConfig(config, configFilePath, configureServer, scope).Added)
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex) when (IsUnreadableConfig(ex))
+        {
+        }
+
+        try
+        {
+            // Paths are enumerated lazily from directories that can change underneath us, so
+            // enumeration failures need the same best-effort handling as individual file reads.
+            foreach (var path in client.GetForwardedMcpConfigPaths(scope))
+            {
+                try
+                {
+                    var config = await McpConfigFileHelper.ReadConfigAsync(
+                        path, ConfigurationHelper.ParseOptions, new AgentConfiguration(), cancellationToken);
+                    if (McpConfigFileHelper.GetServerContainer(config, "servers", path)?["aspire"] is JsonObject)
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex) when (IsUnreadableConfig(ex))
+                {
+                    // One unreadable file must not hide a valid registration in another.
+                }
+            }
+        }
+        catch (Exception ex) when (IsUnreadableConfig(ex))
+        {
+        }
+
+        return false;
+
+        // Unreadable config is not evidence of Aspire setup, and hook installation is best effort.
+        static bool IsUnreadableConfig(Exception ex) =>
+            ex is InvalidOperationException or IOException or UnauthorizedAccessException;
+    }
+
+    private async Task ConfigureTelemetryHooksAsync(
+        IReadOnlyList<IAgentClient> clients,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<TelemetryHookResult> results;
+        try
+        {
+            results = await _telemetryHookConfigurator.ConfigureAsync(clients, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -708,24 +876,26 @@ internal sealed class AgentInitCommand : BaseCommand
             return;
         }
 
-        if (result.ConfiguredEnvironments != AgentEnvironment.None)
+        var configuredNames = results
+            .Where(result => result.Status is TelemetryHookStatus.Configured)
+            .Select(result => result.Client.DisplayName)
+            .ToList();
+        if (configuredNames.Count > 0)
         {
-            var environmentNames = string.Join(", ", Enum.GetValues<AgentEnvironment>()
-                .Where(environment => environment != AgentEnvironment.None && result.ConfiguredEnvironments.HasFlag(environment))
-                .Select(GetEnvironmentDisplayName));
             InteractionService.DisplayMessage(
                 KnownEmojis.BarChart,
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, environmentNames));
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, string.Join(", ", configuredNames)));
         }
 
-        foreach (var skip in result.Skipped)
+        foreach (var result in results.Where(result => result.Status is not TelemetryHookStatus.Configured))
         {
-            var environmentName = GetEnvironmentDisplayName(skip.Environment);
-            var message = skip.Reason switch
+            var clientName = result.Client.DisplayName;
+            var message = result.Status switch
             {
-                TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, environmentName),
-                TelemetryHookSkipReason.UnexpectedConfigShape => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape, environmentName),
-                _ => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, environmentName),
+                TelemetryHookStatus.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
+                TelemetryHookStatus.UnexpectedConfigShape => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape, clientName),
+                TelemetryHookStatus.WriteFailed => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, clientName),
+                _ => throw new UnreachableException($"Unexpected telemetry hook status: {result.Status}"),
             };
 
             // Skips are surfaced to the user but never treated as command failures: a user-owned
@@ -733,17 +903,6 @@ internal sealed class AgentInitCommand : BaseCommand
             InteractionService.DisplaySubtleMessage(message);
         }
     }
-
-    private static string GetEnvironmentDisplayName(AgentEnvironment environment)
-        => environment switch
-        {
-            AgentEnvironment.CopilotCli => "GitHub Copilot CLI",
-            AgentEnvironment.CopilotApp => "GitHub Copilot App",
-            AgentEnvironment.ClaudeCode => "Claude Code",
-            AgentEnvironment.VsCode => "VS Code",
-            AgentEnvironment.OpenCode => "OpenCode",
-            _ => environment.ToString(),
-        };
 
     /// <summary>
     /// Extracts the single short sentence from a skill description so the selection prompt
@@ -882,7 +1041,7 @@ internal sealed class AgentInitCommand : BaseCommand
         InteractionService.DisplayEmptyLine();
     }
 
-    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, IReadOnlyList<SkillSource> sources, DirectoryInfo workspaceRoot)
+    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, DirectoryInfo workspaceRoot)
     {
         var hasErrors = false;
         foreach (var resultGroup in results.GroupBy(result => result.Status switch
@@ -912,30 +1071,222 @@ internal sealed class AgentInitCommand : BaseCommand
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
                     AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, ExecutionContext),
                     string.Join(", ", result.Clients.Select(static client => client.DisplayName))));
-            var sourceUrls = new List<string>();
-            if (resultGroup.Any(result => result.Clients.Any(client => client.Id != OpenCodeAgentClient.ClientId)))
-            {
-                sourceUrls.AddRange(sources.Select(static source => source.GetRepositoryUrl()));
-            }
-
-            foreach (var result in resultGroup.Where(result => result.Clients.Any(client => client.Id == OpenCodeAgentClient.ClientId)))
-            {
-                var catalogs = AspireSkillsRemoteConfiguration.ReadOpenCodeSkills(result.Configuration!);
-                sourceUrls.AddRange((catalogs ?? []).Select(AspireSkillsRemoteConfiguration.String).OfType<string>()
-                    .Where(url => sources.Any(source => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(url, source))));
-            }
-
-            var sourceLine = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredSourceList,
-                string.Join(", ", sourceUrls.Distinct(StringComparer.Ordinal)));
-            var locationLine = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations,
+            var message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
                 string.Join(", ", targets));
-            InteractionService.DisplayMessage(KnownEmojis.Robot,
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                    $"{sourceLine}{Environment.NewLine}  {locationLine}"));
-            InteractionService.DisplayEmptyLine();
+            InteractionService.DisplayMessage(KnownEmojis.Robot, message);
         }
 
         return hasErrors;
+    }
+
+    private static bool AspireSkillsReplaceSkillCopies(IReadOnlyList<AgentTargetResult> registrationResults,
+        IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope)
+    {
+        // The saved configuration proves the replacement lives at the selected scope, but a local or managed
+        // settings file can still disable it, so the merged settings must enable it too.
+        return !registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) &&
+            selectedClients.All(client => registrationResults.Any(result =>
+                result.Clients.Contains(client) && result.Configuration is { } configuration &&
+                ConfigurationContainsAspireSkills(client, configuration)) &&
+                HasAspireSkillsRegistration(client, workspaceRoot, scope));
+    }
+
+    private string[] FindSkillCopiesAtSelectedScope(IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot,
+        AgentConfigurationScope scope, CancellationToken cancellationToken)
+        => LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot, ExecutionContext.HomeDirectory, cancellationToken)
+            .Where(copy => copy.Scope == scope && selectedClients.Any(client =>
+                copy.Owners.Contains(client.Id, StringComparers.AgentClientId)))
+            .Select(copy => copy.Directory)
+            .ToArray();
+
+    // Copies are only removed once the Aspire skills plugin replaces them. When --remove-skill-copies
+    // was passed but that did not happen, report the kept copies instead of ignoring the request silently.
+    private void DisplayRequestedSkillCopiesKept(IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot,
+        AgentConfigurationScope scope, PromptBinding<bool> removeSkillCopiesBinding, CancellationToken cancellationToken)
+    {
+        if (removeSkillCopiesBinding.Resolve() is not (true, true))
+        {
+            return;
+        }
+
+        var skillDirectories = FindSkillCopiesAtSelectedScope(selectedClients, workspaceRoot, scope, cancellationToken);
+        if (skillDirectories.Length > 0)
+        {
+            DisplaySkillCopiesKept(skillDirectories, workspaceRoot, explainPluginRequirement: true);
+        }
+    }
+
+    private void DisplaySkillCopiesKept(IEnumerable<string> skillDirectories, DirectoryInfo workspaceRoot, bool explainPluginRequirement)
+    {
+        var kept = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_KeptSkillCopies,
+            string.Join(", ", skillDirectories.Select(directory => AgentPath.GetDisplayPath(directory, workspaceRoot, ExecutionContext))));
+        InteractionService.DisplayMessage(KnownEmojis.FileFolder, string.Join(Environment.NewLine,
+        [
+            kept.EscapeMarkup(),
+            .. explainPluginRequirement
+                ? [$"[dim]{AgentCommandStrings.InitCommand_SkillCopiesRequirePlugin.EscapeMarkup()}[/]"]
+                : Array.Empty<string>()
+        ]), allowMarkup: true);
+    }
+
+    private IEnumerable<string> FormatSkillCopyFolders(IEnumerable<string> skillDirectories, DirectoryInfo workspaceRoot)
+        => skillDirectories.SelectMany(directory => (IEnumerable<string>)
+        [
+            $"  {AgentPath.GetDisplayPath(directory, workspaceRoot, ExecutionContext).EscapeMarkup()}",
+            .. GetSkillCopyFiles(directory).Select(file => $"    {file.EscapeMarkup()}")
+        ]);
+
+    private static IEnumerable<string> GetSkillCopyFiles(string skillDirectory)
+    {
+        // Directory.Delete(recursive: true) removes everything below the folder, including hidden files,
+        // so list them too. Links are skipped because recursive enumeration would otherwise follow them
+        // into their targets (for example a shared checkout), while deletion removes only the link itself.
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            IgnoreInaccessible = true
+        };
+
+        try
+        {
+            return Directory.EnumerateFiles(skillDirectory, "*", options)
+                .Select(file => Path.GetRelativePath(skillDirectory, file)
+                    .Replace(Path.DirectorySeparatorChar, '/')
+                    .Replace(Path.AltDirectorySeparatorChar, '/'))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The folder path is still shown; deletion reports its own failure if the folder is unusable.
+            return [];
+        }
+    }
+
+    private void DisplaySkillCopiesToDelete(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot)
+        => InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Join(Environment.NewLine,
+        [
+            $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound.EscapeMarkup()}[/]",
+            .. FormatSkillCopyFolders(skillDirectories, workspaceRoot)
+        ]), allowMarkup: true);
+
+    private async Task<bool> ConfirmSkillCopyDeletionAsync(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot,
+        PromptBinding<bool> removeSkillCopiesBinding, CancellationToken cancellationToken)
+    {
+        var (wasProvided, removeSkillCopies) = removeSkillCopiesBinding.Resolve();
+        if (wasProvided)
+        {
+            // Callers that pass the option never see the prompt, so show the same list before deleting.
+            if (removeSkillCopies)
+            {
+                DisplaySkillCopiesToDelete(skillDirectories, workspaceRoot);
+            }
+
+            return removeSkillCopies;
+        }
+
+        // The copies can contain user edits, so only an explicit option or an interactive answer
+        // authorizes recursively deleting them.
+        if (!_hostEnvironment.SupportsInteractiveInput)
+        {
+            return false;
+        }
+
+        DisplaySkillCopiesToDelete(skillDirectories, workspaceRoot);
+        var prompt = skillDirectories.Count == 1
+            ? AgentCommandStrings.InitCommand_DeleteSkillCopyPrompt
+            : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_DeleteSkillCopiesPrompt, skillDirectories.Count);
+        return await InteractionService.PromptConfirmAsync(prompt, removeSkillCopiesBinding, cancellationToken);
+    }
+
+    private (List<string> Removed, List<string> Failures) RemoveSkillCopies(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot)
+    {
+        List<string> removed = [];
+        List<string> failures = [];
+        foreach (var skillDirectory in skillDirectories)
+        {
+            var displayPath = AgentPath.GetDisplayPath(skillDirectory, workspaceRoot, ExecutionContext);
+            try
+            {
+                if (IsBehindLink(new DirectoryInfo(skillDirectory), workspaceRoot))
+                {
+                    failures.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemoveSkillCopyFailed,
+                        displayPath, AgentCommandStrings.InitCommand_SkillCopyBehindLink));
+                    continue;
+                }
+
+                Directory.Delete(skillDirectory, recursive: true);
+                removed.Add(displayPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                failures.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemoveSkillCopyFailed,
+                    displayPath, ex.Message));
+            }
+        }
+
+        return (removed, failures);
+    }
+
+    private static bool ConfigurationContainsAspireSkills(IAgentClient client, JsonObject configuration)
+    {
+        if (client.Id == OpenCodeAgentClient.ClientId)
+        {
+            try
+            {
+                return AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(configuration, [SkillSource.BuiltIn]);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return false;
+            }
+        }
+
+        return configuration["enabledPlugins"] is JsonObject plugins &&
+            plugins[AspireSkillsRemoteConfiguration.PluginName] is JsonValue enabled &&
+            enabled.TryGetValue<bool>(out var isEnabled) && isEnabled;
+    }
+
+    private static bool HasAspireSkillsRegistration(IAgentClient client, DirectoryInfo workspaceRoot,
+        AgentConfigurationScope scope)
+    {
+        try
+        {
+            // Configured sources can enable unrelated plugins that would not replace the copied Aspire skills.
+            return client.HasIntegrationRegistration(workspaceRoot, scope, [SkillSource.BuiltIn]);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            // Unreadable settings cannot prove the agent still has Aspire skills, so keep the copies.
+            return false;
+        }
+    }
+
+    // Discovery follows links, so a copy reached through a linked folder (for example
+    // .agents/skills -> ~/shared-skills) lives outside the workspace or profile, and deleting it
+    // would remove files other tools share. Only directories below the workspace root or profile
+    // are checked because those roots themselves are commonly links (for example a mapped drive).
+    private bool IsBehindLink(DirectoryInfo directory, DirectoryInfo workspaceRoot)
+    {
+        for (var current = directory; current is not null; current = current.Parent)
+        {
+            if (IsSamePath(current.FullName, workspaceRoot.FullName) ||
+                IsSamePath(current.FullName, ExecutionContext.HomeDirectory.FullName))
+            {
+                return false;
+            }
+
+            if (current.LinkTarget is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+
+        static bool IsSamePath(string left, string right) =>
+            StringComparers.FileSystemPath.Equals(Path.TrimEndingDirectorySeparator(left), Path.TrimEndingDirectorySeparator(right));
     }
 
     private sealed record InstalledSkillSummaryItem(string SkillName, string Directory);

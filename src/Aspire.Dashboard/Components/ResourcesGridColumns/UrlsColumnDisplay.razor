@@ -11,10 +11,10 @@ else if (DisplayedUrls.Count == 1)
         @WriteUrl(DisplayedUrls[0])
     </div>
 }
-else if (DisplayedUrls.Count > 1)
+else
 {
     <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-        <FluentOverflow TItem="DisplayedUrl" Items="@DisplayedUrls" Class="url-overflow" MaxRenderedItems="@MaxRenderedOverflowItems" Threshold="0">
+        <FluentOverflow TItem="DisplayedUrl" Items="@DisplayedUrls" Class="url-overflow" MaxRenderedItems="@MaxRenderedItems" Threshold="0">
             <ItemTemplate Context="displayedUrl">
                 <div behavior="@(ReferenceEquals(displayedUrl, DisplayedUrls[0]) ? "ellipsis" : null)">
                     @WriteUrl(displayedUrl)
@@ -22,7 +22,10 @@ else if (DisplayedUrls.Count > 1)
             </ItemTemplate>
             <MoreTemplate Context="overflow">
                 <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" style="display:inherit;">
-                    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
+                    <FluentButton Appearance="@(UseNeutralOverflowButton ? ButtonAppearance.Default : ButtonAppearance.Primary)"
+                                  Class="@(UseNeutralOverflowButton ? "url-button url-button-neutral" : "url-button")"
+                                  aria-label="@($"{Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]}: {overflow.OverflowCount}")"
+                                  OnClick="() => _popoverVisible = !_popoverVisible">
                         @($"+{overflow.OverflowCount}")
                     </FluentButton>
                 </div>

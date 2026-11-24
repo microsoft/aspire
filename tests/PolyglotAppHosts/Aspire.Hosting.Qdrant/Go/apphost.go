@@ -15,8 +15,8 @@ func main() {
 	customApiKey := builder.AddParameter("qdrant-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 	builder.AddQdrant("qdrant-custom", &aspire.AddQdrantOptions{
 		ApiKey:   &customApiKey,
-		GrpcPort: aspire.Float64Ptr(16334),
-		HttpPort: aspire.Float64Ptr(16333),
+		GrpcPort: aspire.IntPtr(16334),
+		HttpPort: aspire.IntPtr(16333),
 	})
 
 	qdrant := builder.AddQdrant("qdrant")

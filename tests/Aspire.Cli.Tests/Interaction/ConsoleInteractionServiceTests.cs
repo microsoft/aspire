@@ -3,7 +3,9 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
@@ -16,14 +18,16 @@ using Spectre.Console;
 using Spectre.Console.Rendering;
 using NewCommand = Aspire.Cli.Commands.NewCommand;
 using NewCommandPrompter = Aspire.Cli.Commands.NewCommandPrompter;
+using AddCommandPrompter = Aspire.Cli.Commands.AddCommandPrompter;
 
 using System.CommandLine;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Aspire.Cli.Tests.Interaction;
 
-public class ConsoleInteractionServiceTests
+public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
 {
     private static readonly DirectoryInfo s_tempRoot = Directory.CreateTempSubdirectory();
     private static readonly DirectoryInfo s_runtimeDirectory = s_tempRoot.CreateSubdirectory("runtimes");
@@ -37,6 +41,295 @@ public class ConsoleInteractionServiceTests
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console, TextReader.Null);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+    }
+
+    [Theory]
+    [InlineData(false, 40)]
+    [InlineData(false, 120)]
+    [InlineData(true, 120)]
+    public async Task SourceDetails_RendersConsistently(bool ansi, int width)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = ansi ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = width;
+        var interaction = CreateInteractionService(console);
+        interaction.DisplaySourceDetails(
+        [
+            [(SharedCommandStrings.SourceGitRepository, "https://example.test/config"), (SharedCommandStrings.SourceRef, "release/[team]")],
+            [(SharedCommandStrings.SourceName, "Company [templates]"), (SharedCommandStrings.SourceGitRepository, "https://example.test/templates"), (SharedCommandStrings.SourceGitPath, "templates"), (SharedCommandStrings.SourceRef, "release/[team]")],
+            [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceFeed, "https://example.test/nuget"), (SharedCommandStrings.SourcePatterns, "Acme.Hosting.*")],
+            [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceGitRepository, "https://example.test/skills"), (SharedCommandStrings.SourceMarketplace, "company-skills"), (SharedCommandStrings.SourcePlugins, "aspire@company-skills")]
+        ]);
+
+        await Verify(output.ToString(), "txt").UseParameters(ansi, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task SourceSelection_IntegrationGroupsAndTrustNotice(bool customSource, bool multipleSources)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        var cache = new FakeNuGetPackageCache();
+        var implicitChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var source = customSource ? "https://example.test/team" : PackageSources.NuGetOrg;
+        var channel = customSource ? new PackageChannel("integration:team", PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.Hosting.*", source)], cache, new TestFeatures(), NullLogger.Instance)
+        {
+            IntegrationSource = new IntegrationSourceConfiguration
+            {
+                Name = "team",
+                Source = source,
+                Patterns = ["Aspire.Hosting.*"]
+            }
+        } : implicitChannel;
+        List<(string FriendlyName, Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages =
+        [
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = source }, channel)
+        ];
+        if (multipleSources)
+        {
+            packages.Add(("postgres", new() { Id = "Aspire.Hosting.Postgres", Version = "2.0.0", Source = "https://example.test/other" }, implicitChannel));
+        }
+
+        var selected = await new AddCommandPrompter(interaction, CreateExecutionContext()).PromptForIntegrationAsync(packages, CancellationToken.None);
+
+        Assert.Equal("Aspire.Hosting.Redis", selected.Package.Id);
+        await Verify(output.ToString(), "txt").UseParameters(customSource, multipleSources).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false, 40)]
+    [InlineData(false, 120)]
+    [InlineData(true, 40)]
+    [InlineData(true, 120)]
+    public async Task SourceSelection_TemplateSourcesExplainBeforeFetching(bool nonDefaultGitValues, int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, []);
+        console.Profile.Width = width;
+        var executionContext = CreateExecutionContext();
+        var interaction = CreateInteractionService(console, executionContext);
+        interaction.DisplayTemplateSources(
+        [
+            ("aspire[1p]", new TemplateSource(nonDefaultGitValues ? "templates/[team]" : ".",
+                "https://example.test/templates.git", nonDefaultGitValues ? "release/[team]" : null)),
+            ("another", new TemplateSource("./", "ssh://git@example.test/another.git", "HEAD")),
+            ("third", new TemplateSource(".\\", "https://example.test/third.git", null)),
+            ("local", new TemplateSource("C:\\Templates\\Company [local]", null, null))
+        ], executionContext);
+        interaction.DisplayTemplateGitFetchNotice("https://example.test/templates.git",
+            nonDefaultGitValues ? "templates/[team]" : ".",
+            nonDefaultGitValues ? "release/[team]" : null, mayPromptForAuthentication: false);
+
+        Assert.False(executionContext.TryMarkSourceTrustWarningDisplayed());
+        await Verify(output.ToString(), "txt").UseParameters(nonDefaultGitValues, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(".", null, "https://example.test/templates.git")]
+    [InlineData("./", "HEAD", "https://example.test/templates.git")]
+    [InlineData(".\\", null, "https://example.test/templates.git")]
+    [InlineData("templates/[team]", "release/[team]", "https://example.test/templates.git")]
+    [InlineData(".", null, "https://user:password@example.test/templates.git?token=secret#fragment")]
+    public void TemplateGitFetchNotice_IdentifiesSourceWithoutExposingUrlCredentials(string path, string? reference, string repository)
+    {
+        var interaction = new TestInteractionService();
+        const string displayedRepository = "https://example.test/templates.git";
+        var source = repository == displayedRepository ? displayedRepository : "https://***@example.test/templates.git";
+        if (path == "templates/[team]")
+        {
+            source += $" ({SharedCommandStrings.SourceGitPath}: {path}, {SharedCommandStrings.SourceRef}: {reference})";
+        }
+
+        interaction.DisplayTemplateGitFetchNotice(repository, path, reference, mayPromptForAuthentication: true);
+
+        var message = Assert.Single(interaction.DisplayedMessages);
+        var expected = string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
+            SharedCommandStrings.GitFetchTemplates, source);
+        Assert.Equal($"[blue]{expected.EscapeMarkup()}[/]", message.Message);
+        Assert.Equal(KnownEmojis.InboxTray, message.Emoji);
+        Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+    }
+
+    [Fact]
+    public void SourceSelection_NoTemplateSourcesDoesNotDisplayOnboarding()
+    {
+        var interaction = new TestInteractionService();
+
+        interaction.DisplayTemplateSources([], CreateExecutionContext());
+
+        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Empty(interaction.DisplayedRenderables);
+        Assert.Equal(0, interaction.DisplayEmptyLineCount);
+    }
+
+    [Fact]
+    public async Task SourceDetails_WideLabelsUseTerminalCellWidths()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 40;
+        CreateInteractionService(console).DisplaySourceDetails(
+        [
+            [("配置来源", "company"), ("仓库", "https://example.test/repo")],
+            [("Source", "another")]
+        ]);
+
+        await Verify(output.ToString(), "txt").ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SourceSelection_IntegrationVersionsUseSourceGroups(bool multipleSources)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        var cache = new FakeNuGetPackageCache();
+        var defaultChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var source = multipleSources ? "https://example.test/daily" : PackageSources.NuGetOrg;
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", source)], cache, new TestFeatures(), NullLogger.Instance);
+        (string FriendlyName, Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)[] packages =
+        [
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = PackageSources.NuGetOrg }, defaultChannel),
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "2.0.0", Source = source }, dailyChannel)
+        ];
+
+        var selected = await new AddCommandPrompter(interaction, CreateExecutionContext()).PromptForIntegrationVersionAsync(packages, "daily", CancellationToken.None);
+
+        Assert.Same(dailyChannel, selected.Channel);
+        Assert.Equal("2.0.0", selected.Package.Version);
+        await Verify(output.ToString(), "txt").UseParameters(multipleSources).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigSource_RendersAlignedDetailsAndReadmeLink(bool ansi)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = ansi ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        console.Profile.Capabilities.Links = ansi;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        const string readmeUrl = "https://docs.example/config-source?team=[platform]";
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
+                [CliConfigNames.InitSourcePath] = "teams/[platform].json",
+                [CliConfigNames.InitSourceRef] = "config-preview",
+                [CliConfigNames.InitSourceReadmeUrl] = readmeUrl
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
+
+        Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
+        var rendered = output.ToString();
+        if (ansi)
+        {
+            TerminalLinkAssert.ContainsLink(rendered, readmeUrl, ConfigSourceStrings.ReadmeLink);
+        }
+        // OSC 8 links include process-specific IDs, e.g. ESC]8;id=123;urlESC\.
+        rendered = Regex.Replace(rendered, @"(?<=\x1b]8;id=)\d+", "link-id");
+        await Verify(rendered, "txt").UseParameters(ansi).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigSource_RendersFetchNotice(bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction, interactive: interactive,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration"
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source"), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
+
+        Assert.False(Assert.IsType<ConfigSource>(source).OptOut);
+        await Verify(output.ToString(), "txt").UseParameters(interactive).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("aspire.config.json", null)]
+    [InlineData("teams/platform.json", null)]
+    [InlineData(null, "config-preview")]
+    [InlineData("aspire.config.json", "config-preview")]
+    [InlineData("teams/platform.json", "config-preview")]
+    public async Task ConfigSource_OmitsDefaultDetails(string? path, string? reference)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
+                [CliConfigNames.InitSourcePath] = path,
+                [CliConfigNames.InitSourceRef] = reference
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
+
+        Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
+        await Verify(output.ToString(), "txt").UseParameters(path, reference).ScrubLinesWithReplace(line => line.TrimEnd());
     }
 
     [Fact]
@@ -1288,13 +1581,33 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console);
 
         var executionContext = CreateExecutionContext();
-        interactionService.DisplaySourceTrustWarning(executionContext);
-        interactionService.DisplaySourceTrustWarning(executionContext);
+        Assert.True(interactionService.DisplaySourceTrustWarning(executionContext));
+        Assert.False(interactionService.DisplaySourceTrustWarning(executionContext));
 
         var expected = enableColor
             ? $"\u001b[91m\U0001F6A8\u001b[0m \u001b[93m{SharedCommandStrings.SourceTrustWarning}\u001b[0m"
             : $"\U0001F6A8 {SharedCommandStrings.SourceTrustWarning}";
         Assert.Equal(expected, output.ToString().TrimEnd());
+    }
+
+    [Fact]
+    public void DisplayTemplateSources_DoesNotRepeatSourceTrustWarning()
+    {
+        var interaction = new TestInteractionService();
+        var executionContext = CreateExecutionContext();
+
+        interaction.DisplaySourceTrustWarning(executionContext);
+        interaction.DisplayTemplateSources(
+            [("first", new TemplateSource(".", "https://example.test/first.git", null))], executionContext);
+        interaction.DisplayTemplateSources(
+            [("second", new TemplateSource(".", "https://example.test/second.git", null))], executionContext);
+        interaction.DisplaySourceTrustWarning(executionContext);
+
+        Assert.Equal(
+            [$"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
+                NewCommandStrings.TemplateSourceExplanation, NewCommandStrings.TemplateSourceExplanation],
+            interaction.DisplayedMessages.Select(message => message.Message));
+        Assert.Equal(2, interaction.DisplayedRenderables.Count);
     }
 
     [Fact]

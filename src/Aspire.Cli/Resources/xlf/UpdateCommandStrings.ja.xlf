@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
         <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
-        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <target state="translated">チャネル ソース '{1}' が無効になっているか、ソースまたはそのパッケージ マッピングが継承されているか、ユーザー所有であるため、'{0}' を変更できません。代わりに、NuGet 構成を手動で更新してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
@@ -63,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
-        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</source>
-        <target state="translated">チャネル '{0}' を '{1}' に適用できません。MSBuild が NuGet 構成をオーバーライドするためです: {2}。明示的なチャネルの更新を有効にするには、これらのオーバーライドを削除してください。明示的なチャネルのない更新は引き続きサポートされます。</target>
+        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
+        <target state="translated">チャネル '{0}' を '{1}' に適用できません。MSBuild が NuGet 構成をオーバーライドするためです: {2}。チャネルの更新を有効にするには、これらのオーバーライドを削除してください。コマンド ラインまたは構成済みチャネルのない更新は引き続きサポートされます。</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -81,6 +81,11 @@
         <source>Cannot safely update conditional Aspire.AppHost.Sdk declarations for '{0}'; update the conditional SDK version explicitly.</source>
         <target state="translated">'{0}' の条件付き Aspire.AppHost.Sdk 宣言を安全に更新できません。条件付き SDK のバージョンを明示的に更新してください。</target>
         <note>{0} = AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="ConfiguredChannelNotFoundFormat">
+        <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
+        <target state="translated">Aspire構成からチャネル '{0}' を使用できません。{1}</target>
+        <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
         <source>Could not find PackageVersion element for '{0}' in {1}</source>
@@ -105,6 +110,53 @@
       <trans-unit id="DotNetToolSelfUpdateMessage">
         <source>To update the Aspire CLI when installed as a .NET tool, run:</source>
         <target state="translated">.NET ツールとしてインストールされたときに Aspire CLI を更新するには、次を実行します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunBackupRecoveryFormat">
+        <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
+        <target state="translated">'{0}' を復元できませんでした。復旧バックアップは '{1}' に保存されました。再試行する前に、バックアップを手動で復元してください。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunBackupsNotReplaced">
+        <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
+        <target state="translated">既存のバックアップを置き換えずに、ドライ ランはキャンセルされました。一覧にあるバックアップ ファイルから元のファイルを復元するか、退避させてから再試行してください。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunExistingBackupsFormat">
+        <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+{0}</source>
+        <target state="translated">以前のドライ ランのバックアップが既に存在します。置き換える前に、必要に応じて復元できるように保存してください:
+{0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunOptionDescription">
+        <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
+        <target state="translated">変更を提案または適用せずに、一時的な NuGet キャッシュを使用して、明示的に指定した .NET AppHost チャネルの更新を検証します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunReplaceBackupsPrompt">
+        <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
+        <target state="translated">既存のバックアップを現在のファイルの内容で置き換えますか?以前の復元用コピーは破棄されます。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunRequiresChannel">
+        <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
+        <target state="translated">--dry-run には、既定値以外の --channel または --quality を明示的に指定する必要があります。また、--self または --migrate と組み合わせることはできません。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunRequiresDotNet">
+        <source>--dry-run is supported only for .NET AppHosts.</source>
+        <target state="translated">--dry-run は .NET AppHosts でのみサポートされます。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunSuccessful">
+        <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
+        <target state="translated">チャネル更新の検証に成功しました。元のファイルが復元されました。更新プログラムは適用されませんでした。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunValidating">
+        <source>Validating the channel update...</source>
+        <target state="translated">チャネルの更新を検証しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -148,9 +200,9 @@
         <note>{0} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
-        <source>Failed to restore packages for project {0} after update.</source>
-        <target state="translated">更新後にプロジェクト {0} のパッケージを復元できませんでした。</target>
-        <note />
+        <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
+        <target state="translated">プロジェクト {1} の {0} チャネル更新の検証復元に失敗しました。更新プログラムは適用されませんでした。詳細については、復元出力を確認してください。</target>
+        <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
         <source>Failed to update package reference for {0} in project {1}.</source>
@@ -436,6 +488,11 @@
         <source>Update successful!</source>
         <target state="translated">正常に更新されました!</target>
         <note />
+      </trans-unit>
+      <trans-unit id="UsingConfiguredChannelFormat">
+        <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
+        <target state="translated">Aspire 構成のチャネル '{0}' を使用しています。上書きするには --channel を指定してください。</target>
+        <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>

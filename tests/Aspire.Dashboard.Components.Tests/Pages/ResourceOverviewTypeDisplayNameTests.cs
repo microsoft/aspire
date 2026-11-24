@@ -29,11 +29,11 @@ public class ResourceOverviewTypeDisplayNameTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(["postgres"], cut.Instance.SelectedResourceNames));
 
         var status = cut.Find("[aria-labelledby='overview-status-title']");
-        var values = status.QuerySelectorAll("dt").ToDictionary(dt => dt.TextContent.Trim(), dt => dt.NextElementSibling!);
+        var values = status.QuerySelectorAll(".overview-status-grid td.nameColumn").ToDictionary(cell => cell.TextContent.Trim(), cell => cell.NextElementSibling!);
         Assert.Equal("PostgreSQL Server", values["Type"].TextContent.Trim());
 
         var graph = cut.FindComponent<ResourceRelationshipGraph>().Instance;
-        Assert.Equal(new RelationshipGraphNode("postgres", "PostgreSQL Server", Url: null), graph.Resource);
+        Assert.Equal(new RelationshipGraphNode("postgres", "PostgreSQL Server", Url: null, IsReplica: false), graph.Resource);
 
         Assert.Contains(KnownResourceTypes.Container, cut.Find(".overview-property-grid").TextContent, StringComparison.Ordinal);
     }
@@ -46,7 +46,9 @@ public class ResourceOverviewTypeDisplayNameTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(["api"], cut.Instance.SelectedResourceNames));
 
         var status = cut.Find("[aria-labelledby='overview-status-title']");
-        var values = status.QuerySelectorAll("dt").ToDictionary(dt => dt.TextContent.Trim(), dt => dt.NextElementSibling!);
+        var values = status.QuerySelectorAll(".overview-status-grid td.nameColumn").ToDictionary(cell => cell.TextContent.Trim(), cell => cell.NextElementSibling!);
+        Assert.Equal("web-api", values["Display name"].TextContent.Trim());
+        Assert.Single(values["Display name"].QuerySelectorAll("svg.resource-icon"));
         Assert.Equal(KnownResourceTypes.Project, values["Type"].TextContent.Trim());
 
         Assert.Empty(cut.FindAll(".overview-property-grid"));
@@ -61,7 +63,7 @@ public class ResourceOverviewTypeDisplayNameTests : DashboardTestContext
             [
                 ModelTestHelpers.CreateResource("postgres", resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running,
                     resourceTypeDisplayName: "PostgreSQL Server", properties: CreateTypeProperty(KnownResourceTypes.Container)),
-                ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running,
+                ModelTestHelpers.CreateResource("api", displayName: "web-api", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running,
                     relationships: [new RelationshipViewModel("postgres", "Reference")], properties: CreateTypeProperty(KnownResourceTypes.Project))
             ],
             resourceChannelProvider: () => channel);

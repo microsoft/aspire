@@ -11,7 +11,7 @@ param existing_resource_group string
 
 param env_acr_outputs_name string
 
-resource env 'Microsoft.App/managedEnvironments@2025-07-01' existing = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' existing = {
   name: existing_name
   scope: resourceGroup(existing_resource_group)
 }

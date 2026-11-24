@@ -69,7 +69,7 @@ builder.AddProject<Projects.Api>("api")
     .WithTags("Backend", "API")
     .WithTrait("Owner", "Finance")
     .WithTrait("Owner", "Platform")
-    .WithDashboardPosition(-10);
+    .WithDisplayOrder(10);
 ```
 
 `WithTags` accepts a single tag or multiple tags using `params ReadOnlySpan<string>`,
@@ -81,8 +81,13 @@ dashboard. User-added tags are stored separately in browser local storage, so
 restarting an AppHost does not lose customizations or copy declared tags from a
 different run.
 
-`WithDashboardPosition` uses `Aspire_Dashboard_Position`; repeated calls replace the
-previous value. Lower positions appear first; defaults can change between runs until
+`WithDisplayOrder` stores its own annotation rather than a trait, and is transported
+as the `resource.displayOrder` resource property; repeated calls replace the previous
+value. It isn't specific to the dashboard, so other UIs can use it too. Like
+`ResourceUrlAnnotation.DisplayOrder`, it's a relative sort key: higher values appear first,
+and resources without one are treated as 0, so a negative value moves a resource after them.
+Resources with the same nonzero order are displayed by name; resources with an order of 0,
+whether declared or not, keep their existing order. Orders can change between runs until
 the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
 per application, independently of the run database.
 
@@ -158,7 +163,7 @@ The Dashboard creates the directory with `Directory.CreateTempSubdirectory`, rem
         └── run.json
 ```
 
-All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
+All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. A Dashboard claims a run ID by taking its run lock and then creating a new run directory. If another Dashboard holds that lock or the directory already exists, such as when two AppHosts start in the same millisecond, the start time advances by one millisecond and the claim is retried. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
 
 - schema version
 - run ID
@@ -388,7 +393,8 @@ SQL values are parameterized. Schema SQL is compiled into the Dashboard assembly
 
 ## Failure behavior
 
-- A lock collision fails startup instead of allowing two writers to share a run database.
+- A run ID collision advances the run ID to the next millisecond instead of allowing two writers to share a run database.
+- A resume-mode lock collision fails startup instead of allowing two writers to share an application database.
 - An invalid persistence mode fails Dashboard option validation and lists the accepted values.
 - Incomplete or unreadable historical metadata is ignored during discovery.
 - A historical run that disappears between discovery and selection leaves the previous run selected.

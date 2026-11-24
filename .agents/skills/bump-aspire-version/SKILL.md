@@ -31,6 +31,14 @@ of the old version throughout the repository.
 4. Confirm the exact target milestone exists and is open in GitHub. If it is
    missing or closed, ask before creating or reopening it; do not leave the policy
    pointing at a milestone the bot cannot assign.
+5. Determine whether the bump advances `main` because a new release branch was
+   just created (for example, main moves to 17.1 after `release/17.0` is
+   branched, as in #21850). If so, confirm that branch exists with
+   `git ls-remote --heads origin release/<X.Y>`. The scheduled API and ATS diff
+   workflows must follow it; otherwise they keep generating baseline PRs for the
+   previous release, and the new release's shipped API surface is never captured.
+   Servicing bumps and other bumps that do not follow a new release branch skip
+   this.
 
 ## Run the deterministic edit
 
@@ -43,17 +51,34 @@ confirmed open milestone:
 dotnet run --file .agents/skills/bump-aspire-version/BumpVersion.cs -- 17.0 --branch main --milestone 17.0
 ```
 
+When the bump follows a newly created release branch, add
+`--api-diff-release-branch release/<X.Y>` to the same command:
+
+```bash
+dotnet run --file .agents/skills/bump-aspire-version/BumpVersion.cs -- 17.0 --branch main --milestone 17.0 --api-diff-release-branch release/13.6
+```
+
 `--branch` is the PR's target branch, not the feature branch. `--milestone` is
 explicit because servicing milestones can differ from product versions (for
 example, product `13.6.1` can use milestone `13.6.x`). The script does not create,
 reopen, or query GitHub milestones; confirm availability in the previous step.
 
 The script updates all three version components (`X.Y` means `X.Y.0`) and exactly
-one matching branch's milestone rule. It validates the expected file structure
-before writing either file and fails on missing or ambiguous matches. It preserves
-formatting, line endings, unrelated rules, and all other properties. Repeating the
-same command makes no further changes. If the file layout changes, update the
-script rather than bypassing its checks.
+one matching branch's milestone rule. With `--api-diff-release-branch`, it also
+replaces the previous release branch in the scheduled `target_branch` matrix of
+`.github/workflows/generate-api-diffs.yml` and
+`.github/workflows/generate-ats-diffs.yml`. It validates the expected file
+structure before writing any file and fails on missing or ambiguous matches. It
+preserves formatting, line endings, unrelated rules, and all other properties.
+Repeating the same command makes no further changes. If the file layout changes,
+update the script rather than bypassing its checks. Precedent: #22172 retargeted
+both workflows from `release/13.6` to `release/17.0`.
+
+When retargeting, also check whether the previous release's shipped baselines
+reached `main`. Those are the `src/**/api/*.cs` and `src/**/api/*.ats.txt` files
+from the automated API/ATS diff PRs against `release/<old>`; #22152 merged the
+13.6 baselines. Report any baselines still missing to the user. Do not import them
+in the bump PR unless asked.
 
 Prerelease/stabilization settings and the dashboard-image pin remain unchanged:
 a product version bump neither stabilizes packages nor publishes a dashboard image.
@@ -65,10 +90,11 @@ of the policy bot; do not recreate it.
 ## Validate
 
 Review `git diff --check` and the complete diff. Confirm only the intended version
-properties, milestone assignment, and any directly related comments changed.
+properties, milestone assignment, any directly related comments, and (when
+applicable) the scheduled API/ATS diff release branch changed.
 
 Confirm the resulting version components and milestone title match the request.
-Run the edit command again and confirm it reports both files unchanged.
+Run the edit command again and confirm it reports every file unchanged.
 
 Check the diff separately to confirm prerelease settings and the dashboard-image
 pin were preserved. If the change extends beyond metadata, run focused validation
@@ -79,7 +105,8 @@ for that behavior and follow the repository's SDK setup instructions when needed
 Use the `create-pr` skill and the repository PR template. Commit only the intended
 files, include required commit trailers, push without force, and use the available
 PR creation tool when the environment requires it. Describe the old and new
-versions, milestone routing, unchanged prerelease status, any retained
-dashboard-image override, and the validation actually performed.
+versions, milestone routing, any API/ATS diff workflow retargeting, unchanged
+prerelease status, any retained dashboard-image override, and the validation
+actually performed.
 Do not claim a full build or test run unless
 one was performed. Do not merge automatically.

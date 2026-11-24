@@ -23,10 +23,11 @@ param webfrontend_identity_outputs_clientid string
 
 param apiservice_entra_outputs_applicationiduri string
 
-resource webfrontend 'Microsoft.App/containerApps@2025-10-02-preview' = {
+resource webfrontend 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'webfrontend'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -46,7 +47,6 @@ resource webfrontend 'Microsoft.App/containerApps@2025-10-02-preview' = {
         }
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

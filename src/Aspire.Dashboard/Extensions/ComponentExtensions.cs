@@ -11,7 +11,7 @@ internal static class ComponentExtensions
 {
     public static Task SafeRefreshDataAsync<T>(this AspireFluentDataGrid<T>? dataGrid)
     {
-        return dataGrid?.RefreshDataAndRenderAsync() ?? Task.CompletedTask;
+        return dataGrid?.RefreshDataAsync(force: true) ?? Task.CompletedTask;
     }
 
     public static async Task SafeRefreshDataAsync(this LogViewer? logViewer)

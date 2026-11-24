@@ -23,7 +23,7 @@ public class DotNetAppHostRestorePreviewTests(ITestOutputHelper outputHelper)
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => DotNetAppHostRestorePreview.CreateAsync(
             NuGetTestHelper.CreateService(), candidate, settings, project,
-            new Dictionary<string, string>(), TestContext.Current.CancellationToken));
+            new Dictionary<string, string>(), isolatedOutputDirectory: null, TestContext.Current.CancellationToken));
 
         Assert.Empty(unrelated.EnumerateFileSystemInfos());
         Assert.Empty(appHost.EnumerateFileSystemInfos());

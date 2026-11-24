@@ -13,6 +13,7 @@ using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class GoDocCommentTests
 {
     private const string ResourceTypeId = "Tests/Tests.DocumentedResource";
@@ -193,10 +194,10 @@ public class GoDocCommentTests
             }
         }
 
-        // Metadata must reach the output: if the scanner reports an obsolete or experimental capability, the SDK says so.
+        // Obsolete capabilities are excluded from the generated Go surface rather than emitted with deprecation docs.
         if (context.Capabilities.Any(c => c.IsObsolete))
         {
-            Assert.Contains("// Deprecated: ", sdk);
+            Assert.DoesNotContain("// Deprecated: ", sdk);
         }
 
         if (context.Capabilities.Any(AtsTypeSystemCompatibility.IsExperimental))
@@ -228,6 +229,92 @@ public class GoDocCommentTests
             {
                 await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
             }
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "options_compatibility.go"), """
+                package aspire
+
+                func compileLegacyOptions(resource TestRedisResource) {
+                    resource.WithPersistence(&WithPersistenceOptions{})
+                }
+                """, timeout.Token);
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "functional_options_test.go"), """
+                package aspire
+
+                import (
+                    "reflect"
+                    "testing"
+                )
+
+                func TestOptionalHandleOptionsSerializeTheHandle(t *testing.T) {
+                    c := newClient("")
+                    password := newParameterResourceFromHandle(&handle{
+                        HandleID: "password",
+                        TypeID:   "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource",
+                    }, c)
+                    options := &WithHttpsDeveloperCertificateOptions{}
+                    HttpsDeveloperCertificatePassword(password).apply(options)
+                    got := options.ToMap()["password"]
+                    want := map[string]any{
+                        "$handle": "password",
+                        "$type":   handleType("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource"),
+                    }
+                    if !reflect.DeepEqual(got, want) {
+                        t.Fatalf("got %#v, want %#v", got, want)
+                    }
+                }
+
+                func TestFunctionalOptionsPreserveZeroFalseAndOrder(t *testing.T) {
+                    options := &WithHttpEndpointOptions{}
+                    for _, option := range []WithHttpEndpointOption{
+                        HttpEndpointPort(8080),
+                        HttpEndpointPort(0),
+                        HttpEndpointIsProxied(false),
+                    } {
+                        option.apply(options)
+                    }
+
+                    request := options.ToMap()
+                    if port := request["port"].(*int); port == nil || *port != 0 {
+                        t.Fatalf("port = %#v, want pointer to zero", port)
+                    }
+                    if proxied := request["isProxied"].(*bool); proxied == nil || *proxied {
+                        t.Fatalf("isProxied = %#v, want pointer to false", proxied)
+                    }
+                }
+
+                func TestDtoOptionAppliesToRequestMap(t *testing.T) {
+                    dialog := &InteractionInputsDialogOptions{PrimaryButtonText: StringPtr("Save")}
+                    options := &PromptInputOptions{}
+                    PromptInputOptionsValue(dialog).apply(options)
+
+                    request := options.ToMap()
+                    serialized := request["options"].(map[string]any)
+                    if text := serialized["primaryButtonText"].(*string); text == nil || *text != "Save" {
+                        t.Fatalf("primaryButtonText = %#v, want Save", text)
+                    }
+                }
+
+                func TestCreateBuilderOptionsMergeIntoResolvedMap(t *testing.T) {
+                    options := &CreateBuilderOptions{}
+                    for _, option := range []CreateBuilderOption{
+                        CreateBuilderProjectDirectory("first"),
+                        CreateBuilderDisableDashboard(false),
+                        CreateBuilderProjectDirectory("second"),
+                    } {
+                        option.apply(options)
+                    }
+
+                    resolved := map[string]any{}
+                    for key, value := range options.ToMap() {
+                        resolved[key] = value
+                    }
+                    if directory := resolved["projectDirectory"].(*string); directory == nil || *directory != "second" {
+                        t.Fatalf("projectDirectory = %#v, want second", directory)
+                    }
+                    if disabled := resolved["disableDashboard"].(bool); disabled {
+                        t.Fatal("disableDashboard = true, want false")
+                    }
+                }
+                """, timeout.Token);
 
             var build = await RunAsync("go", directory.FullName, timeout.Token, "build", "./...");
             Assert.True(build.ExitCode == 0, $"go build failed:{Environment.NewLine}{build.Output}");
@@ -235,12 +322,15 @@ public class GoDocCommentTests
             var vet = await RunAsync("go", directory.FullName, timeout.Token, "vet", "./...");
             Assert.True(vet.ExitCode == 0, $"go vet failed:{Environment.NewLine}{vet.Output}");
 
+            var test = await RunAsync("go", directory.FullName, timeout.Token, "test", "-run", "^Test(OptionalHandleOptionsSerializeTheHandle|FunctionalOptionsPreserveZeroFalseAndOrder|DtoOptionAppliesToRequestMap|CreateBuilderOptionsMergeIntoResolvedMap)$", ".");
+            Assert.True(test.ExitCode == 0, $"go test failed:{Environment.NewLine}{test.Output}");
+
             // gofmt rewrites a doc comment that is not in canonical form, so an unchanged comment line proves the
             // generated comment already is. go/printer only reformats doc comments that start in column 1, so this
             // covers top-level declarations. Tab-indented interface-method and struct-field comments are never
             // reformatted; Render_EndsHeadingLookingRemarksWithAPeriod covers the heading rule they depend on.
             // The code itself is not gofmt-formatted, only the comments are checked.
-            var formatted = await RunAsync("gofmt", directory.FullName, timeout.Token, "aspire.go");
+            var formatted = await RunAsync("gofmt", directory.FullName, timeout.Token, "-s", "aspire.go");
             Assert.True(formatted.ExitCode == 0, $"gofmt failed:{Environment.NewLine}{formatted.Output}");
 
             var generated = CommentLines(files["aspire.go"]);

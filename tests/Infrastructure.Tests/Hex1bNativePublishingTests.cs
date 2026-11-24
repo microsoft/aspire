@@ -138,15 +138,12 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         // Under CI load the dotnet CLI can fail to reach the MSBuild server and prints a fallback
         // diagnostic to standard output after the -getItem JSON. Inject that exact line so the
         // item query is verified independently of whatever else the CLI writes to its streams.
-        var dotnet = CreateDotNetWithStandardOutputDiagnostic(MSBuildServerFallbackDiagnostic);
+        var dotnet = await MSBuildServerFallbackDiagnostic.CreateDotNetWrapperAsync(_workspace.Path, GetDotNetPath());
 
         var result = await VerifyNativeAssetsAsync("win-x64", singleFile: false, dotnet);
 
-        Assert.Contains(MSBuildServerFallbackDiagnostic, result.StandardOutput);
+        Assert.Contains(MSBuildServerFallbackDiagnostic.Message, result.StandardOutput);
     }
-
-    private const string MSBuildServerFallbackDiagnostic =
-        "MSBuild server unavailable: could not connect to the server within the timeout window; the server may have failed to start. Falling back to an in-process build.";
 
     private async Task<(int ExitCode, string StandardOutput, string Output, string QueryResult)> VerifyNativeAssetsAsync(
         string rid, bool singleFile, string? dotnet = null)
@@ -467,34 +464,6 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, contents);
-    }
-
-    private string CreateDotNetWithStandardOutputDiagnostic(string diagnostic)
-    {
-        var dotnet = GetDotNetPath();
-        if (OperatingSystem.IsWindows())
-        {
-            var wrapper = Path.Combine(_workspace.Path, "dotnet-with-diagnostic.cmd");
-            File.WriteAllText(wrapper, $"""
-                @echo off
-                "{dotnet}" %*
-                set exitCode=%ERRORLEVEL%
-                echo {diagnostic}
-                exit /b %exitCode%
-                """);
-            return wrapper;
-        }
-
-        var script = Path.Combine(_workspace.Path, "dotnet-with-diagnostic.sh");
-        File.WriteAllText(script, $"""
-            #!/bin/sh
-            "{dotnet}" "$@"
-            exitCode=$?
-            echo '{diagnostic}'
-            exit $exitCode
-            """);
-        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        return script;
     }
 
     // MSBuild writes -getProperty/-getItem results to this file, separate from diagnostics such as the

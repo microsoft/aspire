@@ -35,7 +35,7 @@
     </StableSectionContent>
 }
 
-@if (ResourcesLayout is not null)
+@if (ViewportInformation.IsDesktop && ResourcesLayout is not null)
 {
     <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.FooterStatusSectionName">
         @GetTotalItemsFooter()
@@ -158,7 +158,7 @@
             </SummaryDetailsView>
         </MainSection>
         <FooterSection>
-            @if (ResourcesLayout is null)
+            @if (!ViewportInformation.IsDesktop || ResourcesLayout is null)
             {
                 @GetTotalItemsFooter()
             }
@@ -174,7 +174,8 @@
                            SingularText="@Loc[nameof(Dashboard.Resources.StructuredLogs.TotalItemsFooterSingularText)]"
                            PluralText="@Loc[nameof(Dashboard.Resources.StructuredLogs.TotalItemsFooterPluralText)]"
                            PartialText="@Loc[nameof(Dashboard.Resources.StructuredLogs.VirtualizedLimitText)]"
-                           PauseText="@PauseText" />;
+                           PausedAt="@PausedAt"
+                           PauseCaptureType="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]" />;
 
     private RenderFragment GetFilterToolbar()
     {

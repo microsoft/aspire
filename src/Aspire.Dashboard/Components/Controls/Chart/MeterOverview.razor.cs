@@ -62,6 +62,7 @@ public partial class MeterOverview : LiveSparklinesBase
     private IJSObjectReference? _jsModule;
     private IJSObjectReference? _cardObserver;
     private DotNetObjectReference<MeterOverview>? _selfReference;
+    private bool _disposed;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -72,11 +73,26 @@ public partial class MeterOverview : LiveSparklinesBase
 
         // The browser reports which cards are near the viewport, so only those keep refreshing. Without the report,
         // for example when the module fails to load, every card keeps refreshing.
+        //
+        // The overview can be removed while these calls are pending, for example when the user switches from Metrics to
+        // Traces right after opening an instrument (https://github.com/microsoft/aspire/issues/21714). Disposal then
+        // finds nothing to release yet, so whatever arrives after it is released here. Observing the removed cards
+        // isn't attempted: the browser has no element for them, and observeCards ignores a missing container.
         try
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Controls/Chart/MeterOverview.razor.js"]}");
+            if (_disposed)
+            {
+                await ReleaseCardObserverAsync();
+                return;
+            }
+
             _selfReference = DotNetObjectReference.Create(this);
             _cardObserver = await _jsModule.InvokeAsync<IJSObjectReference>("observeCards", _container, _selfReference);
+            if (_disposed)
+            {
+                await ReleaseCardObserverAsync();
+            }
         }
         catch (JSDisconnectedException)
         {
@@ -88,16 +104,28 @@ public partial class MeterOverview : LiveSparklinesBase
 
     protected override async ValueTask DisposeCoreAsync()
     {
+        _disposed = true;
+        await ReleaseCardObserverAsync();
+    }
+
+    // Releases the browser's observer and module once. Disposal and a first render that completes after it can both
+    // get here.
+    private async ValueTask ReleaseCardObserverAsync()
+    {
+        var cardObserver = _cardObserver;
+        var jsModule = _jsModule;
+        _cardObserver = null;
+        _jsModule = null;
         try
         {
-            if (_cardObserver is not null)
+            if (cardObserver is not null)
             {
-                await _cardObserver.InvokeVoidAsync("dispose");
-                await _cardObserver.DisposeAsync();
+                await cardObserver.InvokeVoidAsync("dispose");
+                await cardObserver.DisposeAsync();
             }
-            if (_jsModule is not null)
+            if (jsModule is not null)
             {
-                await _jsModule.DisposeAsync();
+                await jsModule.DisposeAsync();
             }
         }
         catch (JSDisconnectedException)
@@ -106,6 +134,7 @@ public partial class MeterOverview : LiveSparklinesBase
         }
 
         _selfReference?.Dispose();
+        _selfReference = null;
     }
 
     private IEnumerable<OtlpInstrumentSummary> GetOrderedInstruments()

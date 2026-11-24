@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.TestUtilities;
@@ -18,6 +19,239 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
     public DashboardInteractionsTests(InteractionsDashboardServerFixture dashboardServerFixture)
         : base(dashboardServerFixture)
     {
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("g")]
+    [InlineData("path")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Tooltips_SvgAnchorsPositionAndCleanUp(string tagName)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1280, 900);
+            await GoToResourcesAndWaitAsync(page);
+            await page.EvaluateAsync("""
+                tagName => {
+                    // Simulate non-localhost HTTP, where randomUUID is not exposed.
+                    Object.defineProperty(crypto, 'randomUUID', { value: undefined });
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.id = 'svg-tooltip-graph';
+                    svg.style.cssText = 'position:fixed;left:600px;top:250px;width:200px;height:80px;z-index:1000;';
+                    svg.setAttribute('viewBox', '0 0 200 80');
+                    const group = document.createElementNS(svg.namespaceURI, 'g');
+                    const anchor = document.createElementNS(svg.namespaceURI, tagName);
+                    anchor.id = 'svg-tooltip-probe';
+                    anchor.setAttribute('tabindex', '0');
+                    anchor.setAttribute('data-tooltip', 'Graph resource');
+                    if (tagName === 'path') {
+                        anchor.setAttribute('d', 'M0 0 H120 V40 H0 Z');
+                    } else {
+                        const rect = document.createElementNS(svg.namespaceURI, 'rect');
+                        rect.setAttribute('width', '120');
+                        rect.setAttribute('height', '40');
+                        anchor.appendChild(rect);
+                    }
+                    group.appendChild(anchor);
+                    svg.appendChild(group);
+                    document.body.appendChild(svg);
+                    const button = document.createElement('button');
+                    button.dataset.testid = 'html-tooltip-probe';
+                    button.textContent = 'HTML control';
+                    button.setAttribute('data-tooltip', 'HTML control');
+                    button.style.cssText = 'position:fixed;left:900px;top:250px;z-index:1000;';
+                    document.body.appendChild(button);
+                }
+                """, tagName);
+
+            var anchor = page.Locator("#svg-tooltip-probe");
+            var tooltip = page.Locator(".dashboard-tooltip");
+            var positioningAnchor = page.Locator(".dashboard-tooltip-anchor");
+            await anchor.HoverAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Graph resource");
+            await AssertPositionedAboveAsync(anchor);
+            await Assertions.Expect(tooltip).ToHaveAttributeAsync("anchor", "svg-tooltip-probe");
+            await Assertions.Expect(anchor).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            foreach (var mutation in new[]
+            {
+                "anchor => anchor.setAttribute('transform', 'translate(15,0)')",
+                "anchor => anchor.parentElement.setAttribute('transform', 'translate(30,0)')",
+                "anchor => anchor.ownerSVGElement.setAttribute('viewBox', '0 0 240 96')",
+                "anchor => anchor.ownerSVGElement.style.transform = 'translateX(10px)'",
+                """
+                anchor => {
+                    const style = document.createElement('style');
+                    style.textContent = '.svg-tooltip-shifted { margin-left: 15px; }';
+                    anchor.ownerSVGElement.appendChild(style);
+                    anchor.ownerSVGElement.classList.add('svg-tooltip-shifted');
+                }
+                """
+            })
+            {
+                await anchor.BlurAsync();
+                await anchor.FocusAsync();
+                await AssertPositionedAboveAsync(anchor);
+                var before = await anchor.BoundingBoxAsync();
+                Assert.NotNull(before);
+
+                await anchor.EvaluateAsync(mutation);
+
+                await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+                await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+                await Assertions.Expect(anchor).ToBeFocusedAsync();
+                await Assertions.Expect(anchor).ToBeVisibleAsync();
+                var after = await anchor.BoundingBoxAsync();
+                Assert.NotNull(after);
+                Assert.True(before.X != after.X || before.Y != after.Y || before.Width != after.Width || before.Height != after.Height);
+            }
+
+            await anchor.BlurAsync();
+            await anchor.FocusAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Graph resource");
+            await AssertPositionedAboveAsync(anchor);
+            await page.SetViewportSizeAsync(1100, 800);
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            await page.Mouse.MoveAsync(0, 0);
+            await anchor.HoverAsync();
+            await AssertPositionedAboveAsync(anchor);
+            await anchor.EvaluateAsync("anchor => anchor.remove()");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            var button = page.GetByTestId("html-tooltip-probe");
+            await button.HoverAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
+            await AssertPositionedAboveAsync(button);
+            await Assertions.Expect(button).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+            await page.Locator("#svg-tooltip-graph").EvaluateAsync("svg => svg.setAttribute('viewBox', '0 0 200 80')");
+            await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
+            await AssertPositionedAboveAsync(button);
+
+            async Task AssertPositionedAboveAsync(ILocator target)
+            {
+                await Assertions.Expect(tooltip).ToBeVisibleAsync();
+                await page.WaitForFunctionAsync("""
+                    anchor => {
+                        const tooltip = document.querySelector('.dashboard-tooltip:popover-open');
+                        if (!tooltip) {
+                            return false;
+                        }
+                        const a = anchor.getBoundingClientRect();
+                        const t = tooltip.getBoundingClientRect();
+                        return Math.abs((a.left + a.width / 2) - (t.left + t.width / 2)) <= 2 &&
+                            Math.abs(a.top - t.bottom) <= 8;
+                    }
+                    """, await target.ElementHandleAsync()).DefaultTimeout();
+            }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Tooltips_HiddenContentIsClonedAndUpdates()
+    {
+        await RunTestAsync(async page =>
+        {
+            await GoToResourcesAndWaitAsync(page);
+            await page.EvaluateAsync("""
+                () => {
+                    const button = document.createElement('button');
+                    button.id = 'table-tooltip-probe';
+                    button.textContent = 'Log entry';
+                    button.style.cssText = 'position:fixed;left:600px;top:250px;z-index:1000;';
+                    button.dataset.tooltipContent = 'hidden-tooltip-probe';
+                    const source = document.createElement('div');
+                    source.id = 'hidden-tooltip-probe';
+                    source.className = 'log-tooltip';
+                    source.hidden = true;
+                    source.innerHTML = `
+                        <div class="log-tooltip-title-container">
+                            <span class="log-tooltip-title"></span> <span class="log-tooltip-subtitle"></span><br>
+                        </div>
+                        <table class="log-tooltip-table"><tbody>
+                            <tr><td class="label-column">Level</td><td><strong>Information</strong></td></tr>
+                            <tr><td class="label-column">Timestamp</td><td>2026-01-01 10:00:00</td></tr>
+                            <tr><td class="label-column">Message</td><td></td></tr>
+                        </tbody></table>`;
+                    source.querySelector('.log-tooltip-title').textContent = 'Event <name>';
+                    source.querySelector('.log-tooltip-subtitle').textContent = 'Scope "name"';
+                    source.querySelector('tr:last-child td:last-child').textContent = 'Test <message>\nwith details';
+                    document.body.append(button, source);
+                }
+                """);
+
+            var anchor = page.Locator("#table-tooltip-probe");
+            var source = page.Locator("#hidden-tooltip-probe");
+            var tooltip = page.Locator(".dashboard-tooltip");
+            await anchor.HoverAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".dashboard-tooltip.log-tooltip")).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Event <name>");
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-subtitle")).ToHaveTextAsync("Scope \"name\"");
+            await Assertions.Expect(tooltip.Locator("strong")).ToHaveTextAsync("Information");
+            await Assertions.Expect(source).ToBeHiddenAsync();
+            await Assertions.Expect(source.Locator(".log-tooltip-title")).ToHaveTextAsync("Event <name>");
+            await Assertions.Expect(tooltip.Locator("td")).ToHaveTextAsync(
+                ["Level", "Information", "Timestamp", "2026-01-01 10:00:00", "Message", "Test <message>\nwith details"]);
+
+            await source.EvaluateAsync("""
+                source => {
+                    source.querySelector('.log-tooltip-title').firstChild.data = 'Updated event';
+                    source.querySelector('tr:last-child td:last-child').textContent = 'Updated message';
+                }
+                """);
+            await Assertions.Expect(tooltip).ToHaveCountAsync(1);
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            await Assertions.Expect(tooltip.Locator("td")).ToHaveTextAsync(
+                ["Level", "Information", "Timestamp", "2026-01-01 10:00:00", "Message", "Updated message"]);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await anchor.FocusAsync();
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            // Fluent gives a new tooltip its id after it's connected, so read the id once it has one.
+            await Assertions.Expect(tooltip).ToHaveAttributeAsync("id", new Regex(".+"));
+            await Assertions.Expect(anchor).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
+
+            await anchor.EvaluateAsync("""
+                anchor => {
+                    const source = document.createElement('div');
+                    source.id = 'replacement-tooltip-probe';
+                    source.hidden = true;
+                    const paragraph = document.createElement('p');
+                    paragraph.textContent = 'Another preview';
+                    source.appendChild(paragraph);
+                    document.body.appendChild(source);
+                    anchor.dataset.tooltipContent = source.id;
+                }
+                """);
+            await Assertions.Expect(tooltip.Locator("p")).ToHaveTextAsync("Another preview");
+            await Assertions.Expect(page.Locator(".dashboard-tooltip.log-tooltip")).ToHaveCountAsync(0);
+            await page.Locator("#replacement-tooltip-probe p").EvaluateAsync("paragraph => paragraph.firstChild.data = 'Updated preview'");
+            await Assertions.Expect(tooltip.Locator("p")).ToHaveTextAsync("Updated preview");
+
+            await anchor.EvaluateAsync("""
+                anchor => {
+                    delete anchor.dataset.tooltipContent;
+                    anchor.dataset.tooltip = 'Plain text';
+                }
+                """);
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Plain text");
+            await Assertions.Expect(tooltip.Locator(":scope > span")).ToHaveTextAsync("Plain text");
+            await anchor.EvaluateAsync("anchor => anchor.remove()");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(source.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            await Assertions.Expect(source).ToBeHiddenAsync();
+        });
     }
 
     [Fact]
@@ -154,6 +388,178 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                     """, new { key, code, shiftKey, altKey, ctrlKey, metaKey, target });
                 Assert.Equal(expected is { } shortcut ? [shortcut] : Array.Empty<int>(), shortcuts);
             }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task GridRemovedDuringInitialization_ReleasesControllerAndKeepsNavigationWorking()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.RouteAsync("**/Components/DataGrid/FluentDataGrid.razor.js*", async route =>
+            {
+                var response = await route.FetchAsync();
+                // Delay the real controller's return to .NET, so navigation disposes the grid while Initialize
+                // is pending. This reproduces https://github.com/microsoft/fluentui-blazor/issues/5580.
+                await route.FulfillAsync(new()
+                {
+                    Response = response,
+                    Body = await response.TextAsync() + """
+
+                        const initialize = Microsoft.FluentUI.Blazor.DataGrid.Initialize;
+                        Microsoft.FluentUI.Blazor.DataGrid.Initialize = async (...args) => {
+                            const controller = initialize(...args);
+                            if (!window.delayedGridElement) {
+                                window.delayedGridElement = args[0];
+                                window.lateGridControllerStops = 0;
+                                const stop = controller.stop;
+                                controller.stop = () => {
+                                    window.lateGridControllerStops++;
+                                    stop();
+                                };
+                                await new Promise(resolve => window.releaseGridInitialization = resolve);
+                            }
+                            return controller;
+                        };
+                        """
+                });
+            });
+
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+            await page.GotoAsync("/legacy/resources");
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
+            await page.WaitForFunctionAsync("() => !!window.releaseGridInitialization");
+            await page.GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuConsoleLogsTab, Exact = true }).ClickAsync();
+            await page.WaitForFunctionAsync("() => !window.delayedGridElement.isConnected");
+
+            await page.EvaluateAsync("() => window.releaseGridInitialization()");
+            await page.WaitForFunctionAsync("() => window.lateGridControllerStops === 1");
+
+            // A second server-handled navigation proves the circuit survived, rather than only checking an error banner.
+            await page.GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuResourcesTab, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator(".main-grid .resource-row").First).ToBeVisibleAsync();
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "fluentui-grid-disposal-regression.png") });
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task LegacyDetailsSplitter_ResizesAndReopensAfterDismissal()
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync($"/legacy/resources?resource={InteractionsDashboardServerFixture.ParentResourceName}");
+            var details = page.Locator(".details-container");
+            await Assertions.Expect(details).ToBeVisibleAsync();
+            var summary = page.Locator(".summary-container");
+            var before = await summary.BoundingBoxAsync();
+            Assert.NotNull(before);
+            var resizeBar = page.Locator(".summary-details-container .fluent-multi-splitter-bar");
+            await Assertions.Expect(resizeBar).ToBeVisibleAsync();
+            var handle = await resizeBar.BoundingBoxAsync();
+            Assert.NotNull(handle);
+            await page.Mouse.MoveAsync(handle.X + handle.Width / 2, handle.Y + handle.Height / 2);
+            await page.Mouse.DownAsync();
+            await page.WaitForFunctionAsync("() => document.splitter?.Data?.size > 0");
+            await page.Mouse.MoveAsync(handle.X - 100, handle.Y + handle.Height / 2, new() { Steps = 10 });
+            var resized = await summary.BoundingBoxAsync();
+            Assert.NotNull(resized);
+            Assert.True(resized.Width < before.Width - 50, $"Expected summary width to shrink from {before.Width}, but was {resized.Width}.");
+            await page.Mouse.UpAsync();
+            await page.WaitForFunctionAsync("() => document.splitter.Data.size === 0");
+
+            await details.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.SummaryDetailsViewCloseView, Exact = true }).ClickAsync();
+            await Assertions.Expect(details).ToHaveCountAsync(0);
+            await page.GetByText(InteractionsDashboardServerFixture.ParentResourceName, new() { Exact = true }).First.ClickAsync();
+            await Assertions.Expect(details).ToBeVisibleAsync();
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "fluentui-legacy-splitter.png") });
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task SettingsDialog_ReopensAfterClosing(bool legacy)
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = legacy ? "legacy" : "new", Url = baseUrl }]);
+            await page.GotoAsync(legacy ? "/legacy/structuredlogs" : "/structuredlogs");
+            var settingsButton = page.Locator("#dashboard-settings-button");
+            await settingsButton.ClickAsync();
+            var dialog = page.GetByRole(AriaRole.Dialog);
+            await Assertions.Expect(dialog).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".language-select")).ToBeVisibleAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.MainLayoutSettingsDialogClose, Exact = true }).Last.ClickAsync();
+            await Assertions.Expect(dialog).Not.ToBeVisibleAsync();
+            await settingsButton.ClickAsync();
+            await Assertions.Expect(dialog).ToBeVisibleAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.MainLayoutSettingsDialogClose, Exact = true }).Last.ClickAsync();
+            await Assertions.Expect(dialog).Not.ToBeVisibleAsync();
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FilterDialog_SelectsOptionsThroughDropdowns(bool legacy)
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = legacy ? "legacy" : "new", Url = baseUrl }]);
+            await page.GotoAsync(legacy ? "/legacy/structuredlogs" : "/structuredlogs");
+            await page.Locator($"fluent-button[aria-label='{Resources.StructuredFiltering.AddFilter}']").ClickAsync();
+
+            var parameter = page.GetByRole(AriaRole.Combobox, new() { Name = Resources.Dialogs.FilterDialogParameterInputLabel, Exact = true });
+            await Assertions.Expect(parameter).ToBeVisibleAsync();
+            await Assertions.Expect(parameter).ToHaveTextAsync("Message");
+            await parameter.ClickAsync();
+            await page.Locator("fluent-listbox:popover-open fluent-option[text='Category']").ClickAsync();
+            await Assertions.Expect(parameter).ToHaveTextAsync("Category");
+
+            var condition = page.GetByRole(AriaRole.Combobox, new() { Name = Resources.Dialogs.FilterDialogConditionInputLabel, Exact = true });
+            await Assertions.Expect(condition).ToBeVisibleAsync();
+            await condition.ClickAsync();
+            await page.Locator("fluent-listbox:popover-open fluent-option[text='==']").ClickAsync();
+            await Assertions.Expect(condition).ToHaveTextAsync("==");
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FilterDialog_PreservesFreeformValueOnBlur(bool legacy)
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = legacy ? "legacy" : "new", Url = baseUrl }]);
+            await page.GotoAsync(legacy ? "/legacy/structuredlogs" : "/structuredlogs");
+            await page.Locator($"fluent-button[aria-label='{Resources.StructuredFiltering.AddFilter}']").ClickAsync();
+            var dialog = page.GetByRole(AriaRole.Dialog);
+            await Assertions.Expect(dialog).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByRole(AriaRole.Combobox, new() { Name = Resources.Dialogs.FilterDialogParameterInputLabel, Exact = true })).ToHaveTextAsync("Message");
+            var value = page.Locator("#filter-dialog-text-value input");
+            await value.FillAsync("fluent-5.1-freeform");
+            await value.PressAsync("Tab");
+            await Assertions.Expect(value).ToHaveValueAsync("fluent-5.1-freeform");
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Dialogs.FilterDialogApplyFilterButtonText, Exact = true }).ClickAsync();
+            await Assertions.Expect(dialog).ToHaveCountAsync(0);
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.StructuredFiltering.Filters, Exact = true })
+                .And(page.Locator("[aria-haspopup='menu']")).ClickAsync();
+            await Assertions.Expect(page.GetByText("fluent-5.1-freeform", new() { Exact = false }).First).ToBeVisibleAsync();
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"fluentui-filter-{(legacy ? "legacy" : "new")}.png") });
         });
     }
 

@@ -2688,7 +2688,7 @@ function queuePanel(opts) {
       const position = it.queuePosition || index + 1;
       return '<li value="' + position + '"><span class="queue-position">' + position + ".</span>" + card + "</li>";
     }).join("");
-    body = opts.numbered ? '<ol class="focus-queue" role="list" aria-label="Needs attention, first-readiness order">' + cards + "</ol>"
+    body = opts.numbered ? '<ol class="focus-queue" role="list" aria-label="Needs attention, fixes-ci or urgent-review labels first, then first readiness oldest first">' + cards + "</ol>"
       : '<div class="grid">' + cards + "</div>";
   } else {
     body = '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
@@ -2726,7 +2726,7 @@ function reviewBoardHtml() {
   // 2. Needs attention — the focused, team-managed review queue (the headline).
   html += queuePanel({
     id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
-    subtitle: "First readiness, oldest first. Blocked PRs keep their priority when they return.",
+    subtitle: "fixes-ci or urgent-review labels first, then first readiness, oldest first. Blocked PRs keep their readiness when they return.",
     items: att.focus || [], cappedTotal: att.focusTotal,
     numbered: true,
     cardActions: focusCardActions,
@@ -2738,8 +2738,8 @@ function reviewBoardHtml() {
     html += collapsibleSect({
       id: "later-in-queue", title: "Later in queue", icon: ICONS.clock,
       count: remainder.length,
-      subtitle: "Find a PR\u2019s position here. Prioritize the first 10 in Needs attention for review.",
-      body: '<ol class="queue-remainder" start="' + remainder[0].queuePosition + '" role="list" aria-label="Later in queue, first-readiness order">' +
+      subtitle: "Same order: fixes-ci or urgent-review labels first, then first readiness, oldest first. Prioritize the first 10 in Needs attention for review.",
+      body: '<ol class="queue-remainder" start="' + remainder[0].queuePosition + '" role="list" aria-label="Later in queue, fixes-ci or urgent-review labels first, then first readiness oldest first">' +
         remainder.map((item) => '<li value="' + item.queuePosition + '"><span class="queue-position">' + item.queuePosition +
           '.</span><div class="queue-reference"><a href="' + safeHref(item.pr.url) + '" target="_blank" rel="noreferrer">' +
           esc(item.pr.title) + '</a><span class="repo">' + esc(item.pr.repository) + " #" + item.pr.number + "</span></div></li>").join("") +
@@ -3215,7 +3215,7 @@ function settingsView() {
   return '<div class="page">' +
     '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, delivery health, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
     '<div class="section"><h3>Review queue</h3>' +
-      '<p class="hint">The shared queue is team-managed, not individually sorted. Needs attention shows the first <b>10</b> PRs in first-readiness order, oldest first. Later in queue starts collapsed and lets you look up the remaining positions; prioritize the first 10 for review.</p>' +
+      '<p class="hint">The shared queue is team-managed, not individually sorted. Needs attention shows the first <b>10</b> eligible PRs: <b>fixes-ci</b> or <b>urgent-review</b> labels first (equal priority, case-insensitive), then first readiness, oldest first within each group. Later in queue continues the same order, starts collapsed, and lets you look up the remaining positions; prioritize the first 10 for review.</p>' +
       '<div class="policy">' +
         '<div class="policy-row">' + ICONS.eye + '<span>A PR only enters the shared queue once <b>checks are green</b> and <b>all review feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>' +
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +

@@ -22,7 +22,7 @@ internal static class DotnetProjectBuildEnvironment
         IReadOnlyDictionary<string, string> environment,
         ILogger logger,
         CancellationToken cancellationToken) =>
-        MsBuildResponseFileFactory.CreateAsync(environment, logger, cancellationToken);
+        MsBuildResponseFileFactory.CreateAsync(environment, isFileBasedApp: false, logger, cancellationToken);
 
     public static string CreateMsBuildPropertyArgument(string name, string value) =>
         MsBuildResponseFileFactory.CreatePropertyArgument(name, value);

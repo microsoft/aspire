@@ -698,6 +698,7 @@ internal sealed class DashboardClient : IDashboardClient
                     var resolvedNames = _resourceByName.Values
                         .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
                     ColorGenerator.Instance.ResolveAll(resolvedNames);
+                    ColorGenerator.TagInstance.ResolveAll(_resourceByName.Values.SelectMany(r => r.AppHostTags));
 
                     // Capture subscribers atomically with the model transition. A subscriber added after this
                     // point receives the updated model in its initial snapshot and must not also receive this change.

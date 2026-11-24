@@ -26,8 +26,7 @@ public sealed class DesktopNavMenuTests : PlaywrightTestsBase<DashboardServerFix
         {
             await page.GotoAsync("/");
 
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath.StartsWith("/resources", StringComparison.Ordinal));
-            // The dashboard opens on the list of all resources, filling the page, with no view selected.
+            // The dashboard opens on its home page: the list of all resources, filling the page, with no view selected.
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(page.GetByRole(AriaRole.Tablist, new() { Name = Resources.Layout.ResourceTabsLandmark })).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator("fluent-tab[aria-selected='true']:visible")).ToHaveCountAsync(0);

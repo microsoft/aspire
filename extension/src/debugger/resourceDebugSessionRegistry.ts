@@ -86,17 +86,18 @@ export class ResourceDebugSessionRegistry implements vscode.Disposable {
             return false;
         }
 
-        return Array.from(attemptMarkers).some(marker => {
-            const attempt = this._attempts.get(marker);
-            return attempt !== undefined && !attempt.terminated && (attempt.startAccepted || attempt.sessionIds.size > 0);
-        });
+        return Array.from(attemptMarkers).some(marker => this._isActive(this._attempts.get(marker)));
+    }
+
+    hasActiveSessions(): boolean {
+        return Array.from(this._attempts.values()).some(attempt => this._isActive(attempt));
     }
 
     async runSerialized<T>(
         appHost: ResourceDebugAppHostTarget,
         resourceName: string,
         cancellationToken: vscode.CancellationToken | undefined,
-        operation: () => Promise<T>,
+        operation: (waited: boolean) => Promise<T>,
         getCancelledResult: () => T,
     ): Promise<T> {
         const resourceKey = this._getResourceKey(appHost, resourceName);
@@ -117,7 +118,7 @@ export class ResourceDebugSessionRegistry implements vscode.Disposable {
                 return getCancelledResult();
             }
 
-            return await operation();
+            return await operation(precedingOperation !== undefined);
         }
         finally {
             releaseCurrentOperation!();
@@ -212,6 +213,10 @@ export class ResourceDebugSessionRegistry implements vscode.Disposable {
     private _getAttempt(session: vscode.DebugSession): TrackedAttachAttempt | undefined {
         const marker = session.configuration?.[resourceDebugSessionMarkerConfigKey];
         return typeof marker === 'number' ? this._attempts.get(marker) : undefined;
+    }
+
+    private _isActive(attempt: TrackedAttachAttempt | undefined): boolean {
+        return attempt !== undefined && !attempt.terminated && (attempt.startAccepted || attempt.sessionIds.size > 0);
     }
 
     private _removeAttempt(attempt: TrackedAttachAttempt): void {

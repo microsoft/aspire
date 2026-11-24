@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Utils;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -222,13 +223,15 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : throw new NotImplementedException();
     }
 
-    public Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, INuGetClient nuGetClient, CancellationToken cancellationToken)
     {
         var result = SearchPackagesAsyncCallback is not null
             ? SearchPackagesAsyncCallback(workingDirectory, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken)
             : throw new NotImplementedException();
 
-        return Task.FromResult(new DotNetPackageSearchResult(result.ExitCode, result.Packages, SearchFailedSources));
+        var hasFullSourcePage = !exactMatch && take > 0 && result.Packages?
+            .GroupBy(package => package.Source).Any(page => page.Count() >= take) == true;
+        return Task.FromResult(new DotNetPackageSearchResult(result.ExitCode, result.Packages, SearchFailedSources, hasFullSourcePage));
     }
 
     public Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken)

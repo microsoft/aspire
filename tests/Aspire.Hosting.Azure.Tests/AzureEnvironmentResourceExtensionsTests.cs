@@ -2,7 +2,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
+#pragma warning disable ASPIREAZURE007 // Tenant-scoped resource annotations are experimental.
 
 using System.Collections.Immutable;
 using System.Text.Json.Nodes;
@@ -792,6 +792,31 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
         Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out var storageEvent));
         Assert.Equal("Running", storageEvent.Snapshot.State?.Text);
         Assert.Equal("https://storage.blob.core.windows.net/", storage.Resource.Outputs["blobEndpoint"]);
+    }
+
+    [Fact]
+    public async Task EnsureProvisionedAsync_UpdatesNestedChildResources()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        AddTestAzureProvisioning(builder);
+
+        var cosmos = builder.AddAzureCosmosDB("cosmosdb");
+        var db = cosmos.AddCosmosDatabase("db");
+        var entries = db.AddContainer("entries", "/id");
+
+        using var app = builder.Build();
+
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        await controller.EnsureProvisionedAsync(model);
+
+        foreach (var resource in new IResource[] { cosmos.Resource, db.Resource, entries.Resource })
+        {
+            Assert.True(notifications.TryGetCurrentState(resource.Name, out var resourceEvent), $"No state was published for '{resource.Name}'.");
+            Assert.Equal(KnownResourceStates.Running, resourceEvent.Snapshot.State?.Text);
+        }
     }
 
     [Fact]

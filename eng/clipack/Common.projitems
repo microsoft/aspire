@@ -209,8 +209,10 @@
 
     <!-- ArchiveFormat is derived from CliRuntime above: Windows RIDs are zip archives,
          and all supported Linux/macOS RIDs are tar.gz archives. -->
-    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;Expand-Archive -LiteralPath '$(_CliArchivePath)' -DestinationPath '$(_NativeBinaryArchiveExtractionDir)' -Force&quot;"
-          Condition="'$(ArchiveFormat)' == 'zip'" />
+    <!-- Avoid loading a PowerShell 7 archive module into Windows PowerShell. -->
+    <Unzip SourceFiles="$(_CliArchivePath)"
+           DestinationFolder="$(_NativeBinaryArchiveExtractionDir)"
+           Condition="'$(ArchiveFormat)' == 'zip'" />
     <Exec Command="tar -xzf '$(_CliArchivePath)' -C '$(_NativeBinaryArchiveExtractionDir)'"
           Condition="'$(ArchiveFormat)' == 'tar.gz'" />
 

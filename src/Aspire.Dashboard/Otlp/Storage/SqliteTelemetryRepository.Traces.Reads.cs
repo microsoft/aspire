@@ -142,7 +142,7 @@ public sealed partial class SqliteTelemetryRepository
         var firstRecord = records[0];
         var summaries = records
             .Where(record => record.TraceId is not null)
-            .GroupBy(record => record.TraceId!, StringComparer.Ordinal)
+            .GroupBy(record => record.TraceId!, StringComparers.OtlpTraceId)
             .Select(group =>
             {
                 var trace = group.First();
@@ -388,7 +388,12 @@ public sealed partial class SqliteTelemetryRepository
 
         var attributePredicate = BuildStringPredicate("a.attribute_value", condition, parameterName);
         parameters.Add($"TraceField{filterIndex}", filter.Field);
-        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND a.attribute_key = @TraceField{filterIndex} COLLATE NOCASE AND {attributePredicate})";
+        // Unary + prevents SQLite from using attribute_key to choose an index, so this
+        // correlated subquery looks up attributes by (trace_id, span_id) instead.
+        // Otherwise, LIKE '%...%' can scan all attributes with the same key for every
+        // span, making filtering quadratic in the span count.
+        // See https://www.sqlite.org/optoverview.html#disqualifying_where_clause_terms_using_unary_
+        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND +a.attribute_key = @TraceField{filterIndex} COLLATE NOCASE AND {attributePredicate})";
     }
 
     private GetSpansResponse GetSpansFromDatabase(GetSpansRequest context, CancellationToken cancellationToken)
@@ -400,7 +405,10 @@ public sealed partial class SqliteTelemetryRepository
         using var transaction = connection.BeginTransaction(deferred: true);
         var query = BuildSpanQuery(context);
         var totalCount = connection.QuerySingle<int>($"SELECT COUNT(*) {query.FromAndWhere};", query.Parameters, transaction);
-        query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
+        var hiddenItemCount = context.LatestItemCount is { } latestItemCount
+            ? Math.Max(totalCount - Math.Max(latestItemCount, 0), 0)
+            : 0;
+        query.Parameters.Add("StartIndex", (long)Math.Max(context.StartIndex, 0) + hiddenItemCount);
         query.Parameters.Add("Count", Math.Max(context.Count, 0));
         var identities = connection.Query<SpanIdentityRecord>($"""
             SELECT s.trace_id AS TraceId, s.span_id AS SpanId
@@ -408,8 +416,8 @@ public sealed partial class SqliteTelemetryRepository
             ORDER BY t.first_span_timestamp_ticks, t.trace_id, s.start_time_ticks, s.span_id
             LIMIT @Count OFFSET @StartIndex;
             """, query.Parameters, transaction).AsList();
-        var traces = identities.Select(identity => identity.TraceId).Distinct(StringComparer.Ordinal)
-            .ToDictionary(traceId => traceId, traceId => MaterializeTrace(connection, traceId, transaction)!, StringComparer.Ordinal);
+        var traces = identities.Select(identity => identity.TraceId).Distinct(StringComparers.OtlpTraceId)
+            .ToDictionary(traceId => traceId, traceId => MaterializeTrace(connection, traceId, transaction)!, StringComparers.OtlpTraceId);
         return new GetSpansResponse
         {
             PagedResult = new PagedResult<OtlpSpan>
@@ -465,6 +473,7 @@ public sealed partial class SqliteTelemetryRepository
             )
             SELECT
                 a.TotalItemCount,
+                p.trace_id AS TraceId,
                 p.resource_id AS ResourceId,
                 p.name AS Name,
                 p.start_time_ticks AS StartTimeTicks,
@@ -493,6 +502,7 @@ public sealed partial class SqliteTelemetryRepository
                 .Select(record => new RequestSpanSummary
                 {
                     Resource = GetCachedResource(record.ResourceId!.Value)!,
+                    TraceId = record.TraceId!,
                     Name = record.Name!,
                     StartTime = new DateTime(record.StartTimeTicks!.Value, DateTimeKind.Utc),
                     Duration = TimeSpan.FromTicks(record.EndTimeTicks!.Value - record.StartTimeTicks.Value),
@@ -818,7 +828,7 @@ public sealed partial class SqliteTelemetryRepository
             """, new { TraceIds = traceIds }, transaction).AsList();
         if (records.Count == 0)
         {
-            return new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
+            return new Dictionary<string, OtlpTrace>(StringComparers.OtlpTraceId);
         }
 
         var spanAttributes = connection.Query<TraceOwnedAttributeRecord>("""
@@ -871,8 +881,8 @@ public sealed partial class SqliteTelemetryRepository
         var outgoingLinks = linkRecords.ToLookup(record => (record.SourceTraceId, record.SourceSpanId));
         var incomingLinks = linkRecords.ToLookup(record => (record.TraceId, record.SpanId));
 
-        var traces = new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
-        foreach (var traceRecords in records.GroupBy(record => record.TraceId, StringComparer.Ordinal))
+        var traces = new Dictionary<string, OtlpTrace>(StringComparers.OtlpTraceId);
+        foreach (var traceRecords in records.GroupBy(record => record.TraceId, StringComparers.OtlpTraceId))
         {
             var traceId = traceRecords.Key;
             var firstRecord = traceRecords.First();
@@ -972,6 +982,7 @@ public sealed partial class SqliteTelemetryRepository
     internal sealed class RequestSpanRecord
     {
         public required int TotalItemCount { get; init; }
+        public string? TraceId { get; init; }
         public long? ResourceId { get; init; }
         public string? Name { get; init; }
         public long? StartTimeTicks { get; init; }

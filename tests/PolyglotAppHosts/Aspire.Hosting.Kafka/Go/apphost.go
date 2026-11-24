@@ -17,7 +17,7 @@ func main() {
 	kafkaWithUI := kafka.WithKafkaUI(&aspire.WithKafkaUIOptions{
 		ContainerName: aspire.StringPtr("my-kafka-ui"),
 		ConfigureContainer: func(ui aspire.KafkaUIContainerResource) {
-			ui.WithHostPort(aspire.Float64Ptr(9000))
+			ui.WithHostPort(aspire.IntPtr(9000))
 		},
 	})
 	kafkaWithUI.WithDataVolume()
@@ -31,7 +31,7 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	kafka2 := builder.AddKafka("broker2", &aspire.AddKafkaOptions{Port: aspire.Float64Ptr(19092)})
+	kafka2 := builder.AddKafka("broker2", &aspire.AddKafkaOptions{Port: aspire.IntPtr(19092)})
 	kafka2.WithDataBindMount("/tmp/kafka-data")
 	if err = kafka2.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))

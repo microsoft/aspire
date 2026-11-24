@@ -43,6 +43,55 @@ public class DashboardViewPreferencesTests : DashboardTestContext
         Assert.Single(writes);
     }
 
+    [Fact]
+    public async Task Load_RemovedSpaciousDensity_WritesComfortableOnce()
+    {
+        object? stored = "Spacious";
+        var writes = new List<(string Key, object? Value)>();
+        var storage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourceListDensity ? (true, stored) : (false, null),
+            OnSetUnprotectedAsync = (key, value) =>
+            {
+                writes.Add((key, value));
+                stored = value;
+            }
+        };
+        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: storage);
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+
+        await preferences.EnsureLoadedAsync();
+
+        Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
+        Assert.Equal([(BrowserStorageKeys.ResourceListDensity, (object?)"Comfortable")], writes);
+
+        await using var reopened = new DashboardViewPreferencesTests();
+        FluentUISetupHelpers.AddCommonDashboardServices(reopened, localStorage: storage);
+        var reopenedPreferences = reopened.Services.GetRequiredService<DashboardViewPreferences>();
+        await reopenedPreferences.EnsureLoadedAsync();
+        Assert.Equal(ResourceListDensity.Comfortable, reopenedPreferences.Density);
+        Assert.Single(writes);
+    }
+
+    [Theory]
+    [InlineData(null, ResourceListDensity.Comfortable)]
+    [InlineData("invalid", ResourceListDensity.Comfortable)]
+    [InlineData("Compact", ResourceListDensity.Compact)]
+    public async Task Load_UsesComfortableUnlessCompactIsSaved(string? stored, ResourceListDensity expected)
+    {
+        var storage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourceListDensity && stored is not null ? (true, stored) : (false, null),
+            OnSetUnprotectedAsync = (_, _) => Assert.Fail("Loading the density should not write a preference.")
+        };
+        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: storage);
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+
+        await preferences.EnsureLoadedAsync();
+
+        Assert.Equal(expected, preferences.Density);
+    }
+
     [Theory]
     [InlineData(null, GroupOverview.Summary)]
     [InlineData("", GroupOverview.Summary)]
@@ -68,9 +117,6 @@ public class DashboardViewPreferencesTests : DashboardTestContext
 
         Assert.Equal(expected, preferences.GroupOverview);
         Assert.Equal([GroupOverview.Summary, GroupOverview.Graph], Enum.GetValues<GroupOverview>());
-        // Nothing stored for the density, so the list starts compact.
-        Assert.Equal(ResourceListDensity.Compact, preferences.Density);
-        Assert.Equal(RecordingsStyle.Panel, preferences.RecordingsStyle);
     }
 
     [Fact]

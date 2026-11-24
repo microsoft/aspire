@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -108,20 +109,18 @@ public class AddJavaContainerTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "http://localhost:4317";
+        UseFakeDcpInfo(builder, containerHostName: "host.wslc.internal");
 
         var app = builder.AddJavaContainer("catalog", "mycompany/catalog");
 
         // Built rather than evaluated against TestServiceProvider because resolving a container's OTLP
         // endpoint needs the DCP options that decide how the container reaches the host, which is also
-        // why the asserted host is not the configured localhost.
+        // why the asserted host is the one DCP reports rather than the configured localhost.
         using var built = builder.Build();
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             app.Resource, serviceProvider: built.Services.GetRequiredService<IServiceProvider>());
 
-        var dcpInfo = await built.Services.GetRequiredService<IDcpDependencyCheckService>().GetDcpInfoAsync();
-        var containerHostName = dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
-
-        Assert.Equal($"http://{containerHostName}:4317", envVars["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        Assert.Equal("http://host.wslc.internal:4317", envVars["OTEL_EXPORTER_OTLP_ENDPOINT"]);
     }
 
     [Fact]
@@ -129,6 +128,7 @@ public class AddJavaContainerTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Configuration["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "http://localhost:4317";
+        UseFakeDcpInfo(builder, containerHostName: "host.docker.internal");
 
         var app = builder.AddJavaContainer("catalog", "mycompany/catalog")
             .WithJvmArgs(["-Xmx512m"])
@@ -152,5 +152,22 @@ public class AddJavaContainerTests
         // so the bundle Aspire generates has to carry the system roots as well.
         var scope = Assert.Single(app.Resource.Annotations.OfType<CertificateAuthorityCollectionAnnotation>());
         Assert.Equal(CertificateTrustScope.System, scope.Scope);
+    }
+
+    // Resolving a container's OTLP endpoint in run mode asks DCP for the container host name. Running the
+    // real `dcp info` makes these tests depend on how fast the machine's container runtime answers its
+    // probes, which can exceed DCP's dependency check timeout on busy CI runners.
+    private static void UseFakeDcpInfo(IDistributedApplicationBuilder builder, string containerHostName)
+    {
+        builder.Services.AddSingleton<IDcpDependencyCheckService>(new TestDcpDependencyCheckService(new DcpInfo
+        {
+            Containers = new DcpContainersInfo
+            {
+                Runtime = "docker",
+                Installed = true,
+                Running = true,
+                HostName = containerHostName
+            }
+        }));
     }
 }

@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerShowChangePerIntervalLabel">
         <source>Show change per interval</source>
-        <target state="new">Show change per interval</target>
+        <target state="translated">Pokaż zmiany na interwał</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerUnitPerInterval">
         <source>{0} per interval</source>
-        <target state="new">{0} per interval</target>
+        <target state="translated">{0} na interwał</target>
         <note>{0} is the instrument's unit, e.g. "Requests"</note>
       </trans-unit>
       <trans-unit id="ClearAllResources">
@@ -167,10 +167,20 @@
         <target state="translated">Eksportuj .env</target>
         <note />
       </trans-unit>
+      <trans-unit id="OverviewGraphAccessibleLabel">
+        <source>Resource graph. The resource list shows the same resources in an accessible format</source>
+        <target state="translated">Wykres zasobów. Lista zasobów zawiera te same zasoby w formacie ułatwień dostępu</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterDeleteValueAction">
         <source>Delete value</source>
-        <target state="new">Delete value</target>
+        <target state="translated">Usuń wartość</target>
         <note />
+      </trans-unit>
+      <trans-unit id="PauseWarningText">
+        <source>{0} capture paused</source>
+        <target state="translated">Wstrzymano przechwytywanie {0}</target>
+        <note>{0} is the type of captured data.</note>
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
@@ -199,7 +209,7 @@
       </trans-unit>
       <trans-unit id="SummaryDetailsViewCloseViewWithShortcut">
         <source>Close (Esc)</source>
-        <target state="new">Close (Esc)</target>
+        <target state="translated">Zamknij (Esc)</target>
         <note>Tooltip of a close button that the Escape key also triggers. Esc is the label of the Escape key on keyboards.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
@@ -420,11 +430,6 @@
       <trans-unit id="PauseButtonTitle">
         <source>Pause incoming data</source>
         <target state="translated">Wstrzymaj dane przychodzące</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="PauseWarningTitle">
-        <source>Capture paused</source>
-        <target state="translated">Wstrzymano przechwytywanie</target>
         <note />
       </trans-unit>
       <trans-unit id="PlotlyChartCount">
@@ -724,7 +729,7 @@
       </trans-unit>
       <trans-unit id="VolumeMountTypeReadOnlyTitle">
         <source>Read-only</source>
-        <target state="new">Read-only</target>
+        <target state="translated">Tylko do odczytu</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumePathColumnHeader">
@@ -734,12 +739,12 @@
       </trans-unit>
       <trans-unit id="VolumeRevealFailed">
         <source>Couldn't open '{0}'. It may not exist on this machine.</source>
-        <target state="new">Couldn't open '{0}'. It may not exist on this machine.</target>
+        <target state="translated">Nie można otworzyć '{0}'. Może nie istnieć na tym komputerze.</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumeRevealInFileExplorer">
         <source>Reveal in file explorer</source>
-        <target state="new">Reveal in file explorer</target>
+        <target state="translated">Pokaż w Eksploratorze plików</target>
         <note />
       </trans-unit>
     </body>

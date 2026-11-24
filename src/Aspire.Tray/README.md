@@ -1,6 +1,6 @@
 # Aspire Tray
 
-An experimental **C# NativeAOT** companion for the Aspire CLI, bundled on macOS, Windows, and glibc Linux.
+A preview **C# NativeAOT** companion for the Aspire CLI, bundled on macOS, Windows, and glibc Linux.
 It uses a native AppKit status item on macOS and a Win32 notification icon on Windows
 through small platform interop layers. Activating the icon opens a shared flyout panel
 on macOS, Windows, and compatible Linux desktops. Linux uses GTK 3, Cairo and
@@ -82,7 +82,7 @@ user-only permissions and no raw discovery payloads or dashboard URLs.
 The launcher opens the log relative to no-follow directory handles and passes
 the open descriptor to the GUI, rather than asking another process to reopen a
 log pathname. Symlinked log files or parent directories are rejected.
-Quit the tray using its original CLI or the panel's **Quit** (**Exit** on Windows) before upgrading from an
+Quit the tray using its original CLI or the panel's **Quit** before upgrading from an
 earlier preview. The state directory has been renamed; a still-running older
 preview uses a separate control endpoint and must be stopped before starting this build.
 
@@ -246,10 +246,9 @@ Aspire logo, the title, and a one-line status
 ("3 running · 1 needs attention", "Connecting…") behind a colored connection dot, an
 optional banner for real problems (storage, discovery, or a failed action), the AppHost
 list, and a footer with three icon buttons on the right: **Settings** (a gear),
-**Documentation** (a globe) and **Quit** (**Exit** on Windows, following each platform's
-convention). Quit closes only the tray: its tooltip and accessibility description say
-"Quit the tray. AppHosts keep running." Every icon-only button, in the footer and on the
-rows, shows a native tooltip naming its action.
+**Documentation** (a globe) and **Quit**. Quit closes only the tray: its tooltip and
+accessibility description simply say "Quit". AppHosts keep running after the tray closes. Every
+icon-only button, in the footer and on the rows, shows a native tooltip naming its action.
 
 The list has **Running**, **Pinned**, and **Recent** sections. Recent is collapsed while
 other AppHosts are listed, and its header has a **Clear** button. Each row shows a

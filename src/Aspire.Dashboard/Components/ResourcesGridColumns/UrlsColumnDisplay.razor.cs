@@ -11,8 +11,6 @@ namespace Aspire.Dashboard.Components;
 
 public partial class UrlsColumnDisplay
 {
-    private const int MaxRenderedOverflowItems = 20;
-
     // Credentials (redis://:password@host), fragments (#access_token=...) and query values (?token=...) can carry
     // secrets, so the address is shown without the first two and with the values masked, as the resource overview does
     // (see DashboardUIHelpers.MaskUrlForDisplay).
@@ -35,6 +33,12 @@ public partial class UrlsColumnDisplay
 
     [Parameter, EditorRequired]
     public required IList<DisplayedUrl> DisplayedUrls { get; set; }
+
+    [Parameter]
+    public bool UseNeutralOverflowButton { get; set; }
+
+    [Parameter]
+    public int MaxRenderedItems { get; set; } = 20;
 
     [Inject]
     public required IStringLocalizer<Columns> Loc { get; init; }

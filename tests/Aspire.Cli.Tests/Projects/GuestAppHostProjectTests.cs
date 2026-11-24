@@ -2086,6 +2086,7 @@ public class GuestAppHostProjectTests : IDisposable
         {
             AppHostFile = appHostFile,
             WorkingDirectory = _workspace.WorkspaceRoot,
+            Isolated = true,
             EnvironmentVariables = new Dictionary<string, string>()
         };
 
@@ -2096,6 +2097,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
         Assert.Equal(image, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
+        Assert.Equal("true", sessionFactory.CapturedEnvironmentVariables["DcpPublisher__RandomizePorts"]);
+        Assert.False(sessionFactory.CapturedEnvironmentVariables.ContainsKey(KnownConfigNames.PersistPortsInIsolatedMode));
     }
 
     [Theory]
@@ -2854,6 +2857,10 @@ public class GuestAppHostProjectTests : IDisposable
         // ConsoleCancellationManager so the fixture doesn't register process-global OS signal handlers;
         // none of the tests here drive the launcher or AppHostServerSession paths that would fire it.
         var shutdownWindow = new TestGracefulShutdownWindow();
+        var configurationService = new TestConfigurationService
+        {
+            OnGetConfigurationFromDirectory = (key, _) => effectiveConfiguration[key.Replace('.', ':')]
+        };
         var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter());
         _fileLoggerProviders.Add(fileLoggerProvider);
 
@@ -2873,10 +2880,7 @@ public class GuestAppHostProjectTests : IDisposable
             executionContext: executionContext,
             environment: effectiveEnvironment,
             appHostConfigurationProjector: new AppHostConfigurationProjector(
-                new TestConfigurationService
-                {
-                    OnGetConfigurationFromDirectory = (key, _) => effectiveConfiguration[key.Replace('.', ':')]
-                },
+                configurationService,
                 effectiveEnvironment),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: fileLoggerProvider,

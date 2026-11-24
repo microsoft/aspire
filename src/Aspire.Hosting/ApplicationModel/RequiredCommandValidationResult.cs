@@ -8,7 +8,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents the result of validating a required command.
 /// </summary>
-[Experimental("ASPIRECOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+/// <remarks>
+/// Failed validation logs a warning but does not prevent the resource from attempting to start.
+/// </remarks>
 [AspireExport(ExposeProperties = true)]
 public sealed class RequiredCommandValidationResult
 {

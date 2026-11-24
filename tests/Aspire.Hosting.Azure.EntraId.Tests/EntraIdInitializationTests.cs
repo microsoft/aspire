@@ -19,7 +19,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_ValidApplication_IsRunningWithLinksAndProperties()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId);
+        var entra = builder.AddExistingEntraIdApplication("entra-api", tenantId: TenantId, clientId: ClientId);
 
         using var app = builder.Build();
         var snapshot = await InitializeAsync(app, entra.Resource);
@@ -49,7 +49,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_WithCredentials_ListsTheirSourceTypes()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra-web", tenantId: TenantId, clientId: ClientId)
             .WithClientSecret(builder.AddParameter("EntraClientSecret", "super-secret", secret: true))
             .WithFederatedManagedIdentityCredential(ClientId);
 
@@ -71,7 +71,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_OtherSignInAudience_LinksDiscoveryDocumentForKeyword()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra-api", tenantId: TenantId, clientId: ClientId)
             .WithSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs);
 
         using var app = builder.Build();
@@ -103,7 +103,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_InstanceWithoutKnownPortal_OmitsPortalLink()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra-api", tenantId: TenantId, clientId: ClientId)
             .WithInstance("https://login.contoso.example/");
 
         using var app = builder.Build();
@@ -123,7 +123,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_SecretParameter_IsSensitiveProperty()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api",
+        var entra = builder.AddExistingEntraIdApplication("entra-api",
                 tenantId: builder.AddParameter("EntraTenantId", TenantId),
                 clientId: builder.AddParameter("EntraClientId", ClientId, secret: true));
 
@@ -142,7 +142,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_InvalidParameterValue_FailsWithoutLoggingTheValue()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api",
+        var entra = builder.AddExistingEntraIdApplication("entra-api",
                 tenantId: builder.AddParameter("EntraTenantId", "secret-tenant-name", secret: true),
                 clientId: builder.AddParameter("EntraClientId", ClientId));
 
@@ -162,7 +162,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_TenantParameterIsSignInKeyword_ExplainsHowToChooseTheAudience()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api",
+        var entra = builder.AddExistingEntraIdApplication("entra-api",
                 tenantId: builder.AddParameter("EntraTenantId", "organizations"),
                 clientId: builder.AddParameter("EntraClientId", ClientId));
 
@@ -180,7 +180,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_ParameterWithoutValue_FailsAndLogsTheException()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api",
+        var entra = builder.AddExistingEntraIdApplication("entra-api",
                 tenantId: builder.AddParameter("EntraTenantId"),
                 clientId: builder.AddParameter("EntraClientId", ClientId));
 
@@ -231,7 +231,7 @@ public class EntraIdInitializationTests
         var log = Assert.Single(await ReadLogsAsync(app, entra.Resource));
         Assert.True(log.IsErrorMessage);
         Assert.StartsWith(
-            "Failed to provision the Entra ID application. If your tenant does not allow creating registrations, use AddExistingEntraApplication " +
+            "Failed to provision the Entra ID application. If your tenant does not allow creating registrations, use AddExistingEntraIdApplication " +
             "with an existing registration's tenant ID and client ID.",
             log.Message);
     }
@@ -401,7 +401,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_InvalidSettings_LogsEveryProblemBeforeFailing()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra-api", tenantId: TenantId, clientId: ClientId)
             .WithCredential(new EntraIdStoreCertificateCredential { StorePath = "CurrentUser/My" });
 
         // The properties are public, so code that sets them directly bypasses the validation in the builder methods.
@@ -428,7 +428,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_KeepsUrlsAndPropertiesPublishedEarlier()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId);
+        var entra = builder.AddExistingEntraIdApplication("entra-api", tenantId: TenantId, clientId: ClientId);
 
         using var app = builder.Build();
 
@@ -454,7 +454,7 @@ public class EntraIdInitializationTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         EntraIdApplicationResource? startedResource = null;
-        var entra = builder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra-api", tenantId: TenantId, clientId: ClientId)
             .OnBeforeResourceStarted((resource, _, _) =>
             {
                 startedResource = resource;
@@ -472,7 +472,7 @@ public class EntraIdInitializationTests
     public async Task Initialize_BeforeResourceStartedCallbackThrows_ReportsFailedToStart()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra-api", tenantId: TenantId, clientId: ClientId)
             .OnBeforeResourceStarted((_, _, _) => throw new InvalidOperationException("The callback failed."));
 
         using var app = builder.Build();

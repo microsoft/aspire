@@ -1,0 +1,17 @@
+﻿ℹ️ One or more template sources are configured. A template source lets an organization share Aspire templates to
+   customize your development experience.
+
+         [1mName[0m:  aspire[1p]
+   [1mGit source[0m:  https://example.test/templates.git
+
+         [1mName[0m:  another
+   [1mGit source[0m:  ssh://git@example.test/another.git
+
+         [1mName[0m:  third
+   [1mGit source[0m:  https://example.test/third.git
+
+         [1mName[0m:  local
+         [1mPath[0m:  C:\Templates\Company [local]
+
+🚨 Only use sources you trust. Content from these sources can run code on your machine.
+📥 Fetching templates from https://example.test/templates.git using Git...

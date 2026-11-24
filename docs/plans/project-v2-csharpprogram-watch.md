@@ -74,7 +74,7 @@ remaining work are recorded once, under their coding sessions.
 | D6 | **Ship the pinned watcher inside `Aspire.Hosting.Dotnet` (like DCP), never download it at run time.** Payload `10.0.403` requires a compatible .NET 10 SDK and the declared runtimes. Metadata or the restored package identifies it. Diagnosed ordinary fallback is permitted only during preflight; explicit required watch cannot silently fall back. |
 | D7 | **The watcher performs the sole initial build of effectively watched services.** Their output-readiness barrier completes on successful watcher build. Ordinary resources retain coordinated builds; no late ordinary downgrade is permitted after handoff. Normal CLI AppHost preparation and the upstream `host` build are separate from this service-build invariant. |
 | D8 | **CLI and IDE ownership are explicit.** Compatible C# AppHosts use `host` and complete model replacement; real IDE-owned runs retain IDE-native build/debug/watch and session restart. Upstream `host`-injected debug settings do not transfer CLI-owned service launch to its execution service. |
-| D9 | **Non-watch F5 parity is required and implemented.** Preserve capability negotiation and older-launcher behavior rather than forcing every IDE onto the coordinated-build path. |
+| D9 | **Non-watch F5 parity is required and implemented.** Preserve capability negotiation and legacy `project` launch payloads; project-only IDEs use build-only coordination without external-build suppression. |
 | D10 | **Aspire owns the service proxy in a small watch host exe shipped by Aspire.Hosting.Dotnet** (`tools/dotnet-watch-host/`, run with `dotnet exec`), using private-pipe environment delivery rather than sensitive `-e` arguments. The CLI doesn't know about it, so `aspire run --watch`, `dotnet run` of the AppHost and polyglot AppHost servers behave the same. Session 6a defines its runtime and wire-contract responsibilities. |
 
 **API maturity is not uniform.** `DotnetProjectResource`, `AddDotnetProject`, and the package's ordinary
@@ -285,12 +285,23 @@ Coordinated V2 builds negotiate **`project-with-external-build.v1`**
 - The coordinator also runs when the launcher advertises an explicit capability list without `project`;
   the IDE cannot launch those resources, so they run as DCP processes and use the coordinated build as
   they do outside an IDE.
-- Older/capability-less launchers, and launchers that advertise `project` without the external-build
-  capability, retain the legacy project-build path.
+- Launchers that support `project` without the external-build capability prebuild project-file resources
+  but retain the legacy `project` launch configuration without build suppression. The ordinary capability
+  means the IDE can launch a project; it does not guarantee that the IDE builds it first. Visual Studio's
+  F5 build only covers the startup project's MSBuild dependencies, and path-based resources are
+  intentionally not `ProjectReference` items. File apps retain their existing launcher and wait for the
+  final coordinated project prebuild, preventing overlap with that prebuild. Separate file apps are not
+  mutually serialized in this mode and can still race when sharing `#:project` outputs.
 - Unsupported project launch or persistent lifetime can retain normal process execution.
 
-Build configuration, build-only environment, build working directory, and build suppression flow through
-project launch metadata.
+To avoid that remaining race, chain only the affected file apps in the AppHost with
+`WaitForStart(..., WaitBehavior.StopOnResourceUnavailable)`. Prefer `WaitForStart` to health-based
+`WaitFor` because the dependency orders startup/build activity rather than application readiness;
+`WaitForCompletion` is inappropriate for long-running services. This startup ordering and failure
+coupling are intentional. A manual force-start can bypass the wait when appropriate.
+
+For external-build launch configurations, build configuration, build-only environment, build working
+directory, and build suppression flow through project launch metadata.
 
 The VS Code debugger understands externally built projects and file apps, resolves SDK-selected
 commands/arguments, and preserves selected/disabled launch-profile behavior and required host variables.
@@ -369,8 +380,17 @@ split build groups.
 Traversal projects are content-addressed, leased artifacts under **`Aspire:Store:Path/.aspire/build`**
 (the resolved AppHost intermediate-output store). Each compatible group performs aggregate NuGet graph
 restore and parallel MSBuild child builds, de-duplicating shared references within that build context
-without introducing solution-specific properties. Groups run serially; direct builds and `.cs` apps also
-run serially so shared outputs, including `#:project` references, do not race.
+without introducing solution-specific properties. Groups and coordinated direct builds run serially.
+Coordinated `.cs` apps are direct build steps. In build-only legacy IDE sessions they retain their existing
+launch path and wait for the final coordinated project prebuild, preventing overlap with that prebuild.
+Separate file apps are not mutually serialized in this mode and can still race when sharing `#:project`
+outputs.
+
+To avoid that remaining race, chain only the affected file apps in the AppHost with
+`WaitForStart(..., WaitBehavior.StopOnResourceUnavailable)`. Prefer `WaitForStart` to health-based
+`WaitFor` because the dependency orders startup/build activity rather than application readiness;
+`WaitForCompletion` is inappropriate for long-running services. This startup ordering and failure
+coupling are intentional. A manual force-start can bypass the wait when appropriate.
 
 Aggregate restore does not run each root's `BeforeTargets="Restore"` / `AfterTargets="Restore"` hooks.
 **`Aspire:Dotnet:RestoreProjectsIndividually=true`** opts into serial per-root restore while retaining
@@ -380,7 +400,8 @@ select the logged individual-restore path; a restore failure is not retried with
 Services wait for the full successful build chain, including forced starts. Failure handling waits for
 a settled exit code rather than treating an early `Exited`/unknown code as success. Missing paths retain
 resource-local failure behavior rather than preventing valid siblings from building. No coordinator is
-created in publish mode or for an IDE that does not advertise external-build support.
+created in publish mode. Project-capable IDEs without external-build support use a build-only coordinator
+for project files while keeping IDE build suppression disabled.
 
 After coordinated builds, `.csproj` resources query `ComputeRunArguments` for **`RunCommand`,
 `RunArguments`, and `RunWorkingDirectory`** in the same build context and launch that output directly.
@@ -389,10 +410,12 @@ Start/Restart reuse built output; Rebuild builds and restarts through the separa
 
 **Additional delivered build API:** `WithBuildEnvironment` supplies build-only variables/global
 properties for `.csproj` resources, not `.cs` apps. One evaluated snapshot per build attempt feeds the
-coordinated build, run-property query, rebuilder, and IDE metadata; publishing also receives the
-customization. Protected response files preserve MSBuild global-property precedence without command-line
-values. This is **not a secret transport**. Callbacks must be configured before plan materialization;
-incompatible duplicate registrations of one project with custom build contexts are rejected.
+coordinated build, run-property query, rebuilder, and external-build IDE metadata; publishing also receives
+the customization. Legacy project-only IDE sessions reject this customization because their launch
+contract cannot reliably consume the same build context. Protected response files preserve MSBuild
+global-property precedence without command-line values. This is **not a secret transport**. Callbacks must
+be configured before plan materialization; incompatible duplicate registrations of one project with
+custom build contexts are rejected.
 
 **Evidence:** [coordinator implementation][build-coordinator], `DotnetProjectBuildCoordinatorTests`,
 `DotnetProjectBuildEnvironmentTests`,

@@ -62,6 +62,32 @@ public class OtlpHttpServiceTests
         Assert.Equal(0, response.PartialSuccess.RejectedLogRecords);
     }
 
+    [Theory]
+    [InlineData("/", "/structuredlogs")]
+    [InlineData("/legacy", "/legacy/structuredlogs")]
+    public async Task Get_OtlpHttpEndPoint_BrowserPagePath_NotRedirectedToFrontend(string path, string frontendRedirectLocation)
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        using var handler = new SocketsHttpHandler { AllowAutoRedirect = false };
+        using var httpClient = new HttpClient(handler);
+
+        var otlpRequest = new HttpRequestMessage(HttpMethod.Get, $"http://{app.OtlpServiceHttpEndPointAccessor().EndPoint}{path}");
+        otlpRequest.Headers.Accept.ParseAdd("text/html");
+        var otlpResponse = await httpClient.SendAsync(otlpRequest).DefaultTimeout();
+
+        var frontendRequest = new HttpRequestMessage(HttpMethod.Get, $"http://{app.FrontendSingleEndPointAccessor().EndPoint}{path}");
+        frontendRequest.Headers.Accept.ParseAdd("text/html");
+        var frontendResponse = await httpClient.SendAsync(frontendRequest).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.NotFound, otlpResponse.StatusCode);
+        Assert.Null(otlpResponse.Headers.Location);
+
+        Assert.Equal(HttpStatusCode.Redirect, frontendResponse.StatusCode);
+        Assert.Equal(frontendRedirectLocation, frontendResponse.Headers.Location?.OriginalString);
+    }
+
     [Fact]
     public async Task CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure()
     {

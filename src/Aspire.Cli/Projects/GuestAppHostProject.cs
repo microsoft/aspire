@@ -630,6 +630,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchProfileEnvironmentVariables,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
+            if (context.Isolated)
+            {
+                launchSettingsEnvVars["DcpPublisher__RandomizePorts"] = "true";
+            }
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
             // Only the final managed Hosting server gets service-watch ownership. Short-lived
             // discovery/bootstrap sessions must explicitly fence inherited watch state.

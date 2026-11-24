@@ -150,7 +150,7 @@ internal sealed record GoApiParameter
 }
 
 /// <summary>
-/// The trailing <c>options ...*T</c> variadic of a generated method.
+/// The trailing <c>options ...T</c> functional-option variadic of a generated method.
 /// </summary>
 internal sealed record GoApiOptions
 {
@@ -160,9 +160,8 @@ internal sealed record GoApiOptions
     public required string TypeName { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether the variadic carries a DTO directly instead of a generated
-    /// <c>XxxOptions</c> struct. Go allows a single trailing variadic, so only a lone optional DTO
-    /// named <c>options</c> can be flattened this way.
+    /// Gets a value indicating whether the variadic carries a DTO directly instead of generated
+    /// functional options. This remains in schema version 1 for compatibility with older exports.
     /// </summary>
     public bool IsDirect { get; init; }
 
@@ -286,6 +285,16 @@ internal sealed record GoApiMember
     /// Gets the JSON property name of a field.
     /// </summary>
     public string? JsonName { get; init; }
+
+    /// <summary>
+    /// Gets the Go type of a field or constant.
+    /// </summary>
+    public string? DeclaredType { get; init; }
+
+    /// <summary>
+    /// Gets whether a field may be omitted, from ATS metadata rather than its JSON tag.
+    /// </summary>
+    public bool IsOptional { get; init; }
 
     /// <summary>
     /// Gets the value of a constant, or the Go literal of an exported value.

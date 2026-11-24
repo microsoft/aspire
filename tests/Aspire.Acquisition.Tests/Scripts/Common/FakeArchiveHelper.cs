@@ -29,12 +29,7 @@ public static class FakeArchiveHelper
         {
             var binaryName = isWindows ? "aspire.exe" : "aspire";
             var binaryPath = Path.Combine(contentDir, binaryName);
-            await File.WriteAllTextAsync(binaryPath, "#!/bin/bash\necho \"aspire mock v1.0\"\n");
-
-            if (!OperatingSystem.IsWindows())
-            {
-                FileHelper.MakeExecutable(binaryPath);
-            }
+            await FileHelper.WriteExecutableFileAsync(binaryPath, "#!/bin/bash\necho \"aspire mock v1.0\"\n");
 
             if (isWindows)
             {
@@ -114,8 +109,7 @@ public static class FakeArchiveHelper
             Directory.CreateDirectory(binaryDir);
 
             var binaryPath = Path.Combine(binaryDir, "aspire");
-            await File.WriteAllTextAsync(binaryPath, FakeVerifyAspireScript);
-            FileHelper.MakeExecutable(binaryPath);
+            await FileHelper.WriteExecutableFileAsync(binaryPath, FakeVerifyAspireScript);
 
             if (includeStraySidecar)
             {

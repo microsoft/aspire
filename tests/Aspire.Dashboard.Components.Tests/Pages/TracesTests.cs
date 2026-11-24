@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -10,8 +12,12 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
@@ -28,6 +34,34 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public class TracesTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Render_FooterShowsCountAndPauseWarningInCorrectLocation(bool isDesktop)
+    {
+        SetupTracesServices();
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/traces");
+        Services.GetRequiredService<PauseManager>().SetTracesPaused(true);
+
+        var cut = Render<ResourcesLayout>(parameters => parameters
+            .AddCascadingValue(viewport)
+            .Add(p => p.Body, builder =>
+            {
+                builder.OpenComponent<Traces>(0);
+                builder.CloseComponent();
+            }));
+
+        cut.WaitForAssertion(() =>
+        {
+            var footer = cut.Find(isDesktop ? ".resource-footer-page-status" : "footer[style='grid-area: footer']");
+            Assert.Equal("Showing 0 traces", footer.QuerySelector(".result-count")!.TextContent.Trim());
+            Assert.Single(footer.QuerySelectorAll(".pause-warning"));
+            Assert.Single(cut.FindComponents<TotalItemsFooter>());
+        });
+    }
+
     [Theory]
     [InlineData(AspireDataType.StructuredLogs)]
     [InlineData(AspireDataType.Traces)]
@@ -126,7 +160,7 @@ public class TracesTests : DashboardTestContext
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         cut.WaitForAssertion(() => Assert.All(cut.FindAll(".trace-service-tag"), element => Assert.Contains("(1)", element.TextContent, StringComparison.Ordinal)));
 
@@ -152,7 +186,7 @@ public class TracesTests : DashboardTestContext
                 }
             }
         });
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         var refreshedResult = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
         {
@@ -186,11 +220,8 @@ public class TracesTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".trace-service-tag"), element => element.TextContent.Contains("(2)", StringComparison.Ordinal)));
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(1)]
-    [InlineData(10)]
-    public async Task Render_StaleOverflowIndex_RendersOnlyCurrentResources(int staleIndex)
+    [Fact]
+    public async Task Render_TraceResources_RendersEveryResourceTagForBrowserOverflow()
     {
         SetupTracesServices();
 
@@ -198,69 +229,59 @@ public class TracesTests : DashboardTestContext
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
-            new ResourceSpans
-            {
-                Resource = CreateResource(),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans = { CreateSpan(traceId: "trace", spanId: "span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
-                    }
-                }
-            }
+            CreateResourceSpans("frontend", CreateSpan(traceId: "trace", spanId: "span-1", startTime: timestamp, endTime: timestamp.AddSeconds(3))),
+            CreateResourceSpans("catalogservice",
+                CreateSpan(traceId: "trace", spanId: "span-2", parentSpanId: "span-1", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2)),
+                CreateSpan(traceId: "trace", spanId: "span-3", parentSpanId: "span-1", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2))),
+            CreateResourceSpans("catalogdb", CreateSpan(traceId: "trace", spanId: "span-4", parentSpanId: "span-2", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2)))
         });
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
-        var overflow = cut.FindComponent<FluentOverflow<TraceResourceSummary>>();
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
+        {
+            StartIndex = 0,
+            Count = 0
+        }).AsTask());
+        var expectedTags = Assert.Single(result.Items).Resources.Select(resource => $"{resource.Resource.ResourceName} ({resource.TotalSpans})").ToList();
+        Assert.Equal(3, expectedTags.Count);
 
-        // A delayed browser measurement can reference resources that are no longer in the row.
-        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
-        [
-            new OverflowItem { Index = 0, Text = "TestService (1)" },
-            new OverflowItem { Index = staleIndex, Text = "RemovedService (1)" }
-        ]));
-
+        // The browser decides which tags fit and fills the count, so the server renders every tag and an empty
+        // count placeholder. The hidden tags stay in the accessibility tree, and the count is presentational.
         cut.WaitForAssertion(() =>
         {
-            // The stale index is ignored, so only the current resource is counted.
-            Assert.Equal("+1", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
+            var tagLine = cut.Find("aspire-tag-overflow");
+            var children = tagLine.Children.ToList();
+            Assert.Equal(expectedTags, children.SkipLast(1).Select(child => string.Join(" ", child.TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))));
+            Assert.All(children.SkipLast(1), child => Assert.Contains("trace-service-tag", child.ClassList));
+            var more = children[^1];
+            Assert.True(more.HasAttribute("data-tag-overflow-more"));
+            Assert.Equal("true", more.GetAttribute("aria-hidden"));
+            Assert.Equal(string.Empty, more.TextContent);
+            Assert.All(children, child =>
+            {
+                Assert.False(child.HasAttribute("data-count"));
+                Assert.False(child.HasAttribute("data-tag-overflow-hidden"));
+            });
         });
 
-        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
-        [
-            new OverflowItem { Index = staleIndex, Text = "RemovedService (1)" }
-        ]));
-
-        cut.WaitForAssertion(() =>
+        static ResourceSpans CreateResourceSpans(string resourceName, params Span[] spans)
         {
-            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
-        });
-
-        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
-        [
-            new OverflowItem { Index = 0, Text = "TestService (1)" }
-        ]));
-        cut.WaitForAssertion(() => Assert.Equal("+1", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim()));
-
-        overflow.Render(builder => builder.Add(p => p.Items, Array.Empty<TraceResourceSummary>()));
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
-        });
-
-        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
-        [
-            new OverflowItem { Index = 0, Text = "TestService (1)" }
-        ]));
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
-        });
+            return new ResourceSpans
+            {
+                Resource = CreateResource(name: resourceName, instanceId: resourceName),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { spans }
+                    }
+                }
+            };
+        }
     }
 
     [Theory]
@@ -294,8 +315,74 @@ public class TracesTests : DashboardTestContext
         var cut = FluentUISetupHelpers.RenderMessageBarProviderWithPage<Traces>(this, viewport);
 
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
         cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
+    }
+
+    [Fact]
+    public async Task ResourcesLayout_SelectedResourceSendsTelemetryAfterPageOpened_ShowsOnlyThatResource()
+    {
+        SetupTracesServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker")],
+            resourceChannelProvider: () => channel));
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.TracesUrl("api"));
+
+        // The page opens before either resource has sent telemetry.
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Traces>(0);
+            builder.AddAttribute(1, nameof(Traces.ResourceName), "api");
+            builder.CloseComponent();
+        }));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var page = cut.FindComponent<Traces>();
+        var grid = page.FindComponent<AspireFluentDataGrid<TraceSummary>>();
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddTraceAsync(repository, "api", "trace-api");
+        // The page and the layout are notified by separate callbacks that can run in either order, so also wait for
+        // the layout's telemetry key that the grid queries.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal(["api"], page.Instance.TracesViewModel.ResourceKeys?.Select(key => key.Name) ?? []);
+        });
+        await AddTraceAsync(repository, "worker", "trace-worker");
+
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
+        {
+            StartIndex = 0,
+            Count = 100
+        }).AsTask());
+
+        Assert.Equal(["api"], result.Items.Select(item => item.RootResource.ResourceName));
+
+        static Task AddTraceAsync(SqliteTelemetryRepository repository, string name, string traceId)
+        {
+            // Without an instance ID, the telemetry resource's name matches the app model resource's name.
+            var resource = CreateResource(name);
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            var timestamp = DateTime.UnixEpoch;
+            return repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = resource,
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = CreateScope(),
+                            Spans = { CreateSpan(traceId: traceId, spanId: $"{traceId}-span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
+                        }
+                    }
+                }
+            });
+        }
     }
 
     private void SetupTracesServices()
@@ -311,7 +398,7 @@ public class TracesTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<Traces>>(NullLogger<Traces>.Instance);

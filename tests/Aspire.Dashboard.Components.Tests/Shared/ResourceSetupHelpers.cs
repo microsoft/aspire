@@ -58,6 +58,8 @@ internal static class ResourceSetupHelpers
         module.Setup<bool>("usesCommandSelectionModifier", _ => true).SetResult(false);
         module.SetupVoid("setTabListAriaLabel", _ => true).SetVoidResult();
         module.Setup<bool>("isResourceTabFocused", _ => true).SetResult(true);
+        // Tests choose tabs through FluentTabs, not the browser, so there's no recorded user activation.
+        module.Setup<bool>("consumeRecentTabActivation", _ => true).SetResult(false);
         module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
         module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
         module.SetupVoid("registerResourceContextMenu", _ => true).SetVoidResult();

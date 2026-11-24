@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class InitCommandStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal InitCommandStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Adding AppHost project to solution....
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AddingAppHostProjectToSolution", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Adding projects to solution....
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AddingProjectsToSolution", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Adding ServiceDefaults project to solution....
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AddingServiceDefaultsProjectToSolution", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire AppHost created! To complete setup, run:.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostCreatedRunOne", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire AppHost created! To complete setup, run one of:.
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostCreatedRunOneOf", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire initialization complete!.
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireInitializationComplete", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Created {0}.
         /// </summary>
@@ -122,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CreatedFile", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Creating AppHost from template....
         /// </summary>
@@ -131,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CreatingAppHostFromTemplate", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Creating AppHost project....
         /// </summary>
@@ -140,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CreatingAppHostProject", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Creating ServiceDefaults project....
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CreatingServiceDefaultsProject", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to `aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version..
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeprecatedOptionWarning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Initialize Aspire in an existing codebase.
         /// </summary>
@@ -167,7 +167,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to create AppHost from template (exit code {0})..
         /// </summary>
@@ -176,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToCreateAppHostFromTemplate", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to parse existing {0} at &apos;{1}&apos;: {2}.
         /// </summary>
@@ -185,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToParseExistingConfig", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} already exists — skipping..
         /// </summary>
@@ -194,7 +194,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FileAlreadyExistsSkipping", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#..
         /// </summary>
@@ -203,7 +203,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FileBasedOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The --file-based option requires C#. Select --language csharp or omit --file-based..
         /// </summary>
@@ -212,7 +212,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FileBasedRequiresCSharp", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Fix or remove {0} and re-run `aspire init`..
         /// </summary>
@@ -221,7 +221,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FixOrRemoveConfigAndRerun", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Installing Aspire project templates....
         /// </summary>
@@ -230,7 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InstallingAspireProjectTemplates", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The programming language for the AppHost.
         /// </summary>
@@ -239,7 +239,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LanguageOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Multiple solution files found. Please select which one to add the Aspire projects to:.
         /// </summary>
@@ -248,7 +248,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MultipleSolutionsFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No solution file found. Creating single-file AppHost....
         /// </summary>
@@ -257,7 +257,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoSolutionFoundCreatingSingleFileAppHost", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Resolving template version....
         /// </summary>
@@ -266,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ResolvingTemplateVersion", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Solution has already been initialized with Aspire..
         /// </summary>
@@ -275,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SolutionAlreadyInitialized", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The solution file &apos;{0}&apos; and project file &apos;{1}&apos; are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory..
         /// </summary>
@@ -284,7 +284,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SolutionAndProjectInSameDirectory", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Solution detected: {0}.
         /// </summary>

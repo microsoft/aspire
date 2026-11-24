@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="ConfigurationWriteRefused">
         <source>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</source>
-        <target state="new">Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</target>
+        <target state="translated">Nepovedlo se bezpečně aktualizovat '{0}'. Zkontrolujte souběžné změny, odkazy nebo omezující oprávnění a pak to zkuste znovu nebo to nakonfigurujte ručně.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
@@ -89,12 +89,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
         <source>Agent assets from configured skill sources</source>
-        <target state="new">Agent assets from configured skill sources</target>
+        <target state="translated">Prostředky agenta z nakonfigurovaných zdrojů dovedností</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
         <source>{0}: {1}</source>
-        <target state="new">{0}: {1}</target>
+        <target state="translated">{0}: {1}</target>
         <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
@@ -107,17 +107,20 @@
         <target state="translated">Chcete nakonfigurovat server MCP Aspire pro vybraná prostředí agentů?</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_ConfiguredSourceList">
-        <source>Sources: {0}</source>
-        <target state="new">Sources: {0}</target>
-        <note>{0} lists the configured repository and catalog URLs separated by commas.</note>
-      </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
-        <source>Configured sources:
-  {0}</source>
-        <target state="new">Configured sources:
-  {0}</target>
-        <note>{0} contains the source URLs and configuration locations, each on its own labeled line.</note>
+        <source>Configured sources in {0}</source>
+        <target state="translated">Nakonfigurované zdroje v {0}</target>
+        <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DeleteSkillCopiesPrompt">
+        <source>Delete {0} copied skill folders?</source>
+        <target state="translated">Chcete odstranit tento počet složek se zkopírovanými dovednostmi: {0}?</target>
+        <note>{0} is the number of skill folders, always greater than one.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DeleteSkillCopyPrompt">
+        <source>Delete this copied skill folder?</source>
+        <target state="translated">Chcete odstranit tuto složku se zkopírovanou dovedností?</target>
+        <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
@@ -136,13 +139,13 @@
       </trans-unit>
       <trans-unit id="InitCommand_ExistingConfigurationConflict">
         <source>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</source>
-        <target state="new">Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</target>
+        <target state="translated">Aspire nelze zaregistrovat, protože {0} je v konfliktu se stávajícím nastavením nebo přepsáním. Stávající nastavení zůstala beze změny.</target>
         <note>{0} identifies the conflicting JSON setting or environment override.</note>
       </trans-unit>
       <trans-unit id="InitCommand_FailedTarget">
         <source>Failed to configure Aspire plugin:
   {0}</source>
-        <target state="new">Failed to configure Aspire plugin:
+        <target state="translated">Nepodařilo se nakonfigurovat modul plug-in Aspire:
   {0}</target>
         <note>{0} lists each agent's configuration path and failure details, one target per line.</note>
       </trans-unit>
@@ -153,7 +156,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
         <source>Global (In your home directory, available across all projects)</source>
-        <target state="needs-review-translation">Globální (instalace do vašeho domovského adresáře; k dispozici ve všech projektech)</target>
+        <target state="translated">Globálně (v domovském adresáři, dostupné ve všech projektech)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
@@ -168,7 +171,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
         <source>Installed skills:</source>
-        <target state="needs-review-translation">Nainstalované dovednosti agentů Aspire:</target>
+        <target state="translated">Nainstalované dovednosti:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
@@ -193,19 +196,17 @@
       </trans-unit>
       <trans-unit id="InitCommand_InvalidSkills">
         <source>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <target state="translated">Neplatný výběr dovedností nebo nástrojů {0}. Použijte {1}, hodnotu {2} nebo hodnotu {3}.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Local Aspire skill files may override plugin skills
-{0}</source>
-        <target state="new">Local Aspire skill files may override plugin skills
-{0}</target>
-        <note>{0} lists the local skill entry-point paths, one per line.</note>
+      <trans-unit id="InitCommand_KeptSkillCopies">
+        <source>Kept copied Aspire skills in {0}</source>
+        <target state="translated">Zkopírované dovednosti Aspire v {0} byly zachovány.</target>
+        <note>{0} lists the copied skill folder paths, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
         <source>{0} ({1})</source>
-        <target state="new">{0} ({1})</target>
+        <target state="translated">{0} ({1})</target>
         <note>{0} is a location, and {1} lists the agents that use it, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
@@ -235,7 +236,27 @@
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>This project (In your workspace, ready to commit with your project)</source>
-        <target state="needs-review-translation">Projekt (instalace do kořenového adresáře vašeho pracovního prostoru; zahrnutí do potvrzení spolu s projektem)</target>
+        <target state="translated">Tento projekt (v pracovním prostoru, připravené k potvrzení spolu s projektem)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
+        <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
+        <target state="translated">Odstranit zkopírované složky dovedností Aspire bez žádosti o potvrzení, včetně všech souborů uvnitř a všech vašich změn. Platí jen tehdy, když je na vybrané úrovni nahradí modul plug-in dovedností Aspire. Výchozí hodnota je false</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoveSkillCopyFailed">
+        <source>Could not remove copied Aspire skill '{0}': {1}</source>
+        <target state="translated">Zkopírovanou dovednost Aspire {0} se nepodařilo odebrat: {1}</target>
+        <note>{0} is the skill directory path, and {1} is the failure reason.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_RemovedSkillCopies">
+        <source>Deleted {0} copied skill folders</source>
+        <target state="translated">Počet odstraněných zkopírovaných složek dovedností: {0}</target>
+        <note>{0} is the number of deleted skill folders, always greater than one.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_RemovedSkillCopy">
+        <source>Deleted 1 copied skill folder</source>
+        <target state="translated">Odstranila se 1 zkopírovaná složka dovedností</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -250,7 +271,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
         <source>Where should skills and tools be installed?</source>
-        <target state="needs-review-translation">Obor instalace</target>
+        <target state="translated">Kam se mají dovednosti a nástroje nainstalovat?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
@@ -263,12 +284,32 @@
         <target state="translated">Sdílené soubory můžou najít i agenti, kteří nejsou vybraní.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_SkillCopiesFound">
+        <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
+        <target state="translated">Tyto dovednosti teď poskytuje modul plug-in dovedností Aspire. Odstraněním zkopírovaných složek se odstraní i veškerý jejich obsah včetně vašich změn:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopiesRequirePlugin">
+        <source>Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</source>
+        <target state="translated">Kopie se odeberou jen v případě, že je modul plug-in s dovednostmi Aspire nakonfigurovaný a povolený ve vybraném oboru pro každého vybraného agenta.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopyBehindLink">
+        <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
+        <target state="translated">Přístup k ní vede přes propojenou složku, která může být sdílená. Pokud už není potřeba, odeberte ji ručně.</target>
+        <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_SkillSources">
         <source>Skill sources:
 {0}</source>
-        <target state="new">Skill sources:
+        <target state="translated">Zdroje dovedností:
 {0}</target>
         <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillSourcesExplanation">
+        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
+        <target state="translated">Je nakonfigurovaný minimálně jeden zdroj dovedností. Zdroj dovedností umožňuje organizaci sdílet dovednosti a přizpůsobit vám tak prostředí pro vývoj.</target>
+        <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
@@ -277,7 +318,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
         <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</source>
-        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</target>
+        <target state="translated">Čárkami oddělená ID dovedností/nástrojů ({0}), {1} nebo {2} (výchozí: aspire). Dovednost dotnet-inspect vyžaduje v pracovním prostoru AppHost v jazyce C#.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
@@ -296,18 +337,13 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="translated">Háčky telemetrie agentů Aspire byly nainstalovány pro: {0}. Zaznamenává se jen používání dovedností Aspire, nástrojů MCP a referenčních souborů. Nastavením ASPIRE_CLI_TELEMETRY_OPTOUT=true můžete kdykoli vyjádřit výslovný nesouhlas.</target>
+        <source>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="translated">Do konfigurace na úrovni uživatele byly nainstalovány háčky telemetrie agenta Aspire pro: {0}. Zaznamenává se jen využití dovedností Aspire, nástrojů MCP a referenčních souborů. Nastavením proměnné prostředí ASPIRE_CLI_TELEMETRY_OPTOUT na hodnotu true můžete kdykoli vyjádřit výslovný nesouhlas.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="translated">Cesta ke kořenovému adresáři pracovního prostoru</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="LocalSkills_ReadFailed">
-        <source>Could not check local Aspire skills at '{0}': {1}</source>
-        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">
@@ -377,7 +413,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
         <source>Which skills and tools do you want to configure?</source>
-        <target state="new">Which skills and tools do you want to configure?</target>
+        <target state="translated">Které dovednosti a nástroje chcete nakonfigurovat?</target>
         <note />
       </trans-unit>
       <trans-unit id="MalformedConfigFileError">
@@ -407,7 +443,7 @@
       </trans-unit>
       <trans-unit id="TelemetryHookScriptUpdateFailed">
         <source>Could not update the telemetry hook script '{0}': {1}</source>
-        <target state="new">Could not update the telemetry hook script '{0}': {1}</target>
+        <target state="translated">Nepovedlo se aktualizovat '{0}' skriptu zavěšení telemetrie: {1}</target>
         <note>{0} is the hook script path. {1} is the underlying error message.</note>
       </trans-unit>
     </body>

@@ -36,6 +36,7 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(TimeFormat))]
 [JsonSerializable(typeof(List<int>))]
 [JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Dictionary<string, List<string>>))]
 [JsonSerializable(typeof(ResourceOrderSettings))]
 [JsonSerializable(typeof(List<MetricPin>))]
