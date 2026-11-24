@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Aspire.Shared.Telemetry;
@@ -17,6 +18,7 @@ namespace Aspire.Cli.Tests.Telemetry;
 internal sealed class TelemetryFixture : IDisposable
 {
     private readonly ActivityListener _listener;
+    private readonly ConcurrentQueue<Activity> _stoppedActivities = new();
 
     /// <summary>
     /// Creates a new telemetry fixture with unique activity source names.
@@ -80,7 +82,11 @@ internal sealed class TelemetryFixture : IDisposable
                     }
                 }
             },
-            ActivityStopped = activity => CapturedActivity = activity
+            ActivityStopped = activity =>
+            {
+                CapturedActivity = activity;
+                _stoppedActivities.Enqueue(activity);
+            }
         };
         ActivitySource.AddActivityListener(_listener);
 
@@ -116,6 +122,17 @@ internal sealed class TelemetryFixture : IDisposable
     /// Gets the last activity that was stopped by the listener.
     /// </summary>
     public Activity? CapturedActivity { get; private set; }
+
+    /// <summary>
+    /// Gets every activity stopped by the listener, in the order they stopped.
+    /// </summary>
+    public IReadOnlyList<Activity> StoppedActivities => [.. _stoppedActivities];
+
+    /// <summary>
+    /// Gets the stopped activities with the given operation name, in the order they stopped.
+    /// </summary>
+    public IReadOnlyList<Activity> GetStoppedActivities(string operationName) =>
+        [.. _stoppedActivities.Where(activity => activity.OperationName == operationName)];
 
     /// <inheritdoc/>
     public void Dispose()

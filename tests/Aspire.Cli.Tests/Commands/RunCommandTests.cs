@@ -26,6 +26,9 @@ using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
+using Aspire.Cli.Watch;
+using Aspire.Shared;
+using Aspire.Shared.DotnetWatch;
 using Aspire.Shared.UserSecrets;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -1471,6 +1474,338 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(fixture.CapturedActivity);
         var tags = fixture.CapturedActivity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
         Assert.Equal("build_failed", tags[TelemetryConstants.Tags.ErrorType]);
+        Assert.DoesNotContain(tags.Keys, key => key.StartsWith("aspire.cli.run.reload.", StringComparison.Ordinal));
+        Assert.Empty(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReloadSummary));
+    }
+
+    [Theory]
+    [InlineData("success", TelemetryConstants.RunReloadOutcomes.Succeeded)]
+    [InlineData("groups-failed", TelemetryConstants.RunReloadOutcomes.GroupFailed)]
+    [InlineData("rpc-failed", TelemetryConstants.RunReloadOutcomes.RpcFailed)]
+    [InlineData("empty", TelemetryConstants.RunReloadOutcomes.NoWatchedServices)]
+    public async Task RunCommand_RecordsServiceReloadTelemetryAndPrintsGroupResults(string scenario, string outcome)
+    {
+        using var fixture = new TelemetryFixture();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        var input = new TestConsoleInput();
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        const string successMessage = "Rebuilt 'api' with a fresh watcher for watch group 'dotnet-watch'.";
+        const string failureMessage = "The fresh build of watch group 'dotnet-watch-other' failed. Fix the errors and save; run 'aspire logs dotnet-watch-other --tail 50'.";
+        var renderables = 0;
+        var interaction = new TestInteractionService
+        {
+            DisplayRenderableCallback = _ =>
+            {
+                if (Interlocked.Increment(ref renderables) == 2)
+                {
+                    ready.TrySetResult();
+                }
+            },
+            DisplayMessageCallback = (_, message, _) =>
+            {
+                if (message == RunCommandStrings.NoWatchedServicesToRebuild)
+                {
+                    finished.TrySetResult();
+                }
+            },
+            DisplaySuccessCallback = _ =>
+            {
+                if (scenario == "success")
+                {
+                    finished.TrySetResult();
+                }
+            },
+            DisplayErrorCallback = _ => finished.TrySetResult()
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetDashboardUrlsAsyncCallback = _ => Task.FromResult(new DashboardUrlsState
+            {
+                DashboardHealthy = true,
+                BaseUrlWithLoginToken = "http://localhost:5000",
+                CodespacesUrlWithLoginToken = null
+            }),
+            GetCapabilitiesAsyncCallback = _ => Task.FromResult(new[] { ResourceWatch.ReloadCapability }),
+            WatchResourceWatchStatusAsyncCallback = _ => new ResourceWatchStatus?[]
+            {
+                new()
+                {
+                    GenerationId = Guid.NewGuid(),
+                    DefaultEnabled = true,
+                    Resources = [new() { Resource = "api", State = "pending", LogResource = "dotnet-watch" }]
+                }
+            }.ToAsyncEnumerable(),
+            ReloadWatchedResourcesAsyncCallback = _ =>
+            {
+                if (scenario == "rpc-failed")
+                {
+                    throw new ConnectionLostException("RAW RPC DETAILS");
+                }
+                if (scenario == "empty")
+                {
+                    return Task.FromResult(new ResourceWatchReloadResult { Groups = [] });
+                }
+
+                var groups = new List<ResourceWatchReloadGroupResult>
+                {
+                    new() { LogResource = "dotnet-watch", Resources = ["api"], Success = true, Message = successMessage, State = ResourceWatch.Watching }
+                };
+                if (scenario == "groups-failed")
+                {
+                    // A failed group outweighs a failed build in another group.
+                    groups.Add(new() { LogResource = "dotnet-watch-other", Resources = ["other"], Success = false, Message = failureMessage, State = ResourceWatch.BuildFailed });
+                    groups.Add(new() { LogResource = "dotnet-watch-third", Resources = ["third"], Success = false, Message = failureMessage, State = ResourceWatch.Failed });
+                }
+                return Task.FromResult(new ResourceWatchReloadResult { Groups = [.. groups] });
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.TelemetryFactory = _ => fixture.Telemetry;
+            options.ConsoleInputFactory = _ => input;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                RunAsyncCallback = async (context, token) =>
+                {
+                    context.BuildCompletionSource!.TrySetResult(true);
+                    context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                    return 0;
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var run = provider.GetRequiredService<RootCommand>().Parse("run --watch false").InvokeAsync(cancellationToken: cancellation.Token);
+        try
+        {
+            await ready.Task.DefaultTimeout();
+            input.PressReload();
+            await finished.Task.DefaultTimeout();
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+        }
+
+        Assert.Equal(scenario == "empty"
+            ? [RunCommandStrings.RebuildingWatchedServices, RunCommandStrings.NoWatchedServicesToRebuild]
+            : new[] { RunCommandStrings.RebuildingWatchedServices }, interaction.DisplayedMessages.Select(message => message.Message));
+        Assert.Equal(scenario is "success" or "groups-failed" ? new[] { successMessage } : [], interaction.DisplayedSuccess);
+        Assert.Equal(scenario switch
+        {
+            "rpc-failed" => new[] { RunCommandStrings.CouldNotReloadWatchedServices },
+            "groups-failed" => [failureMessage, failureMessage],
+            _ => []
+        }, interaction.DisplayedErrors);
+        var runActivity = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHost));
+        Assert.DoesNotContain(runActivity.TagObjects, tag => tag.Key.StartsWith("aspire.cli.run.reload.", StringComparison.Ordinal));
+        var summary = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReloadSummary));
+        Assert.Equal(runActivity.SpanId, summary.ParentSpanId);
+        Assert.Equal("services", summary.GetTagItem(TelemetryConstants.Tags.RunReloadMode));
+        Assert.Equal(1, summary.GetTagItem(TelemetryConstants.Tags.RunReloadCount));
+        var reload = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReload));
+        Assert.Equal(summary.SpanId, reload.ParentSpanId);
+        Assert.Equal("services", reload.GetTagItem(TelemetryConstants.Tags.RunReloadMode));
+        Assert.Equal(outcome, reload.GetTagItem(TelemetryConstants.Tags.RunReloadOutcome));
+        Assert.Equal(scenario is "success" or "empty", reload.GetTagItem(TelemetryConstants.Tags.RunReloadSuccess));
+    }
+
+    [Theory]
+    [InlineData(true, "build")]
+    [InlineData(false, "build")]
+    [InlineData(true, "start")]
+    [InlineData(false, "start")]
+    [InlineData(true, "exit")]
+    [InlineData(false, "exit")]
+    [InlineData(true, "rpc")]
+    [InlineData(false, "rpc")]
+    [InlineData(true, "disconnect")]
+    [InlineData(false, "disconnect")]
+    public async Task RunCommand_AppHostReloadFailureBelongsToTheReplacementActivity(bool manual, string failure)
+    {
+        using var fixture = new TelemetryFixture();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var firstDirectory = new DotnetWatchTestDirectory();
+        using var secondDirectory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        using var firstCancellation = new CancellationTokenSource();
+        using var secondCancellation = new CancellationTokenSource();
+        await using var firstGeneration = new DotnetWatchAppHostGeneration(
+            shutdown, TimeSpan.FromSeconds(5), firstDirectory.RelativePath, NullLogger.Instance);
+        var input = new TestConsoleInput();
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interaction = new TestInteractionService
+        {
+            DisplayErrorCallback = _ => failed.TrySetResult(),
+            ShowStatusCallback = text =>
+            {
+                if (text == RunCommandStrings.AppHostConnectionLostWaitingForExit)
+                {
+                    failed.TrySetResult();
+                }
+            }
+        };
+        var attempts = 0;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.TelemetryFactory = _ => fixture.Telemetry;
+            options.ConsoleInputFactory = _ => input;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                RunAsyncCallback = async (context, token) =>
+                {
+                    var number = Interlocked.Increment(ref attempts);
+                    var generation = context.WatchGeneration!;
+                    if (number == 2 && failure == "build")
+                    {
+                        context.BuildCompletionSource!.TrySetResult(false);
+                        return CliExitCodes.FailedToBuildArtifacts;
+                    }
+                    if (number == 2 && failure == "exit")
+                    {
+                        context.BuildCompletionSource!.TrySetResult(true);
+                        return 17;
+                    }
+                    generation.ApplyEnvironment(new Dictionary<string, string>());
+                    await DotnetWatchAppHostTestChannel.SendAsync(generation.Endpoint, new()
+                    {
+                        Version = DotnetWatchAppHostProtocol.Version,
+                        Session = generation.Session,
+                        Kind = DotnetWatchAppHostProtocol.HostStarted,
+                        Instance = "123:456"
+                    }, token);
+                    context.BuildCompletionSource!.TrySetResult(true);
+                    if (number == 1)
+                    {
+                        context.BackchannelCompletionSource!.TrySetResult(new TestAppHostBackchannel { NotifyAppHostReadyAsyncCalled = ready });
+                    }
+                    else
+                    {
+                        if (failure is "rpc" or "disconnect")
+                        {
+                            context.OutputCollector = new OutputCollector();
+                            context.OutputCollector.MarkWatcherOutput();
+                            context.BackchannelCompletionSource!.TrySetResult(new TestAppHostBackchannel
+                            {
+                                GetDashboardUrlsAsyncCallback = _ =>
+                                    Task.FromException<DashboardUrlsState>(failure == "disconnect"
+                                        ? new ConnectionLostException("Startup connection lost.")
+                                        : new InvalidOperationException("Dashboard startup failed."))
+                            });
+                        }
+                        else
+                        {
+                            generation.MarkStartupFailed();
+                        }
+                    }
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                    return 0;
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RunCommand>();
+        var parsed = provider.GetRequiredService<RootCommand>().Parse("run --watch");
+        var firstRun = command.ExecuteGenerationAsync(parsed, true, true, firstGeneration, firstCancellation.Token);
+        try
+        {
+            await ready.Task.DefaultTimeout();
+            if (manual)
+            {
+                input.PressReload();
+            }
+            else
+            {
+                await DotnetWatchAppHostTestChannel.SendAsync(firstGeneration.Endpoint, new()
+                {
+                    Version = DotnetWatchAppHostProtocol.Version,
+                    Session = firstGeneration.Session,
+                    Kind = DotnetWatchAppHostProtocol.ModelInvalidated,
+                    Instance = "123:456"
+                }, TestContext.Current.CancellationToken);
+            }
+            await firstGeneration.Invalidated.DefaultTimeout();
+        }
+        finally
+        {
+            await firstCancellation.CancelAsync();
+            Assert.Equal(CliExitCodes.Success, (await firstRun.DefaultTimeout()).ExitCode);
+        }
+        var initiatingSummary = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReloadSummary));
+        Assert.Equal("apphost", initiatingSummary.GetTagItem(TelemetryConstants.Tags.RunReloadMode));
+        Assert.Equal(manual ? 1 : 0, initiatingSummary.GetTagItem(TelemetryConstants.Tags.RunReloadCount));
+        Assert.Equal(manual, firstGeneration.RequestedReload is not null);
+        // The reload stays open until the replacement knows its outcome.
+        Assert.Empty(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReload));
+        await using var replacement = new DotnetWatchAppHostGeneration(
+            shutdown, TimeSpan.FromSeconds(5), secondDirectory.RelativePath, NullLogger.Instance)
+        {
+            IsReplacement = true,
+            StartedByReload = firstGeneration.ReloadRequested,
+            PendingReload = firstGeneration.RequestedReload
+        };
+        var replacementRun = command.ExecuteGenerationAsync(parsed, true, true, replacement, secondCancellation.Token);
+        try
+        {
+            if (failure is "exit" or "rpc")
+            {
+                Assert.Equal(failure == "exit" ? 17 : CliExitCodes.FailedToDotnetRunAppHost,
+                    (await replacementRun.DefaultTimeout()).ExitCode);
+            }
+            else
+            {
+                await failed.Task.DefaultTimeout();
+                Assert.False(replacementRun.IsCompleted);
+            }
+        }
+        finally
+        {
+            await secondCancellation.CancelAsync();
+            var result = await replacementRun.DefaultTimeout();
+            if (failure is not "exit" and not "rpc")
+            {
+                Assert.Equal(CliExitCodes.Success, result.ExitCode);
+            }
+        }
+
+        var runActivities = fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHost);
+        Assert.Equal(2, runActivities.Count);
+        Assert.All(runActivities, activity =>
+            Assert.DoesNotContain(activity.TagObjects, tag => tag.Key.StartsWith("aspire.cli.run.reload.", StringComparison.Ordinal)));
+        var reloads = fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReload);
+        if (manual)
+        {
+            var reload = Assert.Single(reloads);
+            Assert.Equal(initiatingSummary.SpanId, reload.ParentSpanId);
+            Assert.Equal("apphost", reload.GetTagItem(TelemetryConstants.Tags.RunReloadMode));
+            Assert.Equal(failure switch
+            {
+                "build" => TelemetryConstants.RunReloadOutcomes.BuildFailed,
+                "start" or "exit" => TelemetryConstants.RunReloadOutcomes.StartFailed,
+                _ => TelemetryConstants.RunReloadOutcomes.RpcFailed
+            }, reload.GetTagItem(TelemetryConstants.Tags.RunReloadOutcome));
+            Assert.False((bool?)reload.GetTagItem(TelemetryConstants.Tags.RunReloadSuccess));
+        }
+        else
+        {
+            // Automatic restarts aren't Ctrl+R reloads.
+            Assert.Empty(reloads);
+        }
+        if (failure is "build" or "start")
+        {
+            Assert.Equal(failure == "build" ? "build_failed" : "backchannel_connection_failed",
+                runActivities[1].GetTagItem(TelemetryConstants.Tags.ErrorType));
+        }
     }
 
     [Fact]

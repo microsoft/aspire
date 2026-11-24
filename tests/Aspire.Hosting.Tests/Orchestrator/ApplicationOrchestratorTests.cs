@@ -1260,6 +1260,189 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ReplicaStoppedDuringSharedWaitNeitherReleasesNorRejoinsTheWait()
+    {
+        // Replicas that start together share one wait for their dependencies. A Stop that cancels one replica's start
+        // moves it from Waiting to NotStarted. That must not release the wait, which would start the other replica
+        // without its dependencies, and later waiting updates must not move the canceled replica back to Waiting.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var firstReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = AddSelfDrivenResource(builder, "first", firstReleased.Task);
+        var second = AddSelfDrivenResource(builder, "second", secondReleased.Task);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(first).WaitFor(second);
+        waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("waiter-abc123", "abc123", 0),
+            new DcpInstance("waiter-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        string? canceledReplica = null;
+        var executor = new TestDcpExecutor { OnIsStartCanceled = id => id == canceledReplica };
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing, dcpExecutor: executor);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        // The replicas start together, so the starting event names neither of them.
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, DcpResourceName: null));
+        foreach (var replica in new[] { "waiter-abc123", "waiter-def456" })
+        {
+            await resourceNotificationService.WaitForResourceAsync(
+                waiter.Resource.Name,
+                e => e.ResourceId == replica && e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+                TestContext.Current.CancellationToken).DefaultTimeout();
+        }
+
+        canceledReplica = "waiter-abc123";
+        await resourceNotificationService.PublishUpdateAsync(waiter.Resource, "waiter-abc123", s => s with
+        {
+            State = KnownResourceStates.NotStarted
+        }).DefaultTimeout();
+        firstReleased.SetResult();
+        await resourceNotificationService.WaitForResourceAsync(
+            waiter.Resource.Name,
+            e => e.ResourceId == "waiter-def456" &&
+                e.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Resource.WaitingFor)?.Value is IEnumerable<string> names &&
+                names.SequenceEqual(["second"]),
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(startingTask.IsCompleted, "Canceling one replica's start must not release the wait of the others.");
+        Assert.True(resourceNotificationService.TryGetCurrentState("waiter-abc123", out var canceledEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, canceledEvent.Snapshot.State?.Text);
+
+        secondReleased.SetResult();
+        await startingTask.DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("waiter-abc123", out var finalEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, finalEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task ReplicaStoppedBeforeTheSharedStartingEventIsNotShownAsStarting()
+    {
+        // Replicas that start together get one starting event, which names neither of them. A replica whose start a Stop
+        // canceled before that event stays as the Stop left it.
+        var builder = DistributedApplication.CreateBuilder();
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter"));
+        waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("waiter-abc123", "abc123", 0),
+            new DcpInstance("waiter-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var executor = new TestDcpExecutor { OnIsStartCanceled = id => id == "waiter-abc123" };
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing, dcpExecutor: executor);
+        await appOrchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+        await resourceNotificationService.PublishUpdateAsync(waiter.Resource, "waiter-abc123", s => s with
+        {
+            State = KnownResourceStates.NotStarted
+        }).DefaultTimeout();
+
+        await events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, DcpResourceName: null)).DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("waiter-abc123", out var canceled));
+        Assert.Equal(KnownResourceStates.NotStarted, canceled.Snapshot.State?.Text);
+        Assert.True(resourceNotificationService.TryGetCurrentState("waiter-def456", out var sibling));
+        Assert.Equal(KnownResourceStates.Starting, sibling.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task StopReportsWhetherItCanceledAStartFoundNothingToStopOrStoppedTheResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddResource(new CustomResourceWithWaitSupport("app"));
+
+        using var app = builder.Build();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var executor = new TestDcpExecutor();
+        executor.AddResource(resource.Resource, "app-abc");
+        var appOrchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), notificationService: resourceNotificationService, dcpExecutor: executor);
+
+        executor.OnCancelPendingStart = _ => Task.FromResult(PendingStartCancellation.Canceled);
+        var canceled = await appOrchestrator.StopResourceAsync("app-abc", TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // Without a DCP object, or with one that wasn't started, there's nothing to stop.
+        executor.OnCancelPendingStart = _ => Task.FromResult(PendingStartCancellation.None);
+        executor.OnHasDcpObject = _ => false;
+        var withoutObject = await appOrchestrator.StopResourceAsync("app-abc", TestContext.Current.CancellationToken).DefaultTimeout();
+        executor.OnHasDcpObject = _ => true;
+        await resourceNotificationService.PublishUpdateAsync(resource.Resource, "app-abc", s => s with { State = KnownResourceStates.NotStarted }).DefaultTimeout();
+        var notStarted = await appOrchestrator.StopResourceAsync("app-abc", TestContext.Current.CancellationToken).DefaultTimeout();
+        await resourceNotificationService.PublishUpdateAsync(resource.Resource, "app-abc", s => s with { State = KnownResourceStates.Running }).DefaultTimeout();
+        var running = await appOrchestrator.StopResourceAsync("app-abc", TestContext.Current.CancellationToken).DefaultTimeout();
+        executor.OnCancelPendingStart = _ => Task.FromResult(PendingStartCancellation.Committed);
+        var committed = await appOrchestrator.StopResourceAsync("app-abc", TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(ResourceStopResult.StartCanceled, canceled);
+        Assert.Equal(ResourceStopResult.NotRunning, withoutObject);
+        Assert.Equal(ResourceStopResult.NotRunning, notStarted);
+        Assert.Equal(ResourceStopResult.Stopped, running);
+        Assert.Equal(ResourceStopResult.Stopped, committed);
+        Assert.Equal(["app-abc", "app-abc"], executor.StoppedResources);
+    }
+
+    [Fact]
+    public async Task DependencyWaitFilterStartsOnlyTheFilteredInstanceWithoutWaiting()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var dependencyReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
+        waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("waiter-abc123", "abc123", 0),
+            new DcpInstance("waiter-def456", "def456", 1)
+        ]));
+#pragma warning disable ASPIREWATCH001 // Dependency wait filters are experimental.
+        waiter.Resource.Annotations.Add(new ResourceDependencyWaitFilterAnnotation(id => id != "waiter-abc123"));
+#pragma warning restore ASPIREWATCH001
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        // The dependency isn't ready, yet the filtered instance starts.
+        await events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, "waiter-abc123")).DefaultTimeout();
+
+        var waiting = events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, "waiter-def456"));
+        await resourceNotificationService.WaitForResourceAsync(
+            waiter.Resource.Name,
+            e => e.ResourceId == "waiter-def456" && e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.False(waiting.IsCompleted, "An instance that the filter doesn't exempt must wait for its dependency.");
+
+        dependencyReleased.SetResult();
+
+        await waiting.DefaultTimeout();
+    }
+
+    [Fact]
     public async Task WaitingUpdateDoesNotDisturbNotStartedReplicas()
     {
         // A replicated resource that uses WithExplicitStart is started one replica at a time, so only the replica
@@ -1926,6 +2109,87 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         // Custom child (does not have own lifetime) SHOULD receive parent state
         Assert.Equal(KnownResourceStates.FailedToStart, customChildState);
+    }
+
+    [Fact]
+    public async Task ContainerStateChangeThatStopsApplyingIsNotAppliedToTheContainerOrItsChildren()
+    {
+        // For example, a canceled start's NotStarted once a newer start of the container began: it mustn't replace the
+        // states that the newer start publishes, on the container or on its children.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var parentContainer = builder.AddContainer("parent-container", "parent-image");
+        var customChild = builder.AddResource(new CustomChildResource("custom-child", parentContainer.Resource));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+        await PublishStateAsync(KnownResourceStates.Starting, isCurrent: null);
+
+        await PublishStateAsync(KnownResourceStates.NotStarted, isCurrent: () => false);
+
+        Assert.Equal(KnownResourceStates.Starting, GetState("parent-container-dcp"));
+        Assert.Equal(KnownResourceStates.Starting, GetState(customChild.Resource.Name));
+
+        // The change stops applying right after the container's update, before its children's.
+        var current = true;
+        await events.PublishAsync(new OnResourceChangedContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            parentContainer.Resource,
+            "parent-container-dcp",
+            new ResourceStatus(KnownResourceStates.NotStarted, null, null),
+            PreviousState: null,
+            snapshot =>
+            {
+                current = false;
+                return snapshot with { State = KnownResourceStates.NotStarted };
+            })
+        {
+            IsCurrent = () => current
+        });
+
+        Assert.Equal(KnownResourceStates.NotStarted, GetState("parent-container-dcp"));
+        Assert.Equal(KnownResourceStates.Starting, GetState(customChild.Resource.Name));
+
+        // The change stops applying after it's published, before the container's update.
+        var checks = 0;
+        await events.PublishAsync(new OnResourceChangedContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            parentContainer.Resource,
+            "parent-container-dcp",
+            new ResourceStatus(KnownResourceStates.Running, null, null),
+            PreviousState: null,
+            snapshot => snapshot with { State = KnownResourceStates.Running })
+        {
+            IsCurrent = () => ++checks == 1
+        });
+
+        Assert.Equal(KnownResourceStates.NotStarted, GetState("parent-container-dcp"));
+        Assert.Equal(KnownResourceStates.Starting, GetState(customChild.Resource.Name));
+
+        Task PublishStateAsync(string state, Func<bool>? isCurrent) => events.PublishAsync(new OnResourceChangedContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            parentContainer.Resource,
+            "parent-container-dcp",
+            new ResourceStatus(state, null, null),
+            PreviousState: null,
+            snapshot => snapshot with { State = state })
+        {
+            IsCurrent = isCurrent
+        });
+
+        string? GetState(string resourceId) =>
+            resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent) ? resourceEvent.Snapshot.State?.Text : null;
     }
 
     [Fact]

@@ -1,0 +1,2 @@
+﻿Press CTRL+R to rebuild watched services · CTRL+C to stop the AppHost
+     and exit.

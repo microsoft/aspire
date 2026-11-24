@@ -484,10 +484,30 @@ remain until confirmed teardown. Internal refresh preserves intended-running ver
 instances; changed SDK/output context or new ownership overlap requires full run restart.
 This is not atomic upstream pause, live repartition, or guaranteed discovery of future inactive imports.
 
-Rebuild is disabled and rejected for watched resources, including access to their physical rebuilder.
-Manual Stop remains available; post-Stop Start requires full run restart. Restart is restart-only for
-one unambiguous last-observed running application. Replicas and duplicate entry points retain watching,
-but their events are project-group observations and instance-specific Restart is rejected.
+For watched resources, Rebuild replaces the watch group's watcher with a fresh one that builds from
+source and restarts the group's services (manually stopped instances stay stopped); the physical
+rebuilder stays unavailable. Manual Stop remains available; post-Stop Start restarts the group the same
+way and starts that instance. Start never connects a new proxy of an instance that already ran in this run to
+the running watcher: a crashed instance, or one whose proxy exited, starts with a fresh watcher too, and Start of
+a running instance leaves it as it is. Restart relaunches every running instance of the project without a build,
+because the watcher's control `rebuild` is project-wide; replicas and duplicate entry points retain
+watching, and their events are project-group observations. Recoverable group failures (an unexpected
+watcher, proxy, or transport stop, or a failed refresh) are retried by Rebuild or Start with a fresh
+watcher; Start then also gives an instance that hasn't launched its usual first start, outside the group's lock.
+Failures that need a new partition, or whose cleanup wasn't confirmed, require full run restart.
+In an interactive `aspire run`, CTRL+R replaces the AppHost generation when C# project AppHost watching is
+active, and otherwise runs Rebuild for every watch group through a capability-gated backchannel call.
+Coordinator relaunches of instances that DCP already launched in this run (including ones that failed before
+they ran) skip `WaitFor` dependency waits (through the experimental `ResourceDependencyWaitFilterAnnotation`):
+their dependencies were satisfied at the first launch, and a dependency that ran to completion would otherwise
+hold the relaunch and the group forever. Stop of an instance that DCP hasn't launched cancels its pending start
+(through the experimental `ResourceCommandService.TryCancelPendingStartAsync`), or a Start's first start that still
+waits for the group's recovery, instead of recording a manual stop, so its next Start is Aspire's usual start, outside
+the group. A Start of an instance whose first start is in progress leaves the start to it, because Aspire's restart of
+it would replace the new proxy's connection to the running watcher. A group restart therefore only relaunches, and never
+waits, under the group's lock, for a dependency; it starts in-group `WaitFor` targets before their dependents.
+A watcher relaunch of a crashed application after all of its instances were stopped is purged by
+replacing the watcher, because no proxy owns that process.
 Proxy PID/exit/ACK never become application identity, completion, or readiness.
 
 Implement the applicable compatibility/lifecycle gates in section 5, including meaningful failure and

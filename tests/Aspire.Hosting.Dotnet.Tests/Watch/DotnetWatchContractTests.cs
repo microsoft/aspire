@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -212,6 +213,77 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
         await Assert.ThrowsAnyAsync<HttpRequestException>(() => GetAsync(port1, "/"));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EditRelaunchesACrashedApplicationWhoseProxyIsGone(bool restartedFirst)
+    {
+        // Pins why the coordinator replaces the watcher when it launches a project whose instances were all stopped:
+        // the watcher relaunches a crashed application on the next edit even after the proxy that requested it
+        // disconnected. That process runs without a proxy and holds the instance's port.
+        var proxy = RequireProxy();
+        await using var harness = await WatchServerHarness.StartAsync(output);
+        var (port, mark) = await StopInstanceAsync(harness, proxy, restartedFirst, crash: true);
+
+        await EditAsync(Path.Combine(harness.AppDirectory, "Greeting.cs"),
+            "internal static class Greeting { public static string Message() => \"contract v2\"; }");
+
+        await harness.WaitForStatusAsync(mark, "process_started");
+        // The watcher replays its hot reload changes into the relaunch, so what the orphan serves depends on whether
+        // the edit was applied. That it serves at all on the instance's port is the contract.
+        await WaitUntilServingAsync(port);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EditDoesNotRelaunchARunningApplicationWhoseProxyIsGone(bool restartedFirst)
+    {
+        var proxy = RequireProxy();
+        await using var harness = await WatchServerHarness.StartAsync(output);
+        var (port, mark) = await StopInstanceAsync(harness, proxy, restartedFirst, crash: false);
+
+        await EditAsync(Path.Combine(harness.AppDirectory, "Greeting.cs"),
+            "internal static class Greeting { public static string Message() => \"contract v2\"; }");
+        await Task.Delay(TimeSpan.FromSeconds(15));
+
+        Assert.DoesNotContain(harness.Observations.Skip(mark), o => o.StatusType == "process_started");
+        Assert.StartsWith("<", await SafeGetAsync(port, "/"));
+    }
+
+    /// <summary>
+    /// Launches one instance, optionally restarts it through the control pipe and crashes it, then stops it the way
+    /// DCP does (ending its proxy) and returns its port and the observation index after the stop.
+    /// </summary>
+    private async Task<(int Port, int Mark)> StopInstanceAsync(WatchServerHarness harness, string proxy, bool restartedFirst, bool crash)
+    {
+        await harness.WaitForStatusAsync(0, "build_complete", s => s.GetProperty("success").GetBoolean());
+        var port = GetFreePort();
+        var instance = harness.LaunchThroughProxy(proxy, [], new Dictionary<string, string> { ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}" }, ["ASPNETCORE_URLS"]);
+        await GetUntilAsync(port, "/", "contract v1");
+        if (restartedFirst)
+        {
+            var pid = await GetAsync(port, "/pid");
+            var restartMark = harness.Observations.Count;
+            Assert.True(await harness.RequestRebuildAsync(harness.ProjectPath));
+            await harness.WaitForStatusAsync(restartMark, "process_started");
+            await WaitForPidChangeAsync(port, pid);
+        }
+
+        if (crash)
+        {
+            var crashMark = harness.Observations.Count;
+            await Assert.ThrowsAnyAsync<HttpRequestException>(() => GetAsync(port, "/crash"));
+            await harness.WaitForStatusAsync(crashMark, "process_exited");
+        }
+
+        instance.Kill();
+        await instance.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        await WaitUntilNotServingAsync(port);
+        output.WriteLine($"Stopped the instance on port {port}.");
+        return (port, harness.Observations.Count);
+    }
+
     [Fact]
     public async Task PackageReferenceChangeIsNotDeployedByTheWatcher()
     {
@@ -285,6 +357,44 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
         }
 
         throw new TimeoutException($"The process on port {port} still has PID {previous} (last: {last}).");
+    }
+
+    private static async Task WaitUntilNotServingAsync(int port)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        string? last = null;
+        while (stopwatch.Elapsed < s_httpTimeout)
+        {
+            // SafeGetAsync reports a failed request as "<ExceptionType: message>".
+            last = await SafeGetAsync(port, "/");
+            if (last.StartsWith('<'))
+            {
+                return;
+            }
+
+            await Task.Delay(250);
+        }
+
+        throw new TimeoutException($"Port {port} still serves '{last}'.");
+    }
+
+    private static async Task WaitUntilServingAsync(int port)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        string? last = null;
+        while (stopwatch.Elapsed < s_httpTimeout)
+        {
+            // SafeGetAsync reports a failed request as "<ExceptionType: message>"; the app's /pid route returns its PID.
+            last = await SafeGetAsync(port, "/pid");
+            if (int.TryParse(last, CultureInfo.InvariantCulture, out _))
+            {
+                return;
+            }
+
+            await Task.Delay(250);
+        }
+
+        throw new TimeoutException($"Port {port} never served the application (last: {last}).");
     }
 
     private static async Task<string> SafeGetAsync(int port, string path)

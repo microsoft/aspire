@@ -169,6 +169,48 @@
     <value>Press [bold]CTRL+C[/] to stop the AppHost and exit.</value>
     <comment>[bold] should not be localized</comment>
   </data>
+  <data name="PressCtrlRToReloadAppHost" xml:space="preserve">
+    <value>Press [bold]CTRL+R[/] to reload the AppHost and all resources · [bold]CTRL+C[/] to stop the AppHost and exit.</value>
+    <comment>[bold], CTRL+R and CTRL+C should not be localized.</comment>
+  </data>
+  <data name="PressCtrlRToRebuildWatchedServices" xml:space="preserve">
+    <value>Press [bold]CTRL+R[/] to rebuild watched services · [bold]CTRL+C[/] to stop the AppHost and exit.</value>
+    <comment>[bold], CTRL+R and CTRL+C should not be localized.</comment>
+  </data>
+  <data name="ReloadingAppHost" xml:space="preserve">
+    <value>Reloading the AppHost and all resources…</value>
+  </data>
+  <data name="StoppingAppHostForReload" xml:space="preserve">
+    <value>Stopping the AppHost…</value>
+  </data>
+  <data name="RebuildingWatchedServices" xml:space="preserve">
+    <value>Rebuilding watched services…</value>
+  </data>
+  <data name="NoWatchedServicesToRebuild" xml:space="preserve">
+    <value>There are no watched services to rebuild.</value>
+  </data>
+  <data name="CouldNotReloadWatchedServices" xml:space="preserve">
+    <value>Could not rebuild watched services. See the CLI log for details.</value>
+  </data>
+  <data name="WatchedServicesReloaded" xml:space="preserve">
+    <value>Rebuilt watched services in watch group '{0}'.</value>
+  </data>
+  <data name="WatchedServicesReloadFailed" xml:space="preserve">
+    <value>The fresh build of watch group '{0}' failed. Fix the errors and save. To see the errors, run 'aspire logs {0} --tail 50'.</value>
+    <comment>aspire logs and --tail 50 should not be localized.</comment>
+  </data>
+  <data name="AppHostBuildFailedWaitingForReload" xml:space="preserve">
+    <value>The AppHost failed to build. Fix the errors, then press CTRL+R to retry · CTRL+C to stop.</value>
+    <comment>CTRL+R and CTRL+C should not be localized.</comment>
+  </data>
+  <data name="WatchAppHostWaitingForFix" xml:space="preserve">
+    <value>Waiting for a fix: save a change to retry, or press CTRL+R · CTRL+C to stop.</value>
+    <comment>CTRL+R and CTRL+C should not be localized.</comment>
+  </data>
+  <data name="WatchAppHostWaitingForFixWithoutInput" xml:space="preserve">
+    <value>Waiting for a fix: save a change to retry · CTRL+C to stop.</value>
+    <comment>CTRL+C should not be localized.</comment>
+  </data>
   <data name="ProjectCouldNotBeRun" xml:space="preserve">
     <value>The project could not be run. See logs at {0}</value>
   </data>
@@ -340,6 +382,10 @@
   </data>
   <data name="WatchAppHostChannelFailed" xml:space="preserve">
     <value>The private AppHost watch channel failed: {0} The watch run will stop rather than overlap AppHost generations.</value>
+  </data>
+  <data name="WatchAppHostReplacedAppHostFailed" xml:space="preserve">
+    <value>The AppHost stopped with an error (exit code {0}) while it was being replaced, so no new AppHost was started. Run aspire run again.</value>
+    <comment>{0} is the exit code of the AppHost that was being replaced.</comment>
   </data>
   <data name="WatchAppHostIdentityRequired" xml:space="preserve">
     <value>The watched AppHost must announce its initial process instance before startup can be established. The run will stop if that announcement is missing or the backchannel disconnects first.</value>

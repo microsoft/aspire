@@ -64,8 +64,14 @@ internal static class CommandsConfigurationExtensions
             {
                 var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
 
-                await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
+                var result = await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
+                var message = result switch
+                {
+                    ResourceStopResult.StartCanceled => CommandStrings.ResourceStartCanceled,
+                    ResourceStopResult.NotRunning => CommandStrings.ResourceNotRunning,
+                    _ => CommandStrings.ResourceStopped
+                };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, message, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
             {
@@ -74,7 +80,8 @@ internal static class CommandsConfigurationExtensions
                 {
                     return ResourceCommandState.Disabled;
                 }
-                else if (!IsStopped(state) && !IsStarting(state) && !IsWaiting(state) && !IsBuilding(state) && !IsRuntimeUnhealthy(state) && !HasNoState(state))
+                // A waiting resource hasn't been launched yet: Stop cancels its start.
+                else if (IsWaiting(state) || !IsStopped(state) && !IsStarting(state) && !IsBuilding(state) && !IsRuntimeUnhealthy(state) && !HasNoState(state))
                 {
                     return ResourceCommandState.Enabled;
                 }

@@ -15,6 +15,9 @@ namespace Aspire.Hosting.Dotnet.WatchHost;
 /// </summary>
 internal sealed class LaunchGate : IDisposable
 {
+    // Launches of a web project take seconds, so a short interval adds little to the next replica's start.
+    private static readonly TimeSpan s_markerPollInterval = TimeSpan.FromMilliseconds(200);
+
     private readonly string _markerPath;
     private readonly ManualResetEventSlim _released = new();
 
@@ -75,18 +78,24 @@ internal sealed class LaunchGate : IDisposable
     }
 
     /// <summary>Releases the gate once the project has launched or <paramref name="connection"/> completes.</summary>
+    /// <remarks>
+    /// Polls for the marker instead of waiting for a file-system notification: notifications can be coalesced, dropped
+    /// (for example when the inotify watch limit is exhausted), or not raised for how the file appeared, and a missed
+    /// one would hold the project's other replicas until this connection ends.
+    /// </remarks>
     public async Task ReleaseAfterLaunchAsync(Task connection)
     {
-        using var watcher = new FileSystemWatcher(Path.GetDirectoryName(_markerPath)!, Path.GetFileName(_markerPath));
-        var created = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        watcher.Created += (_, _) => created.TrySetResult();
-        watcher.EnableRaisingEvents = true;
-        if (!File.Exists(_markerPath))
+        try
         {
-            await Task.WhenAny(created.Task, connection).ConfigureAwait(false);
+            while (!File.Exists(_markerPath) && !connection.IsCompleted)
+            {
+                await Task.WhenAny(Task.Delay(s_markerPollInterval), connection).ConfigureAwait(false);
+            }
         }
-
-        Dispose();
+        finally
+        {
+            Dispose();
+        }
     }
 
     public void Dispose() => _released.Set();

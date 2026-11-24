@@ -32,6 +32,11 @@
         <target state="translated">AppHost</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostBuildFailedWaitingForReload">
+        <source>The AppHost failed to build. Fix the errors, then press CTRL+R to retry · CTRL+C to stop.</source>
+        <target state="new">The AppHost failed to build. Fix the errors, then press CTRL+R to retry · CTRL+C to stop.</target>
+        <note>CTRL+R and CTRL+C should not be localized.</note>
+      </trans-unit>
       <trans-unit id="AppHostConnectionLostWaitingForExit">
         <source>The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</source>
         <target state="translated">La connexion à l'AppHost enfant a été perdue. En attente de la fermeture du processus AppHost. Appuyez sur Ctrl+C pour arrêter d’attendre.</target>
@@ -65,6 +70,11 @@
       <trans-unit id="CopyingUserSecrets">
         <source>Copying user secrets for isolated mode...</source>
         <target state="translated">Copie des secrets utilisateur pour le mode isolé...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CouldNotReloadWatchedServices">
+        <source>Could not rebuild watched services. See the CLI log for details.</source>
+        <target state="new">Could not rebuild watched services. See the CLI log for details.</target>
         <note />
       </trans-unit>
       <trans-unit id="Dashboard">
@@ -162,10 +172,25 @@
         <target state="new">--no-build cannot be used with explicit AppHost watching. Remove --no-build, or pass --watch false. Required resource watching (WithWatch(true)) also conflicts with --no-build.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoWatchedServicesToRebuild">
+        <source>There are no watched services to rebuild.</source>
+        <target state="new">There are no watched services to rebuild.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
         <source>Press [bold]CTRL+C[/] to stop the AppHost and exit.</source>
         <target state="translated">Appuyez sur [bold]CTRL+C[/] pour arrêter l’AppHost et quitter.</target>
         <note>[bold] should not be localized</note>
+      </trans-unit>
+      <trans-unit id="PressCtrlRToRebuildWatchedServices">
+        <source>Press [bold]CTRL+R[/] to rebuild watched services · [bold]CTRL+C[/] to stop the AppHost and exit.</source>
+        <target state="new">Press [bold]CTRL+R[/] to rebuild watched services · [bold]CTRL+C[/] to stop the AppHost and exit.</target>
+        <note>[bold], CTRL+R and CTRL+C should not be localized.</note>
+      </trans-unit>
+      <trans-unit id="PressCtrlRToReloadAppHost">
+        <source>Press [bold]CTRL+R[/] to reload the AppHost and all resources · [bold]CTRL+C[/] to stop the AppHost and exit.</source>
+        <target state="new">Press [bold]CTRL+R[/] to reload the AppHost and all resources · [bold]CTRL+C[/] to stop the AppHost and exit.</target>
+        <note>[bold], CTRL+R and CTRL+C should not be localized.</note>
       </trans-unit>
       <trans-unit id="ProcessId">
         <source>PID</source>
@@ -182,9 +207,19 @@
         <target state="translated">Désolé, le projet n’a pas pu être exécuté. Consultez les journaux à l’emplacement {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="RebuildingWatchedServices">
+        <source>Rebuilding watched services…</source>
+        <target state="new">Rebuilding watched services…</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RecentAppHostStartupOutput">
         <source>Recent AppHost startup output</source>
         <target state="translated">Sortie récente du démarrage d'AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ReloadingAppHost">
+        <source>Reloading the AppHost and all resources…</source>
+        <target state="new">Reloading the AppHost and all resources…</target>
         <note />
       </trans-unit>
       <trans-unit id="Resource">
@@ -252,6 +287,11 @@
         <target state="translated">État</target>
         <note>The state of the resource, eg Running</note>
       </trans-unit>
+      <trans-unit id="StoppingAppHostForReload">
+        <source>Stopping the AppHost…</source>
+        <target state="new">Stopping the AppHost…</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
         <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
         <target state="translated">Délai d'attente dépassé {0}s pour le démarrage d'AppHost. Si AppHost est toujours en cours de génération ou de démarrage, définissez {1} sur une valeur supérieure, puis réessayez.</target>
@@ -312,6 +352,11 @@
         <target state="new">This preview supports C# AppHost watching for .csproj entry points only; file-based and other .NET AppHosts run normally.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WatchAppHostReplacedAppHostFailed">
+        <source>The AppHost stopped with an error (exit code {0}) while it was being replaced, so no new AppHost was started. Run aspire run again.</source>
+        <target state="new">The AppHost stopped with an error (exit code {0}) while it was being replaced, so no new AppHost was started. Run aspire run again.</target>
+        <note>{0} is the exit code of the AppHost that was being replaced.</note>
+      </trans-unit>
       <trans-unit id="WatchAppHostRequirementsInvalid">
         <source>The resolved watcher payload or the AppHost's selected SDK {0} cannot be used: {1} Use a complete, compatible watcher payload and SDK without forcing major-version roll-forward.</source>
         <target state="new">The resolved watcher payload or the AppHost's selected SDK {0} cannot be used: {1} Use a complete, compatible watcher payload and SDK without forcing major-version roll-forward.</target>
@@ -326,6 +371,16 @@
         <source>The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</source>
         <target state="new">The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostWaitingForFix">
+        <source>Waiting for a fix: save a change to retry, or press CTRL+R · CTRL+C to stop.</source>
+        <target state="new">Waiting for a fix: save a change to retry, or press CTRL+R · CTRL+C to stop.</target>
+        <note>CTRL+R and CTRL+C should not be localized.</note>
+      </trans-unit>
+      <trans-unit id="WatchAppHostWaitingForFixWithoutInput">
+        <source>Waiting for a fix: save a change to retry · CTRL+C to stop.</source>
+        <target state="new">Waiting for a fix: save a change to retry · CTRL+C to stop.</target>
+        <note>CTRL+C should not be localized.</note>
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">
         <source>Enable experimental AppHost edit watching; resource watching is configured independently</source>
@@ -371,6 +426,16 @@
         <source>ASPIRE_DOTNET_WATCH_TOOL_PATH is invalid or differs from the package target's resolved tool. Relative overrides are resolved against the AppHost directory; an invalid override does not select a default tool.</source>
         <target state="new">ASPIRE_DOTNET_WATCH_TOOL_PATH is invalid or differs from the package target's resolved tool. Relative overrides are resolved against the AppHost directory; an invalid override does not select a default tool.</target>
         <note>ASPIRE_DOTNET_WATCH_TOOL_PATH must not be localized.</note>
+      </trans-unit>
+      <trans-unit id="WatchedServicesReloadFailed">
+        <source>The fresh build of watch group '{0}' failed. Fix the errors and save. To see the errors, run 'aspire logs {0} --tail 50'.</source>
+        <target state="new">The fresh build of watch group '{0}' failed. Fix the errors and save. To see the errors, run 'aspire logs {0} --tail 50'.</target>
+        <note>aspire logs and --tail 50 should not be localized.</note>
+      </trans-unit>
+      <trans-unit id="WatchedServicesReloaded">
+        <source>Rebuilt watched services in watch group '{0}'.</source>
+        <target state="new">Rebuilt watched services in watch group '{0}'.</target>
+        <note />
       </trans-unit>
     </body>
   </file>

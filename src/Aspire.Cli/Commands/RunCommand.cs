@@ -80,6 +80,8 @@ internal sealed class RunCommand : BaseCommand
     private readonly TimeProvider _timeProvider;
     private readonly AspireSecretsStoreResolver _aspireSecretsStoreResolver;
     private readonly ConsoleCancellationManager _cancellationManager;
+    private readonly IConsoleInput _consoleInput;
+    private readonly ConsoleLogBufferContext _promptContext;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
     // Match BackchannelLoggerProvider's 1,000-entry replay buffer.
@@ -181,6 +183,8 @@ internal sealed class RunCommand : BaseCommand
         ProfileCaptureState profileCaptureState,
         TimeProvider timeProvider,
         AspireSecretsStoreResolver aspireSecretsStoreResolver,
+        IConsoleInput consoleInput,
+        ConsoleLogBufferContext promptContext,
         CommonCommandServices services)
         : base("run", RunCommandStrings.Description, services)
     {
@@ -200,6 +204,8 @@ internal sealed class RunCommand : BaseCommand
         _timeProvider = timeProvider;
         _aspireSecretsStoreResolver = aspireSecretsStoreResolver;
         _cancellationManager = services.CancellationManager;
+        _consoleInput = consoleInput;
+        _promptContext = promptContext;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
@@ -239,15 +245,16 @@ internal sealed class RunCommand : BaseCommand
             ExecutionContext.HomeDirectory.FullName, _timeProvider, _logger);
         return session.RunAsync(
             (generation, token) => ExecuteGenerationAsync(parseResult, watch, watchExplicit, generation, token),
-            () =>
+            reloading =>
             {
                 _resourceStates.Clear();
-                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.WatchAppHostRestarting);
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight,
+                    reloading ? RunCommandStrings.ReloadingAppHost : RunCommandStrings.WatchAppHostRestarting);
             },
             cancellationToken);
     }
 
-    private async Task<CommandResult> ExecuteGenerationAsync(
+    internal async Task<CommandResult> ExecuteGenerationAsync(
         ParseResult parseResult,
         bool watch,
         bool watchExplicit,
@@ -351,11 +358,14 @@ internal sealed class RunCommand : BaseCommand
 
         AppHostProjectContext? context = null;
         Activity? runActivity = null;
+        RunCommandReload? reload = null;
         LauncherLivenessMonitor? launcherMonitor = null;
         Task<int>? runTask = null;
         CancellationTokenSource? runCts = null;
         CancellationTokenRegistration runCancellationRegistration = default;
         var cancellationRequested = false;
+        var replacementStartupFailed = false;
+        var appHostStartupCompleted = false;
         TimeSpan? completedCancellationCleanupTimeout = null;
 
         async Task DrainCancelledRunAsync()
@@ -387,6 +397,11 @@ internal sealed class RunCommand : BaseCommand
             // all failure paths (project not found, incompatible version, etc.) are captured.
             runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
             Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
+            reload = new RunCommandReload(
+                CanListenForReload(_consoleInput, _hostEnvironment, _configuration, nonInteractive, isExtensionHost,
+                    detach || IsDetachedStartChild(), format),
+                _consoleInput, _promptContext, InteractionService, generation, Telemetry, runActivity,
+                _timeProvider, _logger, cancellationToken);
 
             using var activity = _profilingTelemetry.StartRunCommand();
 
@@ -483,7 +498,7 @@ internal sealed class RunCommand : BaseCommand
 
             // This selection owns AppHost edits only. Hosting resolves resource-watch policy independently.
             // Start the project run as a pending task - we'll handle UX while it runs
-            var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
+            var startupTimeout = generation?.IsReplacement == true ? Timeout.InfiniteTimeSpan : TimeSpan.FromSeconds(timeoutSeconds);
             runCts = new CancellationTokenSource();
             runCancellationRegistration = cancellationToken.Register(runCts.Cancel);
 
@@ -552,6 +567,13 @@ internal sealed class RunCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
+                reload.RecordAppHostFailure(TelemetryConstants.RunReloadOutcomes.BuildFailed);
+                if (generation?.IsReplacement == true && reload.EnableAppHost())
+                {
+                    replacementStartupFailed = true;
+                    InteractionService.DisplayError(RunCommandStrings.AppHostBuildFailedWaitingForReload);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                }
                 return CommandResult.Failure(
                     runExitCode == CliExitCodes.Success ? CliExitCodes.FailedToDotnetRunAppHost : runExitCode,
                     context.OutputCollector?.ContainsWatcherOutput == true
@@ -560,6 +582,19 @@ internal sealed class RunCommand : BaseCommand
             }
             var startupStartTimestamp = _timeProvider.GetTimestamp();
             var appHostStartupOutputStartIndex = context.OutputCollector?.GetLines().Count() ?? 0;
+            if (generation is { IsReplacement: true })
+            {
+                // Replacement startup has no deadline. Keep manual recovery available even when the new child hangs
+                // before it can establish a backchannel. The project signals build completion before it opens the
+                // generation channel, so enable the shortcut when the channel opens instead of checking it here. A
+                // replacement whose channel doesn't open runs unwatched, and its backchannel decides what Ctrl+R does.
+                _ = generation.Enabled.ContinueWith(
+                    static (_, state) => ((RunCommandReload)state!).EnableAppHost(),
+                    reload,
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
 
             // If --wait-for-debugger, display a message so the user knows the AppHost is paused.
             if (waitForDebugger)
@@ -584,6 +619,14 @@ internal sealed class RunCommand : BaseCommand
                         appHostStartupOutputStartIndex,
                         startupStartTimestamp,
                         startupTimeout,
+                        generation,
+                        reload,
+                        () =>
+                        {
+                            replacementStartupFailed = true;
+                            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
+                            InteractionService.DisplayError(CreateWatcherFailureSummary());
+                        },
                         cancellationToken).ConfigureAwait(false);
                 }
                 catch (TimeoutException)
@@ -593,6 +636,8 @@ internal sealed class RunCommand : BaseCommand
                     return CreateStartupTimeoutResult(timeoutSeconds);
                 }
 
+                appHostStartupCompleted = true;
+                reload.RecordAppHostStarted();
                 var backchannel = startup.Backchannel;
                 var dashboardUrls = startup.DashboardUrls;
                 pendingLogCapture = startup.PendingLogCapture;
@@ -632,6 +677,7 @@ internal sealed class RunCommand : BaseCommand
 
                 var profileStopRequested = false;
                 var profileWatchOwnerStopRequested = false;
+                void AppendControlHint(RunReloadMode mode) => AppendCtrlCMessage(longestLocalizedLengthWithColon, mode);
                 if (captureProfile)
                 {
                     profileStopRequested = await RequestAppHostStopForProfileAsync(backchannel, runTask, captureProfileDelay, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
@@ -646,7 +692,7 @@ internal sealed class RunCommand : BaseCommand
                 }
                 else if (!isRemoteEnvironment)
                 {
-                    AppendCtrlCMessage(longestLocalizedLengthWithColon);
+                    reload.RegisterHint(AppendControlHint, AppendControlHint);
                 }
                 else
                 {
@@ -662,7 +708,7 @@ internal sealed class RunCommand : BaseCommand
                         return new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(InteractionService, endpoint)}");
                     }
 
-                    IRenderable BuildLiveRenderable()
+                    IRenderable BuildLiveRenderable(RunReloadMode reloadMode)
                     {
                         var rows = new List<IRenderable>();
 
@@ -690,7 +736,7 @@ internal sealed class RunCommand : BaseCommand
 
                         if (showCtrlC)
                         {
-                            rows.Add(BuildCtrlCRenderable(longestLocalizedLengthWithColon));
+                            rows.Add(BuildCtrlCRenderable(longestLocalizedLengthWithColon, reloadMode));
                         }
 
                         return rows.Count > 0 ? new Rows(rows) : Text.Empty;
@@ -731,17 +777,69 @@ internal sealed class RunCommand : BaseCommand
                     {
                         if (_hostEnvironment.SupportsInteractiveOutput)
                         {
-                            await InteractionService.DisplayLiveAsync(
-                                BuildLiveRenderable(),
-                                updateTarget => ProcessResourceStatesAsync((resource, endpoint) =>
+                            // Coverage and endpoint streams can update the same live display concurrently.
+                            var liveDisplayLock = new object();
+                            Action<IRenderable>? updateLive = null;
+                            var liveComplete = false;
+                            var liveReloadMode = RunReloadMode.None;
+                            IRenderable initialRenderable = Text.Empty;
+                            reload.RegisterHint(
+                                mode =>
                                 {
-                                    discoveredEndpoints.Add((resource, endpoint));
-                                    updateTarget(BuildLiveRenderable());
-                                }));
+                                    lock (liveDisplayLock)
+                                    {
+                                        liveReloadMode = mode;
+                                        initialRenderable = BuildLiveRenderable(mode);
+                                    }
+                                },
+                                mode =>
+                                {
+                                    lock (liveDisplayLock)
+                                    {
+                                        liveReloadMode = mode;
+                                        if (updateLive is not null)
+                                        {
+                                            updateLive(BuildLiveRenderable(mode));
+                                        }
+                                        else if (liveComplete)
+                                        {
+                                            AppendControlHint(mode);
+                                        }
+                                    }
+                                });
+                            await InteractionService.DisplayLiveAsync(
+                                initialRenderable,
+                                async updateTarget =>
+                                {
+                                    lock (liveDisplayLock)
+                                    {
+                                        updateLive = updateTarget;
+                                        updateTarget(BuildLiveRenderable(liveReloadMode));
+                                    }
+                                    try
+                                    {
+                                        await ProcessResourceStatesAsync((resource, endpoint) =>
+                                        {
+                                            lock (liveDisplayLock)
+                                            {
+                                                discoveredEndpoints.Add((resource, endpoint));
+                                                updateTarget(BuildLiveRenderable(liveReloadMode));
+                                            }
+                                        });
+                                    }
+                                    finally
+                                    {
+                                        lock (liveDisplayLock)
+                                        {
+                                            updateLive = null;
+                                            liveComplete = true;
+                                        }
+                                    }
+                                });
                         }
                         else
                         {
-                            AppendCtrlCMessage(longestLocalizedLengthWithColon);
+                            reload.RegisterHint(AppendControlHint, AppendControlHint);
 
                             var isFirstEndpoint = true;
                             await ProcessResourceStatesAsync((resource, endpoint) =>
@@ -766,7 +864,6 @@ internal sealed class RunCommand : BaseCommand
                 using (var lifetimeActivity = _profilingTelemetry.StartRunAppHostLifetime())
                 {
                     runActivity?.Stop();
-
                     try
                     {
                         await pendingLogCapture;
@@ -838,7 +935,10 @@ internal sealed class RunCommand : BaseCommand
             ex is ExtensionOperationCanceledException ||
             (runCts is not null && ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested))
         {
-            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "canceled");
+            if (!replacementStartupFailed)
+            {
+                Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "canceled");
+            }
             cancellationRequested = true;
 
             // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
@@ -890,6 +990,13 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
+            if (!appHostStartupCompleted && !cancellationToken.IsCancellationRequested)
+            {
+                // Include fatal startup failures as well as recoverable child/build failures.
+                // Attribute them to the replacement, not the generation that requested it.
+                // A more specific failure recorded earlier takes precedence.
+                reload?.RecordAppHostFailure(TelemetryConstants.RunReloadOutcomes.StartFailed);
+            }
             try
             {
                 try
@@ -955,14 +1062,43 @@ internal sealed class RunCommand : BaseCommand
                 }
                 finally
                 {
-                    runCts?.Dispose();
-                    runActivity?.Dispose();
+                    try
+                    {
+                        if (reload is not null)
+                        {
+                            // Settle an in-flight reload and end the reload telemetry of this AppHost.
+                            await reload.DisposeAsync().ConfigureAwait(false);
+                        }
+                    }
+                    finally
+                    {
+                        runCts?.Dispose();
+                        runActivity?.Dispose();
+                    }
                 }
             }
         }
     }
 
     private bool IsDetachedStartChild() => _configuration.GetBool(KnownConfigNames.CliRunDetached) is true;
+
+    internal static bool CanListenForReload(
+        IConsoleInput input,
+        ICliHostEnvironment hostEnvironment,
+        IConfiguration configuration,
+        bool nonInteractive,
+        bool isExtensionHost,
+        bool detach,
+        OutputFormat format) =>
+        hostEnvironment.SupportsInteractiveInput &&
+        !nonInteractive &&
+        !string.Equals(configuration["ASPIRE_NON_INTERACTIVE"], "true", StringComparison.OrdinalIgnoreCase) &&
+        configuration["ASPIRE_NON_INTERACTIVE"] != "1" &&
+        !CliHostEnvironment.IsCI(configuration) &&
+        !isExtensionHost &&
+        !detach &&
+        format != OutputFormat.Json &&
+        !input.IsInputRedirected;
 
     private static void DisplayRecentAppHostStartupOutput(IInteractionService interactionService, OutputCollector? outputCollector, int startupOutputStartIndex)
     {
@@ -1077,10 +1213,15 @@ internal sealed class RunCommand : BaseCommand
         int appHostStartupOutputStartIndex,
         long startupStartTimestamp,
         TimeSpan startupTimeout,
+        DotnetWatchAppHostGeneration? generation,
+        RunCommandReload reload,
+        Action onStartupFailure,
         CancellationToken cancellationToken)
     {
         using var startupCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var happyPathTask = RunStartupHappyPathAsync(backchannelCompletionSource, onBackchannelEstablished, logCaptureCancellationSource, pendingRun, startupStartTimestamp, startupTimeout, startupCts.Token);
+        var happyPathTask = RunStartupHappyPathAsync(backchannelCompletionSource, onBackchannelEstablished,
+            logCaptureCancellationSource, pendingRun, startupStartTimestamp, startupTimeout, generation, reload,
+            onStartupFailure, startupCts.Token);
 
         // Race the startup readiness signal against the AppHost system task. The AppHost
         // system is owned by the project and tears itself down (via an internal escalation
@@ -1140,6 +1281,9 @@ internal sealed class RunCommand : BaseCommand
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "AppHost startup failed.");
+            reload.RecordAppHostFailure(ex is FailedToConnectBackchannelConnection
+                ? TelemetryConstants.RunReloadOutcomes.StartFailed
+                : TelemetryConstants.RunReloadOutcomes.RpcFailed);
             var failureMessage = GetAppHostFailureMessage(outputCollector, ex);
             DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
 
@@ -1171,14 +1315,41 @@ internal sealed class RunCommand : BaseCommand
         Task<int> pendingRun,
         long startupStartTimestamp,
         TimeSpan startupTimeout,
+        DotnetWatchAppHostGeneration? generation,
+        RunCommandReload reload,
+        Action onStartupFailure,
         CancellationToken cancellationToken)
     {
         IAppHostCliBackchannel backchannel;
         using (var waitForBackchannelActivity = _profilingTelemetry.StartRunAppHostWaitForBackchannel())
         {
-            backchannel = await InteractionService.ShowStatusAsync(
-                RunCommandStrings.ConnectingToAppHost,
-                async () => await backchannelCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken).ConfigureAwait(false));
+            if (generation?.IsReplacement == true)
+            {
+                backchannel = await InteractionService.ShowDynamicStatusAsync(
+                    RunCommandStrings.ConnectingToAppHost,
+                    async updateStatus =>
+                    {
+                        var connection = backchannelCompletionSource.Task.WaitAsync(cancellationToken);
+                        if (await Task.WhenAny(connection, generation.StartupFailed).ConfigureAwait(false) == generation.StartupFailed)
+                        {
+                            reload.RecordAppHostFailure(TelemetryConstants.RunReloadOutcomes.StartFailed);
+                            reload.EnableAppHost();
+                            onStartupFailure();
+                            updateStatus(reload.IsAvailable
+                                ? RunCommandStrings.WatchAppHostWaitingForFix
+                                : RunCommandStrings.WatchAppHostWaitingForFixWithoutInput);
+                        }
+
+                        return await connection.ConfigureAwait(false);
+                    });
+            }
+            else
+            {
+                backchannel = await InteractionService.ShowStatusAsync(
+                    RunCommandStrings.ConnectingToAppHost,
+                    () => backchannelCompletionSource.Task.WaitAsync(
+                        GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken));
+            }
             waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
         }
 
@@ -1186,6 +1357,7 @@ internal sealed class RunCommand : BaseCommand
         {
             await onBackchannelEstablished().ConfigureAwait(false);
         }
+        await reload.BackchannelEstablishedAsync(backchannel, cancellationToken).ConfigureAwait(false);
 
         // Start log capture early so any output produced while we wait for dashboard URLs is
         // routed into the unified CLI log file. The task is returned to the caller so the run
@@ -1218,7 +1390,8 @@ internal sealed class RunCommand : BaseCommand
         // Hosting streams observed coverage as startup completes. Keep both subscriptions within the same
         // generation-lifetime cancellation boundary, including failure before this result reaches the caller.
         pendingLogCapture = Task.WhenAll(pendingLogCapture,
-            CaptureResourceWatchStatusAsync(backchannel, InteractionService, _logger, logCaptureCancellationSource.Token));
+            CaptureResourceWatchStatusAsync(backchannel, InteractionService, _logger, logCaptureCancellationSource.Token,
+                reload.UpdateWatchStatus));
         ObserveFaults(pendingLogCapture);
 
         if (IsDetachedStartChild())
@@ -1253,26 +1426,36 @@ internal sealed class RunCommand : BaseCommand
         public string? FailureMessage { get; } = failureMessage;
     }
 
-    private static IRenderable BuildCtrlCRenderable(int longestLocalizedLengthWithColon)
+    internal static IRenderable BuildCtrlCRenderable(int longestLocalizedLengthWithColon, RunReloadMode reloadMode)
     {
         var ctrlCGrid = new Grid();
         ctrlCGrid.AddColumn();
         ctrlCGrid.AddColumn();
         ctrlCGrid.Columns[0].Width = longestLocalizedLengthWithColon;
         ctrlCGrid.AddRow(Text.Empty, Text.Empty);
-        ctrlCGrid.AddRow(new Text(string.Empty), new Markup(RunCommandStrings.PressCtrlCToStopAppHost) { Overflow = Overflow.Ellipsis });
+        var hint = reloadMode switch
+        {
+            RunReloadMode.AppHost => RunCommandStrings.PressCtrlRToReloadAppHost,
+            RunReloadMode.Services => RunCommandStrings.PressCtrlRToRebuildWatchedServices,
+            _ => RunCommandStrings.PressCtrlCToStopAppHost
+        };
+        // Keep both shortcuts readable when the reload hint exceeds the terminal width.
+        ctrlCGrid.AddRow(new Text(string.Empty), new Markup(hint)
+        {
+            Overflow = reloadMode == RunReloadMode.None ? Overflow.Ellipsis : Overflow.Fold
+        });
 
         return new Padder(ctrlCGrid, new Padding(3, 0));
     }
 
-    private void AppendCtrlCMessage(int longestLocalizedLengthWithColon)
+    private void AppendCtrlCMessage(int longestLocalizedLengthWithColon, RunReloadMode reloadMode)
     {
         if (ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
         {
             return;
         }
 
-        InteractionService.DisplayRenderable(BuildCtrlCRenderable(longestLocalizedLengthWithColon));
+        InteractionService.DisplayRenderable(BuildCtrlCRenderable(longestLocalizedLengthWithColon, reloadMode));
     }
 
     private static async Task<bool> RequestAppHostStopForProfileAsync(
@@ -1432,7 +1615,7 @@ internal sealed class RunCommand : BaseCommand
     internal static string? FormatWatchNotice(BackchannelLogEntry entry)
     {
         var intentional = entry.CategoryName == WatchNoticeCategory && entry.EventId.Id is
-            7100 or 7101 or 7103 or 7104 or 7105 or 7106 or 7107 or 7108 or 7110 or 7111 or 7112 ||
+            7100 or 7101 or 7103 or 7104 or 7105 or 7106 or 7107 or 7108 or 7110 or 7111 or 7112 or 7113 or 7114 ||
             entry.CategoryName == ResourceWatch.NoticeCategory && entry.EventId.Id == ResourceWatch.InvalidConfigurationEventId;
         if (entry.LogLevel < LogLevel.Information ||
             !intentional)
@@ -1471,7 +1654,8 @@ internal sealed class RunCommand : BaseCommand
     }
 
     internal static async Task CaptureResourceWatchStatusAsync(
-        IAppHostCliBackchannel backchannel, IInteractionService interactionService, ILogger logger, CancellationToken cancellationToken)
+        IAppHostCliBackchannel backchannel, IInteractionService interactionService, ILogger logger, CancellationToken cancellationToken,
+        Action<ResourceWatchStatus?>? onStatus = null)
     {
         Guid? generation = null;
         string? previousSummary = null;
@@ -1479,6 +1663,7 @@ internal sealed class RunCommand : BaseCommand
         {
             await foreach (var status in backchannel.WatchResourceWatchStatusAsync(cancellationToken).ConfigureAwait(false))
             {
+                onStatus?.Invoke(status);
                 var summary = FormatResourceWatchStatus(status);
                 if (status?.GenerationId != generation || summary != previousSummary)
                 {
@@ -1496,6 +1681,7 @@ internal sealed class RunCommand : BaseCommand
             logger.LogDebug(exception, "Resource-watch coverage ended with the AppHost connection.");
             if (!cancellationToken.IsCancellationRequested)
             {
+                onStatus?.Invoke(null);
                 interactionService.DisplayMarkupLine(RunCommandStrings.ResourceWatchUnknownSummary.EscapeMarkup());
             }
         }
@@ -1816,6 +2002,10 @@ internal sealed class RunCommand : BaseCommand
 
     private TimeSpan GetRemainingStartupTimeout(long startupStartTimestamp, TimeSpan startupTimeout)
     {
+        if (startupTimeout == Timeout.InfiniteTimeSpan)
+        {
+            return Timeout.InfiniteTimeSpan;
+        }
         var elapsed = _timeProvider.GetElapsedTime(startupStartTimestamp);
         return elapsed >= startupTimeout ? TimeSpan.Zero : startupTimeout - elapsed;
     }

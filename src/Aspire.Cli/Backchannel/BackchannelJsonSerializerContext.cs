@@ -30,6 +30,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<RpcResourceState>))]
 [JsonSerializable(typeof(IAsyncEnumerable<ResourceWatchStatus>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceWatchStatus>))]
+[JsonSerializable(typeof(ResourceWatchReloadResult))]
 [JsonSerializable(typeof(IAsyncEnumerable<BackchannelLogEntry>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<BackchannelLogEntry>))]
 [JsonSerializable(typeof(BackchannelJsonSerializerContext.EventIdPayload), TypeInfoPropertyName = "EventIdPayloadTypeInfo")]

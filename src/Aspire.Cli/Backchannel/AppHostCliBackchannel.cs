@@ -21,6 +21,7 @@ internal interface IAppHostCliBackchannel
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<ResourceWatchStatus?> WatchResourceWatchStatusAsync(CancellationToken cancellationToken);
+    Task<ResourceWatchReloadResult> ReloadWatchedResourcesAsync(CancellationToken cancellationToken);
     Task WaitForDisconnectAsync(CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken);
@@ -176,6 +177,22 @@ internal sealed class AppHostCliBackchannel(
             },
             "resource-watch coverage",
             cancellationToken);
+
+    public async Task<ResourceWatchReloadResult> ReloadWatchedResourcesAsync(CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+        var capabilities = await rpc.InvokeWithProfilingAsync<string[]>(
+            profilingTelemetry, "apphost", "GetCapabilitiesAsync", [], cancellationToken).ConfigureAwait(false);
+        if (!capabilities.Contains(ResourceWatch.ReloadCapability, StringComparer.Ordinal))
+        {
+            logger.LogDebug("The AppHost does not expose watched-service reload.");
+            return new ResourceWatchReloadResult { Groups = [] };
+        }
+
+        return await rpc.InvokeWithProfilingAsync<ResourceWatchReloadResult>(
+            profilingTelemetry, "apphost", "ReloadWatchedResourcesAsync", [], cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Invokes a streaming RPC method, handling reconnection when auto-reconnect is enabled.

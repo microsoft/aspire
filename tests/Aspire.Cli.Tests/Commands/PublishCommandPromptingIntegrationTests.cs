@@ -1096,6 +1096,8 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
     public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public IAsyncEnumerable<ResourceWatchStatus?> WatchResourceWatchStatusAsync(CancellationToken cancellationToken) =>
         AsyncEnumerable.Empty<ResourceWatchStatus?>();
+    public Task<ResourceWatchReloadResult> ReloadWatchedResourcesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new ResourceWatchReloadResult { Groups = [] });
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken) =>
         Task.FromResult(new DashboardUrlsState
         {

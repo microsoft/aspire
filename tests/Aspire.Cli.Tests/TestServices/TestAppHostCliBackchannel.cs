@@ -18,6 +18,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? GetResourceStatesAsyncCalled { get; set; }
     public Func<CancellationToken, IAsyncEnumerable<RpcResourceState>>? GetResourceStatesAsyncCallback { get; set; }
     public Func<CancellationToken, IAsyncEnumerable<ResourceWatchStatus?>>? WatchResourceWatchStatusAsyncCallback { get; set; }
+    public Func<CancellationToken, Task<ResourceWatchReloadResult>>? ReloadWatchedResourcesAsyncCallback { get; set; }
 
     public TaskCompletionSource? GetAppHostLogEntriesAsyncCalled { get; set; }
     public Func<CancellationToken, IAsyncEnumerable<BackchannelLogEntry>>? GetAppHostLogEntriesAsyncCallback { get; set; }
@@ -107,6 +108,10 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 
     public IAsyncEnumerable<ResourceWatchStatus?> WatchResourceWatchStatusAsync(CancellationToken cancellationToken) =>
         WatchResourceWatchStatusAsyncCallback?.Invoke(cancellationToken) ?? new ResourceWatchStatus?[] { null }.ToAsyncEnumerable();
+
+    public Task<ResourceWatchReloadResult> ReloadWatchedResourcesAsync(CancellationToken cancellationToken) =>
+        ReloadWatchedResourcesAsyncCallback?.Invoke(cancellationToken) ??
+        Task.FromResult(new ResourceWatchReloadResult { Groups = [] });
 
     public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken)
         => ConnectAsync(socketPath, autoReconnect: false, retryCount: retryCount, cancellationToken);

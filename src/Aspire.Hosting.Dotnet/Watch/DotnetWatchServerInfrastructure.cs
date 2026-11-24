@@ -71,7 +71,7 @@ internal static class DotnetWatchServerInfrastructure
 
                 return DotnetWatchMember.CloneCommand(original, _ => ResourceCommandState.Hidden,
                     _ => Task.FromResult(CommandResults.Failure(
-                        "The watch run owns this watcher. Restart the complete watch run instead of controlling the server directly.")));
+                        "The watch group owns this watcher. To restart it with a fresh build, use Rebuild on one of its services.")));
             }));
 #pragma warning restore ASPIREWATCH001
         }
@@ -132,7 +132,7 @@ internal static class DotnetWatchServerInfrastructure
 
     internal static string FormatStoppedNotice(string serverName, int? exitCode) =>
         string.Format(CultureInfo.InvariantCulture,
-            "❌ The hot reload watcher '{1}' stopped{0}. Edits aren't applied. Restart the complete watch run; this group cannot downgrade to ordinary execution after build handoff.",
+            "❌ The hot reload watcher '{1}' stopped{0}. Edits aren't applied. Use Rebuild on one of its services to restart it with a fresh build; if Rebuild is refused, restart the complete Aspire run.",
             exitCode is { } code ? string.Format(CultureInfo.InvariantCulture, " (exit code {0})", code) : "",
             serverName);
 

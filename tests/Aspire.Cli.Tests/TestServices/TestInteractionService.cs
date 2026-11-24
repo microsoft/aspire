@@ -29,6 +29,10 @@ internal sealed class TestInteractionService : IInteractionService
     public Action<KnownEmoji, string, ConsoleOutput?>? DisplayMessageCallback { get; set; }
     public Action<string?, ConsoleOutput?>? DisplayCancellationMessageCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
+    public Action<string>? DisplayErrorCallback { get; set; }
+    public Action<string>? DisplaySuccessCallback { get; set; }
+    public Action<IRenderable>? DisplayRenderableCallback { get; set; }
+    public Action<IRenderable>? DisplayLiveRenderableCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
 
     /// <summary>
@@ -271,6 +275,7 @@ internal sealed class TestInteractionService : IInteractionService
         {
             DisplayedErrors.Add(errorMessage);
         }
+        DisplayErrorCallback?.Invoke(errorMessage);
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
@@ -289,6 +294,7 @@ internal sealed class TestInteractionService : IInteractionService
         {
             DisplayedSuccess.Add(message);
         }
+        DisplaySuccessCallback?.Invoke(message);
     }
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
@@ -401,6 +407,7 @@ internal sealed class TestInteractionService : IInteractionService
         {
             DisplayedRenderables.Add(renderable);
         }
+        DisplayRenderableCallback?.Invoke(renderable);
     }
 
     public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
@@ -409,6 +416,7 @@ internal sealed class TestInteractionService : IInteractionService
         {
             DisplayedLiveRenderables.Add(initialRenderable);
         }
+        DisplayLiveRenderableCallback?.Invoke(initialRenderable);
 
         return callback(renderable =>
         {
@@ -416,6 +424,7 @@ internal sealed class TestInteractionService : IInteractionService
             {
                 DisplayedLiveRenderables.Add(renderable);
             }
+            DisplayLiveRenderableCallback?.Invoke(renderable);
         });
     }
 }

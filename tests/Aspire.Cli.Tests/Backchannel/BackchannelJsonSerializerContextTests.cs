@@ -18,6 +18,7 @@ public class BackchannelJsonSerializerContextTests
 {
     [Theory]
     [InlineData(7105, "WatchNotice.BuildFailed", "Aspire.Hosting.Dotnet.Watch")]
+    [InlineData(7113, "WatchNotice.Reloading", "Aspire.Hosting.Dotnet.Watch")]
     [InlineData(7190, null, "Aspire.Hosting.ResourceWatch")]
     public void LogEntryRoundTripPreservesIntentionalNoticeIdentity(int id, string? name, string category)
     {

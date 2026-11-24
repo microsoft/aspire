@@ -597,6 +597,23 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         return string.IsNullOrEmpty(state) || state == ExecutableState.Unknown;
     }
 
+    /// <summary>
+    /// Whether DCP last reported the instance as launched and not yet ended. For example, DCP can find a persistent
+    /// resource already running although the AppHost created its object without starting it.
+    /// </summary>
+    internal bool IsRunning(string dcpResourceName)
+    {
+        if (_resourceState.ContainersMap.TryGetValue(dcpResourceName, out var container))
+        {
+            return container.Status?.State is ContainerState.Starting or ContainerState.Running or ContainerState.Paused or ContainerState.Stopping;
+        }
+        if (_resourceState.ExecutablesMap.TryGetValue(dcpResourceName, out var executable))
+        {
+            return executable.Status?.State is ExecutableState.Starting or ExecutableState.Running or ExecutableState.Stopping;
+        }
+        return false;
+    }
+
     public async IAsyncEnumerable<IReadOnlyList<LogEntry>> GetAllLogsAsync(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>? enumerable = null;

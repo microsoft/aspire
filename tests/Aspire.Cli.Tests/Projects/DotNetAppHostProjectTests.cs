@@ -1832,12 +1832,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(generation.Endpoint, env[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
             Assert.Equal(generation.Session, env[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
             launchEnvironment = env;
+            var started = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(Environment.ProcessId);
+            Assert.NotNull(started);
             await DotnetWatchAppHostTestChannel.SendAsync(generation.Endpoint, new()
             {
                 Version = DotnetWatchAppHostProtocol.Version,
                 Session = generation.Session,
                 Kind = DotnetWatchAppHostProtocol.HostStarted,
-                Instance = "123:456"
+                Instance = $"{Environment.ProcessId}:{started.Value}"
             }, token);
             backchannel!.TrySetResult(new TestAppHostBackchannel());
             return 124;
@@ -1954,13 +1956,20 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(1, launches);
     }
 
-    [Fact]
-    public async Task RunAsync_WatchedAppHostChildExitFailsStartupWithSafeLogGuidance()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_WatchedAppHostChildExitFailsInitiallyButKeepsReplacementWatchersAlive(bool replacement)
     {
         using var directory = new DotnetWatchTestDirectory();
         using var shutdown = new TestGracefulShutdownWindow();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         await using var generation = new DotnetWatchAppHostGeneration(
-            shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance);
+            shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance)
+        {
+            IsReplacement = replacement,
+            RequiresLauncherMonitoring = !replacement
+        };
         var appHost = CreateProjectAppHost();
         var command = CreateBuiltAppHostCommand("AppHost");
         var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "10.0.403", "10.0.14");
@@ -2011,12 +2020,37 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             WatchGeneration = generation,
             BackchannelCompletionSource = outerBackchannel
         };
-        var exitCode = await project.RunAsync(context, TestContext.Current.CancellationToken).DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => outerBackchannel.Task);
-        Assert.StartsWith("The watched AppHost process exited during startup before its backchannel connected. See CLI logs at ",
-            exception.Message, StringComparison.Ordinal);
+        var run = project.RunAsync(context, cancellation.Token);
+        if (replacement)
+        {
+            try
+            {
+                await generation.StartupFailed.DefaultTimeout();
+                Assert.False(run.IsCompleted);
+                Assert.False(outerBackchannel.Task.IsCompleted);
+                await DotnetWatchAppHostTestChannel.SendAsync(generation.Endpoint, new()
+                {
+                    Version = DotnetWatchAppHostProtocol.Version,
+                    Session = generation.Session,
+                    Kind = DotnetWatchAppHostProtocol.HostStarted,
+                    Instance = "999:123456"
+                }, TestContext.Current.CancellationToken).DefaultTimeout();
+                await generation.Invalidated.DefaultTimeout();
+                Assert.False(generation.ReloadRequested);
+            }
+            finally
+            {
+                await cancellation.CancelAsync();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.DefaultTimeout());
+            }
+        }
+        else
+        {
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await run.DefaultTimeout());
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => outerBackchannel.Task);
+            Assert.StartsWith("The watched AppHost process exited during startup before its backchannel connected. See CLI logs at ",
+                exception.Message, StringComparison.Ordinal);
+        }
         Assert.NotNull(context.OutputCollector);
         Assert.True(context.OutputCollector.ContainsWatcherOutput);
         Assert.Equal("WATCH_STARTUP_FAILURE_DETAILS",

@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -161,6 +163,42 @@ public class ResourceCommandService
 
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
         return CreateAggregateResult(names, results);
+    }
+
+    /// <summary>
+    /// Cancels the start of a resource instance if the instance hasn't been launched yet, for example because it's
+    /// waiting for its dependencies.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A start waits for its dependencies and the resource's start-up work before the instance is launched. Until then,
+    /// canceling it leaves the instance <see cref="KnownResourceStates.NotStarted"/>, and a Start command waiting for
+    /// that start reports that it was canceled. A start of the instance that begins after the cancellation determines
+    /// the instance's state instead. After the instance is launched, its start can't be canceled; stop the instance
+    /// instead.
+    /// </para>
+    /// <para>
+    /// The built-in Stop command cancels a pending start the same way. Use this method when a replacement Stop command
+    /// needs to know what the cancellation found.
+    /// </para>
+    /// </remarks>
+    /// <param name="resourceId">The id of the resource instance, or the resource's display name if it has a single instance.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>What the cancellation found. The task completes once a canceled start has ended.</returns>
+    [Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public async Task<ResourceStartCancellationResult> TryCancelPendingStartAsync(string resourceId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(resourceId);
+
+        if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
+        {
+            throw new InvalidOperationException($"Resource '{resourceId}' not found.");
+        }
+
+        // Without an orchestrator (for example, when publishing), Aspire doesn't start resources.
+        return _serviceProvider.GetService<ApplicationOrchestrator>() is { } orchestrator
+            ? await orchestrator.TryCancelPendingStartAsync(resourceEvent.ResourceId, cancellationToken).ConfigureAwait(false)
+            : ResourceStartCancellationResult.NotStarted;
     }
 
     private static ExecuteCommandResult CreateAggregateResult(string[] names, ExecuteCommandResult[] results)

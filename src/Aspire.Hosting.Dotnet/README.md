@@ -158,8 +158,11 @@ including EF operations, completes after a successful build, not after a proxy s
 source error can recover after a fix. Before releasing that barrier, Aspire revalidates the restored
 graph and observes its newly active imports without performing a second build. Queued edits remain
 fenced across observation-inventory replacement. After handoff, infrastructure failure fences and cleans the
-affected group without silently reverting to ordinary execution; restart the complete watch run
-after fixing the reported problem.
+affected group without silently reverting to ordinary execution. When the group's watcher or its transport
+stopped unexpectedly, or a guarded refresh failed, Rebuild (or Start) on one of the group's services retries
+with a fresh watcher. Failures that need a new partition of the projects (a changed SDK or output context, or
+newly overlapping output ownership) and watchers whose cleanup wasn't confirmed can't be retried in the run:
+fix the reported problem and restart the complete run.
 
 Normal AppHost shutdown waits for contained process cleanup before removing private watch run
 directories. If WatchHost is forcibly killed without a chance to acknowledge cleanup, Aspire may
@@ -170,11 +173,67 @@ the complete run uses fresh owners and directories; a root process exit alone is
 |---|---|
 | Source edit | The watcher owns automatic builds, hot reload, and required restarts. |
 | Initial Start / `WithExplicitStart` | Supported; explicitly parked resources wait for Start. |
-| Rebuild | Disabled and rejected by the command callback; ordinary resources retain Rebuild. |
-| Stop | Stops the selected proxy connection and records manual-stop intent. |
-| Start after manual Stop | Disabled until the complete watch run is restarted. |
-| Restart | Restart-only control for one unambiguous, last-observed running application; no build or crash recovery. |
-| Replica/duplicate-entry Restart | Disabled because upstream control is project-wide, not instance-specific. |
+| Restart | Relaunches every running instance of the project, including replicas and duplicate entry points, without a build; hot reload changes are reapplied. Not available for a crashed or manually stopped instance. |
+| Rebuild | Replaces the watch group's watcher with a fresh one that builds from source and restarts the group's services. Manually stopped instances stay stopped. |
+| Stop | Stops the selected proxy connection and records manual-stop intent. A service that hasn't launched yet (for example, one waiting for its dependencies, its first build, or its watch group's recovery) isn't stopped: its start is canceled, and it shows as not started. A Start that was waiting for that start then reports that it was canceled. |
+| Start after manual Stop | Restarts the watch group with a fresh build and starts that instance; other stopped instances stay stopped. |
+| Start of a crashed instance, or one whose proxy exited without a Stop | Restarts the watch group with a fresh build, which starts the instance again. A new proxy connection to the running watcher isn't safe (see below). |
+| Start of a running instance | Leaves it as it is and suggests Restart or Rebuild. The dashboard hides Start for a running instance, but the CLI and MCP tools don't check command state. |
+| Start of a service whose first start is in progress | Leaves the start to the one in progress and reports that the service is already starting. A service that waits for its dependencies starts at once instead, as any resource does. |
+| Start after the watch group failed (retryable) | Restarts the watch group with a fresh build and starts the instance. An instance that hasn't launched in this run gets its usual first start afterwards, which waits for its dependencies. |
+
+Services that share a watcher form a watch group (one per SDK scope and configuration; a project with
+a build environment callback or a file-based app gets its own). Rebuild, and Start of a service that stopped,
+crashed or failed after it ran, restart every service of the group; their dashboard confirmation and result
+name the other services. Both wait for the fresh build and report its result. If the code doesn't build, the group's services stay down until the errors
+are fixed and saved, and the hidden watch group resource (for example `dotnet-watch`, named by each
+service's `resource.watch.log-resource` property) has the compiler errors in its console logs.
+
+When Aspire relaunches a watched service that it already launched in this run (Rebuild, Start after
+Stop, CTRL+R when it rebuilds watched services, or a fresh watcher after a project file change), the
+service doesn't wait for its `WaitFor` dependencies again, even if it failed before it was running: they
+were satisfied when it was first launched, and a dependency that ran to completion, such as EF migrations
+that run on start, doesn't run again. A service's first launch waits as usual, including after CTRL+R
+replaces the AppHost, and Stop can cancel it while it waits. A canceled service isn't stopped manually: its
+next Start is the usual start, which waits for its dependencies without restarting its watch group. So a
+watch group's restart only relaunches services, and never waits for a dependency while it holds the group.
+It starts the group's services after the services of the same group that they wait for.
+
+The watcher can relaunch a crashed application on the next edit even after its instance was stopped,
+leaving a process that no proxy owns on the instance's port. When that happens for a project whose
+instances are all stopped, Aspire replaces the group's watcher to end the process and reports it with
+a 🧹 notice; the stopped instances stay stopped. For the same reason, Start never connects a new proxy of
+an instance that already ran to the running watcher: it starts the instance with a fresh watcher.
+
+When a change doesn't take effect, escalate:
+
+1. Save the file again; the watcher hot reloads it or restarts the affected service.
+2. **Restart** when a change was applied but had no effect. It relaunches the project's running
+   instances and reapplies the hot reload changes.
+3. **Rebuild** after a crash, a change that hot reload can't apply, a change the watcher missed, or
+   when Restart doesn't help. It starts a fresh watcher and build for the service's watch group.
+4. Press CTRL+R in `aspire run`, or stop the run with `aspire stop` and start it again.
+
+In an interactive `aspire run`, CTRL+R reloads what the run watches, and the hint under the dashboard
+URL says which applies:
+
+- With AppHost watching active for a C# project AppHost, CTRL+R rebuilds and restarts the AppHost and
+  all its resources.
+- Otherwise, when the AppHost has watch groups, CTRL+R runs Rebuild for every watch group and prints
+  each group's result. The AppHost and other resources keep running, and manually stopped instances
+  stay stopped.
+
+CTRL+R isn't offered when input is redirected, in non-interactive or JSON output modes, with
+`--detach`, or under the VS Code extension. When a replacement AppHost generation fails to build or
+exits before it connects, `aspire run` keeps running: fix the errors and save, or press CTRL+R to
+retry, or CTRL+C to stop. If the AppHost being replaced stops with an error, no new AppHost starts:
+`aspire run` ends and says why, and you start it again.
+
+Agents use the same commands: `aspire resource <name> restart`, `aspire resource <name> rebuild`,
+and `aspire resource <name> start`, or the MCP `execute_resource_command` tool, which waits for the
+command's result. The command descriptions (for example in the MCP `list_resources` tool or
+`aspire describe --format json`) state each command's scope. Use `aspire logs <watch group> --tail 50`
+for compiler errors.
 
 Replicas and duplicate entry points remain watched. Their application events are explicitly
 project-group observations, separate from each proxy's transport state and real endpoint health.
@@ -213,9 +272,9 @@ silently switching to ordinary execution.
 Some SDK-accepted edits, including method return-type delete/reinsert changes, can instead replay
 a deleted-method delta on each automatic child restart. That upstream limitation is not classified
 as a rude edit by the project-only status protocol, and this integration does not infer a cause or
-automatically rebuild from repeated start events. Stop the complete run with `aspire stop`, then
-rerun `aspire run --watch` with the edited source retained. The fresh run builds that source with
-new owners; an instance Restart is not the workaround. Genuine ENC rude edits of a single file app
+automatically rebuild from repeated start events. Use Rebuild on the service (or CTRL+R in
+`aspire run`) with the edited source retained: the fresh watcher builds that source and discards the
+replayed changes. Restart is not the workaround, because it reapplies them. Genuine ENC rude edits of a single file app
 retain the dedicated fresh-watcher recovery path.
 Private AppHost ownership and notification settings are not inherited by application children,
 including ordinary or opted-out services.

@@ -58,6 +58,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
     private readonly CancellationTokenSource _shutdownCancellation = new();
     private readonly DcpExecutorEvents _executorEvents;
     private readonly DcpResourceWatcher _resourceWatcher;
+    private readonly PendingStartRegistry _pendingStarts = new();
 
     private readonly ExecutableCreator _executableCreator;
     private readonly ContainerCreator _containerCreator;
@@ -978,6 +979,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         Debug.Assert(replicaResources.Any());
         var replicas = replicaResources.ToArray();
         using var activity = ProfilingTelemetry.StartResourceCreate(_configuration, modelResource, resourceType, replicas.Length);
+        PendingStartGroup? pending = null;
 
         try
         {
@@ -1043,29 +1045,72 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
 
                 foreach (var er in replicas)
                 {
+                    // The object exists without starting the instance, so a Stop can act on it, for example on a
+                    // persistent container that DCP found already running.
+                    _pendingStarts.ObjectCreated(er.DcpResourceName);
                     await CreateReplicaAsync(er).ConfigureAwait(false);
                 }
 
                 return;
             }
 
-            await PublishConnectionStringAvailableEventAsync(modelResource, cancellationToken).ConfigureAwait(false);
-
-            // For single-replica resources (e.g. containers), include the DCP resource name in the starting event.
-            // For multi-replica resources (e.g. projects with replicas), the starting event applies to the group, so DcpResourceName is null.
-            var startingDcpName = replicas.Length == 1 ? replicas[0].DcpResourceName : null;
-            await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, modelResource, startingDcpName)).ConfigureAwait(false);
-
-            foreach (var er in replicas)
+            // Until a replica reaches DCP, a Stop can cancel its start. The replicas share one wait, so a canceled replica
+            // only stays out of it; the wait itself is canceled once every replica is (see PendingStartRegistry).
+            pending = _pendingStarts.Begin([.. replicas.Select(r => r.DcpResourceName)], cancellationToken);
+            try
             {
-                await CreateReplicaAsync(er).ConfigureAwait(false);
+                await PublishConnectionStringAvailableEventAsync(modelResource, pending.Token).ConfigureAwait(false);
+
+                // For single-replica resources (e.g. containers), include the DCP resource name in the starting event.
+                // For multi-replica resources (e.g. projects with replicas), the starting event applies to the group, so DcpResourceName is null.
+                var startingDcpName = replicas.Length == 1 ? replicas[0].DcpResourceName : null;
+                await _executorEvents.PublishAsync(new OnResourceStartingContext(pending.Token, resourceType, modelResource, startingDcpName)).ConfigureAwait(false);
+
+                foreach (var er in replicas)
+                {
+                    if (!pending.TryCommit(er.DcpResourceName))
+                    {
+                        if (pending.IsCanceled(er.DcpResourceName))
+                        {
+                            // Stopped while its siblings waited. Publish again: the starting event may have overwritten
+                            // the state that the Stop published.
+                            await PublishStartCanceledAsync(er).ConfigureAwait(false);
+                            continue;
+                        }
+
+                        // The run is stopping.
+                        pending.Token.ThrowIfCancellationRequested();
+                    }
+
+                    await CreateReplicaAsync(er).ConfigureAwait(false);
+                }
+            }
+            catch (Exception) when (replicas.All(r => pending.IsCanceled(r.DcpResourceName)) && !_shutdownCancellation.IsCancellationRequested)
+            {
+                // Every replica was stopped before it reached DCP. Nothing was launched, so this isn't a failure.
+                foreach (var er in replicas)
+                {
+                    await PublishStartCanceledAsync(er).ConfigureAwait(false);
+                }
             }
         }
         catch (Exception ex)
         {
             activity.SetError(ex);
             resourceLogger.LogError(ex, "Failed to create resource {ResourceName}", modelResource.Name);
-            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, modelResource, DcpResourceName: null)).ConfigureAwait(false);
+            // A replica that was stopped before it reached DCP stays NotStarted; only the others failed to start.
+            var canceled = replicas.Where(r => _pendingStarts.IsCanceled(r.DcpResourceName)).ToArray();
+            if (canceled.Length == 0)
+            {
+                await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, modelResource, DcpResourceName: null)).ConfigureAwait(false);
+            }
+            else
+            {
+                foreach (var er in replicas.Except(canceled))
+                {
+                    await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, modelResource, er.DcpResourceName)).ConfigureAwait(false);
+                }
+            }
         }
         finally
         {
@@ -1073,6 +1118,11 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             {
                 r.MarkInitialized();
             }
+
+            // A Start command waits for the replicas to be initialized, so end these starts only now. Otherwise a Stop in
+            // between would find just the queued Start, cancel it, and report that the replica didn't start while the
+            // replica that reached DCP here keeps running.
+            pending?.Dispose();
         }
 
         Func<CustomResourceSnapshot, CustomResourceSnapshot> BuildSnapshotFunc(CustomResource dcpResource)
@@ -1176,7 +1226,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         return matchingResource;
     }
 
-    public async Task StopResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+    public async Task<bool> StopResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Stopping resource '{ResourceName}'...", resourceReference.DcpResourceName);
         var appResource = (IAppResource)resourceReference;
@@ -1188,6 +1238,14 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             // No concurrent start/stop operations on the same resource. Must wait for initialization to complete.
             await appResource.Initialized.WaitAsync(cancellationToken).ConfigureAwait(false);
             using var _ = await ConcurrencyUtils.AcquireAllAsync([appResource.SerializedOpSemaphore], cancellationToken).ConfigureAwait(false);
+
+            if (!await DcpObjectExistsAsync(appResource.DcpResource, cancellationToken).ConfigureAwait(false))
+            {
+                // There's nothing to stop, for example because the creation after the start reached DCP failed. Starts and
+                // stops of the instance are serialized, so a start can't create the object meanwhile.
+                _pendingStarts.ObjectDeleted(resourceReference.DcpResourceName);
+                return false;
+            }
 
             stopped = await DeleteResourceRetryPipeline.ExecuteAsync(async (resourceName, attemptCancellationToken) =>
             {
@@ -1246,6 +1304,29 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             throw new InvalidOperationException($"Failed to stop resource '{resourceReference.DcpResourceName}'.");
         }
+
+        return true;
+    }
+
+    private async Task<bool> DcpObjectExistsAsync(CustomResource resource, CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (resource)
+            {
+                case Container c:
+                    await _kubernetesService.GetAsync<Container>(c.Metadata.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    break;
+                case Executable e:
+                    await _kubernetesService.GetAsync<Executable>(e.Metadata.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    break;
+            }
+            return true;
+        }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
     }
 
     public async Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
@@ -1254,14 +1335,20 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         var resourceType = GetResourceType(appResource.DcpResource, resourceReference.ModelResource);
         var resourceLogger = _loggerService.GetLogger(resourceReference.DcpResourceName);
         using var activity = ProfilingTelemetry.StartResourceStart(_configuration, resourceReference.ModelResource, appResource.DcpResourceKind, appResource.DcpResourceName, resourceType);
+        // Until the start reaches DCP, a Stop or the caller can cancel it, and the instance then doesn't start
+        // (see PendingStartRegistry). Everything before the commit waits with pending.Token.
+        using var pending = _pendingStarts.Begin([appResource.DcpResourceName], cancellationToken);
 
         try
         {
             _logger.LogDebug("Starting {ResourceType} '{ResourceName}'.", appResource.DcpResourceKind, resourceReference.DcpResourceName);
 
             // No concurrent start/stop operations on the same resource. Must wait for initialization to complete.
-            await appResource.Initialized.WaitAsync(cancellationToken).ConfigureAwait(false);
-            using var _ = await ConcurrencyUtils.AcquireAllAsync([appResource.SerializedOpSemaphore], cancellationToken).ConfigureAwait(false);
+            await appResource.Initialized.WaitAsync(pending.Token).ConfigureAwait(false);
+            using var _ = await ConcurrencyUtils.AcquireAllAsync([appResource.SerializedOpSemaphore], pending.Token).ConfigureAwait(false);
+            // The starts that this one waited behind launched what it replaces. If this start is canceled after it deletes
+            // that object, it reports that the instance didn't start.
+            pending.HoldsInstanceLock(appResource.DcpResourceName);
 
             // For resources that need delete/recreate startup, raise the starting event after deletion. This is required because
             // deleting the existing DCP object temporarily overrides the status with a terminal state, such as "Exited".
@@ -1269,38 +1356,46 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             {
                 // We need to handle explicit start persistent resources specially on first launch as they may already be running, so we need to register them with DCP to discover their status.
                 case RenderedModelResource<Container> { DcpResource.Spec.Start: false } cr when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(cr.ModelResource, cr.DcpResource.Spec.Start):
-                    await PublishConnectionStringAvailableEventAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false);
-                    await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, cr.ModelResource, cr.DcpResourceName)).ConfigureAwait(false);
+                    await PublishConnectionStringAvailableEventAsync(cr.ModelResource, pending.Token).ConfigureAwait(false);
+                    await _executorEvents.PublishAsync(new OnResourceStartingContext(pending.Token, resourceType, cr.ModelResource, cr.DcpResourceName)).ConfigureAwait(false);
+                    CommitOrThrow(pending, cr.DcpResourceName);
                     await PatchDcpObjectAsync(cr.DcpResource, static c => c.Spec.Start = true, cancellationToken).ConfigureAwait(false);
                     break;
 
                 case RenderedModelResource<Executable> { DcpResource.Spec.Start: false } er when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(er.ModelResource, er.DcpResource.Spec.Start):
-                    await PublishConnectionStringAvailableEventAsync(er.ModelResource, cancellationToken).ConfigureAwait(false);
-                    await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, er.ModelResource, er.DcpResourceName)).ConfigureAwait(false);
+                    await PublishConnectionStringAvailableEventAsync(er.ModelResource, pending.Token).ConfigureAwait(false);
+                    await _executorEvents.PublishAsync(new OnResourceStartingContext(pending.Token, resourceType, er.ModelResource, er.DcpResourceName)).ConfigureAwait(false);
+                    CommitOrThrow(pending, er.DcpResourceName);
                     await PatchDcpObjectAsync(er.DcpResource, static e => e.Spec.Start = true, cancellationToken).ConfigureAwait(false);
                     break;
 
                 case RenderedModelResource<Container> cr:
+                    // A cancellation doesn't interrupt the deletion: the start checks for it once the old object is gone.
                     await EnsureResourceDeletedAsync<Container>(resourceReference, cancellationToken).ConfigureAwait(false);
+                    pending.Token.ThrowIfCancellationRequested();
 
                     // Ensure we explicitly start the container even if original container was created in "delay-start" mode.
                     cr.DcpResource.Spec.Start = true;
 
-                    await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
-                    await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    var containerEndpointContext = await _containerNetworkEndpointContextSource.Task.ConfigureAwait(false);
+                    await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, pending.Token).ConfigureAwait(false);
+                    await _executorEvents.PublishAsync(new OnResourceStartingContext(pending.Token, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
+                    var containerEndpointContext = await _containerNetworkEndpointContextSource.Task.WaitAsync(pending.Token).ConfigureAwait(false);
+                    CommitOrThrow(pending, cr.DcpResourceName);
                     await _containerCreator.CreateObjectAsync(cr, containerEndpointContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
                 case RenderedModelResource<Executable> er:
+                    // A cancellation doesn't interrupt the deletion: the start checks for it once the old object is gone.
                     await EnsureResourceDeletedAsync<Executable>(resourceReference, cancellationToken).ConfigureAwait(false);
+                    pending.Token.ThrowIfCancellationRequested();
 
                     // Ensure we explicitly start the executable even if original executable was created in "delay-start" mode.
                     er.DcpResource.Spec.Start = true;
 
-                    await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
-                    await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    var executableEndpointContext = await _containerNetworkEndpointContextSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, pending.Token).ConfigureAwait(false);
+                    await _executorEvents.PublishAsync(new OnResourceStartingContext(pending.Token, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
+                    var executableEndpointContext = await _containerNetworkEndpointContextSource.Task.WaitAsync(pending.Token).ConfigureAwait(false);
+                    CommitOrThrow(pending, er.DcpResourceName);
                     await _executableCreator.CreateObjectAsync(er, executableEndpointContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
@@ -1308,6 +1403,21 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                 default:
                     throw new InvalidOperationException($"Unexpected resource type: {appResource.DcpResourceKind}");
             }
+        }
+        catch (Exception ex) when (IsCanceledBeforeDcp(pending, appResource.DcpResourceName, ex))
+        {
+            // Nothing was launched, so the instance simply doesn't start: it's NotStarted rather than FailedToStart, and
+            // the caller sees a cancellation. A Stop already reported it in the resource's log.
+            if (pending.TryEndCanceled(appResource.DcpResourceName))
+            {
+                if (!pending.IsCanceled(appResource.DcpResourceName))
+                {
+                    resourceLogger.LogInformation("The start was canceled before the resource was launched.");
+                }
+                await PublishStartCanceledAsync(resourceReference).ConfigureAwait(false);
+            }
+            throw ex as OperationCanceledException ?? new OperationCanceledException(
+                $"The start of '{resourceReference.DcpResourceName}' was canceled before the resource was launched.", ex);
         }
         catch (Exception ex)
         {
@@ -1324,6 +1434,107 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         }
     }
 
+    /// <summary>
+    /// Cancels the starts of the instance that haven't reached DCP, and waits until the canceled starts have ended.
+    /// </summary>
+    public async Task<PendingStartCancellation> CancelPendingStartAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+    {
+        // Other starts create the instance's object only when they reach DCP, or remove the old one before they wait for
+        // the instance's dependencies, so a Stop that cancels them leaves nothing running. The first start of an
+        // explicit-start persistent resource instead keeps the object that the AppHost created without starting it, and
+        // DCP may have found that resource already running; then the Stop must stop it.
+        var running = ((IAppResource)resourceReference).DcpResource switch
+        {
+            Container { Spec.Start: false } or Executable { Spec.Start: false } =>
+                _pendingStarts.HasObject(resourceReference.DcpResourceName) && _resourceWatcher.IsRunning(resourceReference.DcpResourceName),
+            _ => false
+        };
+        var outcome = _pendingStarts.Cancel(resourceReference.DcpResourceName, running, out var groupsToCancel, out var unwound, out var replacement);
+        if (outcome == PendingStartCancellation.Canceled && replacement is null)
+        {
+            // Report the stop at once. A replica whose siblings share its startup wait stays out of that wait, which ends
+            // only when their dependencies are ready, so its start doesn't end sooner. The registry already marks the
+            // instance as canceled, so leaving Waiting this way doesn't release that wait.
+            LogStartCanceled();
+            await PublishStartCanceledAsync(resourceReference).ConfigureAwait(false);
+        }
+        foreach (var group in groupsToCancel)
+        {
+            group.Cancel();
+        }
+        await unwound.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (replacement is not null)
+        {
+            // The canceled start was deleting the object that it replaces, which the cancellation doesn't interrupt, and it
+            // reported the instance's state when it ended. If the deletion failed, the object may still run, and the
+            // caller has to stop it, unless a newer start of the instance took over: that start replaces the object, and
+            // stopping it would stop that start's instance. A Start that begins after this check, as the caller stops the
+            // object, can still take the instance's lock first; the caller then stops what that Start launched. Like a
+            // Stop and a Start sent at the same moment, the two aren't ordered.
+            if (replacement.LeftObjectToStop())
+            {
+                return PendingStartCancellation.Committed;
+            }
+            LogStartCanceled();
+        }
+        return outcome;
+
+        void LogStartCanceled() =>
+            _loggerService.GetLogger(resourceReference.DcpResourceName).LogInformation("Stopped before the resource was launched; its start was canceled.");
+    }
+
+    public bool HasDcpObject(IResourceReference resourceReference) => _pendingStarts.HasObject(resourceReference.DcpResourceName);
+
+    public bool IsStartCanceled(string dcpResourceName) => _pendingStarts.IsCanceled(dcpResourceName);
+
+    private static void CommitOrThrow(PendingStartGroup pending, string dcpResourceName)
+    {
+        if (!pending.TryCommit(dcpResourceName))
+        {
+            throw new OperationCanceledException(
+                $"The start of '{dcpResourceName}' was canceled before the resource was launched.", pending.Token);
+        }
+    }
+
+    /// <summary>
+    /// Whether the start ended because it was canceled before it reached DCP: by a Stop, or by its caller (for example,
+    /// a Start command whose client disconnected). A start that the stopping AppHost canceled fails as before, and so does
+    /// one whose deletion of the object that it replaces failed, which leaves that object in place.
+    /// </summary>
+    private bool IsCanceledBeforeDcp(PendingStartGroup pending, string dcpResourceName, Exception exception) =>
+        !pending.IsCommitted(dcpResourceName) &&
+        !_shutdownCancellation.IsCancellationRequested &&
+        (exception is OperationCanceledException
+            ? pending.IsCanceled(dcpResourceName) || pending.Token.IsCancellationRequested
+            : pending.IsCanceled(dcpResourceName) && !_pendingStarts.IsLaunched(dcpResourceName));
+
+    /// <summary>
+    /// Publishes the state of an instance whose start was canceled before it reached DCP, unless a newer start of the
+    /// instance began since: that start determines the instance's state.
+    /// </summary>
+    private Task PublishStartCanceledAsync(IResourceReference resourceReference)
+    {
+        var appResource = (IAppResource)resourceReference;
+        var dcpResourceName = resourceReference.DcpResourceName;
+        // A start clears the instance's cancellation when it begins. IsCurrent repeats the check in the updates of the
+        // resource and its children, so that a report can't replace the states that a start which began meanwhile publishes:
+        // leaving Waiting would release that start's dependency wait.
+        if (!_pendingStarts.IsCanceled(dcpResourceName))
+        {
+            return Task.CompletedTask;
+        }
+
+        var resourceType = GetResourceType(appResource.DcpResource, resourceReference.ModelResource);
+        return _executorEvents.PublishAsync(new OnResourceChangedContext(
+            _shutdownCancellation.Token, resourceType, resourceReference.ModelResource, dcpResourceName,
+            new ResourceStatus(KnownResourceStates.NotStarted, null, null),
+            PreviousState: null,
+            s => s with { State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null), ExitCode = null })
+        {
+            IsCurrent = () => _pendingStarts.IsCanceled(dcpResourceName)
+        });
+    }
+
     private async Task EnsureResourceDeletedAsync<T>(IResourceReference resource, CancellationToken cancellationToken) where T : CustomResource, IKubernetesStaticMetadata
     {
         _logger.LogDebug("Ensuring '{ResourceName}' is deleted.", resource.DcpResourceName);
@@ -1331,6 +1542,11 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         // Reset cached callback results so they are re-evaluated on restart.
         ForgetCachedCallbackResults(resource.ModelResource);
         ForgetConnectionStringAvailableEvent(resource.ModelResource);
+
+        // The start replaces the object from here on: a Stop that cancels it leaves nothing running once this deletion,
+        // which the Stop doesn't interrupt, completes. Until here, a Stop must stop the object itself, and it still has
+        // to if the deletion fails.
+        using var deletion = _pendingStarts.BeginDeletion(resource.DcpResourceName);
 
         // The delete watch can clear its observation while the API deletion is still being polled.
         string? deletedUid = null;
@@ -1383,6 +1599,8 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             throw new DistributedApplicationException($"Failed to delete '{resource.DcpResourceName}' successfully before restart.");
         }
+
+        deletion.Complete();
 
         // Do not suppress updates from an object whose deletion failed.
         _resourceWatcher.MarkPreviousIncarnationSuperseded(T.ObjectKind, resource.DcpResourceName, deletedUid);

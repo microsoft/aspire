@@ -3,9 +3,12 @@
 
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Watch;
 using Aspire.Shared.DotnetWatch;
@@ -371,7 +374,7 @@ public class DotnetWatchAppHostTests
             }
 
             return CommandResult.Success();
-        }, () => Interlocked.Increment(ref restartCount), cancellation.Token);
+        }, _ => Interlocked.Increment(ref restartCount), cancellation.Token);
 
         try
         {
@@ -413,7 +416,7 @@ public class DotnetWatchAppHostTests
             started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             return CommandResult.Success();
-        }, () => Interlocked.Increment(ref restarts), cancellation.Token);
+        }, _ => Interlocked.Increment(ref restarts), cancellation.Token);
         await started.Task.DefaultTimeout();
         await cancellation.CancelAsync();
 
@@ -422,6 +425,202 @@ public class DotnetWatchAppHostTests
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal(1, generations);
         Assert.Equal(0, restarts);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReplacementRecordsWhetherCtrlRRequestedIt(bool manualReload)
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        using var cancellation = new CancellationTokenSource();
+        var started = new TaskCompletionSource<DotnetWatchAppHostGeneration>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var generations = 0;
+        var restartReasons = new List<bool>();
+        var session = new DotnetWatchAppHostSession(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, TimeProvider.System, NullLogger.Instance);
+        var run = session.RunAsync(async (generation, token) =>
+        {
+            if (Interlocked.Increment(ref generations) == 1)
+            {
+                Assert.False(generation.IsReplacement);
+                Assert.False(generation.StartedByReload);
+                generation.ApplyEnvironment(new Dictionary<string, string>());
+                started.TrySetResult(generation);
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            }
+            else
+            {
+                Assert.True(generation.IsReplacement);
+                Assert.Equal(manualReload, generation.StartedByReload);
+            }
+
+            return CommandResult.Success();
+        }, restartReasons.Add, cancellation.Token);
+
+        try
+        {
+            var first = await started.Task.DefaultTimeout();
+            if (manualReload)
+            {
+                Assert.True(first.RequestReload());
+                Assert.False(first.RequestReload());
+            }
+            else
+            {
+                await SendAsync(first, DotnetWatchAppHostProtocol.HostStarted, "123:456");
+                await SendAsync(first, DotnetWatchAppHostProtocol.ModelInvalidated, "123:456");
+                Assert.False(first.RequestReload());
+            }
+            var result = await run.DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, result.ExitCode);
+            Assert.Equal(2, generations);
+            Assert.Equal([manualReload], restartReasons);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            await run.DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task CtrlRCanReplaceAGenerationWhosePrebuildDidNotEnableItsChannel()
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        using var cancellation = new CancellationTokenSource();
+        var firstStarted = new TaskCompletionSource<DotnetWatchAppHostGeneration>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var replacementStarted = new TaskCompletionSource<DotnetWatchAppHostGeneration>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var generations = 0;
+        var session = new DotnetWatchAppHostSession(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, TimeProvider.System, NullLogger.Instance);
+        var run = session.RunAsync(async (generation, token) =>
+        {
+            var number = Interlocked.Increment(ref generations);
+            if (number == 1)
+            {
+                generation.ApplyEnvironment(new Dictionary<string, string>());
+                firstStarted.TrySetResult(generation);
+            }
+            else if (number == 2)
+            {
+                replacementStarted.TrySetResult(generation);
+            }
+            else
+            {
+                return CommandResult.Success();
+            }
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return CommandResult.Success();
+        }, _ => { }, cancellation.Token);
+
+        try
+        {
+            (await firstStarted.Task.DefaultTimeout()).RequestReload();
+            var replacement = await replacementStarted.Task.DefaultTimeout();
+            Assert.True(replacement.IsReplacement);
+            Assert.False(replacement.IsEnabled);
+            Assert.True(replacement.RequestReload());
+
+            Assert.Equal(CliExitCodes.Success, (await run.DefaultTimeout()).ExitCode);
+            Assert.Equal(3, generations);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            await run.DefaultTimeout();
+        }
+    }
+
+    [Theory]
+    [InlineData("handed-over", TelemetryConstants.RunReloadOutcomes.Succeeded)]
+    [InlineData("canceled", TelemetryConstants.RunReloadOutcomes.Canceled)]
+    [InlineData("teardown-failed", TelemetryConstants.RunReloadOutcomes.RunFailed)]
+    [InlineData("teardown-failed-with-message", TelemetryConstants.RunReloadOutcomes.RunFailed)]
+    [InlineData("teardown-threw", TelemetryConstants.RunReloadOutcomes.RunFailed)]
+    [InlineData("ended", TelemetryConstants.RunReloadOutcomes.Canceled)]
+    [InlineData("ended-with-error", TelemetryConstants.RunReloadOutcomes.RunFailed)]
+    public async Task ACtrlRReloadIsHandedToItsReplacementOrEndsWithTheSession(string scenario, string outcome)
+    {
+        using var fixture = new TelemetryFixture();
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        using var cancellation = new CancellationTokenSource();
+        var requested = RunReloadActivity.Start(fixture.Telemetry, parent: null, RunReloadMode.AppHost);
+        var generations = 0;
+        var session = new DotnetWatchAppHostSession(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, TimeProvider.System, NullLogger.Instance);
+        var run = session.RunAsync(async (generation, token) =>
+        {
+            if (Interlocked.Increment(ref generations) == 1)
+            {
+                Assert.Null(generation.PendingReload);
+                generation.ApplyEnvironment(new Dictionary<string, string>());
+                // As the shortcut listener does: request the replacement, then record the reload that requested it.
+                Assert.True(generation.RequestReload());
+                generation.RequestedReload = requested;
+                if (scenario == "canceled")
+                {
+                    await cancellation.CancelAsync();
+                }
+                // The AppHost's run ended on its own as the reload was requested.
+                if (scenario == "ended")
+                {
+                    return CommandResult.Success();
+                }
+                if (scenario == "ended-with-error")
+                {
+                    return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, "The AppHost failed.");
+                }
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException) when (scenario is "teardown-failed" or "teardown-failed-with-message")
+                {
+                    // The AppHost's run usually reports only the exit code of the AppHost that stopped with an error.
+                    return scenario == "teardown-failed"
+                        ? CommandResult.FromExitCode(1)
+                        : CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, "Teardown failed.");
+                }
+                catch (OperationCanceledException) when (scenario == "teardown-threw")
+                {
+                    throw new InvalidOperationException("Owned process cleanup failed.");
+                }
+                return CommandResult.Success();
+            }
+
+            Assert.Same(requested, generation.PendingReload);
+            requested.Complete(TelemetryConstants.RunReloadOutcomes.Succeeded);
+            return CommandResult.Success();
+        }, _ => { }, cancellation.Token);
+
+        if (scenario == "teardown-threw")
+        {
+            // A cleanup failure still ends the run with its exception.
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => run.DefaultTimeout());
+            Assert.Equal("Owned process cleanup failed.", exception.Message);
+        }
+        else
+        {
+            var result = await run.DefaultTimeout();
+
+            Assert.Equal(scenario switch
+            {
+                "teardown-failed" => 1,
+                "teardown-failed-with-message" or "ended-with-error" => CliExitCodes.FailedToDotnetRunAppHost,
+                _ => CliExitCodes.Success
+            }, result.ExitCode);
+            if (scenario is "teardown-failed" or "teardown-failed-with-message")
+            {
+                // A replacement isn't started, and the run says why.
+                var stopFailed = string.Format(CultureInfo.CurrentCulture, RunCommandStrings.WatchAppHostReplacedAppHostFailed, result.ExitCode);
+                Assert.Equal(scenario == "teardown-failed" ? stopFailed : $"{stopFailed}{Environment.NewLine}Teardown failed.", result.ErrorMessage);
+            }
+        }
+        Assert.Equal(scenario == "handed-over" ? 2 : 1, generations);
+        var reload = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReload));
+        Assert.Equal(outcome, reload.GetTagItem(TelemetryConstants.Tags.RunReloadOutcome));
     }
 
     [Fact]
@@ -448,7 +647,7 @@ public class DotnetWatchAppHostTests
             {
                 throw new InvalidOperationException("Owned process cleanup failed.");
             }
-        }, () => Interlocked.Increment(ref restarts), cancellation.Token);
+        }, _ => Interlocked.Increment(ref restarts), cancellation.Token);
 
         var first = await started.Task.DefaultTimeout();
         await SendAsync(first, DotnetWatchAppHostProtocol.HostStarted, "123:456");

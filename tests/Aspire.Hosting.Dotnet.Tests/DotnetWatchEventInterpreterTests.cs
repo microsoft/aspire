@@ -113,7 +113,7 @@ public class DotnetWatchEventInterpreterTests
         var crashed = Assert.Single(interpreter.OnStatus("process_exited", [s_api], null, 3));
         Assert.Equal(WatchNoticeKind.Crashed, crashed.Kind);
         Assert.Equal(LogLevel.Error, crashed.Level);
-        Assert.Equal("💥 api exited with code 3. Save a source change or restart the complete Aspire run to relaunch it; Restart requires a running application.", crashed.Message);
+        Assert.Equal("💥 api exited with code 3. Save a source change to relaunch it, or use Rebuild to restart it with a fresh build; Restart only relaunches running applications.", crashed.Message);
 
         // The crashed project is relaunched rather than patched; the other one is still hot reloaded.
         var updated = Assert.Single(interpreter.OnStatus("hot_reload_applied", [s_api, s_worker], null, null));

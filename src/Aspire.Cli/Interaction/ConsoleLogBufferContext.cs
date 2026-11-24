@@ -20,6 +20,47 @@ internal sealed class ConsoleLogBufferContext
     private readonly Queue<(TextWriter Writer, string Message)> _bufferedMessages = new();
     private int _interactivePromptDepth;
 
+    internal bool IsInteractivePromptActive
+    {
+        get
+        {
+            lock (_logBufferLock)
+            {
+                return _interactivePromptDepth > 0;
+            }
+        }
+    }
+
+    internal bool TryReadKey(IConsoleInput input, out ConsoleKeyInfo key)
+    {
+        // Starting a prompt and reading a shortcut must be mutually exclusive, otherwise
+        // the background listener can steal the first character intended for the prompt.
+        lock (_logBufferLock)
+        {
+            if (_interactivePromptDepth == 0 && input.KeyAvailable)
+            {
+                key = input.ReadKey(intercept: true);
+                return true;
+            }
+        }
+
+        key = default;
+        return false;
+    }
+
+    internal bool TryRunWithoutInteractivePrompt(Action action)
+    {
+        lock (_logBufferLock)
+        {
+            if (_interactivePromptDepth > 0)
+            {
+                return false;
+            }
+            action();
+            return true;
+        }
+    }
+
     /// <summary>
     /// Begins an interactive prompt scope. Logs are buffered until the outermost scope ends.
     /// </summary>

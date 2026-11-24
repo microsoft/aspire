@@ -504,6 +504,21 @@ public class ResourceNotificationService : IDisposable
     /// <exception cref="DistributedApplicationException"></exception>
     public async Task WaitForDependenciesAsync(IResource resource, CancellationToken cancellationToken)
     {
+        await WaitForDependenciesAsync(resource, isStarting: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Waits for all dependencies of the resource to be ready, showing <see cref="KnownResourceStates.Waiting"/> on the
+    /// instances that <paramref name="isStarting"/> selects.
+    /// </summary>
+    /// <param name="resource">The resource with dependencies to wait for.</param>
+    /// <param name="isStarting">
+    /// Selects the instances whose start waits, or <see langword="null"/> for all of them. An instance whose start was
+    /// canceled while its sibling replicas keep waiting must stay as the cancellation left it.
+    /// </param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    internal async Task WaitForDependenciesAsync(IResource resource, Func<string, bool>? isStarting, CancellationToken cancellationToken)
+    {
         if (!resource.TryGetAnnotationsOfType<WaitAnnotation>(out var waitAnnotations))
         {
             return;
@@ -546,7 +561,7 @@ public class ResourceNotificationService : IDisposable
                 return;
             }
 
-            await PublishWaitingForDependenciesAsync(resource, pendingDependencyCounts.Keys).ConfigureAwait(false);
+            await PublishWaitingForDependenciesAsync(resource, pendingDependencyCounts.Keys, isStarting).ConfigureAwait(false);
 
             using var pendingDependencyLock = new SemaphoreSlim(1, 1);
 
@@ -573,7 +588,7 @@ public class ResourceNotificationService : IDisposable
 
                     if (waitingFor.Length > 0)
                     {
-                        await PublishWaitingForDependenciesAsync(resource, waitingFor).ConfigureAwait(false);
+                        await PublishWaitingForDependenciesAsync(resource, waitingFor, isStarting).ConfigureAwait(false);
                     }
                     else
                     {
@@ -644,7 +659,7 @@ public class ResourceNotificationService : IDisposable
     private static Exception[] GetDependencyFailures(Task allDependencies) =>
         allDependencies.Exception?.InnerExceptions.Where(static ex => ex is not OperationCanceledException).ToArray() ?? [];
 
-    private Task PublishWaitingForDependenciesAsync(IResource resource, IEnumerable<string> dependencyNames)
+    private async Task PublishWaitingForDependenciesAsync(IResource resource, IEnumerable<string> dependencyNames, Func<string, bool>? isStarting)
     {
         var waitingFor = dependencyNames
             .Where(static dependencyName => !string.IsNullOrWhiteSpace(dependencyName))
@@ -657,14 +672,19 @@ public class ResourceNotificationService : IDisposable
         // so they are always allowed to transition to Waiting if they are waiting on dependencies.
         var allowNotStarted = !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() || !resource.TryGetInstances(out _);
 
-        return PublishUpdateAsync(resource, s =>
-            CanTransitionToWaiting(s.State?.Text, allowNotStarted)
-                ? s with
-                {
-                    State = KnownResourceStates.Waiting,
-                    Properties = s.Properties.SetResourceProperty(KnownProperties.Resource.WaitingFor, waitingFor)
-                }
-                : s);
+        foreach (var resourceId in resource.GetResolvedResourceNames())
+        {
+            // Checked inside the update, under the instance's lock: a Stop that cancels the instance's start marks it
+            // canceled before it publishes NotStarted, so this update can't put a stopped instance back into Waiting.
+            await PublishUpdateAsync(resource, resourceId, s =>
+                (isStarting?.Invoke(resourceId) ?? true) && CanTransitionToWaiting(s.State?.Text, allowNotStarted)
+                    ? s with
+                    {
+                        State = KnownResourceStates.Waiting,
+                        Properties = s.Properties.SetResourceProperty(KnownProperties.Resource.WaitingFor, waitingFor)
+                    }
+                    : s).ConfigureAwait(false);
+        }
     }
 
     private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>

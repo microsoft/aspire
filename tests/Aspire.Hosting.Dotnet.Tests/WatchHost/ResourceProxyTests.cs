@@ -362,6 +362,32 @@ public class ResourceProxyTests
     }
 
     [Fact]
+    public async Task LaunchGateReleasesWhenTheMarkerAppearsByRename()
+    {
+        // The gate polls for the marker: a created-file notification isn't raised for a rename, and notifications can be
+        // coalesced or dropped.
+        var directory = Directory.CreateTempSubdirectory("aspire-launch-gate-");
+        try
+        {
+            var marker = Path.Combine(directory.FullName, "launched0-1-AB");
+            using var first = await LaunchGate.EnterAsync(marker, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.NotNull(first);
+            var release = first.ReleaseAfterLaunchAsync(new TaskCompletionSource().Task);
+            var staged = Path.Combine(directory.FullName, "staged");
+            await File.WriteAllBytesAsync(staged, []);
+
+            File.Move(staged, marker);
+
+            await release.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Null(await LaunchGate.EnterAsync(marker, CancellationToken.None));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task LaunchGateWaitIsCancelable()
     {
         var directory = Directory.CreateTempSubdirectory("aspire-launch-gate-");

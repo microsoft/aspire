@@ -87,12 +87,39 @@ public class DotnetWatchRunEnvironmentTests
     [InlineData(0)]
     [InlineData(7102)]
     [InlineData(7109)]
+    [InlineData(7115)]
     [InlineData(7199)]
     public void DiagnosticAndRetiredIdsCannotEnterTheTerminalNoticeChannel(int eventId)
     {
         var entry = CreateEntry(RunCommand.WatchNoticeCategory, LogLevel.Error, "RAW\nWATCHER DIAGNOSTIC");
         entry.EventId = new(eventId);
         Assert.Null(RunCommand.FormatWatchNotice(entry));
+    }
+
+    [Fact]
+    public void FreshWatcherReloadNoticeUsesTheIntentionalNoticeChannel()
+    {
+        var entry = CreateEntry(RunCommand.WatchNoticeCategory, LogLevel.Information,
+            "🔄 Restarting watch group 'dotnet-watch' (api, worker) with a fresh build…");
+        entry.EventId = new(7113);
+        var time = entry.Timestamp.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.Equal($"[grey]{time}[/] 🔄 Restarting watch group 'dotnet-watch' (api, worker) with a fresh build…",
+            RunCommand.FormatWatchNotice(entry));
+    }
+
+    [Fact]
+    public void OrphanPurgeNoticeUsesTheIntentionalNoticeChannel()
+    {
+        var entry = CreateEntry(RunCommand.WatchNoticeCategory, LogLevel.Warning,
+            "🧹 The watcher relaunched api after it was stopped. Restarting watch group 'dotnet-watch' with a fresh watcher " +
+            "to end that process; stopped services stay stopped.");
+        entry.EventId = new(7114);
+        var time = entry.Timestamp.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.Equal($"[grey]{time}[/] [yellow]🧹 The watcher relaunched api after it was stopped. Restarting watch group " +
+            "'dotnet-watch' with a fresh watcher to end that process; stopped services stay stopped.[/]",
+            RunCommand.FormatWatchNotice(entry));
     }
 
     private static BackchannelLogEntry CreateEntry(string category, LogLevel level, string message) => new()

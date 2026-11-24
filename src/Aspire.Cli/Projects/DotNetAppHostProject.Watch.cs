@@ -104,9 +104,7 @@ internal sealed partial class DotNetAppHostProject
         using var stopAttempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stopStartupWait = CancellationTokenSource.CreateLinkedTokenSource(stopAttempt.Token);
         Task? startupDisconnect = null;
-        var childExit = generation.RequiresLauncherMonitoring
-            ? WaitForAnnouncedHostExitAsync(generation.HostStarted, stopStartupWait.Token)
-            : null;
+        var childExit = WaitForAnnouncedHostExitAsync(generation.HostStarted, stopStartupWait.Token);
         var watchBackchannel = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
         context.OutputCollector?.MarkWatcherOutput();
         var run = _runner.RunAppHostCommandAsync(
@@ -121,9 +119,8 @@ internal sealed partial class DotNetAppHostProject
 
         try
         {
-            await Task.WhenAny(childExit is null ? [run, watchBackchannel.Task] : [run, watchBackchannel.Task, childExit])
-                .ConfigureAwait(false);
-            if (childExit?.IsCompletedSuccessfully == true)
+            await Task.WhenAny(run, watchBackchannel.Task, childExit).ConfigureAwait(false);
+            if (childExit.IsCompletedSuccessfully)
             {
                 return await FailExitedChildStartupAsync().ConfigureAwait(false);
             }
@@ -134,10 +131,8 @@ internal sealed partial class DotNetAppHostProject
                 startupDisconnect = backchannel.WaitForDisconnectAsync(stopStartupWait.Token);
                 // RunCommand's existing startup budget and cancellation bound this wait. A
                 // healthy backchannel alone cannot establish the initial real process identity.
-                await Task.WhenAny(childExit is null
-                    ? [generation.HostStarted, startupDisconnect, run]
-                    : [generation.HostStarted, startupDisconnect, run, childExit]).WaitAsync(cancellationToken).ConfigureAwait(false);
-                if (childExit?.IsCompletedSuccessfully == true)
+                await Task.WhenAny(generation.HostStarted, startupDisconnect, run, childExit).WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (childExit.IsCompletedSuccessfully)
                 {
                     return await FailExitedChildStartupAsync().ConfigureAwait(false);
                 }
@@ -146,6 +141,10 @@ internal sealed partial class DotNetAppHostProject
                     // The real runner gates the connection on HostStarted. Reject any earlier
                     // candidate rather than authenticate its stale connection with a subsequent
                     // rude-edit child's first announcement.
+                    if (generation.IsReplacement)
+                    {
+                        return await WaitForReplacementAsync().ConfigureAwait(false);
+                    }
                     backchannelCompletionSource.TrySetException(new InvalidOperationException(RunCommandStrings.WatchAppHostIdentityRequired));
                     await stopAttempt.CancelAsync().ConfigureAwait(false);
                     return CliExitCodes.FailedToDotnetRunAppHost;
@@ -162,6 +161,11 @@ internal sealed partial class DotNetAppHostProject
 
             if (watchBackchannel.Task.IsFaulted)
             {
+                if (generation.IsReplacement)
+                {
+                    _logger.LogDebug(watchBackchannel.Task.Exception, "The replacement AppHost backchannel failed to connect.");
+                    return await WaitForReplacementAsync().ConfigureAwait(false);
+                }
                 backchannelCompletionSource.TrySetException(watchBackchannel.Task.Exception!.InnerExceptions);
                 // Backchannel negotiation failure after launch is an AppHost failure, not
                 // permission to execute startup code a second time through ordinary launch.
@@ -190,15 +194,12 @@ internal sealed partial class DotNetAppHostProject
                     {
                     }
                 }
-                if (childExit is not null)
+                try
                 {
-                    try
-                    {
-                        await childExit.ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (stopStartupWait.IsCancellationRequested)
-                    {
-                    }
+                    await childExit.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stopStartupWait.IsCancellationRequested)
+                {
                 }
             }
             finally
@@ -222,9 +223,21 @@ internal sealed partial class DotNetAppHostProject
                 RunCommandStrings.WatchAppHostExitedDuringStartup,
                 _fileLoggerProvider.LogFilePath);
             _logger.LogError("{Message}", message);
+            if (generation.IsReplacement)
+            {
+                return await WaitForReplacementAsync().ConfigureAwait(false);
+            }
             backchannelCompletionSource.TrySetException(new InvalidOperationException(message));
             await stopAttempt.CancelAsync().ConfigureAwait(false);
             return CliExitCodes.FailedToDotnetRunAppHost;
+        }
+
+        Task<int> WaitForReplacementAsync()
+        {
+            // Keep the host watcher alive after its child fails. A save starts another
+            // child, whose new instance notification invalidates this generation.
+            generation.MarkStartupFailed();
+            return run.WaitAsync(cancellationToken);
         }
     }
 

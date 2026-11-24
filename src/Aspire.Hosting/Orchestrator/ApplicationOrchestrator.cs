@@ -125,6 +125,18 @@ internal sealed class ApplicationOrchestrator
             return;
         }
 
+#pragma warning disable ASPIREWATCH001 // Dependency wait filters are experimental.
+        // An integration that relaunches an instance whose dependencies were already satisfied in this run can skip
+        // the wait. Otherwise a dependency that ran to completion (for example a database migration) could hold the
+        // relaunch forever, because it doesn't run again.
+        if (@event.ResourceInstanceId is { } instanceId &&
+            @event.Resource.TryGetLastAnnotation<ResourceDependencyWaitFilterAnnotation>(out var waitFilter) &&
+            !waitFilter.ShouldWait(instanceId))
+        {
+            return;
+        }
+#pragma warning restore ASPIREWATCH001
+
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         // Wait for either dependencies to be ready or for someone to move the resource out of a waiting state.
@@ -159,6 +171,15 @@ internal sealed class ApplicationOrchestrator
                     return false;
                 }
 
+                // A Stop that cancels an instance's start before it reaches DCP moves the instance from Waiting to
+                // NotStarted. That isn't a request to start: for replicas that start together, it would start the
+                // replica's siblings without their dependencies.
+                if (_dcpExecutor.IsStartCanceled(e.ResourceId))
+                {
+                    _ = waitingResourceIds.Remove(e.ResourceId);
+                    return false;
+                }
+
                 if (e.Snapshot.State?.Text == KnownResourceStates.Waiting)
                 {
                     _ = waitingResourceIds.Add(e.ResourceId);
@@ -171,7 +192,8 @@ internal sealed class ApplicationOrchestrator
 
         try
         {
-            var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, cts.Token);
+            var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(
+                @event.Resource, isStarting: id => !_dcpExecutor.IsStartCanceled(id), cts.Token);
             if (waitForDependenciesTask.IsCompletedSuccessfully)
             {
                 // Nothing to wait for after all, e.g. every dependency is a resource without a lifetime.
@@ -282,7 +304,7 @@ internal sealed class ApplicationOrchestrator
                     .ConfigureAwait(false);
 
                     Debug.Assert(context.DcpResourceName is not null, "Container that is starting should always include the DCP name.");
-                    await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
+                    await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null, isCurrent: null).ConfigureAwait(false);
                     break;
                 }
             default:
@@ -295,11 +317,26 @@ internal sealed class ApplicationOrchestrator
         };
         await _eventing.PublishAsync(beforeResourceStartedEvent, context.CancellationToken).ConfigureAwait(false);
 
-        static Task PublishUpdateAsync(ResourceNotificationService notificationService, IResource resource, string? resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
+        Task PublishUpdateAsync(ResourceNotificationService notificationService, IResource resource, string? resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
         {
             return resourceId != null
                 ? notificationService.PublishUpdateAsync(resource, resourceId, stateFactory)
-                : notificationService.PublishUpdateAsync(resource, stateFactory);
+                : PublishToStartingInstancesAsync(notificationService, resource, stateFactory);
+        }
+    }
+
+    /// <summary>
+    /// Publishes an update to the instances of a resource whose replicas start together, except a replica that was
+    /// stopped before it reached DCP: it stays NotStarted while its siblings start.
+    /// </summary>
+    private async Task PublishToStartingInstancesAsync(ResourceNotificationService notificationService, IResource resource, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
+    {
+        foreach (var resourceId in resource.GetResolvedResourceNames())
+        {
+            // Checked inside the update, under the instance's lock: a Stop marks the start canceled before it publishes
+            // NotStarted, so a replica that it stopped meanwhile isn't shown as starting again.
+            await notificationService.PublishUpdateAsync(resource, resourceId,
+                s => _dcpExecutor.IsStartCanceled(resourceId) ? s : stateFactory(s)).ConfigureAwait(false);
         }
     }
 
@@ -644,11 +681,21 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceChanged(OnResourceChangedContext context)
     {
-        await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot).ConfigureAwait(false);
+        if (context.IsCurrent is { } isCurrent && !isCurrent())
+        {
+            return;
+        }
+
+        // The change is checked again inside each update, so that it can't replace newer states of the resource or its
+        // children that were published meanwhile (see OnResourceChangedContext.IsCurrent).
+        Func<CustomResourceSnapshot, CustomResourceSnapshot> updateSnapshot = context.IsCurrent is { } current
+            ? s => current() ? context.UpdateSnapshot(s) : s
+            : context.UpdateSnapshot;
+        await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, updateSnapshot).ConfigureAwait(false);
 
         if (context.ResourceType == KnownResourceTypes.Container)
         {
-            await SetChildResourceAsync(context.Resource, context.Status.State, context.Status.StartupTimestamp, context.Status.FinishedTimestamp).ConfigureAwait(false);
+            await SetChildResourceAsync(context.Resource, context.Status.State, context.Status.StartupTimestamp, context.Status.FinishedTimestamp, context.IsCurrent).ConfigureAwait(false);
         }
 
         // Use the previous DCP state from the context, not the published snapshot. A stopped handler
@@ -679,7 +726,7 @@ internal sealed class ApplicationOrchestrator
 
             if (context.ResourceType == KnownResourceTypes.Container)
             {
-                await SetChildResourceAsync(context.Resource, KnownResourceStates.FailedToStart, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
+                await SetChildResourceAsync(context.Resource, KnownResourceStates.FailedToStart, startTimeStamp: null, stopTimeStamp: null, isCurrent: null).ConfigureAwait(false);
             }
         }
         else
@@ -737,13 +784,70 @@ internal sealed class ApplicationOrchestrator
         }
     }
 
-    public async Task StopResourceAsync(string resourceName, CancellationToken cancellationToken)
+#pragma warning disable ASPIREWATCH001 // Canceling a pending start is experimental.
+    /// <summary>
+    /// Stops an instance. A start of it that hasn't reached DCP is canceled instead, and an instance that isn't running
+    /// is left as it is.
+    /// </summary>
+    public async Task<ResourceStopResult> StopResourceAsync(string resourceName, CancellationToken cancellationToken)
     {
         var resourceReference = _dcpExecutor.GetResource(resourceName);
-        await _dcpExecutor.StopResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false);
+        switch (await TryCancelPendingStartAsync(resourceReference, cancellationToken).ConfigureAwait(false))
+        {
+            case ResourceStartCancellationResult.Canceled:
+                return ResourceStopResult.StartCanceled;
+            case ResourceStartCancellationResult.NotStarted:
+                return ResourceStopResult.NotRunning;
+        }
+
+        return await _dcpExecutor.StopResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false)
+            ? ResourceStopResult.Stopped
+            : ResourceStopResult.NotRunning;
     }
 
-    private async Task SetChildResourceAsync(IResource resource, string? state, DateTime? startTimeStamp, DateTime? stopTimeStamp)
+    /// <summary>
+    /// Cancels the start of an instance if it hasn't reached DCP, and reports whether there's anything left to stop.
+    /// </summary>
+    public async Task<ResourceStartCancellationResult> TryCancelPendingStartAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        IResourceReference resourceReference;
+        try
+        {
+            resourceReference = _dcpExecutor.GetResource(resourceName);
+        }
+        catch (InvalidOperationException)
+        {
+            // Not a DCP resource, so Aspire doesn't start it and there's nothing to cancel or stop here.
+            return ResourceStartCancellationResult.NotStarted;
+        }
+
+        return await TryCancelPendingStartAsync(resourceReference, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ResourceStartCancellationResult> TryCancelPendingStartAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+    {
+        switch (await _dcpExecutor.CancelPendingStartAsync(resourceReference, cancellationToken).ConfigureAwait(false))
+        {
+            case PendingStartCancellation.Canceled:
+                return ResourceStartCancellationResult.Canceled;
+            case PendingStartCancellation.Committed:
+                return ResourceStartCancellationResult.Started;
+        }
+
+        // Nothing is pending. Without a DCP object (the instance never started, or its start was canceled or failed
+        // before it reached DCP) there's nothing to stop, and neither is there for an explicit-start object that wasn't
+        // started. Otherwise DCP knows the instance, possibly running: for example, a persistent container that DCP
+        // found already running.
+        var notStarted = !_dcpExecutor.HasDcpObject(resourceReference) ||
+            _notificationService.TryGetCurrentState(resourceReference.DcpResourceName, out var current) &&
+            current.Snapshot.State?.Text == KnownResourceStates.NotStarted;
+        return notStarted ? ResourceStartCancellationResult.NotStarted : ResourceStartCancellationResult.Started;
+    }
+#pragma warning restore ASPIREWATCH001
+
+    // isCurrent says whether the state still applies; it's checked inside each child's update (see
+    // OnResourceChangedContext.IsCurrent). Null means that it always applies.
+    private async Task SetChildResourceAsync(IResource resource, string? state, DateTime? startTimeStamp, DateTime? stopTimeStamp, Func<bool>? isCurrent)
     {
         foreach (var child in _parentChildLookup[resource].Where(c => c is IResourceWithParent))
         {
@@ -753,7 +857,7 @@ internal sealed class ApplicationOrchestrator
                 continue;
             }
 
-            await _notificationService.PublishUpdateAsync(child, s => s with
+            await _notificationService.PublishUpdateAsync(child, s => isCurrent?.Invoke() == false ? s : s with
             {
                 State = state,
                 StartTimeStamp = startTimeStamp,
@@ -761,7 +865,7 @@ internal sealed class ApplicationOrchestrator
             }).ConfigureAwait(false);
 
             // Recurse to set the child resources of the child.
-            await SetChildResourceAsync(child, state, startTimeStamp, stopTimeStamp)
+            await SetChildResourceAsync(child, state, startTimeStamp, stopTimeStamp, isCurrent)
                 .ConfigureAwait(false);
         }
     }

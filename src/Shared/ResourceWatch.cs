@@ -12,6 +12,13 @@ internal static class ResourceWatch
     internal const string Native = "native";
 
     internal const string Capability = "resource-watch-status.v1";
+
+    /// <summary>
+    /// The AppHost serves <c>ReloadWatchedResourcesAsync</c>, which runs the Rebuild command of one resource in every
+    /// watch group. Rebuild on a resource that reports <see cref="LogResourceProperty"/> replaces its whole group's
+    /// watcher with a fresh one that builds from source.
+    /// </summary>
+    internal const string ReloadCapability = "resource-watch-reload.v1";
     internal const string NoticeCategory = "Aspire.Hosting.ResourceWatch";
     internal const int InvalidConfigurationEventId = 7190;
 

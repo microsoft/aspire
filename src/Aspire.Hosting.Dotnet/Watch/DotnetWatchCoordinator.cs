@@ -30,6 +30,16 @@ internal sealed class DotnetWatchServerResource(string name, string workingDirec
     : ExecutableResource(name, "dotnet", workingDirectory);
 
 /// <summary>
+/// The watcher's contained cleanup wasn't confirmed, so its processes may still be running. Starting another watcher
+/// for the same projects could overlap them, so the group can't recover in this run.
+/// </summary>
+internal sealed class DotnetWatchCleanupException(string message) : DistributedApplicationException(message);
+
+/// <summary>Replacing or resuming a watch group failed after it began stopping the group's services.</summary>
+internal sealed class DotnetWatchRefreshException(string message, Exception innerException)
+    : DistributedApplicationException(message, innerException);
+
+/// <summary>
 /// Coordinates evaluated build ownership, contained service watchers, and their resource proxies.
 /// </summary>
 /// <remarks>
@@ -247,6 +257,20 @@ internal static class DotnetWatchCoordinator
         DotnetProjectResource resource, string path, IServiceProvider services, CancellationToken cancellationToken) =>
         GetWatchedProjectForTesting(resource).Server.OnProjectFileChangeForTestingAsync(
             path, services, cancellationToken);
+
+    /// <summary>Test hook: reports a watcher <c>process_started</c> status for the project of <paramref name="resource"/>.</summary>
+    internal static Task ReportProcessStartedForTestingAsync(DotnetProjectResource resource, IServiceProvider services)
+    {
+        var project = GetWatchedProjectForTesting(resource);
+        return project.Server.OnProcessStartedForTestingAsync(project, services);
+    }
+
+    /// <summary>
+    /// Test hook: replaces the wait between the checks of an instance that Rebuild or Start waits for, in the watch group
+    /// of <paramref name="resource"/>.
+    /// </summary>
+    internal static void SetReloadPollDelayForTesting(DotnetProjectResource resource, Func<TimeSpan, CancellationToken, Task> delay) =>
+        GetWatchedProjectForTesting(resource).Server.ReloadPollDelay = delay;
 
     private static WatchedProject GetWatchedProjectForTesting(DotnetProjectResource resource)
     {
@@ -523,7 +547,7 @@ internal static class DotnetWatchCoordinator
                     {
                         if (Projects.Any(project => ReferenceEquals(project.Resource, resource)))
                         {
-                            throw new DistributedApplicationException(DotnetWatchMember.RebuildExplanation);
+                            throw new DistributedApplicationException(DotnetWatchMember.WatchedRebuilderExplanation);
                         }
                         if (resource is DotnetProjectResource dotnet &&
                             ExcludedProjects.FirstOrDefault(project => ReferenceEquals(project.Resource, resource))?.BuildCoordinator is { } coordinator)
@@ -1093,7 +1117,7 @@ internal static class DotnetWatchCoordinator
                     if (DotnetWatchProjectGraph.SharesOutputs(current, project.Graph!))
                     {
                         var reason = $"Ordinary build '{resource.Name}' now overlaps watched output ownership for '{project.Resource.Name}'. Restart the complete watch run.";
-                        project.Server.RequestFailure(reason);
+                        project.Server.RequestFailure(reason, recoverable: false);
                         throw new DotnetWatchIncompatibleGraphException(reason);
                     }
                 }
@@ -1471,10 +1495,22 @@ internal static class DotnetWatchCoordinator
             : StringComparison.Ordinal;
     }
 
-    private sealed class WatchServer
+    private sealed class WatchServer : IDotnetWatchGroup
     {
         // How long the Restart command waits for the watcher to relaunch the service.
         private static readonly TimeSpan s_restartTimeout = TimeSpan.FromMinutes(1);
+
+        // After a project's first relaunch, how long Restart waits for its other instances. The watcher relaunches
+        // running instances only, and its project-level events don't say which replica had crashed.
+        private static readonly TimeSpan s_restartSettleTimeout = TimeSpan.FromSeconds(15);
+
+        // How long Rebuild and Start wait for their instance after the fresh watcher's build succeeded.
+        private static readonly TimeSpan s_reloadStartTimeout = TimeSpan.FromMinutes(1);
+
+        // Waits between the checks of an instance that Rebuild or Start waits for. Tests replace it to run something
+        // between two checks.
+        internal Func<TimeSpan, CancellationToken, Task> ReloadPollDelay { get; set; } =
+            static (delay, cancellationToken) => Task.Delay(delay, cancellationToken);
 
         private readonly WatchState _state;
         private readonly int _index;
@@ -1486,9 +1522,11 @@ internal static class DotnetWatchCoordinator
         private Task? _resourceMonitorTask;
         private ILogger? _lifecycleLogger;
         private Task? _maintenanceTask;
+        /// <summary>Identifies the registered maintenance loop, so a retiring loop can't unregister its successor.</summary>
+        private object? _maintenanceLoop;
         private CancellationToken _stopping;
         private volatile bool _fenced;
-        private volatile string? _failure;
+        private volatile DotnetWatchGroupFailure? _failure;
         private int _failureScheduled;
         private readonly object _maintenanceGate = new();
         private readonly HashSet<string> _pendingChanges = new(StringComparer.Ordinal);
@@ -1513,6 +1551,10 @@ internal static class DotnetWatchCoordinator
 
         // Completed by the watcher's first successful build of the current server run; re-armed when the server restarts.
         private TaskCompletionSource _successfulBuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Completed by the first build_complete of the current watcher run (true when it succeeded). Unlike
+        // _successfulBuild it also reports a failed build, which is what a command that replaced the watcher reports.
+        private TaskCompletionSource<bool> _buildOutcome = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _noticeGate = new();
         private DotnetWatchEventInterpreter? _interpreter;
 
@@ -1520,7 +1562,23 @@ internal static class DotnetWatchCoordinator
         private DotnetWatchControlPipeServer? _control;
 
         // Restart commands waiting for the watcher to relaunch their project (process_started).
-        private readonly List<(string ProjectPath, TaskCompletionSource Started)> _pendingRestarts = [];
+        private readonly List<RestartWaiter> _pendingRestarts = [];
+
+        // Restart commands in progress, by project path. The command runs once per replica in parallel, and one
+        // control-pipe restart relaunches every running instance of the project, so the calls share it.
+        private readonly Dictionary<string, Task<ExecuteCommandResult>> _projectRestarts = new(DotnetWatchProjectGraph.PathComparer);
+
+        // The command-driven reload that the next or current fresh watcher satisfies (guarded by _maintenanceGate).
+        private ReloadOperation? _reload;
+
+        // The reload that a maintenance pass is performing, until the pass completes its refresh (guarded by
+        // _maintenanceGate). An orphan purge can replace _reload with another reload while the pass runs, so a failure
+        // fails this one as well; otherwise its commands would wait for a refresh that never completes.
+        private ReloadOperation? _refreshing;
+
+        // Manually stopped instances that a Start command made intended again, with the reload that starts them
+        // (guarded by _maintenanceGate).
+        private readonly List<(DotnetWatchMember Member, string Id, ReloadOperation Operation)> _requestedStarts = [];
 
         public WatchServer(WatchState state, string name, int index, string? sdkScope, DotnetProjectResource? dedicatedTo)
         {
@@ -1572,7 +1630,7 @@ internal static class DotnetWatchCoordinator
                 }
                 else if (!_stopping.IsCancellationRequested)
                 {
-                    RequestFailure("The watcher owner stopped unexpectedly. Restart the complete watch run.");
+                    RequestFailure("The watcher owner stopped unexpectedly.", recoverable: true);
                 }
                 return Task.CompletedTask;
             });
@@ -1580,6 +1638,27 @@ internal static class DotnetWatchCoordinator
 
         public IResourceBuilder<DotnetWatchServerResource> Builder { get; }
         public DotnetWatchServerResource Resource => Builder.Resource;
+
+        string IDotnetWatchGroup.Name => Resource.Name;
+        bool IDotnetWatchGroup.IsReady => _ready;
+        bool IDotnetWatchGroup.IsFenced => _fenced;
+        DotnetWatchGroupFailure? IDotnetWatchGroup.Failure => _failure;
+        IReadOnlyList<string> IDotnetWatchGroup.ResourceNames => [.. Projects.Select(project => project.Resource.Name)];
+
+        bool IDotnetWatchGroup.IsSingleInstance(DotnetProjectResource resource) =>
+            GetProject(resource) is { } project &&
+            Projects.Where(candidate => PathsEqual(candidate.ProjectPath, project.ProjectPath))
+                .Sum(candidate => candidate.Resource.GetReplicaCount()) == 1;
+
+        Task<ExecuteCommandResult> IDotnetWatchGroup.StopAsync(
+            DotnetProjectResource resource, ResourceCommandAnnotation original, ExecuteCommandContext context) =>
+            StopAsync(GetRequiredProject(resource), original, context);
+
+        private WatchedProject? GetProject(DotnetProjectResource resource) =>
+            Projects.FirstOrDefault(project => ReferenceEquals(project.Resource, resource));
+
+        private WatchedProject GetRequiredProject(DotnetProjectResource resource) =>
+            GetProject(resource) ?? throw new InvalidOperationException($"'{resource.Name}' isn't watched by '{Resource.Name}'.");
         public string ResourcePipeName => OperatingSystem.IsWindows()
             ? $"aspire-watch-{_state.Id}-{_index}"
             : Path.Combine(_state.RunDirectory, $"res{_index}.sock");
@@ -1651,7 +1730,9 @@ internal static class DotnetWatchCoordinator
                 _projectFileWatcher?.Dispose();
                 _monitorCts?.Cancel();
                 _successfulBuild.TrySetCanceled(_stopping);
+                _buildOutcome.TrySetCanceled(_stopping);
                 SettleRestartWaiters(new OperationCanceledException(_stopping));
+                FailReload(new OperationCanceledException(_stopping));
             });
             _resourceMonitorTask = Task.Run(async () =>
             {
@@ -1664,15 +1745,12 @@ internal static class DotnetWatchCoordinator
                         {
                             continue;
                         }
-                        member.ObserveTransport(update.ResourceId, update.Snapshot);
-                        var state = update.Snapshot.Properties.FirstOrDefault(property =>
-                            property.Name == DotnetWatchMember.TransportStateProperty)?.Value as string;
-                        if (!_fenced && !member.IsManuallyStopped(update.ResourceId) &&
-                            !member.IsCoordinatorStopping(update.ResourceId) &&
-                            !member.IsCoordinatorStarting(update.ResourceId) &&
-                            state is not null && KnownResourceStates.TerminalStates.Contains(state))
+                        // Judge the instance by the member's record, which the projection updates as each snapshot is
+                        // published, rather than by this update: the monitor can read an update after newer ones, such as
+                        // the exit of a manual Stop after a Start already relaunched the instance.
+                        if (!_fenced && member.HasUnexpectedTransportExit(update.ResourceId))
                         {
-                            RequestFailure($"The resource proxy '{update.ResourceId}' stopped unexpectedly. Restart the watch run.");
+                            RequestFailure($"The resource proxy '{update.ResourceId}' stopped unexpectedly.", recoverable: true);
                         }
                     }
                 }
@@ -1692,11 +1770,7 @@ internal static class DotnetWatchCoordinator
 
         public void ConfigureLifecycle(WatchedProject project)
         {
-            var member = new DotnetWatchMember(project.Resource, () => _ready, () => _fenced, () => _failure,
-                () => Projects.Where(candidate => PathsEqual(candidate.ProjectPath, project.ProjectPath))
-                    .Sum(candidate => candidate.Resource.GetReplicaCount()) == 1,
-                context => RestartAsync(project, context),
-                (original, context) => StopAsync(project, original, context));
+            var member = new DotnetWatchMember(project.Resource, this);
             project.Member = member;
             member.Configure();
             _state.Builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
@@ -1725,6 +1799,11 @@ internal static class DotnetWatchCoordinator
                     if (_successfulBuild.Task.IsCompleted)
                     {
                         _successfulBuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+
+                    if (_buildOutcome.Task.IsCompleted)
+                    {
+                        _buildOutcome = new(TaskCreationOptions.RunContinuationsAsynchronously);
                     }
 
                     _prepareTask = PrepareWithNoticeAsync(services, _generation, _successfulBuild, _monitorCts.Token, cancellationToken);
@@ -1822,6 +1901,7 @@ internal static class DotnetWatchCoordinator
                     _lastBuildError = null;
                     _ready = true;
                     successfulBuild.TrySetResult();
+                    _buildOutcome.TrySetResult(true);
                     if (_pendingResume is not null)
                     {
                         ScheduleMaintenance(resume: true);
@@ -1829,15 +1909,23 @@ internal static class DotnetWatchCoordinator
                 }
                 catch (DistributedApplicationException exception)
                 {
-                    RequestFailure(WithRestartInstruction(
+                    RequestFailure(
                         $"Initial watch build inventory validation failed: {exception.Message}",
-                        "Restart the complete watch run."));
+                        recoverable: exception is not DotnetWatchIncompatibleGraphException);
                     throw;
                 }
             }
             else
             {
                 _lastBuildError = error ?? "the build failed";
+                lock (_maintenanceGate)
+                {
+                    // A pending build-input change replaces this watcher; its build reports the outcome.
+                    if (_pendingChanges.Count == 0)
+                    {
+                        _buildOutcome.TrySetResult(false);
+                    }
+                }
             }
         }
 
@@ -1865,7 +1953,8 @@ internal static class DotnetWatchCoordinator
             }
             catch (DistributedApplicationException ex)
             {
-                RequestFailure($"Hot reload could not start after build handoff: {ex.Message} Restart the watch run.");
+                RequestFailure($"Hot reload could not start after build handoff: {ex.Message}",
+                    recoverable: ex is not DotnetWatchIncompatibleGraphException);
                 throw;
             }
         }
@@ -1942,7 +2031,7 @@ internal static class DotnetWatchCoordinator
 
             // The pipe listeners must exist before the watcher connects to them.
             var control = new DotnetWatchControlPipeServer(controlPipeName,
-                exception => RequestFailure($"Watch control transport failed: {exception.Message} Restart the watch run."));
+                exception => RequestFailure($"Watch control transport failed: {exception.Message}", recoverable: true));
             control.Start();
             if (Interlocked.Exchange(ref _control, control) is { } previous)
             {
@@ -2034,6 +2123,7 @@ internal static class DotnetWatchCoordinator
                         throw new InvalidDataException("The watcher reported a process for an unknown entry point.");
                     }
 
+                    var buildFailed = false;
                     if (status.Type == DotnetWatchStatusTypes.BuildComplete)
                     {
                         if (status.Success != true && _ready && RebuildFileBasedAppIfStuck(services, status.Projects ?? []))
@@ -2041,8 +2131,12 @@ internal static class DotnetWatchCoordinator
                             continue;
                         }
 
-                        await OnBuildCompleteAsync(status.Success == true, DotnetWatchEventInterpreter.FailureDetail(Resource.Name),
-                            successfulBuild, services, cts.Token).ConfigureAwait(false);
+                        buildFailed = status.Success != true;
+                        if (!buildFailed)
+                        {
+                            await OnBuildCompleteAsync(success: true, DotnetWatchEventInterpreter.FailureDetail(Resource.Name),
+                                successfulBuild, services, cts.Token).ConfigureAwait(false);
+                        }
                     }
 
                     IReadOnlyList<WatchNotice> notices;
@@ -2058,13 +2152,9 @@ internal static class DotnetWatchCoordinator
                         if (status.Type == DotnetWatchStatusTypes.ProcessStarted)
                         {
                             File.WriteAllBytes(GetLaunchMarkerPath(path, generation), []);
-                            CompletePendingRestarts(path);
                         }
 
-                        foreach (var target in Projects.Where(p => PathsEqual(p.ProjectPath, path)))
-                        {
-                            await PublishWatchEventAsync(notifications, target, status).ConfigureAwait(false);
-                        }
+                        await OnProjectEventAsync(services, notifications, path, status).ConfigureAwait(false);
                     }
                     if (projects.Length == 0 && status.Type is DotnetWatchStatusTypes.Building or DotnetWatchStatusTypes.BuildComplete)
                     {
@@ -2073,11 +2163,19 @@ internal static class DotnetWatchCoordinator
                             await PublishWatchEventAsync(notifications, project, status).ConfigureAwait(false);
                         }
                     }
+                    if (buildFailed)
+                    {
+                        // Report a failed build only after its services show it. A Rebuild that waits for the fresh build
+                        // returns as soon as the failure is reported, and the reload RPC then reads the services' watch
+                        // state to tell a failed build from other failures.
+                        await OnBuildCompleteAsync(success: false, DotnetWatchEventInterpreter.FailureDetail(Resource.Name),
+                            successfulBuild, services, cts.Token).ConfigureAwait(false);
+                    }
                 }
 
                 if (!cts.IsCancellationRequested)
                 {
-                    RequestFailure("The watcher closed its status pipe unexpectedly. Application outcomes are unknown; restart the watch run.");
+                    RequestFailure("The watcher closed its status pipe unexpectedly. Application outcomes are unknown.", recoverable: true);
                 }
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested)
@@ -2086,40 +2184,122 @@ internal static class DotnetWatchCoordinator
             catch (Exception ex)
             {
                 serverLogger.LogError(ex, "Watch status monitor failed.");
-                RequestFailure($"Watch status transport failed: {ex.Message} Restart the watch run.");
+                RequestFailure($"Watch status transport failed: {ex.Message}", recoverable: true);
             }
         }
 
-        private async Task<ExecuteCommandResult> RestartAsync(WatchedProject project, ExecuteCommandContext context)
+        async Task<ExecuteCommandResult> IDotnetWatchGroup.RestartProjectAsync(DotnetProjectResource resource, ExecuteCommandContext context)
+        {
+            var project = GetRequiredProject(resource);
+            var key = DotnetWatchProjectGraph.Normalize(project.ProjectPath);
+            var restart = new TaskCompletionSource<ExecuteCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Task<ExecuteCommandResult>? running;
+            lock (_projectRestarts)
+            {
+                if (!_projectRestarts.TryGetValue(key, out running))
+                {
+                    _projectRestarts[key] = restart.Task;
+                }
+            }
+            if (running is not null)
+            {
+                return await running.ConfigureAwait(false);
+            }
+
+            try
+            {
+                var result = await RestartProjectCoreAsync(project, context).ConfigureAwait(false);
+                restart.TrySetResult(result);
+                return result;
+            }
+            catch (Exception exception)
+            {
+                restart.TrySetException(exception);
+                throw;
+            }
+            finally
+            {
+                lock (_projectRestarts)
+                {
+                    if (_projectRestarts.TryGetValue(key, out var current) && ReferenceEquals(current, restart.Task))
+                    {
+                        _projectRestarts.Remove(key);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Relaunches every running instance of <paramref name="project"/>'s project through the control pipe: the
+        /// watcher terminates them and runs them again without a build, replaying the hot reload changes it applied.
+        /// </summary>
+        private async Task<ExecuteCommandResult> RestartProjectCoreAsync(WatchedProject project, ExecuteCommandContext context)
         {
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, _stopping);
             await _restartLock.WaitAsync(cancellation.Token).ConfigureAwait(false);
-            TaskCompletionSource? started = null;
+            var notifications = context.Services.GetRequiredService<ResourceNotificationService>();
+            var targets = Projects.Where(candidate => PathsEqual(candidate.ProjectPath, project.ProjectPath)).ToArray();
+            var names = DotnetWatchMember.FormatNames(targets.Select(target => target.Resource.Name));
+            RestartWaiter? waiter = null;
             try
             {
-                if (_fenced || _failure is not null || !_ready || Volatile.Read(ref _control) is not { } control)
+                if (_failure is { } failure)
                 {
-                    return CommandResults.Failure(_failure ?? "The watcher is not ready or is changing. Restart the watch run.");
+                    return CommandResults.Failure(failure.Summary);
+                }
+                if (_fenced || !_ready || Volatile.Read(ref _control) is not { } control)
+                {
+                    return CommandResults.Failure(
+                        $"Watch group '{Resource.Name}' is starting or changing. Try again once {names} {(targets.Length == 1 ? "is" : "are")} running, " +
+                        "or use Rebuild to restart the group with a fresh build.");
+                }
+                var expected = targets.Sum(target => target.Member!.CountLiveInstances(notifications));
+                if (expected == 0)
+                {
+                    return CommandResults.Failure(
+                        $"No instance of {names} is running. Use Start, or Rebuild to restart the watch group with a fresh build.");
                 }
                 _fenced = true;
-                started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                waiter = new RestartWaiter(project.ProjectPath, expected);
                 lock (_pendingRestarts)
                 {
-                    _pendingRestarts.Add((project.ProjectPath, started));
+                    _pendingRestarts.Add(waiter);
                 }
-                await project.Member!.PublishAsync(context.Services.GetRequiredService<ResourceNotificationService>()).ConfigureAwait(false);
+                foreach (var target in targets)
+                {
+                    await target.Member!.PublishAsync(notifications).ConfigureAwait(false);
+                }
                 if (!await control.SendRebuildAsync([project.ProjectPath], cancellation.Token).ConfigureAwait(false))
                 {
                     context.Logger.LogError("The hot reload control transport for '{Server}' is not accepting the restart.", Resource.Name);
-                    return CommandResults.Failure($"The hot reload watcher '{Resource.Name}' isn't accepting commands.");
+                    return CommandResults.Failure($"The hot reload watcher '{Resource.Name}' isn't accepting commands. Use Rebuild to restart it.");
                 }
 
-                await started.Task.WaitAsync(s_restartTimeout, cancellation.Token).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = $"Restarted '{project.Resource.Name}'." };
+                await waiter.FirstStarted.WaitAsync(s_restartTimeout, cancellation.Token).ConfigureAwait(false);
+                try
+                {
+                    await waiter.AllStarted.WaitAsync(s_restartSettleTimeout, cancellation.Token).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    return new ExecuteCommandResult
+                    {
+                        Success = true,
+                        Message = $"Restarted {waiter.Started} of {expected} running instances of {names}. " +
+                            "Restart doesn't relaunch an instance that had exited; use Rebuild to start it with a fresh build."
+                    };
+                }
+
+                return new ExecuteCommandResult
+                {
+                    Success = true,
+                    Message = expected == 1 ? $"Restarted '{project.Resource.Name}'." : $"Restarted all {expected} running instances of {names}."
+                };
             }
             catch (TimeoutException)
             {
-                return new ExecuteCommandResult { Success = false, Message = $"The watcher didn't relaunch '{project.Resource.Name}' within {s_restartTimeout.TotalSeconds:0} seconds; see the 'dotnet-watch' resource logs." };
+                return CommandResults.Failure(
+                    $"The watcher didn't relaunch {names} within {s_restartTimeout.TotalSeconds:0} seconds; see the '{Resource.Name}' resource logs.");
             }
             catch (Exception exception) when (exception is IOException or DistributedApplicationException)
             {
@@ -2128,21 +2308,26 @@ internal static class DotnetWatchCoordinator
             }
             finally
             {
-                if (started is not null)
+                // Only a restart that fenced the group lifts the fence; a refused one leaves it to its owner.
+                if (waiter is not null)
                 {
                     lock (_pendingRestarts)
                     {
-                        _pendingRestarts.RemoveAll(r => r.Started == started);
+                        _pendingRestarts.Remove(waiter);
                     }
-                }
-                lock (_maintenanceGate)
-                {
-                    _fenced = _failure is not null || _pendingChanges.Count != 0 || _stopping.IsCancellationRequested;
+                    lock (_maintenanceGate)
+                    {
+                        _fenced = _failure is not null || _pendingChanges.Count != 0 || _maintenanceTask is not null ||
+                            (_pendingResume is not null && !_ready) || _stopping.IsCancellationRequested;
+                    }
                 }
                 _restartLock.Release();
                 if (!_stopping.IsCancellationRequested)
                 {
-                    await project.Member!.PublishAsync(context.Services.GetRequiredService<ResourceNotificationService>()).ConfigureAwait(false);
+                    foreach (var target in targets)
+                    {
+                        await target.Member!.PublishAsync(notifications).ConfigureAwait(false);
+                    }
                 }
             }
         }
@@ -2152,9 +2337,9 @@ internal static class DotnetWatchCoordinator
         {
             lock (_pendingRestarts)
             {
-                foreach (var (_, pending) in _pendingRestarts.Where(pending => PathsEqual(pending.ProjectPath, project.ProjectPath)))
+                foreach (var pending in _pendingRestarts.Where(pending => PathsEqual(pending.ProjectPath, project.ProjectPath)))
                 {
-                    pending.TrySetException(new DistributedApplicationException("The watched instance was manually stopped during restart."));
+                    pending.Fail(new DistributedApplicationException("The watched instance was manually stopped during restart."));
                 }
             }
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, _stopping);
@@ -2173,14 +2358,65 @@ internal static class DotnetWatchCoordinator
         {
             lock (_pendingRestarts)
             {
-                foreach (var (path, started) in _pendingRestarts)
+                foreach (var pending in _pendingRestarts.Where(pending => PathsEqual(pending.ProjectPath, projectPath)))
                 {
-                    if (PathsEqual(path, projectPath))
-                    {
-                        started.TrySetResult();
-                    }
+                    pending.OnStarted();
                 }
             }
+        }
+
+        /// <summary>Applies a watcher status event that names <paramref name="projectPath"/> to the project's resources.</summary>
+        private async Task OnProjectEventAsync(
+            IServiceProvider services, ResourceNotificationService notifications, string projectPath, DotnetWatchStatus status)
+        {
+            if (status.Type == DotnetWatchStatusTypes.ProcessStarted)
+            {
+                CompletePendingRestarts(projectPath);
+            }
+
+            foreach (var target in Projects.Where(project => PathsEqual(project.ProjectPath, projectPath)))
+            {
+                await PublishWatchEventAsync(notifications, target, status).ConfigureAwait(false);
+            }
+
+            if (status.Type == DotnetWatchStatusTypes.ProcessStarted && IsOrphanLaunch(projectPath, notifications))
+            {
+                PurgeOrphanLaunch(services, projectPath);
+            }
+        }
+
+        /// <summary>
+        /// Whether the watcher launched <paramref name="projectPath"/> although the user stopped every instance of it and
+        /// their proxies exited. The watcher relaunches a crashed application on the next edit even after the proxy that
+        /// requested it disconnected; that process runs without a proxy and holds the instance's port. The watcher's
+        /// events don't identify replicas, so an orphan is only recognized when no instance of the project is wanted.
+        /// </summary>
+        private bool IsOrphanLaunch(string projectPath, ResourceNotificationService notifications)
+        {
+            var instances = Projects.Where(project => PathsEqual(project.ProjectPath, projectPath))
+                .SelectMany(project => notifications.GetCurrentStates(project.Resource).Select(update => (project.Member!, update.ResourceId)))
+                .ToArray();
+            return instances.Length > 0 && instances.All(instance => instance.Item1.IsStoppedAndDisconnected(instance.ResourceId));
+        }
+
+        /// <summary>Ends an orphaned launch by replacing the group's watcher; its contained cleanup ends the watcher's processes.</summary>
+        private void PurgeOrphanLaunch(IServiceProvider services, string projectPath)
+        {
+            var names = string.Join(", ", Projects.Where(project => PathsEqual(project.ProjectPath, projectPath)).Select(project => project.Resource.Name));
+            EmitNotices(services, [new WatchNotice(WatchNoticeKind.OrphanPurged, LogLevel.Warning,
+                $"🧹 The watcher relaunched {names} after it was stopped. Restarting watch group '{Resource.Name}' with a fresh watcher " +
+                "to end that process; stopped services stay stopped.", [projectPath])]);
+            lock (_maintenanceGate)
+            {
+                // The current watcher launched the process, so a replacement that already started can't end it: request
+                // another, which commands that arrive later join.
+                if (_reload is not { PickedUp: false, IsBuilt: false })
+                {
+                    _reload = new ReloadOperation();
+                }
+                _forceRefresh = true;
+            }
+            ScheduleMaintenance(resume: false);
         }
 
         private void OnProjectFilesChanged(IServiceProvider services, IReadOnlyList<string> changed)
@@ -2239,12 +2475,20 @@ internal static class DotnetWatchCoordinator
                 _resumeRequested |= resume;
                 if (_maintenanceTask is null)
                 {
-                    _maintenanceTask = Task.Run(MaintenanceLoopAsync, CancellationToken.None);
+                    StartMaintenanceLoop();
                 }
             }
         }
 
-        private async Task MaintenanceLoopAsync()
+        /// <summary>Starts a maintenance loop. Runs under <c>_maintenanceGate</c> when no loop is registered.</summary>
+        private void StartMaintenanceLoop()
+        {
+            var loop = new object();
+            _maintenanceLoop = loop;
+            _maintenanceTask = Task.Run(() => MaintenanceLoopAsync(loop), CancellationToken.None);
+        }
+
+        private async Task MaintenanceLoopAsync(object loop)
         {
             var services = _services!;
             try
@@ -2265,6 +2509,7 @@ internal static class DotnetWatchCoordinator
                         if (changes.Length == 0 && !force && !resume)
                         {
                             _maintenanceTask = null;
+                            _maintenanceLoop = null;
                             _fenced = _pendingResume is not null && !_ready;
                             return;
                         }
@@ -2272,6 +2517,12 @@ internal static class DotnetWatchCoordinator
                     await _restartLock.WaitAsync(_stopping).ConfigureAwait(false);
                     try
                     {
+                        // A failure can stop the group while this pass waits for the lock. Its cleanup owns the
+                        // group until a recovery schedules a new pass.
+                        if (_failure is not null)
+                        {
+                            break;
+                        }
                         if (changes.Length != 0 || force)
                         {
                             var owned = OwnedBuildInputs;
@@ -2280,7 +2531,46 @@ internal static class DotnetWatchCoordinator
                             var structureChanged = await _state.RevalidateAsync(this, services, commit: false, evaluateCallbacks: true, _stopping).ConfigureAwait(false);
                             if (force || ownedBuildChange || structureChanged)
                             {
-                                await RefreshAsync(services, _stopping).ConfigureAwait(false);
+                                // Every fresh watcher satisfies the pending forced refreshes, including a reload
+                                // that a command requested after this pass began.
+                                ReloadOperation? reload;
+                                lock (_maintenanceGate)
+                                {
+                                    _forceRefresh = false;
+                                    reload = _reload;
+                                    if (reload is { PickedUp: false })
+                                    {
+                                        reload.PickedUp = true;
+                                        _refreshing = reload;
+                                    }
+                                    else
+                                    {
+                                        reload = null;
+                                    }
+                                }
+                                var outcome = await RefreshGuardedAsync(services, requested: reload is not null, _stopping).ConfigureAwait(false);
+                                if (reload is not null)
+                                {
+                                    reload.SetRefreshed(outcome, _pendingResume?.Values.SelectMany(ids => ids) ?? []);
+                                    lock (_maintenanceGate)
+                                    {
+                                        if (ReferenceEquals(_refreshing, reload))
+                                        {
+                                            _refreshing = null;
+                                        }
+                                    }
+                                    // Later commands join this reload until the fresh watcher reports its build.
+                                    _ = outcome.ContinueWith(_ =>
+                                    {
+                                        lock (_maintenanceGate)
+                                        {
+                                            if (ReferenceEquals(_reload, reload))
+                                            {
+                                                _reload = null;
+                                            }
+                                        }
+                                    }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                                }
                             }
                             else
                             {
@@ -2290,7 +2580,7 @@ internal static class DotnetWatchCoordinator
                         }
                         else if (resume)
                         {
-                            await ResumeAsync(services, _stopping).ConfigureAwait(false);
+                            await ResumeGuardedAsync(services, _stopping).ConfigureAwait(false);
                         }
                     }
                     finally
@@ -2302,16 +2592,22 @@ internal static class DotnetWatchCoordinator
             catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
             {
             }
-            catch (DotnetWatchIncompatibleGraphException exception)
+            catch (Exception exception) when (exception is DotnetWatchIncompatibleGraphException or DotnetWatchCleanupException)
             {
                 services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource)
                     .LogError(exception, "Guarded watch refresh failed.");
-                RequestFailure(WithRestartInstruction(
-                    $"Guarded watch refresh failed: {exception.Message}",
-                    "Restart the complete watch run."));
+                RequestFailure($"Guarded watch refresh failed: {exception.Message}", recoverable: false);
+            }
+            catch (DotnetWatchRefreshException exception)
+            {
+                services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource)
+                    .LogError(exception, "Guarded watch refresh failed.");
+                RequestFailure($"Guarded watch refresh failed: {exception.Message}", recoverable: true);
             }
             catch (DistributedApplicationException exception)
             {
+                // Evaluation runs before the refresh stops anything, so the running services and their watcher
+                // were kept.
                 services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource)
                     .LogWarning(exception, "Build-input evaluation failed; retaining the last successful watch graph until another edit.");
                 var loggers = services.GetRequiredService<ResourceLoggerService>();
@@ -2323,38 +2619,99 @@ internal static class DotnetWatchCoordinator
                 }
                 lock (_maintenanceGate)
                 {
-                    _maintenanceTask = null;
+                    // This loop stays registered until the finally retires it. A corrected save can arrive while this
+                    // pass evaluates the invalid project; it found this loop registered, so the finally starts a loop
+                    // for it, and the watcher doesn't report that save again.
                     _fenced = _pendingResume is not null && !_ready;
+                }
+                var failedReloads = FailReload(new DistributedApplicationException(
+                    $"The project couldn't be evaluated, so watch group '{Resource.Name}' wasn't restarted and its services kept running: {exception.Message} Fix the project and try again.",
+                    exception));
+                foreach (var failed in failedReloads)
+                {
+                    await RevertRequestedStartsAsync(failed).ConfigureAwait(false);
                 }
             }
             catch (Exception exception)
             {
                 services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource)
                     .LogError(exception, "Guarded watch refresh failed.");
-                RequestFailure(WithRestartInstruction(
-                    $"Guarded watch refresh failed: {exception.Message}",
-                    "Restart the complete watch run."));
+                RequestFailure($"Guarded watch refresh failed: {exception.Message}", recoverable: true);
             }
             finally
             {
                 lock (_maintenanceGate)
                 {
-                    if (_failure is not null || _stopping.IsCancellationRequested)
+                    // Unregister by identity rather than by the failure that ended the loop: a recovery can clear that
+                    // failure before this runs, and a loop that stays registered would keep ScheduleMaintenance from
+                    // starting another one. Work scheduled while this loop was retiring found it registered, so start
+                    // a loop for it here.
+                    if (ReferenceEquals(_maintenanceLoop, loop))
                     {
                         _maintenanceTask = null;
+                        _maintenanceLoop = null;
+                        if (!_stopping.IsCancellationRequested && _failure is null &&
+                            (_pendingChanges.Count != 0 || _forceRefresh || _resumeRequested))
+                        {
+                            _fenced = true;
+                            StartMaintenanceLoop();
+                        }
                     }
                 }
             }
         }
 
-        private async Task RefreshAsync(IServiceProvider services, CancellationToken cancellationToken)
+        /// <summary>
+        /// Runs <see cref="RefreshAsync"/>. A failure after the refresh began stopping the group's services leaves the
+        /// group down, so it's reported as a group failure rather than as an evaluation failure that kept them running.
+        /// </summary>
+        private async Task<Task<bool>> RefreshGuardedAsync(IServiceProvider services, bool requested, CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await RefreshAsync(services, requested, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not (OperationCanceledException or DotnetWatchIncompatibleGraphException or DotnetWatchCleanupException))
+            {
+                throw new DotnetWatchRefreshException($"Replacing the watcher failed: {exception.Message}", exception);
+            }
+        }
+
+        private async Task ResumeGuardedAsync(IServiceProvider services, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await ResumeAsync(services, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                throw new DotnetWatchRefreshException($"Starting the services again failed: {exception.Message}", exception);
+            }
+        }
+
+        /// <returns>The build outcome of the replacement watcher.</returns>
+        private async Task<Task<bool>> RefreshAsync(IServiceProvider services, bool requested, CancellationToken cancellationToken)
         {
             var members = Projects.Select(project => project.Member!).ToArray();
             var notifications = services.GetRequiredService<ResourceNotificationService>();
-            _pendingResume ??= members.ToDictionary(member => member, member => member.GetTransportInstances(notifications, intendedOnly: true));
-            EmitNotices(services, [new WatchNotice(WatchNoticeKind.Restarting, LogLevel.Information,
-                $"Restarting {string.Join(", ", Projects.Select(project => project.Resource.Name))} after guarded build-input validation.",
-                Roots)]);
+            var pending = _pendingResume ??= members.ToDictionary(member => member, member => member.GetTransportInstances(notifications, intendedOnly: true));
+            if (requested)
+            {
+                // A command restarts every instance that the user hasn't stopped, including one whose proxy exited.
+                foreach (var member in members)
+                {
+                    pending[member] = [.. (pending.TryGetValue(member, out var ids) ? ids : [])
+                        .Union(member.GetIntendedInstances(notifications), StringComparer.Ordinal)];
+                }
+            }
+            // Any fresh watcher satisfies a requested start, including one requested for a later reload.
+            MergeRequestedStarts(_ => true);
+            var names = string.Join(", ", Projects.Select(project => project.Resource.Name));
+            EmitNotices(services, [requested
+                ? new WatchNotice(WatchNoticeKind.Reloading, LogLevel.Information,
+                    $"🔄 Restarting watch group '{Resource.Name}' ({names}) with a fresh build…", Roots)
+                : new WatchNotice(WatchNoticeKind.Restarting, LogLevel.Information,
+                    $"Restarting {names} after guarded build-input validation.", Roots)]);
             foreach (var member in members)
             {
                 foreach (var id in member.GetTransportInstances(notifications, intendedOnly: false))
@@ -2369,6 +2726,15 @@ internal static class DotnetWatchCoordinator
                 member.BeginRefresh();
             }
             RearmObservation(services);
+            Task<bool> outcome;
+            lock (_gate)
+            {
+                if (_buildOutcome.Task.IsCompleted)
+                {
+                    _buildOutcome = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+                outcome = _buildOutcome.Task;
+            }
             RequireSuccess(await DotnetWatchServerInfrastructure.StartOwnedAsync(Resource, services, cancellationToken).ConfigureAwait(false));
             // A failed source build can wait indefinitely for a fix without blocking this
             // operation queue. The next current-generation successful build schedules resume.
@@ -2376,6 +2742,7 @@ internal static class DotnetWatchCoordinator
             {
                 ScheduleMaintenance(resume: true);
             }
+            return outcome;
         }
 
         private void RearmObservation(IServiceProvider services)
@@ -2402,17 +2769,11 @@ internal static class DotnetWatchCoordinator
             }
         }
 
-        public void RequestRefresh(IServiceProvider services)
-        {
-            lock (_maintenanceGate)
-            {
-                _forceRefresh = true;
-            }
-            OnProjectFilesChanged(services, Roots);
-        }
-
         private async Task ResumeAsync(IServiceProvider services, CancellationToken cancellationToken)
         {
+            // A start requested for the reload that produced the current watcher joins this resume. Starts for a
+            // reload that hasn't replaced the watcher yet wait for that fresh watcher.
+            MergeRequestedStarts(operation => operation.IsRefreshed);
             if (!_ready || _pendingResume is not { } pending)
             {
                 return;
@@ -2424,7 +2785,12 @@ internal static class DotnetWatchCoordinator
                     return;
                 }
             }
-            foreach (var (member, ids) in pending)
+            // Every instance that a resume starts was launched earlier in this run: only a launched instance can be
+            // stopped manually, because a Stop of one that hasn't launched cancels its start instead. So a resume only
+            // relaunches, and a relaunch doesn't wait for dependencies while this resume holds the group's lock. The
+            // group's projects still start after the projects of the group that they wait for, so that each finds its
+            // dependencies running again.
+            foreach (var (member, ids) in OrderByDependencies(pending))
             {
                 foreach (var id in ids.Where(id => !member.IsManuallyStopped(id)))
                 {
@@ -2434,6 +2800,85 @@ internal static class DotnetWatchCoordinator
             _pendingResume = null;
         }
 
+        /// <summary>
+        /// Orders the projects of a resume so that each starts after the projects of this group that it waits for,
+        /// keeping declaration order otherwise. Waits that form a cycle keep declaration order.
+        /// </summary>
+        private List<(DotnetWatchMember Member, string[] Ids)> OrderByDependencies(Dictionary<DotnetWatchMember, string[]> pending)
+        {
+            var projects = Projects;
+            var remaining = pending
+                .Select(entry => (entry.Key, entry.Value, Index: projects.FindIndex(project => ReferenceEquals(project.Member, entry.Key))))
+                .OrderBy(entry => entry.Index < 0 ? int.MaxValue : entry.Index)
+                .ToList();
+            var ordered = new List<(DotnetWatchMember Member, string[] Ids)>(remaining.Count);
+            while (remaining.Count > 0)
+            {
+                var next = remaining.FindIndex(candidate => !remaining.Any(other =>
+                    !ReferenceEquals(other.Key, candidate.Key) && WaitsFor(projects, candidate.Key, other.Key)));
+                if (next < 0)
+                {
+                    next = 0;
+                }
+                ordered.Add((remaining[next].Key, remaining[next].Value));
+                remaining.RemoveAt(next);
+            }
+            return ordered;
+        }
+
+        private static bool WaitsFor(List<WatchedProject> projects, DotnetWatchMember dependent, DotnetWatchMember dependency)
+        {
+            var dependentResource = projects.FirstOrDefault(project => ReferenceEquals(project.Member, dependent))?.Resource;
+            var dependencyResource = projects.FirstOrDefault(project => ReferenceEquals(project.Member, dependency))?.Resource;
+            return dependentResource is not null && dependencyResource is not null &&
+                dependentResource.Annotations.OfType<WaitAnnotation>().Any(wait => ReferenceEquals(wait.Resource, dependencyResource));
+        }
+
+        /// <summary>Adds requested starts to the instances that the next resume starts. Runs under the restart lock.</summary>
+        private void MergeRequestedStarts(Func<ReloadOperation, bool> eligible)
+        {
+            (DotnetWatchMember Member, string Id, ReloadOperation Operation)[] requested;
+            lock (_maintenanceGate)
+            {
+                requested = [.. _requestedStarts.Where(start => eligible(start.Operation))];
+                _requestedStarts.RemoveAll(start => eligible(start.Operation));
+            }
+            if (requested.Length == 0)
+            {
+                return;
+            }
+            var pending = _pendingResume ??= new Dictionary<DotnetWatchMember, string[]>();
+            foreach (var (member, id, _) in requested)
+            {
+                pending[member] = pending.TryGetValue(member, out var ids) ? [.. ids.Append(id).Distinct(StringComparer.Ordinal)] : [id];
+            }
+        }
+
+        /// <summary>
+        /// Restores the manual stops of the starts that <paramref name="operation"/> requested, which failed before a
+        /// fresh watcher could perform them. Starts that other reloads requested still run with their watchers.
+        /// </summary>
+        private async Task RevertRequestedStartsAsync(ReloadOperation operation)
+        {
+            (DotnetWatchMember Member, string Id, ReloadOperation Operation)[] requested;
+            lock (_maintenanceGate)
+            {
+                requested = [.. _requestedStarts.Where(start => ReferenceEquals(start.Operation, operation))];
+                _requestedStarts.RemoveAll(start => ReferenceEquals(start.Operation, operation));
+            }
+            foreach (var (member, id, _) in requested)
+            {
+                member.RevertRequestedStart(id);
+            }
+            if (_notifications is { } notifications)
+            {
+                foreach (var member in requested.Select(start => start.Member).Distinct())
+                {
+                    await member.PublishAsync(notifications).ConfigureAwait(false);
+                }
+            }
+        }
+
         private async Task StopServerAndConfirmCleanupAsync(IServiceProvider services, CancellationToken cancellationToken)
         {
             var prepared = _prepared;
@@ -2441,7 +2886,7 @@ internal static class DotnetWatchCoordinator
             if (prepared is not null &&
                 !await WaitForContainedCleanupAsync(prepared, cancellationToken).ConfigureAwait(false))
             {
-                throw new DistributedApplicationException("Contained watcher cleanup was not acknowledged; replacement is fenced. Restart the watch run.");
+                throw new DotnetWatchCleanupException("Contained watcher cleanup was not acknowledged; replacement is fenced. Restart the watch run.");
             }
             if (Interlocked.Exchange(ref _control, null) is { } control)
             {
@@ -2538,42 +2983,103 @@ internal static class DotnetWatchCoordinator
             }
         }
 
-        private static string WithRestartInstruction(string message, string instruction) =>
-            message.Contains(instruction, StringComparison.Ordinal) ? message : $"{message} {instruction}";
-
         private void SettleRestartWaiters(Exception exception)
         {
             lock (_pendingRestarts)
             {
-                foreach (var (_, pending) in _pendingRestarts)
+                foreach (var pending in _pendingRestarts)
                 {
-                    pending.TrySetException(exception);
+                    pending.Fail(exception);
                 }
             }
         }
 
-        public void RequestFailure(string reason)
+        /// <returns>
+        /// The reloads that failed: the one waiting for a maintenance pass, and the one a pass was performing if an
+        /// orphan purge replaced it.
+        /// </returns>
+        private ReloadOperation[] FailReload(Exception exception)
+        {
+            ReloadOperation[] failed;
+            lock (_maintenanceGate)
+            {
+                failed = [.. new[] { _reload, _refreshing }.OfType<ReloadOperation>().Distinct()];
+                _reload = null;
+                _refreshing = null;
+            }
+            foreach (var reload in failed)
+            {
+                reload.Fail(exception);
+            }
+            return failed;
+        }
+
+        private DotnetWatchGroupFailure RecoverableFailure() => new(
+            $"Watch group '{Resource.Name}' failed. See the '{Resource.Name}' resource logs for details. " +
+            $"Use Rebuild on one of its services ({DotnetWatchMember.FormatNames(Projects.Select(project => project.Resource.Name))}) " +
+            "to restart the group with a fresh watcher, or restart the complete Aspire run.",
+            Recoverable: true);
+
+        private DotnetWatchGroupFailure UnrecoverableFailure() => new(
+            $"Watch group '{Resource.Name}' failed. See the '{Resource.Name}' resource logs for details. " +
+            "Fix the cause and restart the complete Aspire run.",
+            Recoverable: false);
+
+        /// <summary>Makes the current failure unrecoverable. Runs under <c>_gate</c>.</summary>
+        private void MakeFailureUnrecoverable()
+        {
+            var escalated = _failure is { Recoverable: true };
+            _failure = UnrecoverableFailure();
+            if (escalated)
+            {
+                // The failure notice of a recoverable failure suggested Rebuild, which is now refused. Correct it, so
+                // a person or agent reading the terminal doesn't act on outdated guidance.
+                _noticeLogger?.LogError(NoticeEventId(WatchNoticeKind.InfrastructureFailed), "{Notice}", _failure.Summary);
+            }
+        }
+
+        /// <param name="reason">Diagnostic detail for the watch server's log.</param>
+        /// <param name="recoverable">
+        /// Whether a fresh watcher can replace the failed one in this run. The failure becomes unrecoverable when its
+        /// cleanup isn't confirmed, because the old watcher's processes could still be running.
+        /// </param>
+        public void RequestFailure(string reason, bool recoverable)
         {
             lock (_gate)
             {
-                if (_shuttingDown || _stopping.IsCancellationRequested || Interlocked.Exchange(ref _failureScheduled, 1) != 0)
+                if (_shuttingDown || _stopping.IsCancellationRequested)
                 {
                     return;
                 }
-                var summary = $"Watch group '{Resource.Name}' failed. See the '{Resource.Name}' resource logs for details. " +
-                    "Fix the cause and restart the complete Aspire run.";
-                _failure = summary;
+                if (Interlocked.Exchange(ref _failureScheduled, 1) != 0)
+                {
+                    if (!recoverable && _failure is { Recoverable: true })
+                    {
+                        // A later failure that needs a new partition makes an earlier recoverable one permanent.
+                        _serverLogger?.LogError("Watch group failed: {Reason}", reason);
+                        MakeFailureUnrecoverable();
+                        _ = Task.Run(PublishMembersAsync, CancellationToken.None);
+                    }
+                    return;
+                }
+                var failure = recoverable ? RecoverableFailure() : UnrecoverableFailure();
+                _failure = failure;
                 _fenced = true;
                 _ready = false;
-                _successfulBuild.TrySetException(new DistributedApplicationException(summary));
-                SettleRestartWaiters(new DistributedApplicationException(summary));
+                var error = new DistributedApplicationException(failure.Summary);
+                _successfulBuild.TrySetException(error);
+                _buildOutcome.TrySetException(error);
+                // Only commands observe the outcome, and there may be none.
+                _ = _buildOutcome.Task.Exception;
+                SettleRestartWaiters(error);
+                FailReload(error);
                 _monitorCts?.Cancel();
                 if (_services is not { } services || _notifications is not { } notifications)
                 {
                     return;
                 }
                 _serverLogger!.LogError("Watch group failed: {Reason}", reason);
-                _noticeLogger!.LogError(NoticeEventId(WatchNoticeKind.InfrastructureFailed), "{Notice}", summary);
+                _noticeLogger!.LogError(NoticeEventId(WatchNoticeKind.InfrastructureFailed), "{Notice}", failure.Summary);
                 _failureTask = Task.Run(async () =>
                 {
                     var entered = false;
@@ -2599,6 +3105,11 @@ internal static class DotnetWatchCoordinator
                     catch (Exception exception)
                     {
                         _serverLogger!.LogError(exception, "Failed to confirm cleanup of failed watch group. It remains fenced.");
+                        lock (_gate)
+                        {
+                            MakeFailureUnrecoverable();
+                        }
+                        await PublishMembersAsync().ConfigureAwait(false);
                     }
                     finally
                     {
@@ -2609,6 +3120,335 @@ internal static class DotnetWatchCoordinator
                     }
                 }, CancellationToken.None);
             }
+        }
+
+        private async Task PublishMembersAsync()
+        {
+            if (_notifications is not { } notifications)
+            {
+                return;
+            }
+            try
+            {
+                foreach (var project in Projects)
+                {
+                    await project.Member!.PublishAsync(notifications).ConfigureAwait(false);
+                }
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                _serverLogger?.LogDebug(exception, "Couldn't publish the watch group state.");
+            }
+        }
+
+        /// <summary>
+        /// Clears a recoverable failure once its cleanup is confirmed, so that the next fresh watcher restarts every
+        /// instance that the user hasn't stopped. Their proxies were stopped by the failure, so the usual resume set
+        /// (running proxies) would be empty.
+        /// </summary>
+        private async Task RecoverAsync(CancellationToken cancellationToken)
+        {
+            Task? cleanup;
+            lock (_gate)
+            {
+                if (_failure is not { Recoverable: true })
+                {
+                    return;
+                }
+                cleanup = _failureTask;
+            }
+            if (cleanup is not null)
+            {
+                await cleanup.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await _restartLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                lock (_gate)
+                {
+                    if (_failure is not { Recoverable: true } || _shuttingDown || _stopping.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    _failure = null;
+                    _failureTask = null;
+                    Volatile.Write(ref _failureScheduled, 0);
+                    _ready = false;
+                    _lastBuildError = null;
+                    if (_successfulBuild.Task.IsCompleted)
+                    {
+                        _successfulBuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+                    if (_buildOutcome.Task.IsCompleted)
+                    {
+                        _buildOutcome = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+                }
+                if (_notifications is { } notifications)
+                {
+                    _pendingResume = Projects.ToDictionary(project => project.Member!,
+                        project => project.Member!.GetIntendedInstances(notifications));
+                }
+                lock (_maintenanceGate)
+                {
+                    _fenced = true;
+                }
+                _serverLogger?.LogInformation("Recovering watch group '{Group}' with a fresh watcher.", Resource.Name);
+            }
+            finally
+            {
+                _restartLock.Release();
+            }
+            await PublishMembersAsync().ConfigureAwait(false);
+        }
+
+        async Task<ExecuteCommandResult> IDotnetWatchGroup.ReloadAsync(
+            DotnetProjectResource resource, string instanceId, bool start, ExecuteCommandContext context)
+        {
+            var result = await ReloadCoreAsync(resource, instanceId, start, context).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                // Publish the group's state before reporting a failure: the reload RPC reads its services' watch state
+                // right after Rebuild returns to tell a failed group from a failed build or a service that didn't start.
+                await PublishMembersAsync().ConfigureAwait(false);
+            }
+
+            return result;
+        }
+
+        private async Task<ExecuteCommandResult> ReloadCoreAsync(
+            DotnetProjectResource resource, string instanceId, bool start, ExecuteCommandContext context)
+        {
+            var project = GetRequiredProject(resource);
+            var member = project.Member!;
+            var notifications = context.Services.GetRequiredService<ResourceNotificationService>();
+            // A first start that waits for the build continues as soon as the fresh build succeeds, so it can run, and
+            // stop being pending, before this command checks on the instance. Whether it was pending when the command
+            // arrived decides whether the command reports on it.
+            var startPending = member.IsStartPending(instanceId);
+            // A Start of an instance that hasn't launched holds a claim on its first start, which a Stop can cancel.
+            var firstStart = start && member.HasFirstStartClaim(context);
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, _stopping);
+            try
+            {
+                ReloadOperation operation;
+                var requestedStart = false;
+                // Join or create the reload before awaiting recovery. A recovery can wait behind the refresh's restart
+                // lock until that refresh's build has completed and retired _reload, and a command that joined only then
+                // would start a second watcher instead of observing the build it was sent before. RequestFailure fails
+                // the current reload while it holds _gate, so holding _gate keeps a failure that is still being
+                // published from failing this command's reload.
+                lock (_gate)
+                {
+                    lock (_maintenanceGate)
+                    {
+                        if (_shuttingDown || _stopping.IsCancellationRequested)
+                        {
+                            return CommandResults.Failure("The Aspire run is stopping.");
+                        }
+                        if (_failure is { Recoverable: false } failure)
+                        {
+                            return CommandResults.Failure(failure.Summary);
+                        }
+
+                        // Commands that arrive before the fresh watcher reports its build join it: it observes every
+                        // change made before they were sent. Per-replica invocations of one command arrive this way.
+                        // After that build, the reload has already resumed its instances, so a command starts another.
+                        if (_reload is not { IsBuilt: false })
+                        {
+                            _reload = new ReloadOperation();
+                        }
+                        operation = _reload;
+                        if (start && member.IsManuallyStopped(instanceId))
+                        {
+                            member.RequestStart(instanceId);
+                            _requestedStarts.Add((member, instanceId, operation));
+                            operation.Resume(instanceId);
+                            requestedStart = true;
+                        }
+                    }
+                }
+
+                if (_failure is { Recoverable: true })
+                {
+                    await RecoverAsync(cancellation.Token).ConfigureAwait(false);
+                }
+                lock (_maintenanceGate)
+                {
+                    if (_shuttingDown || _stopping.IsCancellationRequested)
+                    {
+                        return CommandResults.Failure("The Aspire run is stopping.");
+                    }
+                    if (_failure is { } failure)
+                    {
+                        return CommandResults.Failure(failure.Summary);
+                    }
+                    // Request the refresh only after recovery, so that a failed maintenance pass that is still retiring
+                    // can't take it.
+                    if (!operation.PickedUp)
+                    {
+                        _forceRefresh = true;
+                    }
+                }
+                if (requestedStart)
+                {
+                    await member.PublishAsync(notifications).ConfigureAwait(false);
+                }
+                ScheduleMaintenance(resume: false);
+
+                var outcome = await operation.Refreshed.WaitAsync(cancellation.Token).ConfigureAwait(false);
+                if (!await outcome.WaitAsync(cancellation.Token).ConfigureAwait(false))
+                {
+                    var names = DotnetWatchMember.FormatNames(Projects.Select(candidate => candidate.Resource.Name));
+                    return CommandResults.Failure(
+                        $"The fresh build of watch group '{Resource.Name}' failed, so its services ({names}) aren't running. " +
+                        $"Fix the errors and save; the watcher rebuilds and starts them automatically. To see the errors, {DotnetWatchEventInterpreter.FailureDetail(Resource.Name)}.");
+                }
+
+                return await WaitForReloadedInstanceAsync(
+                    project, instanceId, start, firstStart, operation, startPending, notifications, context, cancellation.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (_shuttingDown || _stopping.IsCancellationRequested)
+            {
+                return CommandResults.Failure("The Aspire run is stopping.");
+            }
+            catch (DistributedApplicationException exception)
+            {
+                return CommandResults.Failure(exception.Message);
+            }
+        }
+
+        private async Task<ExecuteCommandResult> WaitForReloadedInstanceAsync(
+            WatchedProject project, string instanceId, bool start, bool firstStart, ReloadOperation operation, bool startPending,
+            ResourceNotificationService notifications, ExecuteCommandContext context, CancellationToken cancellationToken)
+        {
+            var member = project.Member!;
+            var restarted = Projects.Where(candidate => !ReferenceEquals(candidate, project) &&
+                candidate.Member!.GetIntendedInstances(notifications).Length > 0).Select(candidate => candidate.Resource.Name).ToArray();
+            var also = restarted.Length == 0 ? "" : $"; also restarted {DotnetWatchMember.FormatNames(restarted)}";
+            // Another start of the instance, by a later Start command, can be in progress by now; it isn't this command's.
+            if (firstStart && member.IsFirstStartCanceled(context))
+            {
+                return StoppedBeforeItStarted();
+            }
+            if (member.IsManuallyStopped(instanceId))
+            {
+                return StaysStopped();
+            }
+            if (!operation.Resumes(instanceId) && !startPending && !member.IsStartPending(instanceId))
+            {
+                // The fresh watcher starts the instances that were running or that a Start requested, and an instance
+                // whose first start waits for the build continues that start. Others, such as an instance waiting for an
+                // explicit Start or one whose start already failed, stay as they were. A start that was pending when the
+                // command arrived is reported on even if it has already run, failed or exited by now.
+                if (start && !member.WaitedForDependencies(instanceId))
+                {
+                    // A Start of an instance that hasn't launched in this run, for example because the group failed
+                    // before its build completed. The fresh watcher only relaunches instances, so the instance's first
+                    // start runs now, outside the group's restart lock, and waits for its dependencies as Aspire's start
+                    // does.
+                    DotnetWatchMember.FirstStartOutcome outcome;
+                    ExecuteCommandResult started;
+                    try
+                    {
+                        (outcome, started) = await member.StartFirstAsync(context).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        // A Stop canceled the start before it reached DCP.
+                        (outcome, started) = (DotnetWatchMember.FirstStartOutcome.Canceled, new ExecuteCommandResult { Success = false, Canceled = true });
+                    }
+
+                    return outcome switch
+                    {
+                        DotnetWatchMember.FirstStartOutcome.Canceled => StoppedBeforeItStarted(),
+                        DotnetWatchMember.FirstStartOutcome.AlreadyStarting => CommandResults.Success(
+                            $"Restarted watch group '{Resource.Name}' with a fresh build{also}. '{instanceId}' is already starting."),
+                        _ when started.Success => CommandResults.Success(
+                            $"Started '{instanceId}' with a fresh build of watch group '{Resource.Name}'{also}."),
+                        _ => new ExecuteCommandResult
+                        {
+                            Success = false,
+                            Canceled = started.Canceled,
+                            Message = $"Restarted watch group '{Resource.Name}' with a fresh build{also}, but '{instanceId}' didn't start" +
+                                (string.IsNullOrEmpty(started.Message) ? "." : $": {started.Message}")
+                        }
+                    };
+                }
+
+                return CommandResults.Success(
+                    $"Restarted watch group '{Resource.Name}' with a fresh build{also}. '{instanceId}' wasn't running, so it wasn't started; use Start to run it.");
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(s_reloadStartTimeout);
+            try
+            {
+                while (!member.IsRunning(instanceId))
+                {
+                    // A Stop can arrive while the fresh watcher starts the instance. The instance then stays stopped,
+                    // and waiting for it to run would only time out.
+                    if (member.IsManuallyStopped(instanceId))
+                    {
+                        return StaysStopped();
+                    }
+                    if (firstStart && member.IsFirstStartCanceled(context))
+                    {
+                        return StoppedBeforeItStarted();
+                    }
+                    if (member.TryGetExit(out var exitCode))
+                    {
+                        return CommandResults.Failure(
+                            $"'{instanceId}' started after the fresh build of watch group '{Resource.Name}', but exited with code {exitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}. See its console logs.");
+                    }
+                    if (_failure is { } failure)
+                    {
+                        return CommandResults.Failure(failure.Summary);
+                    }
+                    if (!operation.Resumes(instanceId) && !member.IsStartPending(instanceId) && !member.HasLaunched(instanceId))
+                    {
+                        // The start that was pending ended without launching the instance, for example because a resource
+                        // it waits for failed. A Start runs Aspire's start of the instance again, dependency waits included.
+                        return CommandResults.Failure(
+                            $"'{instanceId}' was starting when watch group '{Resource.Name}' was rebuilt, but its start failed, " +
+                            "for example because a resource it waits for failed. See its state and console logs, then use Start to try again.");
+                    }
+                    await ReloadPollDelay(TimeSpan.FromMilliseconds(100), timeout.Token).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                return CommandResults.Failure(
+                    $"Watch group '{Resource.Name}' was rebuilt, but '{instanceId}' didn't start within {s_reloadStartTimeout.TotalSeconds:0} seconds. " +
+                    $"See its console logs and the '{Resource.Name}' resource logs.");
+            }
+
+            // A Stop can cancel this command's start while the loop waits, and a later Start can launch the instance
+            // before the loop checks again. That launch isn't this command's.
+            if (firstStart && member.IsFirstStartCanceled(context))
+            {
+                return StoppedBeforeItStarted();
+            }
+
+            // A Stop that arrived as the instance started is still stopping it.
+            if (member.IsManuallyStopped(instanceId))
+            {
+                return StaysStopped();
+            }
+
+            return CommandResults.Success(start
+                ? $"Started '{instanceId}' with a fresh build of watch group '{Resource.Name}'{also}."
+                : $"Rebuilt '{instanceId}' with a fresh watcher for watch group '{Resource.Name}'{also}.");
+
+            ExecuteCommandResult StaysStopped() => CommandResults.Success(
+                $"Restarted watch group '{Resource.Name}' with a fresh build{also}. '{instanceId}' stays stopped; use Start to run it.");
+
+            ExecuteCommandResult StoppedBeforeItStarted() => new()
+            {
+                Success = false,
+                Canceled = true,
+                Message = $"Restarted watch group '{Resource.Name}' with a fresh build{also}, but '{instanceId}' was stopped before it started."
+            };
         }
 
         public Task ShutdownAsync(bool stopOwnedResources, CancellationToken cancellationToken)
@@ -2628,7 +3468,9 @@ internal static class DotnetWatchCoordinator
             _shutdown?.Cancel();
             _monitorCts?.Cancel();
             _successfulBuild.TrySetCanceled(_stopping);
+            _buildOutcome.TrySetCanceled(_stopping);
             SettleRestartWaiters(new OperationCanceledException("The watch run is stopping."));
+            FailReload(new OperationCanceledException("The watch run is stopping."));
             _projectFileWatcher?.Dispose();
             Task<PreparedServer>[] preparing;
             lock (_gate)
@@ -2774,6 +3616,82 @@ internal static class DotnetWatchCoordinator
                 ? $"process_exited({status.ExitCode}) @ {stamp}" : $"{status.Type} @ {stamp}";
             project.Member!.Observe(status.Type, status.Success, status.ExitCode, lastEvent);
             await project.Member.PublishAsync(notifications).ConfigureAwait(false);
+        }
+
+        internal Task OnProcessStartedForTestingAsync(WatchedProject project, IServiceProvider services) =>
+            OnProjectEventAsync(services, services.GetRequiredService<ResourceNotificationService>(), project.ProjectPath,
+                new DotnetWatchStatus(DotnetWatchStatusTypes.ProcessStarted, [project.ProjectPath], Success: null, Error: null, ExitCode: null));
+
+        /// <summary>A Restart command waiting for the watcher to relaunch the running instances of a project.</summary>
+        private sealed class RestartWaiter(string projectPath, int expected)
+        {
+            private readonly TaskCompletionSource _first = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource _all = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private int _started;
+
+            public string ProjectPath { get; } = projectPath;
+            public int Started => Volatile.Read(ref _started);
+            public Task FirstStarted => _first.Task;
+            public Task AllStarted => _all.Task;
+
+            /// <summary>Counts a <c>process_started</c> of the project; replicas aren't identified.</summary>
+            public void OnStarted()
+            {
+                _first.TrySetResult();
+                if (Interlocked.Increment(ref _started) >= expected)
+                {
+                    _all.TrySetResult();
+                }
+            }
+
+            public void Fail(Exception exception)
+            {
+                _first.TrySetException(exception);
+                _all.TrySetException(exception);
+                // A command that already returned (partial relaunch) no longer awaits these.
+                _ = _first.Task.Exception;
+                _ = _all.Task.Exception;
+            }
+        }
+
+        /// <summary>A command-driven replacement of the group's watcher that concurrent commands share.</summary>
+        private sealed class ReloadOperation
+        {
+            private readonly TaskCompletionSource<Task<bool>> _refreshed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _resumed = new(StringComparer.Ordinal);
+
+            /// <summary>Whether a maintenance pass took this reload; later commands then don't request another pass.</summary>
+            public bool PickedUp { get; set; }
+
+            public bool IsRefreshed => _refreshed.Task.IsCompletedSuccessfully;
+
+            /// <summary>Completes with the replacement watcher's build outcome once the watcher was replaced.</summary>
+            public Task<Task<bool>> Refreshed => _refreshed.Task;
+
+            /// <summary>Whether the replacement watcher reported its first build.</summary>
+            public bool IsBuilt => _refreshed.Task.IsCompleted &&
+                (!_refreshed.Task.IsCompletedSuccessfully || _refreshed.Task.Result.IsCompleted);
+
+            /// <summary>Whether the fresh watcher starts the instance: it was running, or a Start requested it.</summary>
+            public bool Resumes(string instanceId) => _resumed.ContainsKey(instanceId);
+
+            /// <summary>Records a requested start, which can join the reload after its watcher was replaced.</summary>
+            public void Resume(string instanceId) => _resumed[instanceId] = 0;
+
+            public void SetRefreshed(Task<bool> outcome, IEnumerable<string> resumed)
+            {
+                foreach (var instanceId in resumed)
+                {
+                    _resumed[instanceId] = 0;
+                }
+                _refreshed.TrySetResult(outcome);
+            }
+
+            public void Fail(Exception exception)
+            {
+                _refreshed.TrySetException(exception);
+                _ = _refreshed.Task.Exception;
+            }
         }
     }
 

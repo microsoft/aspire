@@ -167,11 +167,12 @@ public class DotnetWatchServerInfrastructureTests(ITestOutputHelper outputHelper
     [Fact]
     public void StoppedNoticeSaysHowToRecover()
     {
-        var notice = DotnetWatchServerInfrastructure.FormatStoppedNotice("dotnet-watch", 137);
-
-        Assert.Contains("exit code 137", notice);
-        Assert.Contains("Restart the complete watch run", notice);
-        Assert.DoesNotContain("exit code", DotnetWatchServerInfrastructure.FormatStoppedNotice("dotnet-watch", null));
+        Assert.Equal("❌ The hot reload watcher 'dotnet-watch' stopped (exit code 137). Edits aren't applied. " +
+            "Use Rebuild on one of its services to restart it with a fresh build; if Rebuild is refused, restart the complete Aspire run.",
+            DotnetWatchServerInfrastructure.FormatStoppedNotice("dotnet-watch", 137));
+        Assert.Equal("❌ The hot reload watcher 'dotnet-watch' stopped. Edits aren't applied. " +
+            "Use Rebuild on one of its services to restart it with a fresh build; if Rebuild is refused, restart the complete Aspire run.",
+            DotnetWatchServerInfrastructure.FormatStoppedNotice("dotnet-watch", null));
     }
 
     [Fact]

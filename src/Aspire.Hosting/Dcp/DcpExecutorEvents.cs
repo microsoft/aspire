@@ -11,7 +11,14 @@ internal record OnEndpointsAllocatedContext(CancellationToken CancellationToken,
 internal record OnResourceStartingContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string? DcpResourceName);
 internal record OnConnectionStringAvailableContext(CancellationToken CancellationToken, IResource Resource);
 internal record OnResourcesPreparedContext(CancellationToken CancellationToken);
-internal record OnResourceChangedContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string DcpResourceName, ResourceStatus Status, string? PreviousState, Func<CustomResourceSnapshot, CustomResourceSnapshot> UpdateSnapshot);
+internal record OnResourceChangedContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string DcpResourceName, ResourceStatus Status, string? PreviousState, Func<CustomResourceSnapshot, CustomResourceSnapshot> UpdateSnapshot)
+{
+    /// <summary>
+    /// Whether the change still applies, checked inside each state update that it makes. For example, a canceled start's
+    /// NotStarted doesn't once a newer start of the instance began. Null means that it always applies.
+    /// </summary>
+    public Func<bool>? IsCurrent { get; init; }
+}
 internal record OnResourceFailedToStartContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string? DcpResourceName, string? ErrorMessage = null);
 
 internal sealed class DcpExecutorEvents

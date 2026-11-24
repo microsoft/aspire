@@ -51,11 +51,21 @@ PRIVATE_ENVIRONMENT = (
 WATCH_ENABLED = "AppHost__Run__WatchEnabled"
 RUN_TAG = "WATCH_TEST_RUN_ID"
 POLL_INTERVAL = 0.25
+# Terminal CSI/OSC controls, for example ESC[31m (color), ESC[2K (line clear) and ESC]8;;<url>ESC\ (hyperlink).
+TERMINAL_CONTROLS = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*?(?:\x07|\x1b\\))")
 
 
 def require(condition, message):
     if not condition:
         raise AssertionError(message)
+
+
+def plain_text(raw):
+    # CLI output keeps its colors even when redirected, and the CLI wraps long lines at the console width, so a
+    # phrase can be split by a line break between colored spans:
+    #   "...restart the complete\x1b[0m\r\n   \x1b[1;38;5;9mAspire run.\x1b[0m"
+    # Strip the controls and collapse whitespace before matching phrases.
+    return " ".join(TERMINAL_CONTROLS.sub("", raw).split())
 
 
 def write(path, content):
@@ -930,9 +940,8 @@ public class ReplacementModelBase { }
     def terminal_text(self):
         require(self.terminal_error is None, f"Terminal capture failed: {self.terminal_error}")
         # Strip terminal CSI/OSC controls only for assertions; the original byte transcript is retained.
-        # Examples: ESC[31m (color), ESC[2K (line clear), ESC]8;;<url>ESC\\ (hyperlink).
         raw = (self.root / "watch-run.log").read_text(encoding="utf-8", errors="replace")
-        return re.sub(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*?(?:\x07|\x1b\\))", "", raw).replace("\r", "\n")
+        return TERMINAL_CONTROLS.sub("", raw).replace("\r", "\n")
 
     def finish_terminal(self):
         if self.terminal_reader is not None:
@@ -942,6 +951,15 @@ public class ReplacementModelBase { }
             os.close(self.terminal_master)
             self.terminal_master = None
             self.terminal_reader = None
+
+    def ctrl_r(self):
+        require(self.foreground is not None and self.terminal_master is not None, "No foreground PTY run exists.")
+        # CTRL+R is the DC2 control byte (0x12), the byte a real terminal sends for that key chord.
+        os.write(self.terminal_master, b"\x12")
+
+    def terminal_has(self, text):
+        # Spectre wraps long lines at the PTY width, so compare with whitespace collapsed.
+        return text in " ".join(self.terminal_text().split())
 
     def ctrl_c(self):
         require(self.foreground is not None and self.terminal_master is not None, "No foreground PTY run exists.")
@@ -1169,6 +1187,32 @@ def verify_csharp(context):
     replace_once(apphost_source, "Value() => ;", 'Value() => "recovered";')
     recovered, previous_host = verify_generation(fixture, old, previous_host, "recovered")
     context.evidence.check("csharp-invalid-edit-recovery", response=recovered)
+    assert_terminal_boundary(fixture)
+
+    # With AppHost watching active, CTRL+R replaces the AppHost generation without a source change.
+    wait_for(lambda: fixture.terminal_has("Press CTRL+R to reload the AppHost and all resources"),
+             "waiting for the AppHost-mode CTRL+R hint")
+    old = fixture.capture_generation()
+    fixture.ctrl_r()
+    reloaded = fixture.response("api", lambda value: value["instance"] != recovered["instance"], timeout=240)
+    reloaded_host = fixture.host_instance()
+    require(reloaded_host["instance"] != previous_host["instance"] and reloaded_host["pid"] != previous_host["pid"]
+            and reloaded_host["backchannel"] != previous_host["backchannel"],
+            f"CTRL+R did not replace the AppHost generation: {previous_host} -> {reloaded_host}")
+    verify_new_application(recovered, reloaded, "CTRL+R AppHost reload")
+    require(reloaded["configured"] == "recovered", f"CTRL+R changed the model: {reloaded}")
+    # The key press is acknowledged at once; the reloading message follows once the old AppHost has stopped.
+    def acknowledged_before_reload():
+        transcript = " ".join(fixture.terminal_text().split())
+        stopping = transcript.rfind("Stopping the AppHost")
+        return stopping >= 0 and transcript.find("Reloading the AppHost and all resources", stopping) > stopping
+
+    wait_for(acknowledged_before_reload, "waiting for CTRL+R's acknowledgment before the AppHost reload message")
+    fixture.application_snapshot()
+    fixture.wait_cleanup(old)
+    fixture.capture_generation()
+    previous_host = reloaded_host
+    context.evidence.check("csharp-ctrl-r-replaces-the-apphost-generation", apphost=reloaded_host, response=reloaded)
     assert_terminal_boundary(fixture)
 
     fixture.capture_generation()
@@ -1442,7 +1486,7 @@ def verify_typescript(context):
     replace_once(fixture.root / "Api" / "Program.cs", '=> "after"', '=> "ordinary-edit"')
     source = fixture.apphost.read_text()
     write(fixture.apphost, source.replace("'WATCH_MODEL_VALUE', 'two'", "'WATCH_MODEL_VALUE', 'disabled-edit'"))
-    fixture.command_state("api", "rebuild", "Disabled")
+    fixture.command_state("api", "rebuild", "Enabled")
     rebuilt = fixture.response("api", lambda value: value["value"] == "ordinary-edit")
     verify_same_application(ordinary, rebuilt, "Resource hot reload with AppHost watching explicitly disabled")
     stays_true(lambda: request_json(fixture.endpoint())["configured"] == ordinary["configured"],
@@ -1529,9 +1573,26 @@ def verify_replicas(context):
             f"The physical watch root was duplicated: {server.arguments}")
     for name in instances:
         verify_group_snapshot(fixture, name)
-        fixture.rejected(name, "restart")
-        fixture.rejected(name, "rebuild")
+        fixture.command_state(name, "restart", "Enabled")
+        fixture.command_state(name, "rebuild", "Enabled")
     context.evidence.check("replicas-and-duplicates-distinct-http-identities", responses=instances,
+                          server=server.evidence())
+
+    # The watcher's control `rebuild` is project-wide, so Restart of one replica relaunches every running instance
+    # of the project, including the duplicate entry point, without a build.
+    before_restart = instances
+    fixture.cli("resource", sorted(replicas)[0], "restart", "--non-interactive", timeout=120)
+
+    def all_relaunched():
+        current = {**observe_instances(fixture, "api", 2), **observe_instances(fixture, "duplicate", 1)}
+        return current if all(current[name]["instance"] != before_restart[name]["instance"] for name in before_restart) else None
+
+    instances = wait_for(all_relaunched, "waiting for Restart to relaunch every running instance of the project")
+    replicas = {name: value for name, value in instances.items() if name in replicas}
+    for name in instances:
+        verify_new_application(before_restart[name], instances[name], "Project-wide Restart")
+    require(fixture.server_for("Api/Api.csproj")[1] == server, "Restart replaced the watcher instead of relaunching through it.")
+    context.evidence.check("replica-restart-relaunches-every-running-instance", responses=instances,
                           server=server.evidence())
 
     replace_once(fixture.root / "Api" / "Program.cs", '=> "before"', '=> "replicas-after"')
@@ -1551,9 +1612,8 @@ def verify_replicas(context):
     fixture.wait_cleanup({stopped_process})
     wait_for(lambda: fixture.resource(stopped_name)["state"] == "Exited",
              "waiting for the manually stopped replica's transport to settle")
-    fixture.rejected(stopped_name, "start")
-    context.evidence.check("replica-manual-stop-and-rejected-start", stoppedResource=stopped_name,
-                          stoppedInstance=stopped)
+    fixture.command_state(stopped_name, "start", "Enabled")
+    context.evidence.check("replica-manual-stop", stoppedResource=stopped_name, stoppedInstance=stopped)
 
     project = fixture.root / "Api" / "Api.csproj"
     replace_once(project, "<Nullable>enable</Nullable>",
@@ -1569,7 +1629,6 @@ def verify_replicas(context):
     }
     require(stopped_name not in active, f"An internal project refresh revived the stopped replica: {active}")
     require(fixture.resource(stopped_name)["state"] == "Exited", "Internal refresh lost the stopped instance state.")
-    fixture.rejected(stopped_name, "start")
     context.evidence.check("stopped-replica-survives-project-refresh", responses=active,
                           replacementServer=new_server.evidence())
 
@@ -1592,10 +1651,30 @@ def verify_replicas(context):
         **observe_instances(fixture, "duplicate", 1, "value", "System.IO.Hashing"),
     }
     require(stopped_name not in with_package, f"Package deployment revived the stopped instance: {with_package}")
-    fixture.rejected(stopped_name, "start")
     stays_true(lambda: fixture.resource(stopped_name)["state"] == "Exited" and not stopped_process.alive(),
                "checking stopped intent remains fenced after package deployment")
     context.evidence.check("stopped-replica-survives-package-refresh", responses=with_package)
+
+    # Start after a manual Stop replaces the group's watcher (a reconnect to the running watcher isn't safe) and
+    # starts that instance; every other instance of the group restarts with the fresh build.
+    fixture.command_state(stopped_name, "start", "Enabled")
+    fixture.cli("resource", stopped_name, "start", "--non-interactive", timeout=240)
+    started_server = wait_for(
+        lambda: (item if (item := fixture.server_for("Api/Api.csproj"))[1] != package_server else None),
+        "waiting for the Start watcher replacement",
+    )[1]
+    fixture.wait_cleanup({package_server})
+    restarted = {
+        **observe_instances(fixture, "api", 2, "value", "System.IO.Hashing"),
+        **observe_instances(fixture, "duplicate", 1, "value", "System.IO.Hashing"),
+    }
+    require(stopped_name in restarted, f"Start did not start the stopped replica: {restarted}")
+    for name in with_package:
+        verify_new_application(with_package[name], restarted[name], "Start with a fresh watcher")
+    context.evidence.check("stopped-replica-starts-with-a-fresh-watcher", responses=restarted,
+                          replacementServer=started_server.evidence())
+    with_package = restarted
+    package_server = started_server
 
     crashed_name = next(name for name in with_package if name.startswith("api-"))
     crashed = fixture.track(with_package[crashed_name]["pid"])
@@ -1769,7 +1848,6 @@ def verify_builds(context):
 
     api_builds = build_attempts(api_project)
     worker_builds = build_attempts(worker_project)
-    fixture.rejected("api", "rebuild")
     rebuilders = [
         resource for resource in fixture.describe(hidden=True)
         if resource.get("displayName", resource["name"]) == "api-rebuilder"
@@ -1779,7 +1857,7 @@ def verify_builds(context):
     rebuilder = rebuilders[0]
     result = fixture.cli("resource", rebuilder["name"], "start", "--non-interactive", success=False, timeout=30)
     require(result.returncode != 0, f"The hidden watched rebuilder was physically started: {rebuilder}")
-    require(build_attempts(api_project) == api_builds, "Rejected Rebuild still launched a physical watch build.")
+    require(build_attempts(api_project) == api_builds, "The rejected hidden rebuilder launched a physical build.")
     fixture.command_state("ordinary", "rebuild", "Enabled")
     replace_once(fixture.root / "Ordinary" / "Program.cs", '=> "before"', '=> "ordinary-after"')
     fixture.cli("resource", "ordinary", "rebuild", "--non-interactive")
@@ -1789,7 +1867,43 @@ def verify_builds(context):
     verify_same_application(worker, fixture.response("worker"), "Independent watcher isolation")
     require(build_attempts(api_project) == api_builds and build_attempts(worker_project) == worker_builds,
             "Ordinary Rebuild disturbed independently owned watcher builds.")
-    context.evidence.check("watched-rebuild-rejection-and-ordinary-rebuild-isolation", ordinary=rebuilt)
+    context.evidence.check("hidden-rebuilder-rejection-and-ordinary-rebuild-isolation", ordinary=rebuilt)
+
+    # Watched Rebuild replaces only its group's watcher with a fresh one that builds from source.
+    _, api_owner = fixture.server_for("Api/Api.csproj")
+    _, worker_owner = fixture.server_for("Independent/Worker/Worker.csproj")
+    fixture.command_state("worker", "rebuild", "Enabled")
+    fixture.cli("resource", "worker", "rebuild", "--non-interactive", timeout=240)
+    rebuilt_worker = fixture.response("worker", lambda value: value["instance"] != worker["instance"])
+    verify_new_application(worker, rebuilt_worker, "Watched Rebuild")
+    fresh_owner = wait_for(
+        lambda: (item if (item := fixture.server_for("Independent/Worker/Worker.csproj"))[1] != worker_owner else None),
+        "waiting for the watched Rebuild's fresh watcher",
+    )[1]
+    fixture.wait_cleanup({worker_owner})
+    require(build_attempts(worker_project) > worker_builds, "Watched Rebuild did not build the project from source.")
+    require(fixture.server_for("Api/Api.csproj")[1] == api_owner and build_attempts(api_project) == api_builds,
+            "Watched Rebuild disturbed an independent watch group.")
+    verify_same_application(api_response, fixture.response(), "Watched Rebuild group isolation")
+    verify_same_application(rebuilt, fixture.response("ordinary"), "Watched Rebuild ordinary isolation")
+    worker = rebuilt_worker
+    worker_builds = build_attempts(worker_project)
+    context.evidence.check("watched-rebuild-fresh-watcher-and-group-isolation", response=rebuilt_worker,
+                          previousOwner=worker_owner.evidence(), freshOwner=fresh_owner.evidence())
+
+    # The API waits for its EF migration, which finished and doesn't run again. A watch relaunch continues the API,
+    # so it doesn't wait for the migration again.
+    require(fixture.resource("migrations")["state"] == "Finished", "The EF migration is no longer finished.")
+    fixture.cli("resource", "api", "rebuild", "--non-interactive", timeout=240)
+    rebuilt_api = fixture.response("api", lambda value: value["instance"] != api_response["instance"], timeout=240)
+    verify_new_application(api_response, rebuilt_api, "Watched Rebuild of a service that waits for a finished dependency")
+    require(rebuilt_api["value"] == "build-recovered", f"The rebuilt API lost its source: {rebuilt_api}")
+    require(fixture.resource("migrations")["state"] == "Finished", "Rebuilding the API ran its EF migration again.")
+    require(build_attempts(api_project) > api_builds, "The API's watched Rebuild did not build the project from source.")
+    verify_same_application(worker, fixture.response("worker"), "The API's Rebuild group isolation")
+    api_response = rebuilt_api
+    api_builds = build_attempts(api_project)
+    context.evidence.check("watched-rebuild-does-not-wait-again-for-a-finished-dependency", response=rebuilt_api)
 
     proxy = fixture.application_snapshot()["properties"]["dotnet-watch.transport.pid"]
     for _ in range(2):
@@ -1804,21 +1918,27 @@ def verify_builds(context):
     require(build_attempts(api_project) == api_builds, "Restart-only control secretly built the project.")
     context.evidence.check("single-launch-restart-only-with-stable-transport", response=api_response)
 
-    stopped = fixture.track(api_response["pid"])
-    fixture.cli("resource", "api", "stop", "--non-interactive")
+    # Start after a manual Stop replaces the group's watcher: the running watcher lost the stopped instance's proxy.
+    stopped = fixture.track(worker["pid"])
+    _, worker_owner = fixture.server_for("Independent/Worker/Worker.csproj")
+    fixture.cli("resource", "worker", "stop", "--non-interactive")
     fixture.wait_cleanup({stopped})
-    wait_for(lambda: fixture.resource()["state"] == "Exited", "waiting for the stopped single launch")
-    fixture.rejected("api", "start")
-    require(fixture.resource().get("exitCode") is None, "Manual Stop published the proxy's zero application exit.")
-    fixture.stop()
-    fixture.start()
-    replacement = fixture.response("api", lambda value: value["value"] == "build-recovered")
-    verify_new_application(api_response, replacement, "A full watch-run restart after manual Stop")
-    fixture.application_snapshot()
-    worker = fixture.response("worker")
-    rebuilt = fixture.response("ordinary", lambda value: value["value"] == "ordinary-after")
-    api_response = replacement
-    context.evidence.check("single-launch-stop-rejects-start-until-full-run-restart", response=replacement)
+    wait_for(lambda: fixture.resource("worker")["state"] == "Exited", "waiting for the stopped single launch")
+    require(fixture.resource("worker").get("exitCode") is None, "Manual Stop published the proxy's zero application exit.")
+    fixture.command_state("worker", "start", "Enabled")
+    fixture.cli("resource", "worker", "start", "--non-interactive", timeout=240)
+    replacement = fixture.response("worker", lambda value: value["instance"] != worker["instance"])
+    verify_new_application(worker, replacement, "Start after a manual Stop")
+    started_owner = wait_for(
+        lambda: (item if (item := fixture.server_for("Independent/Worker/Worker.csproj"))[1] != worker_owner else None),
+        "waiting for the Start's fresh watcher",
+    )[1]
+    fixture.wait_cleanup({worker_owner})
+    fixture.application_snapshot("worker")
+    verify_same_application(api_response, fixture.response(), "Start after Stop group isolation")
+    worker = replacement
+    context.evidence.check("single-launch-start-after-stop-uses-a-fresh-watcher", response=replacement,
+                          previousOwner=worker_owner.evidence(), freshOwner=started_owner.evidence())
 
     _, owner = fixture.server_for("Api/Api.csproj")
     _, independent_owner = fixture.server_for("Independent/Worker/Worker.csproj")
@@ -1843,6 +1963,12 @@ def verify_builds(context):
     require(independent_owner.alive(), "The failed group terminated an independent watcher.")
     verify_same_application(worker, fixture.response("worker"), "Real watcher failure isolation")
     verify_same_application(rebuilt, fixture.response("ordinary"), "Real watcher failure ordinary isolation")
+    # The killed owner can't acknowledge the cleanup of its processes, so a fresh watcher can't safely replace it.
+    wait_for(lambda: fixture.resource("api")["commands"]["rebuild"]["state"] == "Disabled",
+             "waiting for the unconfirmed cleanup to refuse Rebuild")
+    refused = fixture.rejected("api", "rebuild")
+    require("restart the complete Aspire run" in plain_text(refused.stdout + refused.stderr),
+            f"The refused Rebuild did not say how to recover: {refused.stdout}\n{refused.stderr}")
     context.evidence.check("real-owner-termination-group-only-cleanup-and-settled-command",
                           failed=failed, pendingRestartExit=pending.returncode,
                           owner=owner.evidence(), independentOwner=independent_owner.evidence())
@@ -1999,7 +2125,7 @@ builder.Configuration["AppHost:BuildConfiguration"] = "Release";""")
     context.evidence.check("managed-file-app-invalid-edit-fresh-watcher-recovery", response=rude_recovered,
                           beforeOwner=before_rude_owner.evidence(), afterOwner=after_rude_owner.evidence())
 
-    before_run_restart_host = fixture.host_instance()
+    before_rebuild_host = fixture.host_instance()
     return_type_owner_resource, return_type_owner = wait_for(
         lambda: fixture.server_for("FileApp/file.cs"), "capturing the file-app owner before an SDK-accepted edit")
     replace_once(file_source, 'public static string Read() => "file-rude-recovered";',
@@ -2016,29 +2142,27 @@ builder.Configuration["AppHost:BuildConfiguration"] = "Release";""")
                                   "Attempted to invoke a deleted method implementation")
 
     wait_for(accepted_edit_replay_failure, "observing the SDK-accepted delete/reinsert replay limitation", timeout=45)
-    context.evidence.check("sdk-accepted-return-type-replay-requires-full-run-restart",
+    context.evidence.check("sdk-accepted-return-type-replay-requires-rebuild",
                           owner=return_type_owner.evidence(), automaticRecovery=False)
-    fixture.stop()
-    require(not fixture.owned_processes(), "The old full watch run left fixture-owned processes behind.")
-    fixture.start(application_args=host_arguments)
-    restarted = fixture.response("file", lambda value: value["value"] == "file-return-type-recovered", timeout=240)
-    _, restarted_owner = wait_for(
-        lambda: fixture.server_for("FileApp/file.cs"), "capturing the fresh full-run file-app owner")
-    restarted_host = fixture.host_instance()
-    require(restarted_owner != return_type_owner, "A full watch-run restart retained the old file-app watcher.")
-    verify_new_application(rude_recovered, restarted, "Full-run recovery from SDK-accepted delete/reinsert")
-    require(restarted_host["pid"] != before_run_restart_host["pid"]
-            and restarted_host["instance"] != before_run_restart_host["instance"]
-            and restarted_host["backchannel"] != before_run_restart_host["backchannel"],
-            "The explicit full-run recovery reused an old AppHost generation or backchannel.")
-    require(restarted_host["arguments"] == host_arguments
-            and restarted["configuration"] == "Release" and restarted["arguments"] == file_arguments,
-            "Full-run recovery changed the AppHost/file-app launch context.")
+    # The watcher replays the broken delta into every relaunch, so only a fresh watcher, which builds from source,
+    # recovers. Rebuild replaces just the file app's dedicated watcher, without restarting the AppHost.
+    fixture.command_state("file", "rebuild", "Enabled")
+    fixture.cli("resource", "file", "rebuild", "--non-interactive", timeout=240)
+    rebuilt = fixture.response("file", lambda value: value["value"] == "file-return-type-recovered", timeout=240)
+    rebuilt_owner = wait_for(
+        lambda: (identity if (identity := fixture.server_for("FileApp/file.cs")[1]) != return_type_owner else None),
+        "waiting for the file app's fresh watcher after Rebuild",
+    )
+    fixture.wait_cleanup({return_type_owner})
+    verify_new_application(rude_recovered, rebuilt, "Rebuild recovery from SDK-accepted delete/reinsert")
+    require(rebuilt["configuration"] == "Release" and rebuilt["arguments"] == file_arguments,
+            f"Rebuild changed the file-app launch context: {rebuilt}")
+    require(fixture.host_instance() == before_rebuild_host, "Rebuild of one watch group restarted the AppHost.")
     fixture.response("api", lambda value: value["value"] == "release-after")
-    verify_new_application(worker, fixture.response("worker"), "Independent group after complete run replacement")
+    verify_same_application(worker, fixture.response("worker"), "Independent group after the file app's Rebuild")
     fixture.application_snapshot("file")
-    context.evidence.check("sdk-accepted-return-type-full-run-restart-and-cleanup", response=restarted,
-                          beforeOwner=return_type_owner.evidence(), afterOwner=restarted_owner.evidence())
+    context.evidence.check("sdk-accepted-return-type-rebuild-recovery-and-cleanup", response=rebuilt,
+                          beforeOwner=return_type_owner.evidence(), afterOwner=rebuilt_owner.evidence())
     fixture.stop()
 
 
@@ -2819,12 +2943,32 @@ def verify_terminal(context):
     replace_once(source, "public class ValueSource\n", "public class ValueSource : ReplacementBase\n")
     restarted = fixture.response("api", lambda value: value["instance"] != recovered["instance"])
     verify_new_application(recovered, restarted, "A real rude edit restarts the affected application")
+
+    # Without AppHost watching, CTRL+R runs Rebuild for every watch group: a fresh watcher and build.
+    wait_for(lambda: fixture.terminal_has("Press CTRL+R to rebuild watched services"),
+             "waiting for the services-mode CTRL+R hint")
+    before_reload_host = fixture.host_instance()
+    _, before_reload_owner = fixture.server_for("Api/Api.csproj")
+    fixture.ctrl_r()
+    reloaded = fixture.response("api", lambda value: value["instance"] != restarted["instance"], timeout=240)
+    verify_new_application(restarted, reloaded, "CTRL+R rebuild of watched services")
+    reload_owner = wait_for(
+        lambda: (identity if (identity := fixture.server_for("Api/Api.csproj")[1]) != before_reload_owner else None),
+        "waiting for CTRL+R's fresh watcher",
+    )
+    fixture.wait_cleanup({before_reload_owner})
+    require(fixture.host_instance() == before_reload_host, "Rebuilding watched services restarted the AppHost.")
+    wait_for(lambda: fixture.terminal_has("Rebuilding watched services"),
+             "waiting for the CTRL+R progress message")
+    context.evidence.check("real-foreground-ctrl-r-rebuilds-watched-services", response=reloaded,
+                          previousOwner=before_reload_owner.evidence(), freshOwner=reload_owner.evidence())
+    assert_terminal_boundary(fixture, canaries)
     _, owner = fixture.server_for("Api/Api.csproj")
     fixture.capture_generation()
     fixture.kill_watch_host(owner)
     wait_for(lambda: fixture.resource("api", retry=True)["properties"].get("resource.watch.state") == "failed",
              "waiting for typed infrastructure-failed coverage")
-    wait_for(lambda: "Fix the cause and restart the complete Aspire run" in " ".join(fixture.terminal_text().split()),
+    wait_for(lambda: fixture.terminal_has("Fix the cause and restart the complete Aspire run"),
              "waiting for authored watch-group failure/recovery guidance")
     assert_terminal_boundary(fixture, canaries)
     fixture.ctrl_c()

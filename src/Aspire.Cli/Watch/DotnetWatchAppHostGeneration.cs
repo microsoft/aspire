@@ -19,9 +19,11 @@ internal sealed class DotnetWatchAppHostGeneration : IAsyncDisposable, IGraceful
     private readonly TimeSpan _shutdownBudget;
     private readonly string _homeDirectory;
     private readonly ILogger _logger;
-    private readonly TaskCompletionSource _invalidation = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<bool> _invalidation = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _startupFailed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<string> _hostStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<Exception> _failure = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _enabled = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private NamedPipeServerStream? _pipe;
     private Socket? _socket;
     private Task _listener = Task.CompletedTask;
@@ -49,11 +51,37 @@ internal sealed class DotnetWatchAppHostGeneration : IAsyncDisposable, IGraceful
     internal string Endpoint => _endpoint ?? throw new InvalidOperationException("The AppHost generation channel is not enabled.");
     internal string Session { get; }
     internal bool IsEnabled => _isEnabled;
+
+    /// <summary>
+    /// Completes when the generation channel opens. The AppHost project opens it after it signals that its build
+    /// completed, so this is how a caller that observed the build learns that the channel is enabled.
+    /// </summary>
+    internal Task Enabled => _enabled.Task;
     internal Task Invalidated => _invalidation.Task;
+    internal bool ReloadRequested => _invalidation.Task.IsCompletedSuccessfully && _invalidation.Task.Result;
+    internal bool IsReplacement { get; init; }
+    internal bool StartedByReload { get; init; }
+    internal Task StartupFailed => _startupFailed.Task;
     internal Task<string> HostStarted => _hostStarted.Task;
     internal Task<Exception> Failure => _failure.Task;
     internal bool RequiresLauncherMonitoring { get; init; } = true;
     internal Action? OnBackchannelEstablished { get; init; }
+
+    /// <summary>
+    /// The Ctrl+R reload that this generation accepted. The session hands it to the replacement, which completes it.
+    /// </summary>
+    /// <remarks>
+    /// Set by the generation's run after <see cref="RequestReload"/> succeeds. The session reads it only after that run
+    /// has drained, which includes the shortcut listener that set it.
+    /// </remarks>
+    internal RunReloadActivity? RequestedReload { get; set; }
+
+    /// <summary>The Ctrl+R reload that started this generation. This generation's run completes it.</summary>
+    internal RunReloadActivity? PendingReload { get; init; }
+
+    internal bool RequestReload() => _invalidation.TrySetResult(true);
+
+    internal void MarkStartupFailed() => _startupFailed.TrySetResult();
 
     internal (int ProcessId, DateTimeOffset StartedAt)? GetGracefulShutdownTarget()
     {
@@ -109,6 +137,7 @@ internal sealed class DotnetWatchAppHostGeneration : IAsyncDisposable, IGraceful
 
             _isEnabled = true;
             _listener = ListenAsync();
+            _enabled.TrySetResult();
         }
 
         environment[DotnetWatchOwnership.AppHostControlEnvironmentVariable] = Endpoint;
@@ -203,12 +232,12 @@ internal sealed class DotnetWatchAppHostGeneration : IAsyncDisposable, IGraceful
                 {
                     // A rude edit starts a different real AppHost without calling a metadata handler.
                     // Replace its entire model/backchannel; a disconnect on its own is not invalidation.
-                    _invalidation.TrySetResult();
+                    _invalidation.TrySetResult(false);
                 }
             }
             else if (string.Equals(_hostInstance, message.Instance, StringComparison.Ordinal))
             {
-                _invalidation.TrySetResult();
+                _invalidation.TrySetResult(false);
             }
         }
         catch (Exception exception) when (exception is IOException or SocketException or InvalidDataException or JsonException or OperationCanceledException)

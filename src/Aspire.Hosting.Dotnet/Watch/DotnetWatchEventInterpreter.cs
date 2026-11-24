@@ -24,6 +24,13 @@ internal enum WatchNoticeKind
     ProjectFileChanged = 10,
     Excluded = 11,
     InfrastructureFailed = 12,
+    /// <summary>A command replaced the group's watcher with a fresh one that builds from source.</summary>
+    Reloading = 13,
+    /// <summary>
+    /// The watcher launched a project whose instances were all stopped, so the group's watcher is replaced to end that
+    /// process.
+    /// </summary>
+    OrphanPurged = 14,
 }
 
 /// <summary>A concise, user-facing watch notice, attributed to the affected watched projects.</summary>
@@ -153,7 +160,7 @@ internal sealed class DotnetWatchEventInterpreter
             case DotnetWatchStatusTypes.ProcessExited:
                 _crashed.UnionWith(projects);
                 notices.Add(Notice(WatchNoticeKind.Crashed, LogLevel.Error,
-                    $"💥 {Names(projects)} exited with code {exitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}. Save a source change or restart the complete Aspire run to relaunch it; Restart requires a running application.", projects));
+                    $"💥 {Names(projects)} exited with code {exitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}. Save a source change to relaunch it, or use Rebuild to restart it with a fresh build; Restart only relaunches running applications.", projects));
                 break;
 
             case DotnetWatchStatusTypes.ProcessStarted:
