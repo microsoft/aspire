@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.Agents;
@@ -74,6 +75,37 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(EnvironmentCheckStatus.Warning, warning.Status);
         Assert.Contains($"aspire agent init --agents {clientId}", warning.Fix);
+
+        var services = context.CreateServiceCollection(outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse(
+            $"agent init --agents {clientId} --scope project --skills none --mcp=false --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(await check.CheckAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("claude")]
+    public async Task CheckAsync_LegacyHookInDefaultAspireHomeWarnsWhenInstallHomeAndAspireHomeAreElsewhere(string clientId)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper, aspireHomeDirectoryName: "install-home");
+        context.SetVariable("ASPIRE_HOME", Path.Combine(context.Workspace.WorkspaceRoot.FullName, "configured-home"));
+        var script = JsonEncodedText.Encode(Path.Combine(context.Home.FullName, ".aspire", "hooks", "track-telemetry.sh")).ToString();
+        var configPath = clientId == CopilotAgentClient.ClientId
+            ? Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json")
+            : Path.Combine(context.ClaudeDirectory, "settings.json");
+        await AgentConfigurationTestContext.WriteAsync(configPath, clientId == CopilotAgentClient.ClientId
+            ? $$$"""{"version":1,"hooks":{"postToolUse":[{"type":"command","bash":"bash '{{{script}}}'"}]}}"""
+            : $$$"""{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"bash","args":["{{{script}}}"]}]}]}}""");
+        var check = CreateCheck(context);
+
+        var warning = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(EnvironmentCheckStatus.Warning, warning.Status);
+        Assert.Equal(configPath, warning.Details);
 
         var services = context.CreateServiceCollection(outputHelper);
         using var provider = services.BuildServiceProvider();

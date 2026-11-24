@@ -24,7 +24,11 @@ internal sealed class AgentConfigurationTestContext : IDisposable
 {
     private readonly Dictionary<string, string?> _variables;
 
-    public AgentConfigurationTestContext(ITestOutputHelper output)
+    /// <param name="output">The test output helper.</param>
+    /// <param name="aspireHomeDirectoryName">
+    /// A workspace directory to use as the CLI's install-route Aspire home instead of <c>~/.aspire</c>.
+    /// </param>
+    public AgentConfigurationTestContext(ITestOutputHelper output, string? aspireHomeDirectoryName = null)
     {
         Workspace = TemporaryWorkspace.Create(output);
         Project = Workspace.CreateDirectory("project");
@@ -36,7 +40,10 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         };
         // Keep platform-specific policy reads inside the fixture on every test OS.
         Environment = TestEnvironment.CreateWindows(_variables);
-        ExecutionContext = TestExecutionContextHelper.CreateExecutionContext(Project, homeDirectory: Home);
+        ExecutionContext = TestExecutionContextHelper.CreateExecutionContext(
+            Project,
+            homeDirectory: Home,
+            aspireHomeDirectory: aspireHomeDirectoryName is null ? null : Workspace.CreateDirectory(aspireHomeDirectoryName));
         Copilot = new CopilotAgentClient(ExecutionContext, Environment, NullLogger<CopilotAgentClient>.Instance);
         ClaudeCode = new ClaudeCodeAgentClient(ExecutionContext, Environment, NullLogger<ClaudeCodeAgentClient>.Instance);
         OpenCode = new OpenCodeAgentClient(ExecutionContext, Environment);
