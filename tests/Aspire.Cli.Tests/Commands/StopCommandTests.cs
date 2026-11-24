@@ -1540,6 +1540,49 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             Assert.Single(interactionService.DisplayedMessages, message => message.Emoji.Name == KnownEmojis.Information.Name).Message);
     }
 
+    [Fact]
+    public async Task StopCommand_AllWait_TearsDownResourcesOfOrphanedAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+        var connection = CreateConnection(appHostPath, int.MaxValue - 1);
+        // The launching CLI process does not exist, so the AppHost is orphaned.
+        connection.AppHostInfo = new AppHostInformation { AppHostPath = appHostPath, ProcessId = int.MaxValue - 1, CliProcessId = int.MaxValue - 3 };
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        monitor.AddConnection(connection.SocketPath, connection);
+        // Like the real monitor, a scan drops connections whose socket file has been deleted.
+        monitor.ScanAsyncCallback = _ =>
+        {
+            if (!File.Exists(connection.SocketPath))
+            {
+                monitor.RemoveConnection(connection.SocketPath);
+            }
+
+            return Task.CompletedTask;
+        };
+        Assert.True(OrphanedAppHostCollector.IsOrphaned(connection));
+
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, new TestProcessExecutionFactory(), interactive: false);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("stop --all --wait --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, connection.StopAppHostAndWaitForResourceCleanupCallCount);
+        Assert.Equal(0, connection.StopAppHostCallCount);
+        Assert.False(File.Exists(connection.SocketPath));
+        Assert.Equal(
+            [
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, "AppHost.csproj"),
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourcesTornDown, "AppHost.csproj")
+            ],
+            interactionService.DisplayedSuccess);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

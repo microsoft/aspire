@@ -36,10 +36,15 @@ internal sealed class TestKubernetesService : IKubernetesService
     public string StoppedExecutableState { get; set; } = ExecutableState.Finished;
     public string StoppedContainerState { get; set; } = ContainerState.Exited;
 
+    // DCP reports cleanup as complete even when some objects could not be deleted, so tests can keep the
+    // created objects listable after cleanup to simulate that.
+    public bool KeepResourcesAfterCleanup { get; set; }
+
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private int _cleanupResourcesCallCount;
+    private volatile bool _resourcesCleanedUp;
     private readonly Action<CustomResource>? _beforeCreate;
     private readonly Func<CustomResource, CancellationToken, Task>? _beforeCreateAsync;
     private readonly bool _allocateServiceAddresses;
@@ -309,6 +314,11 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public Task<List<T>> ListAsync<T>(string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
+        if (_resourcesCleanedUp)
+        {
+            return Task.FromResult(new List<T>());
+        }
+
         var res = CreatedResources.OfType<T>().Where(r =>
             string.Equals(r.Metadata.NamespaceProperty ?? string.Empty, namespaceParameter ?? string.Empty)
         );
@@ -500,6 +510,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     public Task CleanupResourcesAsync(CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _cleanupResourcesCallCount);
+        _resourcesCleanedUp = !KeepResourcesAfterCleanup;
         return StopServerAsync("Full", cancellationToken);
     }
 

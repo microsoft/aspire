@@ -12074,6 +12074,24 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncReportsCleanupAsUnconfirmedWhenObjectsRemain()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService { KeepResourcesAfterCleanup = true };
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(resourcesCleanedUp);
+        Assert.Equal(1, kubernetesService.CleanupResourcesCallCount);
+    }
+
+    [Fact]
     public async Task StopAndWaitForResourceCleanupAsyncCannotConfirmCleanupAfterARegularStop()
     {
         var builder = DistributedApplication.CreateBuilder();

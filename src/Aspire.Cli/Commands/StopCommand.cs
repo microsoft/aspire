@@ -583,10 +583,17 @@ internal sealed partial class StopCommand : BaseCommand
         // Collecting first guarantees orphaned trees and their stale sockets are cleaned up
         // even if the normal stop path can't connect to one of them. CollectAsync is best effort and
         // never throws for scan/stop failures (only cancellation propagates), so no guard is needed here.
-        var collected = await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
-        if (collected > 0)
+        //
+        // With --wait, collection is skipped: it only waits for the process to exit, so collected AppHosts
+        // could still be removing their resources when the command returns. Orphaned AppHosts are discovered by
+        // the same scan below, so they go through the teardown-aware stop and report their cleanup outcome.
+        if (!_waitForResourceTeardown)
         {
-            _logger.LogDebug("Collected {Count} orphaned AppHost(s) before stopping the rest.", collected);
+            var collected = await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
+            if (collected > 0)
+            {
+                _logger.LogDebug("Collected {Count} orphaned AppHost(s) before stopping the rest.", collected);
+            }
         }
 
         var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
