@@ -277,7 +277,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         var tags = Services.GetRequiredService<ResourceTagStore>();
         foreach (var name in new[] { "api", "worker", "other", "parameter", "hidden-parameter" })
         {
-            tags.AddTag(name, "Backend");
+            await tags.AddTagAsync(name, "Backend");
         }
 
         var navigation = Services.GetRequiredService<NavigationManager>();
@@ -542,7 +542,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         var context = await RenderLiveSummaryAsync(GroupOverview.Summary);
         context.Summary.WaitForAssertion(() => Assert.Single(context.Summary.FindAll(".home-chart-bar")), DefaultWaitTimeout);
 
-        await DisposeComponentsAsync();
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
         var queries = Volatile.Read(ref context.RequestQueries.Count);
         context.Timers.Advance(TimeSpan.FromSeconds(30));
 
