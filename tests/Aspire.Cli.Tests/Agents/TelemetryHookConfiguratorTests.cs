@@ -248,6 +248,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [InlineData("""{"type":"command","command":"cat","args":["{sh}"]}""")]
     [InlineData("""{"type":"command","command":"bash","args":["/work/hooks/log.sh","{sh}"]}""")]
     [InlineData("""{"type":"command","command":"pwsh","args":["-Command","Get-Content","{ps1}"]}""")]
+    [InlineData("""{"type":"command","command":"cat '{sh}'"}""")]
     public async Task ConfigureAsync_PreservesHookThatPassesLegacyScriptPathAsData(string userHookJson)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

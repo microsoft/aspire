@@ -143,13 +143,15 @@ internal sealed class LegacyTelemetryHook
     // Any other shape, such as {"command":"cat","args":["/home/me/.aspire/hooks/track-telemetry.sh"]}, passes
     // the path as data rather than running the script, so it is left alone.
     private bool IsExecFormMatch(string? command, string?[]? args)
-        => args switch
-        {
-            [var script] when string.Equals(command, "bash", StringComparison.OrdinalIgnoreCase) => IsScriptPath(script),
-            [.., var option, var script] when string.Equals(command, "pwsh", StringComparison.OrdinalIgnoreCase)
-                => string.Equals(option, "-File", StringComparison.OrdinalIgnoreCase) && IsScriptPath(script),
-            _ => false,
-        };
+        => args is [.. var argsBeforeScript, var script] && RunsScript(command, argsBeforeScript) && IsScriptPath(script);
+
+    // Shared by the exec-form and shell-form matchers so both accept the same invocations: the script as bash's
+    // only argument, or as the value of pwsh's final -File option.
+    private static bool RunsScript(string? command, string?[] argsBeforeScript)
+        => argsBeforeScript is []
+            ? string.Equals(command, "bash", StringComparison.OrdinalIgnoreCase)
+            : string.Equals(command, "pwsh", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(argsBeforeScript[^1], "-File", StringComparison.OrdinalIgnoreCase);
 
     private bool IsScriptPath(string? value)
         => value is not null && _scriptPaths.Contains(Normalize(value), StringComparers.FileSystemPath);
@@ -187,14 +189,30 @@ internal sealed class LegacyTelemetryHook
             return false;
         }
 
-        // Require an Aspire-owned script path as the whole value or as its final whitespace-separated token, so
-        // user hooks such as `bash /work/project/hooks/track-telemetry.sh` or
-        // `bash '/home/me/.aspire/hooks/track-telemetry.sh.backup'` are left alone. Paths compare with the
-        // platform's file-system rules, so a path that differs only by case is a different file on Linux.
+        // Require an Aspire-owned script path as the whole value, or as the final whitespace-separated token of a
+        // bash or pwsh invocation that RunsScript accepts. User hooks such as
+        // `bash /work/project/hooks/track-telemetry.sh`, `bash '/home/me/.aspire/hooks/track-telemetry.sh.backup'`,
+        // or `cat '/home/me/.aspire/hooks/track-telemetry.sh'` are left alone. Paths compare with the platform's
+        // file-system rules, so a path that differs only by case is a different file on Linux.
         var value = Normalize(text.Trim());
-        return _scriptReferences.Any(reference =>
-            value.EndsWith(reference, StringComparisons.FileSystemPath) &&
-            (value.Length == reference.Length || char.IsWhiteSpace(value[value.Length - reference.Length - 1])));
+        foreach (var reference in _scriptReferences)
+        {
+            if (!value.EndsWith(reference, StringComparisons.FileSystemPath))
+            {
+                continue;
+            }
+
+            var prefix = value[..^reference.Length];
+            if (prefix.Length == 0 ||
+                (char.IsWhiteSpace(prefix[^1]) &&
+                    prefix.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries) is [var command, .. var argsBeforeScript] &&
+                    RunsScript(command, argsBeforeScript)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string Normalize(string value) => value.Replace('\\', '/');
