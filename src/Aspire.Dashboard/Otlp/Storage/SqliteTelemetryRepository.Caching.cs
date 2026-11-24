@@ -65,6 +65,9 @@ public sealed partial class SqliteTelemetryRepository
                 if (record is not null)
                 {
                     cachedResource = GetOrAddCachedResource(record);
+                    // Instruments and spans stored for this resource refer to its stored views. Load them, because this
+                    // path runs before EnsureCachePopulated after a restart.
+                    LoadCachedResourceViews(connection, transaction, cachedResource);
                     if (cachedResource.Resource.UninstrumentedPeer && !uninstrumentedPeer)
                     {
                         connection.Execute(
@@ -624,6 +627,30 @@ public sealed partial class SqliteTelemetryRepository
         _cachedResourcesByKey.Add(key, cachedResource);
         _cachedResourcesById.Add(resourceId, cachedResource);
         return cachedResource;
+    }
+
+    private static void LoadCachedResourceViews(SqliteConnection connection, IDbTransaction transaction, CachedResource resource)
+    {
+        var records = connection.Query<CachedResourceViewRecord>("""
+            SELECT
+                v.resource_view_id AS ResourceViewId,
+                v.resource_id AS ResourceId,
+                a.attribute_key AS AttributeKey,
+                a.attribute_value AS AttributeValue
+            FROM telemetry_resource_views v
+            LEFT JOIN telemetry_resource_view_attributes a ON a.resource_view_id = v.resource_view_id
+            WHERE v.resource_id = @ResourceId
+            ORDER BY v.resource_view_id, a.ordinal;
+            """, new { resource.ResourceId }, transaction);
+
+        foreach (var group in records.GroupBy(record => record.ResourceViewId))
+        {
+            var properties = group
+                .Where(record => record.AttributeKey is not null)
+                .Select(record => KeyValuePair.Create(record.AttributeKey!, record.AttributeValue!))
+                .ToArray();
+            AddCachedResourceView(resource, group.Key, properties);
+        }
     }
 
     private static CachedResourceView AddCachedResourceView(CachedResource resource, long resourceViewId, KeyValuePair<string, string>[] properties)
