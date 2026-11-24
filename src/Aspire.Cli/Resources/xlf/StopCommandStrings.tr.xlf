@@ -172,6 +172,21 @@
         <target state="translated">{0} ve {1} seçenekleri birlikte kullanılamaz.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TimeoutMustBePositive">
+        <source>Timeout must be a positive number of seconds.</source>
+        <target state="new">Timeout must be a positive number of seconds.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutOptionDescription">
+        <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
+        <target state="new">Maximum time in seconds to wait for resources to be torn down (requires --wait)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutRequiresWait">
+        <source>The {0} option requires the {1} option.</source>
+        <target state="new">The {0} option requires the {1} option.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
         <source>an unknown version</source>
         <target state="translated">bilinmeyen bir sürüm</target>

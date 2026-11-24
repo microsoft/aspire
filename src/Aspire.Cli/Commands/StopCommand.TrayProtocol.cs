@@ -59,7 +59,8 @@ internal sealed partial class StopCommand
             parseResult.GetResult(s_allOption) is { Implicit: false } ||
             parseResult.GetResult(s_forceOption) is { Implicit: false } ||
             parseResult.GetResult(s_volumesOption) is { Implicit: false } ||
-            parseResult.GetResult(s_waitOption) is { Implicit: false })
+            parseResult.GetResult(s_waitOption) is { Implicit: false } ||
+            parseResult.GetResult(s_timeoutOption) is { Implicit: false })
         {
             InteractionService.DisplayError(StopCommandStrings.ProtocolRequiresExactIdentity);
             return StopResponse("invalid_request", CliExitCodes.InvalidCommand);

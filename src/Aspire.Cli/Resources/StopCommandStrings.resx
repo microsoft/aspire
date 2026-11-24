@@ -234,4 +234,13 @@
   <data name="ResourceTeardownMayContinue" xml:space="preserve">
     <value>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</value>
   </data>
+  <data name="TimeoutOptionDescription" xml:space="preserve">
+    <value>Maximum time in seconds to wait for resources to be torn down (requires --wait)</value>
+  </data>
+  <data name="TimeoutMustBePositive" xml:space="preserve">
+    <value>Timeout must be a positive number of seconds.</value>
+  </data>
+  <data name="TimeoutRequiresWait" xml:space="preserve">
+    <value>The {0} option requires the {1} option.</value>
+  </data>
 </root>

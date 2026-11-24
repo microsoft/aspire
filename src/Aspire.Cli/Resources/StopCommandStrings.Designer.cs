@@ -367,6 +367,33 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Timeout must be a positive number of seconds..
+        /// </summary>
+        internal static string TimeoutMustBePositive {
+            get {
+                return ResourceManager.GetString("TimeoutMustBePositive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Maximum time in seconds to wait for resources to be torn down (requires --wait).
+        /// </summary>
+        internal static string TimeoutOptionDescription {
+            get {
+                return ResourceManager.GetString("TimeoutOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The {0} option requires the {1} option..
+        /// </summary>
+        internal static string TimeoutRequiresWait {
+            get {
+                return ResourceManager.GetString("TimeoutRequiresWait", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to an unknown version.
         /// </summary>
         internal static string UnknownAspireHostingVersion {

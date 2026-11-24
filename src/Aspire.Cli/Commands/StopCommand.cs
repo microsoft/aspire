@@ -37,12 +37,13 @@ internal sealed partial class StopCommand : BaseCommand
 
     // Per-invocation state. A command instance handles a single invocation.
     private bool _waitForResourceTeardown;
+    private TimeSpan _resourceTeardownTimeout;
     private int _appHostsStoppedWithoutTeardownWait;
     private int _resourceTeardownExitCode;
 
     // Stopping a container sends SIGTERM and waits up to 10 seconds before SIGKILL, and DCP tears resources down in
     // parallel, so a healthy teardown takes seconds. The extra headroom covers slow container runtimes.
-    internal static TimeSpan ResourceTeardownTimeout { get; } = TimeSpan.FromMinutes(2);
+    internal const int DefaultResourceTeardownTimeoutSeconds = 120;
 
     private const int MinimumHostingMajorVersionForPersistentResourceCleanup = 13;
     private const int MinimumHostingMinorVersionForPersistentResourceCleanup = 5;
@@ -76,6 +77,12 @@ internal sealed partial class StopCommand : BaseCommand
     private static readonly Option<bool> s_waitOption = new("--wait")
     {
         Description = StopCommandStrings.WaitOptionDescription
+    };
+
+    private static readonly Option<int> s_timeoutOption = new("--timeout")
+    {
+        Description = StopCommandStrings.TimeoutOptionDescription,
+        DefaultValueFactory = _ => DefaultResourceTeardownTimeoutSeconds
     };
 
     public StopCommand(
@@ -122,6 +129,7 @@ internal sealed partial class StopCommand : BaseCommand
         Options.Add(s_formatOption);
         Options.Add(s_volumesOption);
         Options.Add(s_waitOption);
+        Options.Add(s_timeoutOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -144,11 +152,26 @@ internal sealed partial class StopCommand : BaseCommand
         var processId = parseResult.GetValue(s_pidOption);
         var volumes = parseResult.GetValue(s_volumesOption);
         _waitForResourceTeardown = parseResult.GetValue(s_waitOption);
+        var timeoutSeconds = parseResult.GetValue(s_timeoutOption);
+        var timeoutSpecified = parseResult.GetResult(s_timeoutOption) is { Implicit: false };
         _appHostsStoppedWithoutTeardownWait = 0;
         _resourceTeardownExitCode = CliExitCodes.Success;
         using var activity = _profilingTelemetry.StartStopCommand(stopAll, passedAppHostProjectFile is not null);
 
-        var result = await ExecuteStopAsync(passedAppHostProjectFile, stopAll, force, processId, volumes, cancellationToken).ConfigureAwait(false);
+        CommandResult result;
+        if (timeoutSpecified && !_waitForResourceTeardown)
+        {
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.TimeoutRequiresWait, s_timeoutOption.Name, s_waitOption.Name));
+        }
+        else if (timeoutSeconds <= 0)
+        {
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, StopCommandStrings.TimeoutMustBePositive);
+        }
+        else
+        {
+            _resourceTeardownTimeout = TimeSpan.FromSeconds(timeoutSeconds);
+            result = await ExecuteStopAsync(passedAppHostProjectFile, stopAll, force, processId, volumes, cancellationToken).ConfigureAwait(false);
+        }
 
         // An unconfirmed resource teardown does not fail the stop itself, so the remaining steps (such as the
         // persistent resource cleanup of --force) still run, but the command must not report success.
@@ -693,7 +716,7 @@ internal sealed partial class StopCommand : BaseCommand
         {
             ResourceTeardownOutcome.NotRequested => CountStoppedWithoutTeardownWait(),
             ResourceTeardownOutcome.TornDown => DisplayTeardownSuccess(appHostIdentifier),
-            ResourceTeardownOutcome.TimedOut => DisplayTeardownError(CliExitCodes.WaitTimeout, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, (int)ResourceTeardownTimeout.TotalSeconds),
+            ResourceTeardownOutcome.TimedOut => DisplayTeardownError(CliExitCodes.WaitTimeout, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, (int)_resourceTeardownTimeout.TotalSeconds),
             ResourceTeardownOutcome.Unsupported => DisplayTeardownError(CliExitCodes.AppHostIncompatible, StopCommandStrings.ResourceTeardownUnsupported, appHostIdentifier, s_waitOption.Name),
             _ => DisplayTeardownError(CliExitCodes.FailedToDotnetRunAppHost, StopCommandStrings.ResourceTeardownNotConfirmed, appHostIdentifier)
         };
@@ -706,7 +729,7 @@ internal sealed partial class StopCommand : BaseCommand
     }
 
     /// <summary>
-    /// Asks the AppHost to tear down its resources and waits, up to <see cref="ResourceTeardownTimeout"/>, for it to
+    /// Asks the AppHost to tear down its resources and waits, up to the <c>--timeout</c> value, for it to
     /// confirm that they are gone.
     /// </summary>
     /// <remarks>
@@ -722,7 +745,7 @@ internal sealed partial class StopCommand : BaseCommand
             return ResourceTeardownOutcome.Unsupported;
         }
 
-        using var timeoutCts = new CancellationTokenSource(ResourceTeardownTimeout, _timeProvider);
+        using var timeoutCts = new CancellationTokenSource(_resourceTeardownTimeout, _timeProvider);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
         try

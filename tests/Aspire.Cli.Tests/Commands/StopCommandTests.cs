@@ -1667,8 +1667,10 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             interactionService.DisplayedMessages.Select(message => message.Message));
     }
 
-    [Fact]
-    public async Task StopCommand_Wait_ReportsTimeoutWhenResourceTeardownDoesNotComplete()
+    [Theory]
+    [InlineData("stop --wait --non-interactive", StopCommand.DefaultResourceTeardownTimeoutSeconds)]
+    [InlineData("stop --wait --timeout 5 --non-interactive", 5)]
+    public async Task StopCommand_Wait_ReportsTimeoutWhenResourceTeardownDoesNotComplete(string commandLine, int expectedTimeoutSeconds)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
@@ -1679,7 +1681,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
         connection.StopAppHostAndWaitForResourceCleanupHandler = async cancellationToken =>
         {
-            timeProvider.Advance(StopCommand.ResourceTeardownTimeout);
+            // Advancing by exactly the expected timeout proves which timeout is in effect: a longer one never fires.
+            timeProvider.Advance(TimeSpan.FromSeconds(expectedTimeoutSeconds));
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return true;
         };
@@ -1692,7 +1695,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var exitCode = await command.Parse("stop --wait --non-interactive").InvokeAsync().DefaultTimeout();
+        var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.WaitTimeout, exitCode);
         var appHostIdentifier = Path.Combine("AppHost", "AppHost.csproj");
@@ -1700,8 +1703,37 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier),
             Assert.Single(interactionService.DisplayedSuccess));
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, (int)StopCommand.ResourceTeardownTimeout.TotalSeconds),
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, expectedTimeoutSeconds),
             Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Theory]
+    [InlineData("stop --timeout 30 --non-interactive")]
+    [InlineData("stop --wait --timeout 0 --non-interactive")]
+    [InlineData("stop --wait --timeout -1 --non-interactive")]
+    public async Task StopCommand_InvalidTimeout_FailsWithoutStopping(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+        var connection = CreateConnection(appHostPath, int.MaxValue - 1);
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        monitor.AddConnection(connection.SocketPath, connection);
+
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, new TestProcessExecutionFactory(), interactive: false);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(0, connection.StopAppHostCallCount);
+        Assert.Equal(0, connection.StopAppHostAndWaitForResourceCleanupCallCount);
+        var expectedError = commandLine.Contains("--wait", StringComparison.Ordinal)
+            ? StopCommandStrings.TimeoutMustBePositive
+            : string.Format(CultureInfo.CurrentCulture, StopCommandStrings.TimeoutRequiresWait, "--timeout", "--wait");
+        Assert.Equal(expectedError, Assert.Single(interactionService.DisplayedErrors));
     }
 
     [Theory]

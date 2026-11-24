@@ -354,10 +354,11 @@ aspire stop --wait
 ```
 
 With `--wait`, the AppHost tears its resources down before it exits and confirms when
-they are gone. The command waits up to two minutes for that confirmation. It exits with
-code 17 if the wait times out and code 9 if the AppHost's Aspire version does not
-support waiting; the AppHost is stopped in both cases. `--wait` can be combined with
-`--pid`, `--all`, and `--force`.
+they are gone. The command waits up to 120 seconds for that confirmation; use
+`--timeout <seconds>` to change it (for example, `aspire stop --wait --timeout 300`).
+`--timeout` requires `--wait`. The command exits with code 17 if the wait times out and
+code 9 if the AppHost's Aspire version does not support waiting; the AppHost is stopped
+in both cases. `--wait` can be combined with `--pid`, `--all`, and `--force`.
 
 ### Desktop tray companion (Preview)
 
