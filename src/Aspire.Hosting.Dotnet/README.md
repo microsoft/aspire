@@ -173,6 +173,28 @@ It does not change the shared `ProjectResourceOptions` handle used by the legacy
 
 ### Configure the build environment
 
+Use `WithDotnetBuildEnvironment` on the distributed application builder to pass an app-wide
+environment variable and matching MSBuild global property to coordinated run-mode SDK-style
+.NET project builds. Project-specific `WithBuildEnvironment` values override an app-wide value
+with the same name. These values are not added to launched project environments; configure the
+same variable with `WithEnvironment` separately when it is needed at runtime.
+
+```csharp
+builder.WithDotnetBuildEnvironment("SkipAssets", "true");
+builder.AddDotnetProject("worker", "../worker/worker.csproj");
+```
+
+**TypeScript**
+
+```typescript
+await builder.withDotnetBuildEnvironment("SkipAssets", "true");
+await builder.addDotnetProject("worker", "../worker/worker.csproj");
+```
+
+IDE debugging requires a launcher that advertises `project-with-external-build.v1`. Aspire rejects
+this API when the active IDE session supports only the legacy project launch contract because that
+launcher cannot reliably locate output produced with app-wide build settings.
+
 Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation for an SDK-style
 `.csproj`, `.fsproj`, or `.vbproj` resource. File-based `.cs` apps do not support build-only environment variables and are rejected when
 `WithBuildEnvironment` is called. Projects with build-specific environment variables use serialized direct

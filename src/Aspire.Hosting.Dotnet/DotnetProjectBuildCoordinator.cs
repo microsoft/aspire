@@ -668,6 +668,14 @@ internal static partial class DotnetProjectBuildCoordinator
             buildEntries = buildEntries
                 .Where(entry => File.Exists(entry.Metadata.ProjectPath))
                 .ToArray();
+            var environmentComparer = OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
+            var appWideBuildEnvironment = new Dictionary<string, string>(environmentComparer);
+            foreach (var environmentEntry in services.GetServices<DotnetProjectBuildEnvironmentEntry>())
+            {
+                appWideBuildEnvironment[environmentEntry.Name] = environmentEntry.Value;
+            }
 
             if (_coordinationMode == BuildCoordinationMode.BuildOnly &&
                 buildEntries.FirstOrDefault(entry => GetBuildEnvironmentCallbacks(entry).Any()) is { } customizedEntry)
@@ -677,6 +685,18 @@ internal static partial class DotnetProjectBuildCoordinator
                     $"WithBuildEnvironment, but Aspire can use only the legacy " +
                     $"'{KnownLaunchConfigurationTypes.Project}' launch contract for the active IDE session and cannot " +
                     $"reliably launch output produced with project-specific build settings. Use an IDE that advertises " +
+                    $"'{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}', run the application outside this IDE, " +
+                    "or remove the build customization.");
+            }
+
+            if (_coordinationMode == BuildCoordinationMode.BuildOnly &&
+                appWideBuildEnvironment.Count > 0 &&
+                buildEntries.Length > 0)
+            {
+                throw new DistributedApplicationException(
+                    $"The AppHost uses WithDotnetBuildEnvironment, but Aspire can use only the legacy " +
+                    $"'{KnownLaunchConfigurationTypes.Project}' launch contract for the active IDE session and cannot " +
+                    "reliably launch output produced with app-wide build settings. Use an IDE that advertises " +
                     $"'{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}', run the application outside this IDE, " +
                     "or remove the build customization.");
             }
@@ -753,10 +773,39 @@ internal static partial class DotnetProjectBuildCoordinator
                             step.Configuration,
                             restoreProjectsIndividually);
                         rollbackActions.Push(ValidateMaterializedBuildCallbacks(buildResource, step.Projects));
+                        if (appWideBuildEnvironment.Count > 0)
+                        {
+                            var sharedBuildEnvironment = new SharedBuildEnvironment(
+                                step.Projects[0],
+                                services.GetRequiredService<ResourceNotificationService>(),
+                                applicationLifetime.ApplicationStopping,
+                                appWideBuildEnvironment);
+                            _sharedBuildEnvironments.Add(sharedBuildEnvironment);
+                            rollbackActions.Push(() =>
+                            {
+                                _sharedBuildEnvironments.Remove(sharedBuildEnvironment);
+                                sharedBuildEnvironment.Dispose();
+                            });
+                            rollbackActions.Push(BeginBuildEnvironmentAttemptOnResourceStart(
+                                _builder,
+                                buildResource,
+                                sharedBuildEnvironment));
+                            rollbackActions.Push(ApplyBuildEnvironment(buildResource, sharedBuildEnvironment));
+                            rollbackActions.Push(ApplyBuildProperties(buildResource, sharedBuildEnvironment));
+
+                            foreach (var entry in step.Projects)
+                            {
+                                entry.Metadata.SetBuildEnvironment(appWideBuildEnvironment);
+                            }
+                        }
                     }
                     else
                     {
                         var entry = step.Projects.Single();
+                        IReadOnlyDictionary<string, string> initialBuildEnvironment =
+                            IsProjectFile(entry.Metadata.ProjectPath)
+                                ? appWideBuildEnvironment
+                                : new Dictionary<string, string>(environmentComparer);
                         buildResource.ConfigureDirectBuild(
                             entry.Metadata.ProjectPath,
                             step.WorkingDirectory,
@@ -767,7 +816,8 @@ internal static partial class DotnetProjectBuildCoordinator
                         var sharedBuildEnvironment = new SharedBuildEnvironment(
                             entry,
                             services.GetRequiredService<ResourceNotificationService>(),
-                            applicationLifetime.ApplicationStopping);
+                            applicationLifetime.ApplicationStopping,
+                            initialBuildEnvironment);
                         _sharedBuildEnvironments.Add(sharedBuildEnvironment);
                         rollbackActions.Push(() =>
                         {
@@ -800,6 +850,28 @@ internal static partial class DotnetProjectBuildCoordinator
                     {
                         if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
                         {
+                            if (step.IsTraversal && appWideBuildEnvironment.Count > 0)
+                            {
+                                var sharedBuildEnvironment = new SharedBuildEnvironment(
+                                    entry,
+                                    services.GetRequiredService<ResourceNotificationService>(),
+                                    applicationLifetime.ApplicationStopping,
+                                    appWideBuildEnvironment);
+                                _sharedBuildEnvironments.Add(sharedBuildEnvironment);
+                                rollbackActions.Push(() =>
+                                {
+                                    _sharedBuildEnvironments.Remove(sharedBuildEnvironment);
+                                    sharedBuildEnvironment.Dispose();
+                                });
+                                rollbackActions.Push(BeginBuildEnvironmentAttemptOnResourceStart(
+                                    _builder,
+                                    rebuilder,
+                                    sharedBuildEnvironment));
+                                rollbackActions.Push(ValidateMaterializedBuildCallbacks(rebuilder, [entry]));
+                                rollbackActions.Push(ApplyBuildEnvironment(rebuilder, sharedBuildEnvironment));
+                                rollbackActions.Push(ApplyBuildProperties(rebuilder, sharedBuildEnvironment));
+                            }
+
                             rollbackActions.Push(BeginBuildAttemptOnResourceStart(_builder, rebuilder));
                         }
 
@@ -1171,6 +1243,7 @@ internal static partial class DotnetProjectBuildCoordinator
             private readonly ProjectEntry _entry;
             private readonly ResourceNotificationService _notificationService;
             private readonly CancellationToken _applicationStopping;
+            private readonly IReadOnlyDictionary<string, string> _initialEnvironment;
             private readonly object _lock = new();
             private readonly object _responseFilesLock = new();
             private readonly Dictionary<IResource, MsBuildResponseFile> _responseFiles =
@@ -1182,11 +1255,13 @@ internal static partial class DotnetProjectBuildCoordinator
             public SharedBuildEnvironment(
                 ProjectEntry entry,
                 ResourceNotificationService notificationService,
-                CancellationToken applicationStopping)
+                CancellationToken applicationStopping,
+                IReadOnlyDictionary<string, string> initialEnvironment)
             {
                 _entry = entry;
                 _notificationService = notificationService;
                 _applicationStopping = applicationStopping;
+                _initialEnvironment = initialEnvironment;
                 Callbacks = GetBuildEnvironmentCallbacks(entry).ToArray();
             }
 
@@ -1473,7 +1548,12 @@ internal static partial class DotnetProjectBuildCoordinator
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-                var environment = new Dictionary<string, object>(comparer);
+                var environment = new Dictionary<string, object>(_initialEnvironment.Count, comparer);
+                foreach (var (name, value) in _initialEnvironment)
+                {
+                    environment[name] = value;
+                }
+
                 foreach (var callback in Callbacks)
                 {
                     var callbackContext = new EnvironmentCallbackContext(

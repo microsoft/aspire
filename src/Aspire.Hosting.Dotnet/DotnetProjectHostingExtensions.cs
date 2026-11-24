@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental
@@ -16,6 +17,58 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class DotnetProjectHostingExtensions
 {
+    /// <summary>
+    /// Adds an environment variable to coordinated .NET project builds in the distributed application.
+    /// </summary>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The name of the environment variable and MSBuild property.</param>
+    /// <param name="value">The value of the environment variable and MSBuild property.</param>
+    /// <returns>The same builder for chaining additional configuration.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/>, <paramref name="name"/>, or <paramref name="value"/> is null.
+    /// </exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is empty.</exception>
+    /// <exception cref="DistributedApplicationException">
+    /// Thrown when the active IDE session supports only the legacy project launch contract.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// The value is supplied both as a build-process environment variable and as an MSBuild global property. It applies
+    /// to coordinated builds and is not added to launched project environments. Use <c>WithEnvironment</c> separately
+    /// when the same variable is also needed at runtime.
+    /// </para>
+    /// <para>
+    /// A project-specific <see cref="WithBuildEnvironment(IResourceBuilder{DotnetProjectResource}, string, string)"/>
+    /// value takes precedence when it uses the same name.
+    /// </para>
+    /// <para>
+    /// IDE debugging requires a launcher that advertises
+    /// <see cref="KnownLaunchConfigurationTypes.ProjectWithExternalBuild"/>. Aspire rejects legacy project-only
+    /// IDE sessions because they cannot reliably locate output produced with custom build settings.
+    /// </para>
+    /// <para>Do not use this API for secrets. Values can appear in build diagnostics.</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    /// builder.WithDotnetBuildEnvironment("SkipAssets", "true");
+    /// builder.AddDotnetProject("worker", "../worker/worker.csproj");
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IDistributedApplicationBuilder WithDotnetBuildEnvironment(
+        this IDistributedApplicationBuilder builder,
+        string name,
+        string value)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        builder.Services.AddSingleton(new DotnetProjectBuildEnvironmentEntry(name, value));
+        return builder;
+    }
+
     /// <summary>
     /// Adds an environment variable to the build process for a .NET project.
     /// </summary>

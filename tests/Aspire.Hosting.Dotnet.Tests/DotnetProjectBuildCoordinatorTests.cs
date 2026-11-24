@@ -380,6 +380,85 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LegacyIdeWithAppWideBuildEnvironmentFailsBeforeBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.WithDotnetBuildEnvironment("BUILD_FLAVOR", "custom");
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            $"The AppHost uses WithDotnetBuildEnvironment, but Aspire can use only the legacy " +
+            $"'{KnownLaunchConfigurationTypes.Project}' launch contract for the active IDE session and cannot " +
+            "reliably launch output produced with app-wide build settings. Use an IDE that advertises " +
+            $"'{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}', run the application outside this IDE, or " +
+            "remove the build customization.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AppWideBuildEnvironmentAppliesToTraversalAndProjectBuilds()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.WithDotnetBuildEnvironment("BUILD_FLAVOR", "global");
+        var apiPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var workerPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var api = builder.AddDotnetProject("api", apiPath, options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", workerPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment("BUILD_FLAVOR", "resource");
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResources = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        Assert.Collection(
+            buildResources,
+            traversalBuild => Assert.Equal([NormalizeProjectPath(apiPath)], traversalBuild.ProjectPaths),
+            directBuild => Assert.Equal([NormalizeProjectPath(workerPath)], directBuild.ProjectPaths));
+
+        var traversalEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            buildResources[0],
+            serviceProvider: app.Services);
+        var traversalArguments = await ArgumentEvaluator.GetArgumentListAsync(buildResources[0], app.Services);
+        var traversalResponseFile = Assert.Single(traversalArguments, argument => argument.StartsWith('@'));
+        var traversalResponseFileContents = File.ReadAllLines(traversalResponseFile[1..]);
+
+        var directEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            buildResources[1],
+            serviceProvider: app.Services);
+        var directArguments = await ArgumentEvaluator.GetArgumentListAsync(buildResources[1], app.Services);
+        var directResponseFile = Assert.Single(directArguments, argument => argument.StartsWith('@'));
+        var directResponseFileContents = File.ReadAllLines(directResponseFile[1..]);
+
+        Assert.Equal("global", traversalEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal(["\"--property:BUILD_FLAVOR=global\""], traversalResponseFileContents);
+        Assert.Equal("resource", directEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal(["\"--property:BUILD_FLAVOR=resource\""], directResponseFileContents);
+        Assert.Equal(
+            "global",
+            api.Resource.Annotations.OfType<DotnetProjectMetadata>().Single().BuildEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal(
+            "resource",
+            builder.Resources
+                .OfType<DotnetProjectResource>()
+                .Single(resource => resource.Name == "worker")
+                .Annotations.OfType<DotnetProjectMetadata>()
+                .Single()
+                .BuildEnvironment["BUILD_FLAVOR"]);
+    }
+
+    [Fact]
     public void ProjectCapabilityWithoutExternalBuildCreatesBuildWithoutSuppressingIdeBuild()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
