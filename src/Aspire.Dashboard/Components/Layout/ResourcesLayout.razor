@@ -953,7 +953,7 @@
                             {
                                 @* The verb and a short age, after the state ("Running · Started 7m ago"). *@
                                 var sidebarTimeTooltip = GetRowTimeTooltip(sidebarTime);
-                                <span class="resource-row-start-time resource-row-sidebar-start">
+                                <span class="resource-row-sep" aria-hidden="true">·</span><span class="resource-row-start-time resource-row-sidebar-start">
                                     <time datetime="@sidebarTime.Time.ToString("O", CultureInfo.InvariantCulture)"
                                           tabindex="0"
                                           aria-label="@GetRowTimeDescription(sidebarTime, sidebarTimeTooltip)"
@@ -1015,7 +1015,7 @@
                             @{ RenderRowHiddenIcon(__builder, item, compact: false); }
                             @* The parts have no whitespace between them. Where this line flows as text, so that it ends with
                                an ellipsis, whitespace would render as spaces on top of their margins. *@
-                            <span class="state-dot @GetStateClass(resource)"></span><span>@item.State.Text</span><span class="resource-row-sep resource-row-type-sep" aria-hidden="true">·</span><span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" tabindex="0" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
+                            <span class="state-dot @GetStateClass(resource)"></span><span>@item.State.Text</span><span class="resource-row-sep" aria-hidden="true">·</span><span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" tabindex="0" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                         </span>
                     </span>
                     RenderRowErrorSpacer(__builder, item);
@@ -1046,8 +1046,8 @@
                     <div class="resource-row-endpoints">
                         @if (item.Urls.Count > 0)
                         {
-                            @* Render all candidates so even a wide column with many short URLs shows everything that fits.
-                               Links and buttons don't select the row (see ResourcesLayout.razor.js). *@
+                            @* The resources grid's URLs column shows as many URLs as fit. Links and buttons don't select the row
+                               (see ResourcesLayout.razor.js). *@
                             <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" UseNeutralOverflowButton="true" MaxRenderedItems="@item.Urls.Count" />
                         }
                     </div>

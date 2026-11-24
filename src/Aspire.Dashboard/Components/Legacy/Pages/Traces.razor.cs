@@ -26,8 +26,8 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 {
     private static readonly IEqualityComparer<TraceSummary> s_traceSummaryComparer = EqualityComparer<TraceSummary>.Create(
         static (left, right) => ReferenceEquals(left, right) || (left is not null && right is not null &&
-            left.TraceId == right.TraceId && left.LastUpdatedTimestampTicks == right.LastUpdatedTimestampTicks),
-        static item => HashCode.Combine(item.TraceId.GetHashCode(StringComparison.Ordinal), item.LastUpdatedTimestampTicks));
+            string.Equals(left.TraceId, right.TraceId, StringComparisons.OtlpTraceId) && left.LastUpdatedTimestampTicks == right.LastUpdatedTimestampTicks),
+        static item => HashCode.Combine(item.TraceId.GetHashCode(StringComparisons.OtlpTraceId), item.LastUpdatedTimestampTicks));
 
     private const string ScrollContainerId = "tracesScrollContainer";
     private const string TimestampColumn = nameof(TimestampColumn);
