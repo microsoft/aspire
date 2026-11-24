@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Agents;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -73,6 +74,42 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             ["AGENTS.md", "CLAUDE.md"],
             workspace.WorkspaceRoot.EnumerateFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task WriteAsync_RelatesDiscoveredAppHostToDirectoryGivenThroughSymbolicLink()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var real = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "real"));
+        var link = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        TestSymlinkHelper.TryCreateSymlink(link, real.FullName);
+        // Discovery returns the AppHost with links resolved, while the workspace root is given through the link.
+        var appHost = PathNormalizer.ResolveSymlinks(Path.Combine(real.FullName, "App", "apphost.cs"));
+
+        var change = await AgentInstructionsFile.WriteAsync(new DirectoryInfo(link), appHost, [], CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Created, change);
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("App/apphost.cs", [], newLine)}{newLine}",
+            await File.ReadAllTextAsync(Path.Combine(link, AgentInstructionsFile.FileName)));
+    }
+
+    [Fact]
+    public async Task WriteAsync_KeepsLinkedSubfolderNameInAppHostPath()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var real = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere", "App"));
+        var link = Path.Combine(workspace.WorkspaceRoot.FullName, "app");
+        TestSymlinkHelper.TryCreateSymlink(link, real.FullName);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, Path.Combine(link, "apphost.cs"), [], CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Created, change);
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("app/apphost.cs", [], newLine)}{newLine}",
+            await ReadFileAsync(workspace));
     }
 
     [Fact]

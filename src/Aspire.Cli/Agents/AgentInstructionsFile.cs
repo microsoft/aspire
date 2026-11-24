@@ -178,7 +178,7 @@ internal static class AgentInstructionsFile
     {
         // Agents run the commands from the directory holding AGENTS.md, so the path is relative to it.
         // Forward slashes work in every shell the commands are pasted into.
-        var relativeAppHostPath = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(directory.FullName, appHostPath));
+        var relativeAppHostPath = PathNormalizer.NormalizePathForStorage(GetRelativeAppHostPath(directory.FullName, appHostPath));
         var filePath = Path.Combine(directory.FullName, FileName);
 
         // AGENTS.md is often a link to another agent's instructions file (AGENTS.md -> CLAUDE.md) so every
@@ -371,6 +371,35 @@ internal static class AgentInstructionsFile
 
         var fence = new string('`', longestRun + 1);
         return $"{fence} {text} {fence}";
+    }
+
+    /// <summary>
+    /// Returns the AppHost path relative to <paramref name="directory"/>.
+    /// </summary>
+    /// <remarks>
+    /// AppHost discovery returns paths with symbolic links resolved, while the directory can be given through a link,
+    /// as with macOS temporary folders under <c>/var</c>, which links to <c>/private/var</c>. Relating the two
+    /// lexically then climbs out through the link, as in
+    /// <c>../../../../private/var/folders/…/ws/App/apphost.cs</c>. The operating system resolves <c>..</c> against
+    /// the physical directory, so that path doesn't exist, and it would tie a committed file to one machine. A lexical
+    /// path that stays inside the directory is kept, so an AppHost configured through a linked subfolder keeps that
+    /// folder's name; a path that climbs out is computed from both locations with links resolved instead.
+    /// </remarks>
+    private static string GetRelativeAppHostPath(string directory, string appHostPath)
+    {
+        var lexical = Path.GetRelativePath(directory, appHostPath);
+        if (!IsOutsideDirectory(lexical))
+        {
+            return lexical;
+        }
+
+        return Path.GetRelativePath(PathNormalizer.ResolveSymlinks(directory), PathNormalizer.ResolveSymlinks(appHostPath));
+
+        // GetRelativePath returns an absolute path when the two have no common root, such as different drives.
+        static bool IsOutsideDirectory(string relativePath) =>
+            Path.IsPathRooted(relativePath) ||
+            relativePath == ".." ||
+            relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static async Task CreateFileAsync(string filePath, string content, CancellationToken cancellationToken)
