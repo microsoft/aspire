@@ -136,9 +136,9 @@ safe-outputs:
     repositories: ["aspire"]
   # These outputs carry free agent text into public issues, and the agent sees private
   # alert details, so they are never published. The agent-job scrub also drops them.
-  missing-tool:
+  report-missing-tool:
     create-issue: false
-  missing-data:
+  report-missing-data:
     create-issue: false
   report-incomplete:
     create-issue: false
@@ -528,5 +528,5 @@ Dependabot alerts (including malware) and version-mapped code scanning alerts.
 The scrub binds both totals to a runner-owned snapshot from collection; editing
 the input files or inventing totals fails publication.
 Do not list package names, alert numbers, or advisory ids in this
-message; any other text fails the run. Do not emit `missing_tool`, `missing_data`,
+message; any other text fails the run. Do not emit `report_missing_tool`, `report_missing_data`,
 or `report_incomplete`; they are dropped.

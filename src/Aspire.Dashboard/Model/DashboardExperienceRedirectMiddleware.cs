@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Authentication.Connection;
 using Aspire.Dashboard.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -15,7 +16,8 @@ internal sealed class DashboardExperienceRedirectMiddleware(
 
     public Task InvokeAsync(HttpContext context)
     {
-        if (!HttpMethods.IsGet(context.Request.Method) ||
+        if (!context.IsFrontendConnection() ||
+            !HttpMethods.IsGet(context.Request.Method) ||
             !context.Request.Headers.Accept.Any(value => value?.Contains("text/html", StringComparison.OrdinalIgnoreCase) == true))
         {
             return next(context);

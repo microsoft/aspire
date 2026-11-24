@@ -509,7 +509,12 @@ public sealed class TerminalService : IAsyncDisposable
     private async Task DisposeTerminalsAsync(Hex1bAspireTerminal[] terminals, ResourceTerminalCatalog? resourceTerminals)
     {
         // Workload cancellation can invoke user callbacks. Do not begin teardown under the registry lock.
-        await Task.Yield();
+        // With nothing to tear down, complete synchronously: the host's bounded stop wait must not fail on a no-op
+        // when earlier hosted services (for example, DCP shutdown) have already consumed the shutdown budget.
+        if (terminals.Length > 0 || resourceTerminals?.HasHandles == true)
+        {
+            await Task.Yield();
+        }
 
         try
         {

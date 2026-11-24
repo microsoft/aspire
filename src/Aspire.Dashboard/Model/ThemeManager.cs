@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Utils;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Model;
@@ -15,16 +16,20 @@ public interface IThemeResolver
     Task<ThemeSettings> GetThemeSettingsAsync(CancellationToken cancellationToken);
 }
 
-public sealed class BrowserThemeResolver(IJSRuntime jsRuntime) : IThemeResolver, IAsyncDisposable
+public sealed class BrowserThemeResolver(IJSRuntime jsRuntime, EndpointDataSource? endpointDataSource = null) : IThemeResolver, IAsyncDisposable
 {
+    private const string ThemeModuleAssetPath = "js/app-theme.js";
+
     private readonly IJSRuntime _jsRuntime = jsRuntime;
+    private readonly EndpointDataSource? _endpointDataSource = endpointDataSource;
     private IJSObjectReference? _jsModule;
 
     public async Task<ThemeSettings> GetThemeSettingsAsync(CancellationToken cancellationToken)
     {
         if (_jsModule == null)
         {
-            _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", "/js/app-theme.js").ConfigureAwait(false);
+            var modulePath = ResolveThemeModulePath();
+            _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", modulePath).ConfigureAwait(false);
         }
 
         var currentThemeTask = _jsModule.InvokeAsync<string>("getCurrentTheme", cancellationToken);
@@ -33,6 +38,22 @@ public sealed class BrowserThemeResolver(IJSRuntime jsRuntime) : IThemeResolver,
         var themeCookieValue = await themeCookieValueTask.ConfigureAwait(false);
 
         return new ThemeSettings(themeCookieValue, currentTheme);
+    }
+
+    private string ResolveThemeModulePath()
+    {
+        if (_endpointDataSource is not null)
+        {
+            foreach (var endpoint in _endpointDataSource.Endpoints)
+            {
+                if (endpoint.Metadata.GetMetadata<ResourceAssetCollection>() is { } assets)
+                {
+                    return $"/{assets[ThemeModuleAssetPath]}";
+                }
+            }
+        }
+
+        return $"/{ThemeModuleAssetPath}";
     }
 
     public async ValueTask DisposeAsync()

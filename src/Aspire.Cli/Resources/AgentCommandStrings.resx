@@ -283,7 +283,7 @@
     <value>Agent assets from configured skill sources</value>
   </data>
   <data name="InitCommand_RemoveSkillCopiesOptionDescription" xml:space="preserve">
-    <value>Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false</value>
+    <value>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</value>
   </data>
   <data name="InitCommand_DeleteSkillCopyPrompt" xml:space="preserve">
     <value>Delete this copied skill folder?</value>
@@ -293,7 +293,7 @@
     <comment>{0} is the number of skill folders, always greater than one.</comment>
   </data>
   <data name="InitCommand_SkillCopiesFound" xml:space="preserve">
-    <value>Found copied Aspire skills that the Aspire skills plugin now provides:</value>
+    <value>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</value>
   </data>
   <data name="InitCommand_KeptSkillCopies" xml:space="preserve">
     <value>Kept copied Aspire skills in {0}</value>
@@ -307,9 +307,12 @@
   {0}</value>
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
+  <data name="InitCommand_RemovedSkillCopy" xml:space="preserve">
+    <value>Deleted 1 copied skill folder</value>
+  </data>
   <data name="InitCommand_RemovedSkillCopies" xml:space="preserve">
-    <value>Removed copied Aspire skills in {0}</value>
-    <comment>{0} lists the removed skill folder paths, separated by commas.</comment>
+    <value>Deleted {0} copied skill folders</value>
+    <comment>{0} is the number of deleted skill folders, always greater than one.</comment>
   </data>
   <data name="InitCommand_RemoveSkillCopyFailed" xml:space="preserve">
     <value>Could not remove copied Aspire skill '{0}': {1}</value>

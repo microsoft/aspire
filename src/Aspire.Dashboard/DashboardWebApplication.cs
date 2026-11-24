@@ -34,6 +34,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Server.Kestrel;
@@ -169,11 +170,30 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         var builder = options is not null ? WebApplication.CreateBuilder(options) : WebApplication.CreateBuilder();
 
-        // WebApplication.CreateBuilder already enables static web assets in the Development environment.
-        // The dashboard also needs them in other environments when running from source (e.g. to serve
-        // _content/ files from NuGet packages like FluentUI). The call is a no-op when published
-        // because the static web assets manifest doesn't exist.
-        if (!builder.Environment.IsDevelopment())
+        // WebApplication.CreateBuilder already enables static web assets in the Development environment
+        // using Environment.ApplicationName. The dashboard also needs its runtime static web assets
+        // manifest in non-Development environments and when hosted under a different ApplicationName
+        // (e.g. in tests or custom hosts). This is a no-op when published because the runtime manifest
+        // does not exist.
+        var dashboardAssemblyName = typeof(DashboardWebApplication).Assembly.GetName().Name;
+        var isDefaultDashboardDevHost = builder.Environment.IsDevelopment() &&
+            string.Equals(builder.Environment.ApplicationName, dashboardAssemblyName, StringComparison.Ordinal);
+        if (!isDefaultDashboardDevHost && string.IsNullOrEmpty(builder.Configuration[WebHostDefaults.StaticWebAssetsKey]))
+        {
+            var runtimeManifestPath = ResolveStaticAssetsManifestPath(builder.Environment.ContentRootPath, AppContext.BaseDirectory, "runtime");
+            if (runtimeManifestPath is not null)
+            {
+                var staticWebAssetsConfig = new ConfigurationBuilder()
+                    .AddInMemoryCollection([new KeyValuePair<string, string?>(WebHostDefaults.StaticWebAssetsKey, runtimeManifestPath)])
+                    .Build();
+                StaticWebAssetsLoader.UseStaticWebAssets(builder.Environment, staticWebAssetsConfig);
+            }
+            else if (!builder.Environment.IsDevelopment())
+            {
+                builder.WebHost.UseStaticWebAssets();
+            }
+        }
+        else if (!builder.Environment.IsDevelopment())
         {
             builder.WebHost.UseStaticWebAssets();
         }
@@ -206,7 +226,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Logging.AddFilter("Microsoft.AspNetCore.Cors", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Routing.EndpointMiddleware", LogLevel.Warning);
-        builder.Logging.AddFilter("Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware", LogLevel.Warning);
+        builder.Logging.AddFilter("Microsoft.AspNetCore.StaticAssets", LogLevel.Warning);
 #endif
 
         // Allow for a user specified JSON config file on disk. Throw an error if the specified file doesn't exist.
@@ -550,9 +570,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // Redirect browser directly to /structuredlogs address if the dashboard is running without a resource service.
         // This is done to avoid immediately navigating in the Blazor app.
+        // Only redirect frontend requests. OTLP-only endpoints don't serve the UI, so a redirect there points to a 404.
         _app.Use(async (context, next) =>
         {
-            if (context.Request.Path.Value is { } requestPath && TargetLocationInterceptor.GetStandaloneLocation(requestPath) is { } standaloneLocation)
+            if (context.IsFrontendConnection() &&
+                context.Request.Path.Value is { } requestPath &&
+                TargetLocationInterceptor.GetStandaloneLocation(requestPath) is { } standaloneLocation)
             {
                 var client = context.RequestServices.GetRequiredService<IDashboardClient>();
                 if (!client.IsEnabled)
@@ -601,21 +624,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             _app.UseHttpsRedirection();
         }
 
-        _app.UseStaticFiles(new StaticFileOptions()
-        {
-            OnPrepareResponse = context =>
-            {
-                // If Cache-Control isn't already set to something, set it to 'no-cache' so that the
-                // ETag and Last-Modified headers will be respected by the browser.
-                // This may be able to be removed if https://github.com/dotnet/aspnetcore/issues/44153
-                // is fixed to make this the default
-                if (context.Context.Response.Headers.CacheControl.Count == 0)
-                {
-                    context.Context.Response.Headers.CacheControl = "no-cache";
-                }
-            }
-        });
-
         _app.UseAuthorization();
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
@@ -640,10 +648,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        _app.MapRazorComponents<App>().AddInteractiveServerRenderMode(options =>
-        {
-            options.DisableWebSocketCompression = dashboardOptions.Frontend.DisableWebSocketCompression;
-        });
+        var staticAssetsManifestPath = ResolveStaticAssetsManifestPath(_app.Environment.ContentRootPath, AppContext.BaseDirectory);
+        _app.MapStaticAssets(staticAssetsManifestPath);
+
+        _app.MapRazorComponents<App>()
+            .AddInteractiveServerRenderMode(options =>
+            {
+                options.DisableWebSocketCompression = dashboardOptions.Frontend.DisableWebSocketCompression;
+            })
+            .WithStaticAssets(staticAssetsManifestPath);
 
         // Terminal WebSocket proxy
         _app.MapTerminalWebSocket();
@@ -659,6 +672,24 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapTelemetryApi(dashboardOptions);
         _app.MapDashboardApi(dashboardOptions);
         _app.MapDashboardHealthChecks();
+    }
+
+    internal static string? ResolveStaticAssetsManifestPath(string contentRootPath, string baseDirectory, string manifestKind = "endpoints")
+    {
+        var manifestFileName = $"{typeof(DashboardWebApplication).Assembly.GetName().Name}.staticwebassets.{manifestKind}.json";
+        var baseDirectoryPath = Path.Combine(baseDirectory, manifestFileName);
+        if (File.Exists(baseDirectoryPath))
+        {
+            return baseDirectoryPath;
+        }
+
+        var contentRootManifestPath = Path.Combine(contentRootPath, manifestFileName);
+        if (File.Exists(contentRootManifestPath))
+        {
+            return contentRootManifestPath;
+        }
+
+        return null;
     }
 
     private void PrintSummary(ResolvedEndpointInfo? frontendEndpointInfo)

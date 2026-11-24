@@ -83,6 +83,12 @@ public sealed class ResourceTagStore
         return tagsByResource;
     }
 
+    internal static bool HasTag(ResourceViewModel resource, string tagName, IReadOnlyDictionary<string, IReadOnlyList<string>>? tagsByResource)
+    {
+        var tags = tagsByResource is null ? resource.AppHostTags : tagsByResource.GetValueOrDefault(resource.DisplayName);
+        return tags?.Contains(tagName, StringComparer.OrdinalIgnoreCase) is true;
+    }
+
     public IReadOnlyList<string> GetAllTags(IEnumerable<ResourceViewModel> resources) =>
         GetTagsByResource(resources).Values.SelectMany(tags => tags).Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.CurrentCultureIgnoreCase).ToArray();

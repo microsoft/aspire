@@ -331,7 +331,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Failed to restore packages for project {0} after update..
+        ///   Looks up a localized string similar to Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details..
         /// </summary>
         internal static string FailedToRestoreAfterUpdateFormat {
             get {
@@ -356,6 +356,24 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FallbackParsingWarning", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes..
+        /// </summary>
+        internal static string DryRunOptionDescription {
+            get {
+                return ResourceManager.GetString("DryRunOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string DryRunRequiresChannel => ResourceManager.GetString("DryRunRequiresChannel", resourceCulture);
+        internal static string DryRunRequiresDotNet => ResourceManager.GetString("DryRunRequiresDotNet", resourceCulture);
+        internal static string DryRunSuccessful => ResourceManager.GetString("DryRunSuccessful", resourceCulture);
+        internal static string DryRunValidating => ResourceManager.GetString("DryRunValidating", resourceCulture);
+        internal static string DryRunExistingBackupsFormat => ResourceManager.GetString("DryRunExistingBackupsFormat", resourceCulture);
+        internal static string DryRunReplaceBackupsPrompt => ResourceManager.GetString("DryRunReplaceBackupsPrompt", resourceCulture);
+        internal static string DryRunBackupsNotReplaced => ResourceManager.GetString("DryRunBackupsNotReplaced", resourceCulture);
+        internal static string DryRunBackupRecoveryFormat => ResourceManager.GetString("DryRunBackupRecoveryFormat", resourceCulture);
 
         /// <summary>
         ///   Looks up a localized string similar to    Mapping: {0} (added).

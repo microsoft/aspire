@@ -7,7 +7,7 @@
             @foreach (var tag in _tags)
             {
                 <li class="tag-chip" @key="tag">
-                    <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(tag)" />
+                    <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.TagInstance.GetColorVariableByKey(tag)" />
                     <span class="tag-chip-name">@tag</span>
                     @if (IsAppHostTag(tag))
                     {
@@ -79,7 +79,7 @@
                             }
                             else
                             {
-                                <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(option.Tag)" />
+                                <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.TagInstance.GetColorVariableByKey(option.Tag)" />
                                 <span class="tag-suggestion-text"><FluentHighlighter HighlightedText="@_text" Text="@option.Tag" /></span>
                             }
                         </li>

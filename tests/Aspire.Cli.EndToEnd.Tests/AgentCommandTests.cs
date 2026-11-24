@@ -233,7 +233,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Delete this copied skill folder?", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitAsync(500);
         await auto.TypeAsync("y");
-        await auto.WaitUntilTextAsync("Removed copied Aspire skills in", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Deleted 1 copied skill folder", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 

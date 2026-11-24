@@ -6,6 +6,90 @@
     src: url("../fonts/geist/Geist-Variable.woff2") format("woff2");
 }
 
+.resource-graph-container {
+    --resource-graph-control-inset: 30px;
+    --resource-graph-control-icon-size: 24px;
+}
+
+.resource-graph-container .resource-graph-controls {
+    position: absolute;
+    right: var(--resource-graph-control-inset-override, var(--resource-graph-control-inset));
+    bottom: var(--resource-graph-control-inset-override, var(--resource-graph-control-inset));
+    display: flex;
+    column-gap: var(--aspire-space-2);
+}
+
+.resource-graph-container .resource-graph-game-launch {
+    left: var(--resource-graph-control-inset);
+    right: auto;
+}
+
+.resource-graph-container .resource-graph-controls fluent-button > svg {
+    width: var(--resource-graph-control-icon-size);
+}
+
+/* The overview uses the Fluent button's default icon height. */
+.resource-graph-container:not(.home-resource-graph-layout *) .resource-graph-controls fluent-button > svg {
+    height: var(--resource-graph-control-icon-size);
+}
+
+.resource-graph .resource-group-selected .resource-scale {
+    transform: scale(var(--resource-graph-selected-scale));
+}
+
+.resource-tag-fill,
+.resource-tag-boundary {
+    fill: var(--tag-color);
+    fill-opacity: 0.05;
+}
+
+.resource-tag-fill-hover {
+    fill-opacity: 0.07;
+}
+
+.resource-tag-boundary {
+    stroke: var(--tag-color);
+    stroke-opacity: 0.7;
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
+    vector-effect: non-scaling-stroke;
+}
+
+.resource-node-tag-tint {
+    fill: var(--resource-node-tag-tint, none);
+    pointer-events: none;
+}
+
+.resource-group-selected .resource-node-tag-tint,
+.resource-group-hidden:not(.resource-group-hover, .resource-group-highlight) .resource-node-tag-tint {
+    fill: none;
+}
+
+.resource-tag-label {
+    fill: var(--colorNeutralForeground1);
+    font-size: var(--aspire-font-size-large);
+    font-weight: var(--aspire-font-weight-semibold);
+    stroke: var(--aspire-page-background);
+    stroke-width: 5px;
+    stroke-linejoin: round;
+    paint-order: stroke;
+    cursor: pointer;
+}
+
+/* Let the pointer reveal either cog directly, without activating the tag cog's hover bridge early. */
+.resource-menu-cog-background {
+    pointer-events: auto;
+}
+
+.resource-tag-controls:hover > .resource-tag-menu-cog {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.resource-tag-controls:hover > .resource-tag-menu-bridge {
+    pointer-events: auto;
+}
+
 @font-face {
     font-family: "Geist Mono";
     font-style: normal;
@@ -158,6 +242,7 @@
     --layout-right-padding: 12px;
     --layout-top-padding: 12px;
     --datagrid-hover-color: #efefef;
+    --property-grid-row-hover-color: var(--datagrid-hover-color);
     --datagrid-selected-color: var(--colorNeutralBackground3);
     --datagrid-border-color: #e5e5e5;
     --fluent-multi-splitter-background-color: var(--colorNeutralStroke1);
@@ -309,6 +394,8 @@
     --colorNeutralBackground4: var(--aspire-shell-background);
     --colorNeutralBackgroundDisabled: var(--colorNeutralBackground1);
     --datagrid-hover-color: var(--colorNeutralBackground1);
+    --property-grid-row-hover-color: var(--colorNeutralBackground3);
+    --property-grid-row-divider-color: #3f3c4a;
     --datagrid-border-color: #363241;
     --colorNeutralForeground1: #ffffff;
     --colorNeutralForeground3: #96929e;

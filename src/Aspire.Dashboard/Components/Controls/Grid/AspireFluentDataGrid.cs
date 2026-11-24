@@ -10,8 +10,7 @@ using Microsoft.Extensions.Localization;
 namespace Aspire.Dashboard.Components.Controls.Grid;
 
 [CascadingTypeParameter(nameof(TGridItem))]
-// Derives from DisposalSafeFluentDataGrid for the Fluent UI workaround it carries.
-public class AspireFluentDataGrid<TGridItem> : DisposalSafeFluentDataGrid<TGridItem>
+public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
 {
     public AspireFluentDataGrid(LibraryConfiguration configuration) : base(configuration)
     {
@@ -28,15 +27,6 @@ public class AspireFluentDataGrid<TGridItem> : DisposalSafeFluentDataGrid<TGridI
         builder.AddAttribute(2, "grid", Id);
         builder.AddAttribute(3, "hidden", true);
         builder.CloseElement();
-    }
-
-    /// <summary>
-    /// Refreshes virtualized data and renders this grid when the refresh originates outside a Blazor event.
-    /// </summary>
-    public async Task RefreshDataAndRenderAsync()
-    {
-        await RefreshDataAsync(force: true);
-        StateHasChanged();
     }
 
     private void RenderLoadingContent(RenderTreeBuilder builder)

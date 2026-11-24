@@ -1,4 +1,4 @@
-﻿/* The summary is rendered inside the resource overview, which already pads and scrolls its content. Adding padding
+/* The summary is rendered inside the resource overview, which already pads and scrolls its content. Adding padding
    here would indent the summary from the tabs above it, unlike a single resource's overview. */
 .home {
     width: 100%;
@@ -99,16 +99,7 @@
 }
 
 .resource-graph-controls {
-    position: absolute;
-    right: 24px;
-    bottom: 24px;
-    display: flex;
-    column-gap: var(--aspire-space-2);
-}
-
-.resource-graph-controls.resource-graph-game-launch {
-    left: 30px;
-    right: auto;
+    --resource-graph-control-inset-override: var(--aspire-space-6);
 }
 
 .resource-graph-controls fluent-button {
@@ -125,11 +116,6 @@
 .resource-graph-controls fluent-button:active,
 .resource-graph-controls fluent-button:hover:active {
     background-color: var(--resource-graph-secondary-hover-background);
-}
-
-.resource-graph-controls fluent-button > svg {
-    width: 24px;
-    height: 24px;
 }
 
 ::deep .resource-graph .texts,
@@ -160,15 +146,11 @@
 
 ::deep .resource-node {
     fill: var(--aspire-page-background);
-    stroke: var(--aspire-page-background);
+    stroke: transparent;
 }
 
 ::deep .resource-group-hover .resource-node {
     fill: var(--resource-graph-hover-background) !important;
-}
-
-::deep .resource-group-selected .resource-scale {
-    transform: scale(1.2);
 }
 
 ::deep .resource-group-selected .resource-node {
@@ -208,7 +190,7 @@
     transition: opacity .15s ease-in-out;
 }
 
-::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-scale:hover .resource-menu-cog,
 ::deep .resource-menu-cog:focus,
 ::deep .resource-menu-cog[aria-expanded="true"] {
     opacity: 1;
@@ -487,18 +469,25 @@
 
 .home-activity-totals {
     display: flex;
-    gap: var(--aspire-space-4);
+    flex-wrap: wrap;
+    gap: var(--aspire-space-1) var(--aspire-space-2);
     font-size: var(--aspire-font-size-secondary);
 }
 
 .home-activity-totals a {
+    padding: var(--aspire-space-1);
+    border-radius: var(--aspire-control-radius);
     color: var(--colorNeutralForeground2);
     text-decoration: none;
+    white-space: nowrap;
 }
 
-.home-activity-totals a:hover {
-    color: var(--colorNeutralForeground1);
-    text-decoration: underline;
+.home-activity-totals a:is(:hover, :focus-visible) {
+    background-color: var(--colorNeutralBackground3);
+}
+
+.home-activity-totals a:focus-visible {
+    outline-offset: -2px;
 }
 
 .home-activity-totals strong {
@@ -666,27 +655,45 @@
     color: var(--error);
 }
 
-.home-insight-list {
+.home-insight-list,
+.home-event-list {
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-.home-insight-list li + li {
-    border-top: 1px solid var(--colorNeutralStroke3);
+.home-insight-list li + li,
+.home-event-list li + li {
+    border-top: 1px solid var(--property-grid-row-divider-color, var(--colorNeutralStroke3));
 }
 
-.home-insight-list a {
+.home-insight-list a,
+.home-event-list a {
     display: flex;
     flex-direction: column;
-    gap: var(--aspire-space-1);
     padding: 7px 0;
     color: var(--colorNeutralForeground1);
     text-decoration: none;
 }
 
-.home-insight-list a:hover .home-insight-name {
-    text-decoration: underline;
+.home-insight-list a {
+    gap: var(--aspire-space-1);
+}
+
+.home-event-list a {
+    gap: 2px;
+}
+
+.home-insight-list a:hover,
+.home-insight-list a:focus-visible,
+.home-event-list a:hover,
+.home-event-list a:focus-visible {
+    background-color: var(--property-grid-row-hover-color);
+}
+
+.home-insight-list a:focus-visible,
+.home-event-list a:focus-visible {
+    outline-offset: -2px;
 }
 
 .home-insight-row {
@@ -720,6 +727,10 @@
     overflow: hidden;
     border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground3);
+}
+
+.home-insight-list a:is(:hover, :focus-visible) .home-insight-meter {
+    background: var(--colorNeutralStroke1);
 }
 
 .home-insight-meter span {
@@ -815,33 +826,6 @@
     color: #fff;
     font-size: var(--aspire-font-size-caption);
     font-weight: var(--aspire-font-weight-semibold);
-}
-
-.home-event-list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.home-event-list li {
-    border-top: 1px solid var(--colorNeutralStroke3);
-}
-
-.home-event-list li:first-child {
-    border-top: 0;
-}
-
-.home-event-list a {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 7px 0;
-    color: var(--colorNeutralForeground1);
-    text-decoration: none;
-}
-
-.home-event-list a:hover .home-event-title {
-    text-decoration: underline;
 }
 
 .home-event-title {

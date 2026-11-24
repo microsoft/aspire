@@ -249,6 +249,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             {
                 FindSolutionFileAsyncCallback = (_, _) => throw new InvalidOperationException("File-based initialization must not discover solutions.")
             };
+            // Pin the identity version to a stable, non-prerelease 17.0.0 so the snapshot doesn't
+            // depend on whether the CLI assembly reports a "17.0.0-pr.*" identity, which would emit
+            // the compatibility "#:property AspireUseCliBundle=true" directive. The prerelease case
+            // is covered separately by the version-dependent theories.
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityVersion: "17.0.0");
         });
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();

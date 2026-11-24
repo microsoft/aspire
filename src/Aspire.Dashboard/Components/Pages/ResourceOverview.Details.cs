@@ -15,7 +15,7 @@ public sealed partial class ResourceOverview
 {
     private const int DetailsPreviewCount = 10;
 
-    // The status card already displays these properties, and the header displays the resource name.
+    // The status card already displays these properties.
     private static readonly HashSet<string> s_statusCardPropertyNames = new(StringComparers.ResourcePropertyName)
     {
         KnownProperties.Resource.DisplayName,
@@ -189,12 +189,6 @@ public sealed partial class ResourceOverview
     private void ToggleEnvironmentMasked(ResourceViewModel resource) => _environmentMask.Toggle(resource.Environment);
 
     private void OnEnvironmentVariableMaskedChanged(ResourceViewModel resource, EnvironmentVariableViewModel variable) => _environmentMask.OnItemChanged(resource.Environment, variable);
-
-    private string? GetStateDescription(ResourceViewModel resource, string stateText)
-    {
-        var description = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc, ResourcesLayout?.ResourceByName.Values);
-        return string.IsNullOrWhiteSpace(description) || string.Equals(description, stateText, StringComparison.Ordinal) ? null : description;
-    }
 
     private static List<HealthReportViewModel> GetHealthReports(ResourceViewModel resource) =>
         resource.HealthReports.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();

@@ -13,6 +13,8 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
@@ -54,6 +56,8 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "templateSources": null }""")]
     [InlineData("""{ "templates": { "not-a-source": true } }""")]
     [InlineData("""{ "unrelated": true }""")]
+    // Older CLIs stored the retired Go polyglot flag as a nested feature object.
+    [InlineData("""{ "features": { "stagingChannelEnabled": "true", "experimentalPolyglot": { "go": "true" } } }""")]
     public async Task ConfiguredSources_AbsentSettingHasNoSources(string json)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -380,6 +384,40 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(["Greeting text"],
             interaction.StringPromptCalls.Select(call => call.PromptText));
         await Verify(ReadOutput(workspace)).UseParameters(noBuiltIns);
+    }
+
+    [Fact]
+    public async Task ConfiguredSources_LogsSelectedAliasWhenSourcesShareCachedTemplate()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateSearchTemplateAsync(workspace, "template", "sample", "Sample", "Found");
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("Welcome");
+        interaction.PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().Last();
+        var loggerProvider = new FakeLoggerProvider();
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.RemoveAll<ITemplateFactory>();
+        services.AddSingleton<ITemplateFactory, TemplateEngineFactory>();
+        services.AddLogging(logging =>
+        {
+            logging.AddProvider(loggerProvider);
+            logging.SetMinimumLevel(LogLevel.Debug);
+        });
+        using var provider = services.BuildServiceProvider();
+        var templatePath = Path.Combine(workspace.Path, "template");
+        await WriteConfiguredSourcesAsync(provider, new()
+        {
+            ["first-source"] = templatePath,
+            ["second-source"] = templatePath
+        });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(loggerProvider.Collector.GetSnapshot(), entry =>
+            entry.Message == "Selected template sample from configured template source second-source.");
+        await Verify(ReadOutput(workspace));
     }
 
     [Fact]

@@ -986,11 +986,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         await ConsoleLogsManager.UpdateFiltersAsync(newFilters);
     }
 
-    private string? PauseText => PauseManager.ConsoleLogPauseIntervals.LastOrDefault() is { End: null } pause
-        ? string.Format(
-            CultureInfo.CurrentCulture,
-            Loc[nameof(Dashboard.Resources.ConsoleLogs.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, pause.Start))
+    private DateTime? PausedAt => PauseManager.ConsoleLogPauseIntervals.LastOrDefault() is { End: null } pause
+        ? pause.Start
         : null;
 
     private void OnPausedChanged(bool isPaused)

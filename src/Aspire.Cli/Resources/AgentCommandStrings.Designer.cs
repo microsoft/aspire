@@ -466,7 +466,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false.
+        ///   Looks up a localized string similar to Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false.
         /// </summary>
         internal static string InitCommand_RemoveSkillCopiesOptionDescription {
             get {
@@ -493,7 +493,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Found copied Aspire skills that the Aspire skills plugin now provides:.
+        ///   Looks up a localized string similar to The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:.
         /// </summary>
         internal static string InitCommand_SkillCopiesFound {
             get {
@@ -520,7 +520,16 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Removed copied Aspire skills in {0}.
+        ///   Looks up a localized string similar to Deleted 1 copied skill folder.
+        /// </summary>
+        internal static string InitCommand_RemovedSkillCopy {
+            get {
+                return ResourceManager.GetString("InitCommand_RemovedSkillCopy", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Deleted {0} copied skill folders.
         /// </summary>
         internal static string InitCommand_RemovedSkillCopies {
             get {
