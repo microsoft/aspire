@@ -2,6 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+
+    <!-- The watch tests find the watch tool and watch host through build-machine paths (the assembly metadata below),
+         which the Helix test archive doesn't contain. AzDO runs the tests on its agents instead, which build them. -->
+    <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
+    <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
   </PropertyGroup>
 
   <ItemGroup>

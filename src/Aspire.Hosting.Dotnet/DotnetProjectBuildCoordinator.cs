@@ -473,7 +473,7 @@ internal static partial class DotnetProjectBuildCoordinator
         }
 
         /// <summary>
-        /// Hands a registered project's build to something else (the hot reload watcher, in <c>aspire run --watch</c>):
+        /// Hands a registered project's build to something else (the hot reload watcher, when the project is watched):
         /// the project leaves the coordinated build, its launch builds nothing, and its build-completion barrier is
         /// removed so the new owner can supply its own. Only valid before the build plan is materialized.
         /// </summary>

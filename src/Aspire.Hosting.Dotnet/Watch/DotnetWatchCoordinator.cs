@@ -96,8 +96,9 @@ internal static class DotnetWatchCoordinator
     /// </summary>
     /// <remarks>
     /// Under an IDE-owned debug session the IDE owns change tracking: no service is watched, and the terminal and each
-    /// service's log say so. Nothing else is required of the launcher: <c>aspire run --watch</c> and a plain
-    /// <c>dotnet run</c> of the AppHost with <c>AppHost:Run:WatchEnabled=true</c> behave the same.
+    /// service's log say so. Nothing else is required of the launcher: <c>aspire run</c> and a plain <c>dotnet run</c> of the
+    /// AppHost apply the same resource-watch default (<see cref="DistributedApplicationOptions.DefaultResourceWatchEnabled"/>,
+    /// <c>AppHost:Run:WatchEnabled</c>).
     /// </remarks>
     internal static bool ShouldWatch(IDistributedApplicationBuilder builder)
     {
@@ -149,7 +150,7 @@ internal static class DotnetWatchCoordinator
                 if (e.Model.Resources.FirstOrDefault(r => r.Name == resourceName) is { } resource)
                 {
                     e.Services.GetRequiredService<ResourceLoggerService>().GetLogger(resource).LogInformation(
-                        "[watch] Hot reload is handled by the IDE debug session; 'aspire run --watch' doesn't watch this service.");
+                        "[watch] Hot reload is handled by the IDE debug session; Aspire doesn't watch this service.");
                 }
 
                 return Task.CompletedTask;
@@ -313,8 +314,8 @@ internal static class DotnetWatchCoordinator
     /// <item><description>A project that another resource waits on with <c>WaitForCompletion</c> runs to completion. The watcher
     /// relaunches a watched service when it exits instead of letting it complete (#9756), so it's excluded, visibly; with an
     /// explicit <c>WithWatch(true)</c> the run fails instead.</description></item>
-    /// <item><description>Persistent lifetimes and custom launches can't be watched and fail the run with
-    /// an error that names the opt-out.</description></item>
+    /// <item><description>Persistent lifetimes and custom launches can't be watched: the project runs without hot reload,
+    /// and says so; with an explicit <c>WithWatch(true)</c> the run fails instead.</description></item>
     /// </list>
     /// </remarks>
     internal static WatchDecision Evaluate(DotnetProjectResource resource, IEnumerable<IResource> model)

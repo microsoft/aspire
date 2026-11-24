@@ -7,18 +7,19 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting.Dotnet;
 
 /// <summary>
-/// Records whether a .NET project resource takes part in <c>aspire run --watch</c> hot reload.
+/// Records whether a .NET project resource is watched for hot reload, overriding the AppHost's resource-watch default.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Add this annotation with <see cref="DotnetProjectHostingExtensions.WithWatch(IResourceBuilder{DotnetProjectResource}, bool)"/>.
-/// Without it, every .NET project resource is watched in an <c>aspire run --watch</c> run unless it runs to completion
-/// (another resource waits for it with <c>WaitForCompletion</c>).
+/// Without it, the AppHost's resource-watch default applies: compatible .NET project resources are watched in Run mode
+/// unless <see cref="DistributedApplicationOptions.DefaultResourceWatchEnabled"/> or <c>AppHost:Run:WatchEnabled</c>
+/// turns watching off. The CLI's <c>--watch</c> option controls AppHost edits only.
 /// </para>
 /// <para>
-/// Integrations that replace a project's launch with their own tool, which the watcher can't launch, add this annotation
-/// with <see cref="Enabled"/> set to <see langword="false"/> so that the resource runs without hot reload rather than
-/// failing the watch run.
+/// A project that can't be watched runs without hot reload and says so: for example, one with a persistent lifetime or
+/// a custom launch tool, or one that another resource waits for with <c>WaitForCompletion</c>. With <see cref="Enabled"/>
+/// set to <see langword="true"/>, such a project fails the run instead.
 /// </para>
 /// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Enabled = {Enabled}")]
@@ -28,8 +29,7 @@ public sealed class DotnetProjectWatchAnnotation : IResourceAnnotation
     /// Initializes a new instance of the <see cref="DotnetProjectWatchAnnotation"/> class.
     /// </summary>
     /// <param name="enabled">
-    /// <see langword="true"/> to require hot reload for the resource in watch runs; <see langword="false"/> to run it
-    /// without hot reload.
+    /// <see langword="true"/> to require hot reload for the resource; <see langword="false"/> to run it without hot reload.
     /// </param>
     public DotnetProjectWatchAnnotation(bool enabled)
     {
@@ -37,7 +37,7 @@ public sealed class DotnetProjectWatchAnnotation : IResourceAnnotation
     }
 
     /// <summary>
-    /// Gets a value indicating whether the resource is watched in an <c>aspire run --watch</c> run.
+    /// Gets a value indicating whether the resource is watched for hot reload.
     /// </summary>
     /// <remarks>
     /// <see langword="true"/> explicitly requires hot reload: a resource that can't be watched then fails the run instead
