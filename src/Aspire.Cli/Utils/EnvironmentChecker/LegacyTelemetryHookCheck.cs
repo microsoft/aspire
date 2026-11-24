@@ -37,13 +37,18 @@ internal sealed class LegacyTelemetryHookCheck(
 
             if (path is not null)
             {
+                // Init refuses to write through a symbolic link (ConfigurationHelper.ValidateSymbolicLinkPolicy),
+                // so the init command alone cannot fix a hook found through one.
+                var fix = new FileInfo(path).LinkTarget is not null
+                    ? string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.LegacyTelemetryHookSymlinkFixFormat, path, client.Id)
+                    : string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.LegacyTelemetryHookFixFormat, client.Id);
                 results.Add(new EnvironmentCheckResult
                 {
                     Category = EnvironmentCheckCategories.Environment,
                     Name = GetCheckName(client.Id),
                     Status = EnvironmentCheckStatus.Warning,
                     Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.LegacyTelemetryHookMessageFormat, client.DisplayName),
-                    Fix = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.LegacyTelemetryHookFixFormat, client.Id),
+                    Fix = fix,
                     Details = path,
                 });
             }

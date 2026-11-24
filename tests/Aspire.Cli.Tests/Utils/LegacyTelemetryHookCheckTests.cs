@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -115,6 +118,37 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(await check.CheckAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CheckAsync_LegacyHookInSymbolicLinkSuggestsManualMigration()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var configPath = Path.Combine(context.ClaudeDirectory, "settings.json");
+        var targetPath = Path.Combine(context.Workspace.WorkspaceRoot.FullName, "shared-settings.json");
+        var config = context.WithLegacyScriptPaths(
+            """{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"bash","args":["{sh}"]}]}]}}""");
+        await AgentConfigurationTestContext.WriteAsync(targetPath, config);
+        Directory.CreateDirectory(context.ClaudeDirectory);
+        TestSymlinkHelper.TryCreateSymlink(configPath, targetPath, isDirectory: false);
+        var check = CreateCheck(context);
+
+        var warning = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(EnvironmentCheckStatus.Warning, warning.Status);
+        Assert.Equal(configPath, warning.Details);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.LegacyTelemetryHookSymlinkFixFormat, configPath, "claude"),
+            warning.Fix);
+
+        var services = context.CreateServiceCollection(outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        await command.Parse(
+            "agent init --agents claude --scope project --skills none --mcp=false --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(config, await File.ReadAllTextAsync(targetPath));
+        Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
     }
 
     [Theory]
