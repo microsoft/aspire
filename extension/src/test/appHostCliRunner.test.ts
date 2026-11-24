@@ -56,12 +56,12 @@ suite('data/appHostCliRunner tests', () => {
             subscriptions.forEach(subscription => subscription.dispose());
         });
 
-        test('completes a one-shot command when the direct process exits before close', async () => {
+        test('drains one-shot JSON output after process exit before completing on close', async () => {
             const cliProcess = new TestChildProcess();
-            let processExitCallback: ((code: number | null) => void) | undefined;
+            let spawnOptions: cliModule.SpawnProcessOptions | undefined;
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
-                processExitCallback = options.processExitCallback;
-                options.stdoutCallback?.('{"resources":[{"name":"api"}]}');
+                spawnOptions = options;
+                options.stdoutCallback?.('{"resources":[');
                 options.stderrCallback?.('AppHost diagnostic');
                 return cliProcess;
             });
@@ -69,10 +69,13 @@ suite('data/appHostCliRunner tests', () => {
             const runner = new AppHostCliRunner(terminalProvider);
             try {
                 const pending = runner.runCliCommand('describe', ['describe', '--format', 'json']);
-                await waitForCondition(() => processExitCallback !== undefined, 'expected the direct process exit callback');
+                await waitForCondition(() => spawnOptions !== undefined, 'expected the describe command to spawn');
 
                 cliProcess.exitCode = 0;
-                processExitCallback!(0);
+                spawnOptions!.processExitCallback?.(0);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                spawnOptions!.stdoutCallback?.('{"name":"api"}]}');
+                spawnOptions!.exitCallback?.(0);
 
                 const result = await pending;
                 assert.deepStrictEqual(result, {
@@ -97,7 +100,7 @@ suite('data/appHostCliRunner tests', () => {
                 // callback runs before the caller ever sees the process handle.
                 options.stdoutCallback?.('{"resources":[]}');
                 cliProcess.exitCode = 0;
-                options.processExitCallback?.(0);
+                options.exitCallback?.(0);
                 return cliProcess;
             });
 
@@ -117,6 +120,36 @@ suite('data/appHostCliRunner tests', () => {
             assert.strictEqual(cliProcess.killed, false);
         });
 
+        test('retains failure diagnostics written after process exit', async () => {
+            const cliProcess = new TestChildProcess();
+            let spawnOptions: cliModule.SpawnProcessOptions | undefined;
+            spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
+                spawnOptions = options;
+                return cliProcess;
+            });
+
+            const runner = new AppHostCliRunner(terminalProvider);
+            try {
+                const pending = runner.runCliCommand('describe', ['describe', '--format', 'json']);
+                const rejected = assert.rejects(pending, (error: unknown) => {
+                    assert.ok(error instanceof AspireCliFailedError);
+                    assert.strictEqual(error.exitCode, 1);
+                    assert.strictEqual(error.stderr, 'AppHost failed');
+                    return true;
+                });
+                await waitForCondition(() => spawnOptions !== undefined, 'expected the describe command to spawn');
+
+                cliProcess.exitCode = 1;
+                spawnOptions!.processExitCallback?.(1);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                spawnOptions!.stderrCallback?.('AppHost failed');
+                spawnOptions!.exitCallback?.(1);
+                await rejected;
+            } finally {
+                runner.dispose();
+            }
+        });
+
         test('resolves a one-shot command with its supplied workspace target', async () => {
             const folder: vscode.WorkspaceFolder = {
                 uri: vscode.Uri.file('/workspace'),
@@ -127,7 +160,7 @@ suite('data/appHostCliRunner tests', () => {
             const cliProcess = new TestChildProcess();
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
                 cliProcess.exitCode = 0;
-                options.processExitCallback?.(0);
+                options.exitCallback?.(0);
                 return cliProcess;
             });
 
@@ -146,7 +179,7 @@ suite('data/appHostCliRunner tests', () => {
             const cliProcess = new TestChildProcess();
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
                 cliProcess.exitCode = 0;
-                options.processExitCallback?.(0);
+                options.exitCallback?.(0);
                 return cliProcess;
             });
 
@@ -193,7 +226,7 @@ suite('data/appHostCliRunner tests', () => {
                     call.args[3].stderrCallback(stderr);
                 }
                 process.exitCode = code;
-                call.args[3].processExitCallback(code);
+                call.args[3].exitCallback(code);
             };
 
             const runner = new AppHostCliRunner(terminalProvider);
@@ -226,23 +259,23 @@ suite('data/appHostCliRunner tests', () => {
 
         test('tracks a one-shot process that is still running so it can be stopped', async () => {
             const cliProcess = new TestChildProcess();
-            let processExitCallback: ((code: number | null) => void) | undefined;
+            let exitCallback: ((code: number | null) => void) | undefined;
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
-                processExitCallback = options.processExitCallback;
+                exitCallback = options.exitCallback;
                 return cliProcess;
             });
 
             const runner = new AppHostCliRunner(terminalProvider);
             try {
                 const pending = runner.runCliCommand('describe', ['describe', '--format', 'json']);
-                await waitForCondition(() => processExitCallback !== undefined, 'expected the describe command to spawn');
+                await waitForCondition(() => exitCallback !== undefined, 'expected the describe command to spawn');
 
                 runner.stopOneShotProcesses();
                 assert.strictEqual(terminateStub.callCount, 1, 'a running one-shot process must be terminated');
                 assert.strictEqual(terminateStub.firstCall.args[0], cliProcess);
 
                 cliProcess.exitCode = 1;
-                processExitCallback!(1);
+                exitCallback!(1);
                 await assert.rejects(pending, (error: unknown) => {
                     assert.ok(error instanceof AspireCliFailedError);
                     assert.strictEqual(error.exitCode, 1);

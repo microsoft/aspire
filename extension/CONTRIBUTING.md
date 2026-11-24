@@ -56,6 +56,11 @@ Candidate discovery and default selection are separate. Successful `aspire ls` r
 
 Status and resource watchers run while the Aspire panel or an AppHost editor is visible, an AppHost run/debug session or attached resource debugger is active, or an explicit consumer needs data. Background tabs alone do not keep polling alive. Active watchers keep the configured polling interval and refresh when monitoring resumes.
 
+One-shot CLI commands complete after their stdout and stderr pipes close, not when the direct
+process exits. Windows can deliver final output chunks after exit; resolving earlier can truncate
+JSON snapshots or omit diagnostics needed for compatibility retries. The existing command timeout
+and cancellation still bound the wait if a descendant keeps a pipe open.
+
 ## Building the full repository (extension + CLI)
 
 Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to compile the CLI, install extension dependencies, and localize. Use this when debugging the extension and CLI together. See [docs/contributing.md](/docs/contributing.md) and [docs/machine-requirements.md](/docs/machine-requirements.md) for the .NET prerequisites.
