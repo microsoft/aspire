@@ -40,10 +40,14 @@ public interface IPropertyGridItem
     /// </summary>
     string? Value { get; }
 
+    string? ValueTooltip => null;
+
     /// <summary>
     /// Overrides the value to visualize. If <see langword="null"/>, <see cref="Value"/> is visualized.
     /// </summary>
     public string? ValueToVisualize => null;
+
+    bool TextVisualizerContainsSecret => false;
 
     /// <summary>
     /// Gets the initial visualizer format, overriding automatic format detection. Users can still change the format.
@@ -102,6 +106,9 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
 
     [Parameter]
     public string GridTemplateColumns { get; set; } = "1fr 1fr";
+
+    [Parameter]
+    public bool FitNameColumn { get; set; }
 
     [Parameter]
     public string? NameColumnTitle { get; set; }

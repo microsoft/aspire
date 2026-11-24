@@ -8,9 +8,11 @@ namespace Aspire.Dashboard.Model;
 
 public record LaunchArgument(string Value, bool IsShown);
 
-internal sealed record ResourceSourceViewModel(string value, List<LaunchArgument>? contentAfterValue, string valueToVisualize, string tooltip)
+internal sealed record ResourceSourceViewModel(string value, string originalValue, ResourcePropertyViewModel property, List<LaunchArgument>? contentAfterValue, string valueToVisualize, string tooltip)
 {
     public string Value { get; } = value;
+    public string OriginalValue { get; } = originalValue;
+    public ResourcePropertyViewModel Property { get; } = property;
     public List<LaunchArgument>? ContentAfterValue { get; } = contentAfterValue;
     public string ValueToVisualize { get; } = valueToVisualize;
     public string Tooltip { get; } = tooltip;
@@ -25,11 +27,14 @@ internal sealed record ResourceSourceViewModel(string value, List<LaunchArgument
             return null;
         }
 
+        var property = resource.Properties[source.PropertyName];
         var commandLineInfo = GetCommandLineInfo(resource);
         if (commandLineInfo is null)
         {
             return new ResourceSourceViewModel(
                 value: source.Value,
+                originalValue: source.OriginalValue,
+                property: property,
                 contentAfterValue: null,
                 valueToVisualize: source.OriginalValue,
                 tooltip: source.OriginalValue);
@@ -37,6 +42,8 @@ internal sealed record ResourceSourceViewModel(string value, List<LaunchArgument
 
         return new ResourceSourceViewModel(
             value: source.Value,
+            originalValue: source.OriginalValue,
+            property: property,
             contentAfterValue: commandLineInfo.Arguments,
             valueToVisualize: $"{source.OriginalValue} {commandLineInfo.ArgumentsString}",
             tooltip: $"{source.OriginalValue} {commandLineInfo.TooltipString}");

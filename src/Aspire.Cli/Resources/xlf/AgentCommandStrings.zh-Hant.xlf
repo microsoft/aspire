@@ -241,7 +241,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
         <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
-        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <target state="translated">刪除複製的 Aspire 技能資料夾時不要求確認，包括其中的所有檔案和您所做的任何變更。只有當 Aspire 技能外掛程式在選取的範圍內取代這些資料夾時才適用。預設為 false</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">
@@ -286,7 +286,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesFound">
         <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
-        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
+        <target state="translated">Aspire 技能外掛程式現在提供以下技能。刪除複製的資料夾也會刪除其中的所有內容，包括您所做的任何變更:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesRequirePlugin">

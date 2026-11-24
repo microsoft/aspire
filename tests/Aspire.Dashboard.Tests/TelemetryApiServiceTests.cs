@@ -65,6 +65,38 @@ public class TelemetryApiServiceTests
         Assert.Contains("résumé", receivedItems[0]);
     }
 
+    [Fact]
+    public async Task FollowLogsAsync_WithSeverity_ExcludesUnspecifiedFromSnapshotAndLiveUpdates()
+    {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
+        var repository = repositoryContext.Repository;
+        await AddLogsToRepository(repository, [
+            CreateLogRecord(time: s_testTime.AddSeconds(1), message: "snapshot-unspecified", severity: SeverityNumber.Unspecified),
+            CreateLogRecord(time: s_testTime.AddSeconds(2), message: "snapshot-error", severity: SeverityNumber.Error)
+        ]);
+
+        var service = CreateService(repository);
+        using var cancellation = new CancellationTokenSource();
+        await using var enumerator = service.FollowLogsAsync(null, null, "error", null, cancellation.Token).GetAsyncEnumerator();
+        Assert.True(await enumerator.MoveNextAsync().DefaultTimeout());
+        Assert.Contains("snapshot-error", enumerator.Current);
+
+        await AddLogsToRepository(repository, [
+            CreateLogRecord(time: s_testTime.AddSeconds(3), message: "live-unspecified", severity: SeverityNumber.Unspecified),
+            CreateLogRecord(time: s_testTime.AddSeconds(4), message: "live-critical", severity: SeverityNumber.Fatal)
+        ]);
+
+        try
+        {
+            Assert.True(await enumerator.MoveNextAsync().DefaultTimeout());
+            Assert.Contains("live-critical", enumerator.Current);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+        }
+    }
+
     [Theory]
     [InlineData(false, 1)]
     [InlineData(true, 1)]

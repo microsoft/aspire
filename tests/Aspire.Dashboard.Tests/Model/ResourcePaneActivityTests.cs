@@ -12,23 +12,24 @@ namespace Aspire.Dashboard.Tests.Model;
 public class ResourcePaneActivityTests
 {
     [Fact]
-    public void Summarize_UsesNearestRankAndErrorSpanStatus()
+    public void Summarize_CountsDistinctTracesButComputesP95OverSpans()
     {
         var resource = new OtlpResource("api", "one", false, TelemetryTestHelpers.CreateContext());
         var latest = new DateTime(2026, 11, 3, 10, 0, 0, DateTimeKind.Utc);
         var items = Enumerable.Range(1, 20).Select(i => new RequestSpanSummary
         {
             Resource = resource,
+            TraceId = i <= 3 ? "shared" : $"trace-{i}",
             Name = "GET /",
             StartTime = latest.AddSeconds(i - 20),
             Duration = TimeSpan.FromMilliseconds(i),
-            Status = i <= 2 ? OtlpSpanStatusCode.Error : OtlpSpanStatusCode.Ok
+            Status = i is 2 or 3 ? OtlpSpanStatusCode.Error : OtlpSpanStatusCode.Ok
         }).ToArray();
 
         var result = Assert.Single(ResourcePaneActivity.Summarize(new GetRequestSpansResponse { Items = items, TotalItemCount = items.Length }));
 
         Assert.Equal(resource.ResourceKey, result.Key);
-        Assert.Equal(new ResourcePaneActivity(20, 2, TimeSpan.FromMilliseconds(19), 20, latest), result.Value);
+        Assert.Equal(new ResourcePaneActivity(18, 1, TimeSpan.FromMilliseconds(19), 20, latest), result.Value);
     }
 
     [Fact]
@@ -40,6 +41,7 @@ public class ResourcePaneActivityTests
         var items = resources.Select((resource, index) => new RequestSpanSummary
         {
             Resource = resource,
+            TraceId = "shared",
             Name = "receive",
             StartTime = time,
             Duration = TimeSpan.FromMilliseconds(index + 1),
@@ -68,6 +70,7 @@ public class ResourcePaneActivityTests
         var items = Enumerable.Range(0, validCount + 1).Select(i => new RequestSpanSummary
         {
             Resource = resource,
+            TraceId = $"trace-{i}",
             Name = "receive",
             StartTime = DateTime.UnixEpoch,
             Duration = TimeSpan.FromMilliseconds(i - 1),
@@ -76,7 +79,7 @@ public class ResourcePaneActivityTests
 
         var result = Assert.Single(ResourcePaneActivity.Summarize(new GetRequestSpansResponse { Items = items, TotalItemCount = items.Length })).Value;
 
-        Assert.Equal(validCount + 1, result.Count);
+        Assert.Equal(validCount + 1, result.TraceCount);
         Assert.Equal(validCount, result.DurationSampleCount);
         Assert.Equal(validCount == 20 ? TimeSpan.FromMilliseconds(18) : (TimeSpan?)null, result.P95);
     }

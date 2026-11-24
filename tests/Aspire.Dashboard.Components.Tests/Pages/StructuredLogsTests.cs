@@ -113,6 +113,34 @@ public partial class StructuredLogsTests : DashboardTestContext
         Assert.Equal("abc-def", viewModel.ResourceKey.Value.InstanceId);
     }
 
+    [Theory]
+    [InlineData("error", LogLevel.Error, LogLevel.Critical)]
+    [InlineData("warning", LogLevel.Warning, LogLevel.Error, LogLevel.Critical)]
+    [InlineData(null, LogLevel.Warning, LogLevel.Error, LogLevel.Critical, LogLevel.None)]
+    public async Task Render_LogLevelLink_ReturnsMatchingSeverities(string? logLevel, params LogLevel[] expected)
+    {
+        SetupStructureLogsServices();
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddLogAsync(repository, "api", SeverityNumber.Unspecified);
+        await AddLogAsync(repository, "api", SeverityNumber.Warn);
+        await AddLogAsync(repository, "api", SeverityNumber.Error);
+        await AddLogAsync(repository, "api", SeverityNumber.Fatal);
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl("api", logLevel: logLevel));
+        var cut = Render<StructuredLogs>(p => p.Add(p => p.ResourceName, "api").Add(p => p.ViewportInformation, viewport));
+        var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
+
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<LogSummary>
+        {
+            StartIndex = 0,
+            Count = 10
+        }).AsTask());
+
+        Assert.Equal(expected, result.Items.Select(item => item.Severity).Order());
+    }
+
     [Fact]
     public void Render_TraceIdAndSpanId_FilterAdded()
     {
