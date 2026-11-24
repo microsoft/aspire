@@ -215,14 +215,14 @@
                 {
                 var telemetry = metricsTelemetry;
                     <div class="overview-stats">
-                        <div class="overview-stat">
+                        <a class="overview-stat" href="@DashboardUrls.MetricsUrl(resourceName, all: true)">
                             <span class="overview-stat-value">@telemetry.Instruments.Count.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInstruments)]</span>
-                        </div>
-                        <div class="overview-stat">
+                        </a>
+                        <a class="overview-stat" href="@DashboardUrls.MetricsUrl(resourceName, all: true)">
                             <span class="overview-stat-value">@telemetry.Instruments.Select(i => i.Parent.Name).Distinct(StringComparer.Ordinal).Count().ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMeters)]</span>
-                        </div>
+                        </a>
                     </div>
                     var pinnedInstruments = PinStore.GetPinnedInstruments(telemetry.Instruments);
                     @if (pinnedInstruments.Count == 0)
@@ -377,28 +377,32 @@
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewErrors)]</span>
                         </a>
                     </div>
-                    @if (telemetry.RecentAttentionLogs.Count > 0)
+                    var recentLogs = telemetry.RecentAttentionLogs.Count > 0 ? telemetry.RecentAttentionLogs : telemetry.RecentLogs;
+                    @if (recentLogs.Count > 0)
                     {
                         <ul class="overview-list">
-                            @foreach (var log in telemetry.RecentAttentionLogs)
+                            @foreach (var log in recentLogs)
                             {
                                 <li @key="log.InternalId">
-                                    <span class="overview-level @(log.IsError ? "error" : "warning")">@log.Severity</span>
-                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
-                                    <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
-                                </li>
-                            }
-                        </ul>
-                    }
-                    else if (telemetry.RecentLogs.Count > 0)
-                    {
-                        <ul class="overview-list">
-                            @foreach (var log in telemetry.RecentLogs)
-                            {
-                                <li @key="log.InternalId">
-                                    <span class="overview-level">@log.Severity</span>
-                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
-                                    <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
+                                    <a class="overview-list-row-link" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">
+                                        <span class="overview-level" data-tooltip="@log.Severity">
+                                            @if (log.IsError)
+                                            {
+                                                <FluentIcon Icon="Icons.Filled.Size12.ErrorCircle" Color="Color.Error" aria-hidden="true" />
+                                            }
+                                            else if (log.IsWarning)
+                                            {
+                                                <FluentIcon Icon="Icons.Filled.Size16.Warning" Color="Color.Warning" Width="12px" aria-hidden="true" />
+                                            }
+                                            else
+                                            {
+                                                <span class="overview-log-level-dot" data-log-level="@log.Severity" aria-hidden="true"></span>
+                                            }
+                                            <span class="visually-hidden">@log.Severity</span>
+                                        </span>
+                                        <span class="overview-list-value">@log.Message</span>
+                                        <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
+                                    </a>
                                 </li>
                             }
                         </ul>
@@ -437,10 +441,10 @@
                             <span class="overview-stat-value">@telemetry.TraceCount.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTotal)]</span>
                         </a>
-                        <div class="overview-stat @(telemetry.FailedTraceCount > 0 ? "error" : string.Empty)">
+                        <a class="overview-stat @(telemetry.FailedTraceCount > 0 ? "error" : string.Empty)" href="@DashboardUrls.TracesUrl(resourceName, filters: s_serializedFailedTraceFilter)">
                             <span class="overview-stat-value">@telemetry.FailedTraceCount.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]</span>
-                        </div>
+                        </a>
                     </div>
                     @if (telemetry.RecentTraces.Count > 0)
                     {
@@ -448,16 +452,18 @@
                             @foreach (var trace in telemetry.RecentTraces)
                             {
                                 <li @key="trace.TraceId">
-                                    @if (trace.HasError)
-                                    {
-                                        <FluentIcon Value="@(new Icons.Filled.Size12.ErrorCircle())" Color="Color.Error" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" />
-                                    }
-                                    else
-                                    {
-                                        <span class="overview-dot"></span>
-                                    }
-                                    <a class="overview-list-value" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))" data-tooltip="@trace.FullName">@trace.FullName</a>
-                                    <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
+                                    <a class="overview-list-row-link" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))" data-tooltip="@trace.FullName">
+                                        @if (trace.HasError)
+                                        {
+                                            <FluentIcon Value="@(new Icons.Filled.Size12.ErrorCircle())" Color="Color.Error" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" />
+                                        }
+                                        else
+                                        {
+                                            <span class="overview-dot"></span>
+                                        }
+                                        <span class="overview-list-value">@trace.FullName</span>
+                                        <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
+                                    </a>
                                 </li>
                             }
                         </ul>
@@ -788,7 +794,7 @@
             @for (var i = 0; i < rowCount; i++)
             {
                 <li>
-                    <span class="overview-level"><FluentSkeleton Width="36px" Height="12px" Shimmer="true" /></span>
+                    <span class="overview-level"><FluentSkeleton Width="12px" Height="12px" Shimmer="true" /></span>
                     <span class="overview-list-value"><FluentSkeleton Width="60%" Height="12px" Shimmer="true" /></span>
                     <span class="overview-list-time"><FluentSkeleton Width="32px" Height="12px" Shimmer="true" /></span>
                 </li>

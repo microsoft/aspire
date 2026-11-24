@@ -5,6 +5,7 @@ using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
@@ -35,6 +36,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private static readonly TimeSpan s_telemetryRefreshDelay = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan s_consoleRenderDelay = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan s_consoleLoadingTimeout = TimeSpan.FromSeconds(1);
+
+    private static readonly FieldTelemetryFilter s_failedTraceFilter = new() { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) };
+    private static readonly string s_serializedFailedTraceFilter = TelemetryFilterFormatter.SerializeFiltersToString([s_failedTraceFilter]);
 
     private readonly object _consoleLock = new();
     private readonly List<ConsolePreviewLine> _consoleLines = new();
@@ -347,8 +351,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
         var logsTask = repository.GetOverviewLogsAsync([key], RecentItemCount, errorsOnly: false, cancellationToken);
         var tracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([], RecentItemCount), cancellationToken);
-        List<TelemetryFilter> failedTraceFilters = [new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) }];
-        var failedTracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest(failedTraceFilters, 0), cancellationToken);
+        var failedTracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([s_failedTraceFilter], 0), cancellationToken);
         await Task.WhenAll(logsTask, tracesTask, failedTracesTask).ConfigureAwait(false);
         var logs = await logsTask.ConfigureAwait(false);
         var traces = (await tracesTask.ConfigureAwait(false)).PagedResult;

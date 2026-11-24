@@ -7,17 +7,23 @@ using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Otlp;
+using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
+using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
@@ -26,6 +32,84 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
 {
     private static readonly ViewportInformation s_viewport = new(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+    [Fact]
+    public async Task TelemetryStats_LinkToAllMetricsAndFailedTracesForResource()
+    {
+        const string resourceName = "test-TestId";
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport,
+            new TestDashboardClient(isEnabled: true,
+                initialResources: [ModelTestHelpers.CreateResource(resourceName)],
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo($"/resources/{resourceName}");
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await TelemetryHelpSetupHelpers.AddSignalAsync(repository, AspireDataType.Metrics);
+        await TelemetryHelpSetupHelpers.AddSignalAsync(repository, AspireDataType.Traces);
+
+        var cut = RenderOverview(s_viewport, resourceName);
+        cut.WaitForAssertion(() =>
+        {
+            var metricsLinks = cut.FindAll("[aria-labelledby='overview-metrics-title'] a.overview-stat");
+            Assert.Equal(["Instruments", "Meters"], metricsLinks.Select(link => link.QuerySelector(".overview-stat-label")!.TextContent));
+            Assert.All(metricsLinks, link => Assert.Equal($"/metrics/resource/{resourceName}?all=true", link.GetAttribute("href")));
+
+            var traceLinks = cut.FindAll("[aria-labelledby='overview-traces-title'] a.overview-stat");
+            Assert.Equal(["Total", "Failed"], traceLinks.Select(link => link.QuerySelector(".overview-stat-label")!.TextContent));
+            Assert.Equal($"/traces/resource/{resourceName}", traceLinks[0].GetAttribute("href"));
+            Assert.Equal("0", traceLinks[1].QuerySelector(".overview-stat-value")!.TextContent);
+            var failedUrl = navigation.ToAbsoluteUri(traceLinks[1].GetAttribute("href")!);
+            Assert.Equal($"/traces/resource/{resourceName}", failedUrl.AbsolutePath);
+            var filter = Assert.Single(TelemetryFilterFormatter.DeserializeFiltersFromString(QueryHelpers.ParseQuery(failedUrl.Query)["filters"].ToString()));
+            Assert.True(filter.Enabled);
+            Assert.Equal(KnownTraceFields.StatusField, filter.Field);
+            Assert.Equal(FilterCondition.Equals, filter.Condition);
+            Assert.Equal(nameof(OtlpSpanStatusCode.Error), filter.Value);
+
+            var traceRow = Assert.Single(cut.FindAll("[aria-labelledby='overview-traces-title'] a.overview-list-row-link"));
+            Assert.Equal("test: Test span. Id: span", traceRow.GetAttribute("data-tooltip"));
+        });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task StructuredLogPreview_ShowsCompactSeverityWithAccessibleText(bool showAttentionLogs)
+    {
+        const string resourceName = "test-TestId";
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport,
+            new TestDashboardClient(isEnabled: true,
+                initialResources: [ModelTestHelpers.CreateResource(resourceName)],
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/resources/{resourceName}");
+        var logs = new ScopeLogs { Scope = TelemetryTestHelpers.CreateScope() };
+        (SeverityNumber Number, string Level)[] levels = showAttentionLogs
+            ? [(SeverityNumber.Error, "Error"), (SeverityNumber.Fatal, "Critical"), (SeverityNumber.Warn, "Warning")]
+            : [(SeverityNumber.Info, "Information"), (SeverityNumber.Debug, "Debug"), (SeverityNumber.Trace, "Trace")];
+        foreach (var (number, level) in levels)
+        {
+            logs.LogRecords.Add(TelemetryTestHelpers.CreateLogRecord(message: $"{level} message", severity: number));
+        }
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new(), [new ResourceLogs { Resource = TelemetryTestHelpers.CreateResource("test"), ScopeLogs = { logs } }]);
+
+        var cut = RenderOverview(s_viewport, resourceName);
+        cut.WaitForAssertion(() =>
+        {
+            var rows = cut.FindAll("[aria-labelledby='overview-logs-title'] a.overview-list-row-link");
+            Assert.Equal(levels.Length, rows.Count);
+            foreach (var (_, level) in levels)
+            {
+                var row = Assert.Single(rows, r => r.QuerySelector(".overview-list-value")!.TextContent == $"{level} message");
+                Assert.Equal($"{level} message", row.GetAttribute("data-tooltip"));
+                var severity = row.QuerySelector(".overview-level")!;
+                Assert.Equal(level, severity.GetAttribute("data-tooltip"));
+                Assert.Equal(level, severity.QuerySelector(".visually-hidden")!.TextContent);
+                var indicatorSelector = showAttentionLogs ? "svg[aria-hidden='true']" : $".overview-log-level-dot[data-log-level='{level}'][aria-hidden='true']";
+                Assert.Single(severity.QuerySelectorAll(indicatorSelector));
+            }
+        });
+    }
 
     [Theory]
     [InlineData(KnownResourceTypes.Container)]

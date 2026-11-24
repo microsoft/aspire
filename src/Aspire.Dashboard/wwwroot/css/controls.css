@@ -1191,6 +1191,14 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     --aspire-data-grid-cell-border-color: var(--datagrid-border-color);
 }
 
+[data-theme="dark"] .property-grid {
+    --datagrid-hover-color: var(--property-grid-row-hover-color);
+}
+
+[data-theme="dark"] .property-grid .fluent-data-grid {
+    --aspire-data-grid-cell-border-color: var(--property-grid-row-divider-color);
+}
+
 .property-grid-container .fluent-data-grid > thead > tr > th > fluent-button {
     --colorSubtleBackground: var(--property-grid-background-color);
 }
