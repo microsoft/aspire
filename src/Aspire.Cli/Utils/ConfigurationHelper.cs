@@ -348,6 +348,7 @@ internal static partial class ConfigurationHelper
         // system temp directory are on different volumes. CreateNew rejects existing links/files.
         var temporaryPath = Path.Combine(Path.GetDirectoryName(filePath)!, $".{Path.GetFileName(filePath)}.{Guid.NewGuid():N}.tmp");
         var created = false;
+        var published = false;
         var destinationExists = File.Exists(filePath);
         string? unixMetadata = null;
         try
@@ -395,7 +396,7 @@ internal static partial class ConfigurationHelper
             if (OperatingSystem.IsWindows() && destinationExists)
             {
                 // Replace preserves the destination DACL and other Windows file metadata.
-                await RetryOnTransientWindowsFileLockAsync(
+                await RetryOnTransientFileLockAsync(
                     ValidateBeforePublishAsync,
                     () => File.Replace(temporaryPath, filePath, destinationBackupFileName: null), cancellationToken);
             }
@@ -404,24 +405,39 @@ internal static partial class ConfigurationHelper
                 // A tracked edit must not overwrite a new file created after validation.
                 // Untracked workspace writes retain their existing overwrite behavior.
                 var overwrite = destinationExists || beforeReplace is null;
-                await RetryOnTransientWindowsFileLockAsync(
+                await RetryOnTransientFileLockAsync(
                     ValidateBeforePublishAsync,
                     () => File.Move(temporaryPath, filePath, overwrite), cancellationToken);
             }
+            published = true;
         }
         finally
         {
-            if (created)
+            // An unpublished staging file means an exception is already propagating. Cleanup is best
+            // effort so that the process still holding the staging file open (the same kind of lock
+            // the retry waits out) cannot replace that exception, including cancellation, with its
+            // own sharing violation. The cost is a leftover hidden .tmp sibling in that rare case.
+            if (created && !published)
             {
-                File.Delete(temporaryPath);
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
             }
         }
     }
 
-    // Win32 errors that indicate another process briefly holds one of the files open. Antivirus
-    // real-time scanning (for example Microsoft Defender) and the search indexer commonly open a
-    // freshly written file without FILE_SHARE_DELETE, which makes ReplaceFile/MoveFileEx fail until
-    // the scan finishes. See https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-replacefilew.
+    // Win32 errors that indicate another process briefly has one of the files open. Processes that
+    // watch the file system, such as antivirus scanners, indexers, and editor or source control
+    // watchers, can open a freshly written file without FILE_SHARE_DELETE, which makes
+    // ReplaceFile/MoveFileEx fail until they close it.
+    // See https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-replacefilew.
+    // The list is exact rather than any IOException so that deterministic failures, such as a full
+    // disk or ERROR_ALREADY_EXISTS from a tracked edit that refuses to overwrite a competing file,
+    // fail immediately instead of after the backoff.
     // ERROR_UNABLE_TO_MOVE_REPLACEMENT (1176) is intentionally excluded: with no backup file, ReplaceFile
     // has already deleted the destination at that point, so a retry would not be equivalent.
     private const int ErrorSharingViolation = 32;
@@ -437,7 +453,7 @@ internal static partial class ConfigurationHelper
         TimeSpan.FromMilliseconds(800),
     ];
 
-    private static async Task RetryOnTransientWindowsFileLockAsync(Func<Task> beforeAttempt, Action operation, CancellationToken cancellationToken)
+    private static async Task RetryOnTransientFileLockAsync(Func<Task> beforeAttempt, Action operation, CancellationToken cancellationToken)
     {
         for (var attempt = 0; ; attempt++)
         {
@@ -448,16 +464,23 @@ internal static partial class ConfigurationHelper
                 operation();
                 return;
             }
-            catch (IOException ex) when (attempt < s_transientFileLockRetryDelays.Length && IsTransientWindowsFileLock(ex))
+            catch (IOException ex) when (attempt < s_transientFileLockRetryDelays.Length && IsTransientFileLock(ex, OperatingSystem.IsWindows()))
             {
                 await Task.Delay(s_transientFileLockRetryDelays[attempt], cancellationToken);
             }
         }
     }
 
-    private static bool IsTransientWindowsFileLock(IOException exception)
+    /// <summary>
+    /// Determines whether a settings file publication failed because another process briefly has the file open.
+    /// </summary>
+    /// <remarks>
+    /// Always false off Windows: rename(2) replaces the destination even while other processes have it
+    /// open, so there is no equivalent transient failure, and the operation runs exactly once.
+    /// </remarks>
+    internal static bool IsTransientFileLock(IOException exception, bool isWindows)
     {
-        if (!OperatingSystem.IsWindows())
+        if (!isWindows)
         {
             return false;
         }

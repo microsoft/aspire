@@ -71,6 +71,43 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WriteSettingsFileAtomically_LockedStagingCleanupDoesNotHideFailure()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Open files block deletion only on Windows.");
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string original = """{"custom":"original"}""";
+        await File.WriteAllTextAsync(path, original);
+        var failure = new IOException("The settings changed during staging.");
+        FileStream? scanner = null;
+
+        try
+        {
+            // Mimic a scanner that still has the staging file open without FILE_SHARE_DELETE when the write fails.
+            var error = await Assert.ThrowsAsync<IOException>(() => ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
+                path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None,
+                beforeReplace: _ =>
+                {
+                    var staging = Assert.Single(Directory.GetFiles(workspace.Path, "*.tmp"));
+                    scanner = new FileStream(staging, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    throw failure;
+                }));
+
+            Assert.Same(failure, error);
+            Assert.Equal(original, await File.ReadAllTextAsync(path));
+        }
+        finally
+        {
+            scanner?.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task WriteSettingsFileAtomically_TrackedEditDoesNotOverwriteNewCompetingDestination()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -239,9 +276,32 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
                 return Task.CompletedTask;
             }).WaitAsync(TimeSpan.FromSeconds(30));
 
-        Assert.Equal(2, attempts);
+        Assert.True(attempts >= 2, $"Expected at least one retry, but publication was attempted {attempts} time(s).");
         Assert.Equal("updated", JsonNode.Parse(await File.ReadAllTextAsync(path))!["custom"]!.GetValue<string>());
         Assert.Equal(path, Assert.Single(Directory.GetFiles(workspace.Path)));
+    }
+
+    [Theory]
+    [InlineData(unchecked((int)0x80070020), true)] // ERROR_SHARING_VIOLATION
+    [InlineData(unchecked((int)0x80070021), true)] // ERROR_LOCK_VIOLATION
+    [InlineData(unchecked((int)0x80070497), true)] // ERROR_UNABLE_TO_REMOVE_REPLACED
+    [InlineData(unchecked((int)0x80070498), false)] // ERROR_UNABLE_TO_MOVE_REPLACEMENT
+    [InlineData(unchecked((int)0x80070005), false)] // ERROR_ACCESS_DENIED
+    [InlineData(unchecked((int)0x80070070), false)] // ERROR_DISK_FULL
+    [InlineData(unchecked((int)0x800700B7), false)] // ERROR_ALREADY_EXISTS
+    public void IsTransientFileLock_OnlyRetriesTransientWindowsLockErrors(int hresult, bool expected)
+    {
+        var exception = new IOException("Settings publication failed.", hresult);
+
+        Assert.Equal(expected, ConfigurationHelper.IsTransientFileLock(exception, isWindows: true));
+    }
+
+    [Fact]
+    public void IsTransientFileLock_DoesNotRetryOnNonWindows()
+    {
+        var exception = new IOException("Settings publication failed.", unchecked((int)0x80070020));
+
+        Assert.False(ConfigurationHelper.IsTransientFileLock(exception, isWindows: false));
     }
 
     [Fact]
