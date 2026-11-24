@@ -743,7 +743,7 @@ internal sealed class AgentInitCommand : BaseCommand
             scope,
             cancellationToken);
 
-        // --- Phase 7: Describe the start flow and the installed skills in AGENTS.md ---
+        // --- Phase 7: Describe the start flow in AGENTS.md ---
         // AGENTS.md is a project file, so global setup, which leaves the project untouched, skips it.
         if (scope is AgentConfigurationScope.Project)
         {
@@ -752,7 +752,6 @@ internal sealed class AgentInitCommand : BaseCommand
                 discoverAppHost ? null : configurationDirectory,
                 discoverAppHost ? GetDiscoveredAppHostAsync : null,
                 GetAspireSkillsRegisteredClients(registrationResults, skillSources).Any(),
-                installedSkills,
                 cancellationToken);
         }
 
@@ -804,7 +803,6 @@ internal sealed class AgentInitCommand : BaseCommand
         DirectoryInfo? appConfigurationDirectory,
         Func<Task<FileInfo?>>? discoverAppHostAsync,
         bool aspireSkillsRegistered,
-        IReadOnlyList<InstalledSkillSummaryItem> installedSkills,
         CancellationToken cancellationToken)
     {
         // Agents read AGENTS.md from the workspace root they are opened in, so the file goes there and
@@ -821,12 +819,7 @@ internal sealed class AgentInitCommand : BaseCommand
             return true;
         }
 
-        List<AgentInstructionsSkill> skills = aspireSkillsRegistered ? [.. AgentInstructionsFile.AspireSkillsPluginSkills] : [];
-        skills.AddRange(SkillDefinition.CliDefined
-            .Where(skill => installedSkills.Any(installed => skill.HasName(installed.SkillName)))
-            .Select(skill => new AgentInstructionsSkill(skill.Name, skill.AgentInstructionsJob)));
-
-        return await AgentInstructionsFile.WriteAndReportAsync(InteractionService, workspaceRoot, appHostPath, skills, cancellationToken);
+        return await AgentInstructionsFile.WriteAndReportAsync(InteractionService, workspaceRoot, appHostPath, aspireSkillsRegistered, cancellationToken);
     }
 
     private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(

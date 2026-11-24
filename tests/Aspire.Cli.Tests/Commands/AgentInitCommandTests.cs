@@ -185,7 +185,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var newLine = Environment.NewLine;
         Assert.Equal(
-            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("src/AppHost/apphost.cs", AgentInstructionsFile.AspireSkillsPluginSkills, newLine)}{newLine}",
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("src/AppHost/apphost.cs", aspireSkillsPluginRegistered: true, newLine)}{newLine}",
             await File.ReadAllTextAsync(agentInstructionsPath));
     }
 
@@ -208,7 +208,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         var newLine = Environment.NewLine;
         Assert.Equal(
-            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("App.AppHost/App.AppHost.csproj", [], newLine)}{newLine}",
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("App.AppHost/App.AppHost.csproj", aspireSkillsPluginRegistered: false, newLine)}{newLine}",
             await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
     }
 

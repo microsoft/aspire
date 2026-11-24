@@ -14,11 +14,6 @@ using Spectre.Console;
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// A skill named in the generated agent instructions, with the one-line job an agent picks it for.
-/// </summary>
-internal sealed record AgentInstructionsSkill(string Name, string Job);
-
-/// <summary>
 /// How <see cref="AgentInstructionsFile.WriteAsync"/> changed the agent instructions file.
 /// </summary>
 internal enum AgentInstructionsFileChange
@@ -44,13 +39,14 @@ internal enum AgentInstructionsFileChange
 /// Coding agents read <c>AGENTS.md</c> on every turn without any plugin, skill or MCP setup
 /// (https://agents.md). The section gives the start flow for this AppHost in order: start it, list
 /// its resources with <c>aspire describe</c>, then <c>aspire wait</c> on the ones the task needs.
-/// It deliberately carries no skill content; skills are delivered through agent plugins.
+/// It deliberately names no individual skills: they are delivered through the Aspire skills plugin, whose installed
+/// version can differ from any list written here, and the agent harness already lists the skills it loaded.
 /// </para>
 /// <para>
 /// An existing file is never overwritten. The Aspire section is delimited by HTML comment markers,
 /// which markdown renderers hide: when the file has no section, one is appended after the existing
 /// content; when it has one, only the text between the markers is replaced, so a later
-/// <c>aspire agent init</c> can add the skills it installed to the section <c>aspire new</c> wrote.
+/// <c>aspire agent init</c> can add its plugin note to the section <c>aspire new</c> wrote.
 /// </para>
 /// </remarks>
 internal static class AgentInstructionsFile
@@ -67,24 +63,6 @@ internal static class AgentInstructionsFile
     private const string SectionEndMarker = SectionEndMarkerPrefix + " -->";
     private const string CommentStart = "<!--";
     private const string CommentEnd = "-->";
-
-    /// <summary>
-    /// The skills of the <c>aspire@aspire-skills</c> plugin, with the job each one is picked for.
-    /// The plugin content is acquired by the agent, not the CLI, so this list mirrors
-    /// https://github.com/microsoft/aspire-skills/blob/main/.github/plugins/aspire-skills/.claude-plugin/plugin.json
-    /// and must be updated when that plugin adds, renames or removes a skill.
-    /// </summary>
-    internal static IReadOnlyList<AgentInstructionsSkill> AspireSkillsPluginSkills { get; } =
-    [
-        new("aspire", "route an Aspire task to the right Aspire skill."),
-        new("aspire-orchestration", "start, stop and restart the app and its resources, and fix start-up failures."),
-        new("aspire-monitoring", "logs, traces, metrics and resource state of a running app; the standalone dashboard."),
-        new("aspireify", "wire resources into an AppHost."),
-        new("aspire-init", "add Aspire to a repository."),
-        new("aspire-deployment", "deploy or publish the app."),
-        new("aspire-terminals", "author and automate Aspire terminals."),
-        new("aspire-project-v2-migration", "move project resources to the v2 APIs.")
-    ];
 
     /// <summary>
     /// Reads the AppHost path that the <c>aspire.config.json</c> in <paramref name="directory"/> configures.
@@ -115,9 +93,9 @@ internal static class AgentInstructionsFile
     /// Creates the Aspire section, including its markers, without a trailing line break.
     /// </summary>
     /// <param name="appHostPath">The AppHost path relative to the directory of the instructions file.</param>
-    /// <param name="skills">The installed skills to list, or an empty list when none are known.</param>
+    /// <param name="aspireSkillsPluginRegistered">Whether <c>aspire agent init</c> registered the Aspire skills plugin.</param>
     /// <param name="newLine">The line break to use.</param>
-    internal static string CreateSection(string appHostPath, IReadOnlyList<AgentInstructionsSkill> skills, string newLine)
+    internal static string CreateSection(string appHostPath, bool aspireSkillsPluginRegistered, string newLine)
     {
         // Every command passes --apphost so it targets this app, rather than prompting or failing in a
         // non-interactive session, when other AppHosts are running.
@@ -149,14 +127,10 @@ internal static class AgentInstructionsFile
         Line($"Start with {traces}");
         Line("(milliseconds; lower the threshold if nothing comes back), before reading code or timing requests by hand.");
 
-        if (skills.Count > 0)
+        if (aspireSkillsPluginRegistered)
         {
             Line();
-            Line("### Skills");
-            foreach (var skill in skills)
-            {
-                Line($"- `{skill.Name}`: {skill.Job}");
-            }
+            Line("Aspire skills are provided by the `microsoft/aspire-skills` plugin that `aspire agent init` registered, and the harness lists them.");
         }
 
         builder.Append(SectionEndMarker);
@@ -168,12 +142,12 @@ internal static class AgentInstructionsFile
     /// </summary>
     /// <param name="directory">The directory that receives the file.</param>
     /// <param name="appHostPath">The full path of the AppHost the start flow targets.</param>
-    /// <param name="skills">The installed skills to list.</param>
+    /// <param name="aspireSkillsPluginRegistered">Whether <c>aspire agent init</c> registered the Aspire skills plugin.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     internal static async Task<AgentInstructionsFileChange> WriteAsync(
         DirectoryInfo directory,
         string appHostPath,
-        IReadOnlyList<AgentInstructionsSkill> skills,
+        bool aspireSkillsPluginRegistered,
         CancellationToken cancellationToken)
     {
         // Agents run the commands from the directory holding AGENTS.md, so the path is relative to it.
@@ -193,14 +167,14 @@ internal static class AgentInstructionsFile
         if (!File.Exists(filePath))
         {
             var newLine = Environment.NewLine;
-            var content = $"# Agent instructions{newLine}{newLine}{CreateSection(relativeAppHostPath, skills, newLine)}{newLine}";
+            var content = $"# Agent instructions{newLine}{newLine}{CreateSection(relativeAppHostPath, aspireSkillsPluginRegistered, newLine)}{newLine}";
             await CreateFileAsync(filePath, content, cancellationToken);
             return AgentInstructionsFileChange.Created;
         }
 
         var existing = await File.ReadAllTextAsync(filePath, cancellationToken);
         var lineBreak = existing.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        var section = CreateSection(relativeAppHostPath, skills, lineBreak);
+        var section = CreateSection(relativeAppHostPath, aspireSkillsPluginRegistered, lineBreak);
 
         var start = existing.IndexOf(SectionStartMarkerPrefix, StringComparison.Ordinal);
         if (start < 0)
@@ -266,14 +240,14 @@ internal static class AgentInstructionsFile
         IInteractionService interactionService,
         DirectoryInfo directory,
         string appHostPath,
-        IReadOnlyList<AgentInstructionsSkill> skills,
+        bool aspireSkillsPluginRegistered,
         CancellationToken cancellationToken)
     {
         var displayPath = Path.Combine(directory.FullName, FileName).EscapeMarkup();
         AgentInstructionsFileChange change;
         try
         {
-            change = await WriteAsync(directory, appHostPath, skills, cancellationToken);
+            change = await WriteAsync(directory, appHostPath, aspireSkillsPluginRegistered, cancellationToken);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

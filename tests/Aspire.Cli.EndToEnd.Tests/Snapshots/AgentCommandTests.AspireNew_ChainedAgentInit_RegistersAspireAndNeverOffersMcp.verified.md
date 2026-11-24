@@ -18,15 +18,7 @@ This is an Aspire application. Its AppHost is `StarterApp.AppHost/StarterApp.App
 Start with `aspire otel traces -n 15 --search "duration:>500" --apphost StarterApp.AppHost/StarterApp.AppHost.csproj`
 (milliseconds; lower the threshold if nothing comes back), before reading code or timing requests by hand.
 
-### Skills
-- `aspire`: route an Aspire task to the right Aspire skill.
-- `aspire-orchestration`: start, stop and restart the app and its resources, and fix start-up failures.
-- `aspire-monitoring`: logs, traces, metrics and resource state of a running app; the standalone dashboard.
-- `aspireify`: wire resources into an AppHost.
-- `aspire-init`: add Aspire to a repository.
-- `aspire-deployment`: deploy or publish the app.
-- `aspire-terminals`: author and automate Aspire terminals.
-- `aspire-project-v2-migration`: move project resources to the v2 APIs.
+Aspire skills are provided by the `microsoft/aspire-skills` plugin that `aspire agent init` registered, and the harness lists them.
 <!-- aspire:end -->
 
 ## Team rules

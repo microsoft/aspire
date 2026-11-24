@@ -389,7 +389,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 await File.WriteAllTextAsync(mcpConfigPath, originalMcpConfig);
 
                 // aspire new writes AGENTS.md before it offers agent init. Add the team's own instructions,
-                // which the chained agent init must keep while it adds the installed skills to the Aspire
+                // which the chained agent init must keep while it adds the skills plugin note to the Aspire
                 // section. The container can own the generated file, so it is replaced, not edited in place.
                 var generated = await File.ReadAllTextAsync(agentInstructionsPath);
                 File.Delete(agentInstructionsPath);
@@ -417,7 +417,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         Assert.False(Directory.Exists(Path.Combine(
             workspace.WorkspaceRoot.FullName, "StarterApp", ".claude", "skills", "aspireify")));
 
-        // One Aspire section, naming the nested AppHost project and the installed skills, followed by the
+        // One Aspire section, naming the nested AppHost project and the skills plugin, followed by the
         // team's instructions unchanged.
         await Verify(await File.ReadAllTextAsync(agentInstructionsPath), "md");
     }

@@ -836,11 +836,11 @@ internal sealed class NewCommand : BaseCommand
         // Every template writes the AppHost path to aspire.config.json at its output root, which is also where
         // agents open the new app, so AGENTS.md is written there. The CLI writes it rather than each template
         // so all template runtimes share one start flow, and a template that ships its own AGENTS.md keeps it
-        // with the Aspire section appended. A chained agent init then adds the skills it installs to that section.
+        // with the Aspire section appended. A chained agent init then adds its skills plugin note to that section.
         if (templateResult.ExitCode == CliExitCodes.Success &&
             AgentInstructionsFile.GetConfiguredAppHostPath(workspaceRoot) is { } appHostPath)
         {
-            await AgentInstructionsFile.WriteAndReportAsync(InteractionService, workspaceRoot, appHostPath, [], cancellationToken);
+            await AgentInstructionsFile.WriteAndReportAsync(InteractionService, workspaceRoot, appHostPath, aspireSkillsPluginRegistered: false, cancellationToken);
         }
 
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);

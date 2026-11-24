@@ -1466,7 +1466,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         var newLine = Environment.NewLine;
         Assert.Equal(
-            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("apphost.cs", [], newLine)}{newLine}",
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("apphost.cs", aspireSkillsPluginRegistered: false, newLine)}{newLine}",
             await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "output", AgentInstructionsFile.FileName)));
     }
 

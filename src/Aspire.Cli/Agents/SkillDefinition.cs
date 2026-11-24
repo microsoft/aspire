@@ -19,7 +19,6 @@ internal sealed class SkillDefinition
     public static readonly SkillDefinition PlaywrightCli = new(
         "playwright-cli",
         AgentCommandStrings.SkillDescription_PlaywrightCli,
-        "drive a browser to check the app's web pages.",
         skillContent: null);
 
     /// <summary>
@@ -29,20 +28,17 @@ internal sealed class SkillDefinition
     public static readonly SkillDefinition DotnetInspect = new(
         CommonAgentApplicators.DotnetInspectSkillName,
         AgentCommandStrings.SkillDescription_DotnetInspect,
-        "query the API surface of .NET packages and assemblies.",
         CommonAgentApplicators.DotnetInspectSkillFileContent,
         applicableLanguages: [KnownLanguageId.CSharp]);
 
     private SkillDefinition(
         string name,
         string description,
-        string agentInstructionsJob,
         string? skillContent,
         IReadOnlyList<string>? applicableLanguages = null)
     {
         Name = name;
         Description = description;
-        AgentInstructionsJob = agentInstructionsJob;
         SkillContent = skillContent;
         ApplicableLanguages = applicableLanguages ?? [];
     }
@@ -56,12 +52,6 @@ internal sealed class SkillDefinition
     /// Gets the description shown in the selection prompt.
     /// </summary>
     public string Description { get; }
-
-    /// <summary>
-    /// Gets the one-line job of the skill listed in the generated <c>AGENTS.md</c>. Unlike
-    /// <see cref="Description"/>, it is not localized because the file is written for coding agents.
-    /// </summary>
-    public string AgentInstructionsJob { get; }
 
     /// <summary>
     /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle.

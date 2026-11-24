@@ -10,13 +10,12 @@ namespace Aspire.Cli.Tests.Agents;
 public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task WriteAsync_CreatesFileWithStartFlowAndSkills()
+    public async Task WriteAsync_CreatesFileWithStartFlowAndSkillsPluginNote()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "src", "My App.AppHost", "My App.AppHost.csproj");
-        IReadOnlyList<AgentInstructionsSkill> skills = [.. AgentInstructionsFile.AspireSkillsPluginSkills, new("playwright-cli", "drive a browser.")];
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, skills, CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, aspireSkillsPluginRegistered: true, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.Created, change);
         await Verify(await ReadFileAsync(workspace), "md");
@@ -30,11 +29,11 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         const string existing = "# Team rules\r\n\r\nRun `make lint` before committing.";
         await File.WriteAllTextAsync(GetFilePath(workspace), existing);
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.Appended, change);
         Assert.Equal(
-            existing + "\r\n\r\n" + AgentInstructionsFile.CreateSection("apphost.cs", [], "\r\n") + "\r\n",
+            existing + "\r\n\r\n" + AgentInstructionsFile.CreateSection("apphost.cs", false, "\r\n") + "\r\n",
             await ReadFileAsync(workspace));
     }
 
@@ -43,17 +42,16 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
-        var oldSection = AgentInstructionsFile.CreateSection("old.cs", [], "\n");
+        var oldSection = AgentInstructionsFile.CreateSection("old.cs", false, "\n");
         await File.WriteAllTextAsync(GetFilePath(workspace), $"# Rules\n\n{oldSection}\n\n## More rules\nKeep tests green.\n");
-        IReadOnlyList<AgentInstructionsSkill> skills = [new("dotnet-inspect", "query .NET APIs.")];
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, skills, CancellationToken.None);
-        var unchanged = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, skills, CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, aspireSkillsPluginRegistered: true, CancellationToken.None);
+        var unchanged = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, aspireSkillsPluginRegistered: true, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.Updated, change);
         Assert.Equal(AgentInstructionsFileChange.Unchanged, unchanged);
         Assert.Equal(
-            $"# Rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", skills, "\n")}\n\n## More rules\nKeep tests green.\n",
+            $"# Rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", aspireSkillsPluginRegistered: true, "\n")}\n\n## More rules\nKeep tests green.\n",
             await ReadFileAsync(workspace));
     }
 
@@ -66,11 +64,11 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(target, "# Team rules\n");
         TestSymlinkHelper.TryCreateSymlink(GetFilePath(workspace), target, isDirectory: false);
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.Appended, change);
         Assert.Equal(target, new FileInfo(GetFilePath(workspace)).LinkTarget);
-        Assert.Equal($"# Team rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", [], "\n")}\n", await File.ReadAllTextAsync(target));
+        Assert.Equal($"# Team rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", false, "\n")}\n", await File.ReadAllTextAsync(target));
         Assert.Equal(
             ["AGENTS.md", "CLAUDE.md"],
             workspace.WorkspaceRoot.EnumerateFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
@@ -86,12 +84,12 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         // Discovery returns the AppHost with links resolved, while the workspace root is given through the link.
         var appHost = PathNormalizer.ResolveSymlinks(Path.Combine(real.FullName, "App", "apphost.cs"));
 
-        var change = await AgentInstructionsFile.WriteAsync(new DirectoryInfo(link), appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(new DirectoryInfo(link), appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.Created, change);
         var newLine = Environment.NewLine;
         Assert.Equal(
-            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("App/apphost.cs", [], newLine)}{newLine}",
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("App/apphost.cs", false, newLine)}{newLine}",
             await File.ReadAllTextAsync(Path.Combine(link, AgentInstructionsFile.FileName)));
     }
 
@@ -103,12 +101,12 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         var link = Path.Combine(workspace.WorkspaceRoot.FullName, "app");
         TestSymlinkHelper.TryCreateSymlink(link, real.FullName);
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, Path.Combine(link, "apphost.cs"), [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, Path.Combine(link, "apphost.cs"), false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.Created, change);
         var newLine = Environment.NewLine;
         Assert.Equal(
-            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("app/apphost.cs", [], newLine)}{newLine}",
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("app/apphost.cs", false, newLine)}{newLine}",
             await ReadFileAsync(workspace));
     }
 
@@ -120,13 +118,13 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         var target = Path.Combine(workspace.WorkspaceRoot.FullName, "CLAUDE.md");
         TestSymlinkHelper.TryCreateSymlink(GetFilePath(workspace), "CLAUDE.md", isDirectory: false);
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.Created, change);
         Assert.Equal("CLAUDE.md", new FileInfo(GetFilePath(workspace)).LinkTarget);
         var newLine = Environment.NewLine;
         Assert.Equal(
-            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("apphost.cs", [], newLine)}{newLine}",
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("apphost.cs", false, newLine)}{newLine}",
             await File.ReadAllTextAsync(target));
     }
 
@@ -137,10 +135,10 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
-        var existing = $"# Rules\n\n{earlierText}\nKeep this team rule.\n\n{AgentInstructionsFile.CreateSection("old.cs", [], "\n")}\n";
+        var existing = $"# Rules\n\n{earlierText}\nKeep this team rule.\n\n{AgentInstructionsFile.CreateSection("old.cs", false, "\n")}\n";
         await File.WriteAllTextAsync(GetFilePath(workspace), existing);
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
         Assert.Equal(existing, await ReadFileAsync(workspace));
@@ -154,7 +152,7 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         var existing = $"# Rules\n\n{AgentInstructionsFile.SectionStartMarkerPrefix} -->\nMy own notes.\n";
         await File.WriteAllTextAsync(GetFilePath(workspace), existing);
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
         Assert.Equal(existing, await ReadFileAsync(workspace));
@@ -165,14 +163,14 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
-        var oldSection = AgentInstructionsFile.CreateSection("old.cs", [], "\n");
+        var oldSection = AgentInstructionsFile.CreateSection("old.cs", false, "\n");
         await File.WriteAllTextAsync(GetFilePath(workspace), $"# Rules\n\n{oldSection} Keep this team rule.\nMore rules.\n");
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.Updated, change);
         Assert.Equal(
-            $"# Rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", [], "\n")} Keep this team rule.\nMore rules.\n",
+            $"# Rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", false, "\n")} Keep this team rule.\nMore rules.\n",
             await ReadFileAsync(workspace));
     }
 
@@ -184,7 +182,7 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         var existing = $"# Rules\n\n{AgentInstructionsFile.SectionStartMarkerPrefix} -->\nOld section.\n{AgentInstructionsFile.SectionEndMarkerPrefix}\nMy own notes.\n";
         await File.WriteAllTextAsync(GetFilePath(workspace), existing);
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
         Assert.Equal(existing, await ReadFileAsync(workspace));
@@ -198,7 +196,7 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         var existing = $"# Rules\n\n{AgentInstructionsFile.SectionStartMarkerPrefix} -->\nOld section.\n{AgentInstructionsFile.SectionEndMarkerPrefix}\nKeep this team rule.\n<!-- unrelated note -->\n";
         await File.WriteAllTextAsync(GetFilePath(workspace), existing);
 
-        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
         Assert.Equal(existing, await ReadFileAsync(workspace));
@@ -213,7 +211,7 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
     [InlineData("src/My`App/apphost.cs", "`` aspire start --apphost 'src/My`App/apphost.cs' --non-interactive --isolated ``")]
     public void CreateSection_QuotesAppHostPathAsOneLiteralShellArgument(string appHostPath, string expectedStartCommand)
     {
-        var section = AgentInstructionsFile.CreateSection(appHostPath, [], "\n");
+        var section = AgentInstructionsFile.CreateSection(appHostPath, false, "\n");
 
         Assert.Equal($"1. Start it: {expectedStartCommand}.", section.Split('\n').Single(line => line.StartsWith("1. ", StringComparison.Ordinal)));
     }
