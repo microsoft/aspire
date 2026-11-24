@@ -542,7 +542,8 @@ public class ApplicationSummaryTests : DashboardTestContext
         var context = await RenderLiveSummaryAsync(GroupOverview.Summary);
         context.Summary.WaitForAssertion(() => Assert.Single(context.Summary.FindAll(".home-chart-bar")), DefaultWaitTimeout);
 
-        await DisposeComponentsAsync();
+        // Off-dispatcher removal can clear bUnit's component list before the queued removal runs.
+        await Renderer.Dispatcher.InvokeAsync(DisposeComponentsAsync);
         var queries = Volatile.Read(ref context.RequestQueries.Count);
         context.Timers.Advance(TimeSpan.FromSeconds(30));
 
@@ -551,7 +552,61 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Equal(queries, Volatile.Read(ref context.RequestQueries.Count));
     }
 
-    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(GroupOverview overview, IReadOnlyList<string>? resourceNames = null)
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Live_DisposalWaitsForInFlightRefreshAndRejectsLateCallback(bool changeSelection)
+    {
+        var requestStarted = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRequest = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logsCallback = new TaskCompletionSource<Func<Task>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var context = await RenderLiveSummaryAsync(
+            GroupOverview.Summary,
+            getRequestSpansAsyncHandler: async (_, cancellationToken) =>
+            {
+                requestStarted.TrySetResult(cancellationToken);
+                await releaseRequest.Task;
+                cancellationToken.ThrowIfCancellationRequested();
+                return new GetRequestSpansResponse { Items = [], TotalItemCount = 0 };
+            },
+            onNewLogsRegistered: callback => logsCallback.TrySetResult(callback));
+
+        var cancellationToken = await requestStarted.Task.WaitAsync(DefaultWaitTimeout);
+        if (changeSelection)
+        {
+            await context.Summary.InvokeAsync(() => context.Summary.Render(builder => builder.Add(p => p.ResourceNames, ["missing"])));
+        }
+
+        var disposalTask = Renderer.Dispatcher.InvokeAsync(DisposeComponentsAsync);
+        try
+        {
+            await Renderer.Dispatcher.InvokeAsync(() => { });
+            Assert.True(cancellationToken.IsCancellationRequested);
+            Assert.False(disposalTask.IsCompleted);
+            Assert.Equal(1, Volatile.Read(ref context.RequestQueries.Count));
+            await (await logsCallback.Task.WaitAsync(DefaultWaitTimeout))();
+        }
+        finally
+        {
+            releaseRequest.TrySetResult(true);
+        }
+
+        await disposalTask.WaitAsync(DefaultWaitTimeout);
+
+        var queryCount = Volatile.Read(ref context.RequestQueries.Count);
+        await (await logsCallback.Task.WaitAsync(DefaultWaitTimeout))();
+        context.Timers.Advance(TimeSpan.FromSeconds(30));
+
+        // Longer than the delay before a queued refresh runs.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        Assert.Equal(queryCount, Volatile.Read(ref context.RequestQueries.Count));
+    }
+
+    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(
+        GroupOverview overview,
+        IReadOnlyList<string>? resourceNames = null,
+        Func<GetRequestSpansRequest, CancellationToken, Task<GetRequestSpansResponse>>? getRequestSpansAsyncHandler = null,
+        Action<Func<Task>>? onNewLogsRegistered = null)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var timers = new FakeTimeProvider();
@@ -571,8 +626,9 @@ public class ApplicationSummaryTests : DashboardTestContext
                         GetRequestSpansAsyncHandler = (request, token) =>
                         {
                             Interlocked.Increment(ref requestQueries.Count);
-                            return inner.GetRequestSpansAsync(request, token);
-                        }
+                            return getRequestSpansAsyncHandler?.Invoke(request, token) ?? inner.GetRequestSpansAsync(request, token);
+                        },
+                        OnNewLogsRegistered = onNewLogsRegistered
                     };
                 });
             });
