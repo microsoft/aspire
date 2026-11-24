@@ -20,7 +20,7 @@ public sealed partial class SqliteTelemetryRepository
         // Keep the count, selected trace IDs, and their spans in one snapshot so eviction
         // cannot remove a selected trace between queries.
         using var transaction = connection.BeginTransaction(deferred: true);
-        var query = BuildTraceQuery(context);
+        var query = BuildTraceQuery(connection, transaction, context);
         var aggregate = connection.QuerySingle<TraceAggregateRecord>($"""
             SELECT COUNT(*) AS TotalItemCount, COALESCE(MAX(t.duration_ticks), 0) AS MaxDurationTicks
             {query.FromAndWhere};
@@ -60,7 +60,7 @@ public sealed partial class SqliteTelemetryRepository
     {
         using var connection = _database.OpenConnection();
         using var interrupt = connection.RegisterInterrupt(cancellationToken);
-        var query = BuildTraceQuery(context);
+        var query = BuildTraceQuery(connection, transaction: null, context);
         query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
         query.Parameters.Add("Count", Math.Max(context.Count, 0));
         query.Parameters.Add("LatestItemCount", Math.Max(context.LatestItemCount ?? int.MaxValue, 0));
@@ -180,10 +180,11 @@ public sealed partial class SqliteTelemetryRepository
             new(resourceName, instanceId, uninstrumentedPeer, _otlpContext);
     }
 
-    private static TraceQuery BuildTraceQuery(GetTracesRequest context)
+    private static TraceQuery BuildTraceQuery(SqliteConnection connection, SqliteTransaction? transaction, GetTracesRequest context)
     {
         var sql = new StringBuilder("FROM telemetry_traces t WHERE 1 = 1");
         var parameters = new DynamicParameters();
+        string? resourcePredicate = null;
         if (context.ResourceKeys.Count > 0)
         {
             var resourcePredicates = new List<string>(context.ResourceKeys.Count);
@@ -191,17 +192,16 @@ public sealed partial class SqliteTelemetryRepository
             {
                 var key = context.ResourceKeys[index];
                 parameters.Add($"ResourceName{index}", key.Name);
-                var resourcePredicate = $"r.resource_name = @ResourceName{index} COLLATE NOCASE";
+                var predicate = $"r.resource_name = @ResourceName{index} COLLATE NOCASE";
                 if (key.InstanceId is not null)
                 {
                     parameters.Add($"InstanceId{index}", key.InstanceId);
-                    resourcePredicate += $" AND r.instance_id = @InstanceId{index} COLLATE NOCASE";
+                    predicate += $" AND r.instance_id = @InstanceId{index} COLLATE NOCASE";
                 }
-                resourcePredicates.Add($"({resourcePredicate})");
+                resourcePredicates.Add($"({predicate})");
             }
-            sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr JOIN telemetry_resources r ON r.resource_id = tr.resource_id WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND (");
-            sql.AppendJoin(" OR ", resourcePredicates);
-            sql.Append("))");
+            resourcePredicate = string.Join(" OR ", resourcePredicates);
+            sql.Append(CultureInfo.InvariantCulture, $" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr JOIN telemetry_resources r ON r.resource_id = tr.resource_id WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND ({resourcePredicate}))");
         }
         if (!string.IsNullOrWhiteSpace(context.TraceNameFilterText))
         {
@@ -262,10 +262,22 @@ public sealed partial class SqliteTelemetryRepository
         }
         if (hasTimestampLowerBound && hasTimestampUpperBound && timestampBoundCount == positivePredicates.Count)
         {
-            // For a bounded time-only span query (such as an Overview activity bucket), find the matching
-            // spans first. Iterating resource IDs lets SQLite seek the existing (resource_id, start_time_ticks)
-            // index instead of probing the span index once per retained trace.
-            sql.Append(" AND t.trace_id IN (SELECT s.trace_id FROM telemetry_spans s WHERE s.resource_id IN (SELECT resource_id FROM telemetry_resources) AND ");
+            // "All resources" can also arrive as explicit keys. Check coverage using resource metadata so that
+            // only a selection that excludes trace sources takes the trace-first path.
+            var excludesTraceSources = resourcePredicate is not null && connection.QuerySingle<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM telemetry_resources r WHERE r.has_traces = 1 AND ({resourcePredicate}) IS NOT TRUE);
+                """, parameters, transaction);
+            if (excludesTraceSources)
+            {
+                // After filtering traces by resource, seek the time range by trace ID. The matching span
+                // can come from any resource on the trace, not just from the selection.
+                sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_spans s WHERE s.trace_id = t.trace_id AND ");
+            }
+            else
+            {
+                // For broad searches, seek by resource ID and time range before looking up the matching traces.
+                sql.Append(" AND t.trace_id IN (SELECT s.trace_id FROM telemetry_spans s WHERE s.resource_id IN (SELECT resource_id FROM telemetry_resources) AND ");
+            }
             sql.AppendJoin(" AND ", positivePredicates);
             sql.Append(')');
         }

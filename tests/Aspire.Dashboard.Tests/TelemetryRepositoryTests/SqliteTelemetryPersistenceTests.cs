@@ -27,6 +27,85 @@ namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
 public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task TraceSummaries_TimestampRangeSeeksUsingResourceScope(int selectedResourceCount)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repositoryContext = await CreateRepositoryAsync(workspace.Path);
+        var start = DateTime.UnixEpoch.AddMilliseconds(1);
+        var end = DateTime.UnixEpoch.AddMilliseconds(3);
+        await repositoryContext.Repository.AddTracesAsync(new AddContext(),
+        [
+            Spans("api",
+                CreateSpan("1", "1-1", start.AddTicks(-1), end),
+                CreateSpan("2", "2-1", start.AddTicks(-1), end.AddSeconds(1))),
+            Spans("worker",
+                CreateSpan("1", "1-2", start, end, parentSpanId: "1-1"),
+                CreateSpan("2", "2-2", end, end.AddSeconds(1), parentSpanId: "2-1"),
+                CreateSpan("3", "3-1", end.AddTicks(-1), end))
+        ]);
+
+        ResourceKey[] keys = [new("API", "instance"), new("worker", null)];
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repositoryContext.Database.ActivitySource, onActivityStopped: activities.Enqueue);
+        var result = await repositoryContext.Repository.GetTraceSummariesAsync(new GetTracesRequest
+        {
+            ResourceKeys = keys[..selectedResourceCount],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.GreaterThanOrEqual, Value = "1970-01-01T00:00:00.0015Z" },
+                new FieldTelemetryFilter { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.LessThan, Value = "1970-01-01T00:00:00.0035Z" }
+            ]
+        }, TestContext.Current.CancellationToken);
+
+        // Trace 1 matches through its worker span even with only api selected. Trace 2 has no single span inside the range.
+        Assert.Equal(selectedResourceCount == 1 ? ["1"] : ["1", "3"],
+            result.PagedResult.Items.Select(trace => GetStringId(trace.TraceId)));
+
+        var sql = Assert.Single(activities.Select(a => a.GetTagItem("db.query.text")).OfType<string>(),
+            query => query.Contains("paged_traces AS", StringComparison.Ordinal));
+        using var connection = repositoryContext.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "EXPLAIN QUERY PLAN " + sql;
+        command.Parameters.AddWithValue("@StartIndex", 0);
+        command.Parameters.AddWithValue("@Count", 10);
+        command.Parameters.AddWithValue("@LatestItemCount", int.MaxValue);
+        command.Parameters.AddWithValue("@MaxTraceCount", 100_000);
+        command.Parameters.AddWithValue("@TraceFilter0", start.Ticks);
+        command.Parameters.AddWithValue("@TraceFilter1", end.Ticks);
+        if (selectedResourceCount >= 1)
+        {
+            command.Parameters.AddWithValue("@ResourceName0", keys[0].Name);
+            command.Parameters.AddWithValue("@InstanceId0", keys[0].InstanceId!);
+        }
+        if (selectedResourceCount == 2)
+        {
+            command.Parameters.AddWithValue("@ResourceName1", keys[1].Name);
+        }
+
+        using var reader = command.ExecuteReader();
+        var plan = new List<string>();
+        while (reader.Read())
+        {
+            plan.Add(reader.GetString(3));
+        }
+
+        var seekKey = selectedResourceCount == 1 ? "trace_id" : "resource_id";
+        Assert.Contains(plan, detail => detail.StartsWith("SEARCH s ", StringComparison.Ordinal) &&
+            detail.Contains($"{seekKey}=? AND start_time_ticks>? AND start_time_ticks<?", StringComparison.Ordinal));
+
+        static ResourceSpans Spans(string resource, params Span[] spans) => new()
+        {
+            Resource = CreateResource(resource, "instance"),
+            ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { spans } } }
+        };
+    }
+
     [Fact]
     public async Task ResourceSignalAvailability_UsesIndexedExistenceProbes()
     {
