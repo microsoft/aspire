@@ -670,6 +670,26 @@ public class ListStructuredLogsToolTests
     }
 
     [Fact]
+    public async Task ListStructuredLogsTool_ReturnsNewestLog_WhenResourcesAreInterleaved()
+    {
+        // The API groups records by resource, so the newest record is not the last one in the response.
+        using var handler = CreateHandler(CreateResourceLogsResponse(
+            CreateResourceLogs("api", (1, "api first"), (3, "api newest")),
+            CreateResourceLogs("worker", (2, "worker middle"))));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["limit"] = JsonSerializer.SerializeToElement(1)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["api newest"], logs.Select(log => log!["message"]!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task ListStructuredLogsTool_DefaultResponseStaysCompact_WhenManyLargeLogsExist()
     {
         using var handler = CreateHandler(CreateLogsResponse(Enumerable.Range(0, 800).Select(index => $"{index} {new string('x', 1500)}").ToArray()));
@@ -701,33 +721,34 @@ public class ListStructuredLogsToolTests
 
     private static string CreateLogsResponse(params string[] messages)
     {
-        var logRecords = messages.Select((message, index) => new OtlpLogRecordJson
+        return CreateResourceLogsResponse(CreateResourceLogs("api", messages.Select((message, index) => ((ulong)index, message)).ToArray()));
+    }
+
+    private static string CreateResourceLogsResponse(params OtlpResourceLogsJson[] resourceLogs)
+    {
+        return JsonSerializer.Serialize(
+            new TelemetryApiResponse { Data = new OtlpTelemetryDataJson { ResourceLogs = resourceLogs } },
+            OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+    }
+
+    private static OtlpResourceLogsJson CreateResourceLogs(string serviceName, params (ulong TimeOffset, string Message)[] logs)
+    {
+        var logRecords = logs.Select((log, index) => new OtlpLogRecordJson
         {
-            TimeUnixNano = 1706540400000000000 + (ulong)index,
+            TimeUnixNano = 1706540400000000000 + log.TimeOffset,
             SeverityText = "Information",
-            Body = new OtlpAnyValueJson { StringValue = message },
+            Body = new OtlpAnyValueJson { StringValue = log.Message },
             Attributes = [new OtlpKeyValueJson { Key = "aspire.log_id", Value = new OtlpAnyValueJson { IntValue = index } }]
         }).ToArray();
 
-        return JsonSerializer.Serialize(
-            new TelemetryApiResponse
+        return new OtlpResourceLogsJson
+        {
+            Resource = new OtlpResourceJson
             {
-                Data = new OtlpTelemetryDataJson
-                {
-                    ResourceLogs =
-                    [
-                        new OtlpResourceLogsJson
-                        {
-                            Resource = new OtlpResourceJson
-                            {
-                                Attributes = [new OtlpKeyValueJson { Key = "service.name", Value = new OtlpAnyValueJson { StringValue = "api" } }]
-                            },
-                            ScopeLogs = [new OtlpScopeLogsJson { Scope = new OtlpInstrumentationScopeJson { Name = "Api" }, LogRecords = logRecords }]
-                        }
-                    ]
-                }
+                Attributes = [new OtlpKeyValueJson { Key = "service.name", Value = new OtlpAnyValueJson { StringValue = serviceName } }]
             },
-            OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+            ScopeLogs = [new OtlpScopeLogsJson { Scope = new OtlpInstrumentationScopeJson { Name = "Api" }, LogRecords = logRecords }]
+        };
     }
 
     private static MockHttpMessageHandler CreateHandler(string logsResponse, Action<HttpRequestMessage>? onLogsRequest = null)

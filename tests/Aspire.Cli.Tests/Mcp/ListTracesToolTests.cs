@@ -698,6 +698,70 @@ public class ListTracesToolTests
         Assert.Equal(["trace3", "trace4"], traces.Select(trace => trace!["traceId"]!.GetValue<string>()));
     }
 
+    [Theory]
+    [InlineData("summary")]
+    [InlineData("full")]
+    public async Task ListTracesTool_ReturnsNewestTrace_WhenResourcesAreInterleaved(string format)
+    {
+        // The API groups spans by resource, so the newest trace is not the last one in the response.
+        var apiResponse = CreateTracesResponse(
+            CreateResourceSpans("api",
+                new OtlpSpanJson { TraceId = "first", SpanId = "span1", Name = "GET /first", StartTimeUnixNano = 1706540400000000001, EndTimeUnixNano = 1706540400100000000 },
+                new OtlpSpanJson { TraceId = "newest", SpanId = "span3", Name = "GET /newest", StartTimeUnixNano = 1706540400000000003, EndTimeUnixNano = 1706540400100000000 }),
+            CreateResourceSpans("worker",
+                new OtlpSpanJson { TraceId = "middle", SpanId = "span2", Name = "process", StartTimeUnixNano = 1706540400000000002, EndTimeUnixNano = 1706540400100000000 }));
+        using var handler = CreateHandler(apiResponse, ["api", "worker"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["limit"] = JsonSerializer.SerializeToElement(1),
+            ["format"] = JsonSerializer.SerializeToElement(format)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var traces = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["newest"], traces.Select(trace => trace!["traceId"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task ListTracesTool_SlowestSpanSubtractsOverlappingChildrenOnce()
+    {
+        // "parallel" lasts 1,000 ms and has two fully overlapping 400 ms children, so its self time is 600 ms,
+        // which is more than the 400 ms of either child.
+        var apiResponse = CreateTracesResponse(CreateResourceSpans("api",
+            new OtlpSpanJson { TraceId = "trace1", SpanId = "root", Name = "GET /orders", StartTimeUnixNano = 1706540400000000000, EndTimeUnixNano = 1706540401100000000 },
+            new OtlpSpanJson { TraceId = "trace1", SpanId = "parallel", ParentSpanId = "root", Name = "fan out", StartTimeUnixNano = 1706540400050000000, EndTimeUnixNano = 1706540401050000000 },
+            new OtlpSpanJson { TraceId = "trace1", SpanId = "child1", ParentSpanId = "parallel", Name = "query 1", StartTimeUnixNano = 1706540400100000000, EndTimeUnixNano = 1706540400500000000 },
+            new OtlpSpanJson { TraceId = "trace1", SpanId = "child2", ParentSpanId = "parallel", Name = "query 2", StartTimeUnixNano = 1706540400100000000, EndTimeUnixNano = 1706540400500000000 }));
+        using var handler = CreateHandler(apiResponse, ["api"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var trace = Assert.Single(JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray());
+        Assert.Equal("parallel", trace!["slowestSpan"]!["spanId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ListTracesTool_ReturnsTraceWithBoundedTitle_WhenRootSpanNameIsVeryLong()
+    {
+        var longName = new string('x', 20_000);
+        var apiResponse = CreateTracesResponse(CreateResourceSpans("api",
+            new OtlpSpanJson { TraceId = "trace1", SpanId = "root", Name = longName, StartTimeUnixNano = 1706540400000000000, EndTimeUnixNano = 1706540400100000000 }));
+        using var handler = CreateHandler(apiResponse, ["api"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var trace = Assert.Single(JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray());
+        Assert.Equal("trace1", trace!["traceId"]!.GetValue<string>());
+        Assert.Equal($"{longName[..512]}...[TRUNCATED]", trace["title"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task ListTracesTool_DefaultResponseStaysCompact_WhenManyLargeTracesExist()
     {

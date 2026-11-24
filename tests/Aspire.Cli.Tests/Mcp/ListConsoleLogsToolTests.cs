@@ -588,6 +588,41 @@ public class ListConsoleLogsToolTests
         Assert.Equal("fail: first", ExtractCodeBlockContent(text));
     }
 
+    [Fact]
+    public async Task ListConsoleLogsTool_Head_ReturnsEarliestLinesAcrossInterleavedReplicas()
+    {
+        // Replicas stream their histories concurrently, so a slower replica's startup failure
+        // can arrive after a faster replica's later lines.
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            LogLines =
+            [
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 1, Content = "2026-01-01T00:00:03.0000000Z replica a started", IsError = false },
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 2, Content = "2026-01-01T00:00:04.0000000Z replica a serving", IsError = false },
+                new ResourceLogLine { ResourceName = "api-service-def", LineNumber = 1, Content = "2026-01-01T00:00:01.0000000Z replica b failed to bind port", IsError = true },
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 3, Content = "2026-01-01T00:00:05.0000000Z replica a healthy", IsError = false },
+                new ResourceLogLine { ResourceName = "api-service-def", LineNumber = 2, Content = "2026-01-01T00:00:02.0000000Z replica b exited", IsError = true }
+            ]
+        };
+        monitor.AddConnection("socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement("api-service"),
+            ["from"] = JsonSerializer.SerializeToElement("head"),
+            ["limit"] = JsonSerializer.SerializeToElement(3)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith("Returned first 3 console logs. Later 2 console logs not returned because of size limits.", text, StringComparison.Ordinal);
+        Assert.Equal(
+            "replica b failed to bind port\nreplica b exited\nreplica a started",
+            ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
+    }
+
     [Theory]
     [InlineData("""{"from":"middle"}""", "Argument 'from' must be one of: tail, head.")]
     [InlineData("""{"limit":2001}""", "Argument 'limit' must be an integer from 1 through 2000.")]

@@ -100,10 +100,14 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
             string limitMessage;
             if (from == HeadPosition)
             {
-                // Keep only the first matching lines, but read the whole stream so the summary can report
-                // how many later lines were not returned. The tail buffer below can't be reused here because
-                // it evicts the oldest lines once it is full.
-                var headEntries = new List<LogEntry>();
+                // Keep the earliest matching lines, but read the whole stream so the summary can report how many
+                // later lines were not returned. Replicas of a resource stream their histories concurrently, so
+                // arrival order isn't log order: a slower replica's startup failure can arrive after a faster
+                // replica's later lines. Entries are ordered like the tail path (and the dashboard) with
+                // LogEntries.InsertSorted, and the latest entry is dropped whenever more than limit are kept.
+                // The buffer has room for one extra entry because a full LogEntries evicts its earliest entry,
+                // which is the one head needs to keep.
+                var headEntries = new LogEntries(maximumEntryCount: limit + 1) { BaseLineNumber = 1 };
                 var totalLogsCount = 0;
                 await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
                 {
@@ -114,14 +118,17 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                     }
 
                     totalLogsCount++;
-                    if (headEntries.Count < limit)
+                    headEntries.InsertSorted(entry);
+
+                    var entries = headEntries.GetEntries();
+                    if (entries.Count > limit)
                     {
-                        headEntries.Add(entry);
+                        entries.RemoveAt(entries.Count - 1);
                     }
                 }
 
                 (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromStartWithSummary(
-                    headEntries,
+                    headEntries.GetEntries().ToList(),
                     totalLogsCount,
                     limit,
                     SharedAIHelpers.CompactListTokenLength,

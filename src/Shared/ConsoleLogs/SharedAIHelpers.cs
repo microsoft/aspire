@@ -79,7 +79,13 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
-        var logRecords = GetLogRecordsFromOtlpData(resourceLogs);
+        // GetLimitFromEndWithSummary keeps the last items, but OTLP data is grouped by resource and scope,
+        // so interleaved records from different resources are not in time order. Sort them so the limit keeps
+        // the newest entries. This is done here rather than in GetLogRecordsFromOtlpData so the CLI output order
+        // of other callers is unchanged. OrderBy is stable, so records with equal timestamps keep their order.
+        var logRecords = GetLogRecordsFromOtlpData(resourceLogs)
+            .OrderBy(GetLogTimestampUnixNano)
+            .ToList();
         var promptContext = new PromptContext();
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
@@ -134,7 +140,7 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
-        var traces = GetTracesFromOtlpData(resourceSpans);
+        var traces = GetTracesInStartOrder(resourceSpans);
         var promptContext = new PromptContext();
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
@@ -168,7 +174,7 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
-        var traces = GetTracesFromOtlpData(resourceSpans);
+        var traces = GetTracesInStartOrder(resourceSpans);
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
             traces,
@@ -202,16 +208,18 @@ internal static class SharedAIHelpers
 
         // Rank child spans by self time (duration not covered by their own children). Ranking by duration
         // would pick the span that wraps everything, such as the outgoing HTTP call, instead of the database
-        // call inside it where the time was actually spent. Overlapping (parallel) children make the
-        // subtraction negative; those spans count as having no self time.
-        var childDurationsBySpanId = trace.Spans
+        // call inside it where the time was actually spent.
+        var childrenBySpanId = trace.Spans
             .Where(s => !string.IsNullOrEmpty(s.Span.ParentSpanId))
             .GroupBy(s => s.Span.ParentSpanId!, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.Sum(s => (long)(CalculateDurationMs(s.Span.StartTimeUnixNano, s.Span.EndTimeUnixNano) ?? 0)), StringComparer.Ordinal);
+            .ToDictionary(g => g.Key, g => g.Select(s => s.Span).ToList(), StringComparer.Ordinal);
         var slowestSpan = trace.Spans
             .Where(s => !ReferenceEquals(s, rootSpan))
-            .MaxBy(s => (CalculateDurationMs(s.Span.StartTimeUnixNano, s.Span.EndTimeUnixNano) ?? -1)
-                - (s.Span.SpanId is { } spanId ? childDurationsBySpanId.GetValueOrDefault(spanId) : 0));
+            .MaxBy(s => CalculateSelfTimeNano(
+                s.Span,
+                s.Span.SpanId is { } spanId && childrenBySpanId.TryGetValue(spanId, out var children) ? children : []) is { } selfTime
+                    ? (long)selfTime
+                    : -1);
 
         // A failure usually propagates to its parents, which then also end with an error status.
         // The failed span that ended first is the closest to the origin of the failure; among spans
@@ -235,7 +243,7 @@ internal static class SharedAIHelpers
         var summary = new JsonObject
         {
             ["traceId"] = trace.TraceId,
-            ["title"] = rootSpan?.Span.Name,
+            ["title"] = LimitLength(rootSpan?.Span.Name, MaximumSummaryStringLength),
             ["timestamp"] = timestamp,
             ["durationMs"] = CalculateTraceDurationMs(trace.Spans),
             ["spanCount"] = trace.Spans.Count,
@@ -742,6 +750,81 @@ internal static class SharedAIHelpers
         }
 
         return CalculateDurationMs(minStart, maxEnd);
+    }
+
+    /// <summary>
+    /// Calculates the time of a span not covered by any of its children, in nanoseconds.
+    /// </summary>
+    /// <remarks>
+    /// Children can run in parallel, so subtracting the sum of their durations would double-count overlapping
+    /// time. Instead, the union of the child intervals, clipped to the parent interval, is subtracted.
+    /// Children without both timestamps are ignored.
+    /// </remarks>
+    private static ulong? CalculateSelfTimeNano(OtlpSpanJson span, List<OtlpSpanJson> children)
+    {
+        if (span.StartTimeUnixNano is not { } start || span.EndTimeUnixNano is not { } end || end < start)
+        {
+            return null;
+        }
+
+        var childIntervals = children
+            .Where(c => c.StartTimeUnixNano is not null && c.EndTimeUnixNano is not null)
+            .Select(c => (Start: Math.Max(c.StartTimeUnixNano!.Value, start), End: Math.Min(c.EndTimeUnixNano!.Value, end)))
+            .Where(i => i.End > i.Start)
+            .OrderBy(i => i.Start);
+
+        ulong covered = 0;
+        ulong? currentStart = null;
+        ulong currentEnd = 0;
+        foreach (var (childStart, childEnd) in childIntervals)
+        {
+            if (currentStart is null || childStart > currentEnd)
+            {
+                if (currentStart is not null)
+                {
+                    covered += currentEnd - currentStart.Value;
+                }
+
+                currentStart = childStart;
+                currentEnd = childEnd;
+            }
+            else
+            {
+                currentEnd = Math.Max(currentEnd, childEnd);
+            }
+        }
+
+        if (currentStart is not null)
+        {
+            covered += currentEnd - currentStart.Value;
+        }
+
+        return end - start - covered;
+    }
+
+    private static ulong GetLogTimestampUnixNano(OtlpLogEntryDto logEntry)
+    {
+        // OTLP uses 0 for an unknown time; fall back to the time the collector observed the record.
+        // See https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-observedtimestamp
+        return logEntry.LogRecord.TimeUnixNano is { } time and not 0
+            ? time
+            : logEntry.LogRecord.ObservedTimeUnixNano ?? 0;
+    }
+
+    /// <summary>
+    /// Gets traces ordered by their earliest span start time.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="GetLimitFromEndWithSummary"/> keeps the last items, but <see cref="GetTracesFromOtlpData"/> returns
+    /// traces in resource and scope traversal order, which is not chronological when resources are interleaved.
+    /// <see cref="GetTracesFromOtlpData"/> itself is left unchanged so the CLI output order of other callers stays the same.
+    /// OrderBy is stable, so traces with equal start times keep their original order.
+    /// </remarks>
+    private static List<OtlpTraceDto> GetTracesInStartOrder(IList<OtlpResourceSpansJson>? resourceSpans)
+    {
+        return GetTracesFromOtlpData(resourceSpans)
+            .OrderBy(t => t.Spans.Select(s => s.Span.StartTimeUnixNano).Min() ?? 0)
+            .ToList();
     }
 
     /// <summary>
