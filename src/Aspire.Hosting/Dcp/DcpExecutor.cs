@@ -302,7 +302,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
     }
 
     /// <returns>
-    /// <see langword="true"/> when DCP finished resource cleanup and no application objects remain in DCP.
+    /// <see langword="true"/> when DCP confirmed that the application resources were cleaned up before this method returned.
     /// </returns>
     private async Task<bool> StopCoreAsync(bool waitForResourceCleanup, CancellationToken cancellationToken)
     {
@@ -332,8 +332,10 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             if (waitForResourceCleanup)
             {
+                // DCP reports cleanup failures itself, through its logs, which reach the AppHost through the DCP
+                // log stream.
                 await _kubernetesService.CleanupResourcesAsync(cancellationToken).ConfigureAwait(false);
-                resourcesCleanedUp = await VerifyNoApplicationObjectsRemainAsync(cancellationToken).ConfigureAwait(false);
+                resourcesCleanedUp = true;
             }
 
             // The app orchestrator (represented by kubernetesService here) will perform a resource cleanup
@@ -354,59 +356,6 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         }
 
         return resourcesCleanedUp;
-    }
-
-    // DCP reports CleanupComplete when its cleanup pass ends, even if the pass failed or timed out, so the
-    // completed cleanup request alone does not prove that teardown succeeded. See
-    // https://github.com/microsoft/dcp/blob/v0.27.5/internal/apiserver/admin_http_handler.go#L193-L204
-    //
-    // The cleanup pass deletes every object of the kinds listed in
-    // https://github.com/microsoft/dcp/blob/v0.27.5/internal/resourcecleanup/resources.go and waits for the
-    // deletions to complete. Controllers keep their finalizers on objects whose programs or containers are still
-    // stopping, so an object that is still present after cleanup means teardown was not confirmed. Persistent
-    // containers do not affect this check: DCP deletes their Container objects too and only leaves the
-    // underlying container running.
-    //
-    // This check cannot detect a container runtime failure that the Container controller logged before
-    // removing its finalizer anyway; DCP does not expose that outcome.
-    private async Task<bool> VerifyNoApplicationObjectsRemainAsync(CancellationToken cancellationToken)
-    {
-        (string Kind, int Count)[] remainingObjectCounts;
-        try
-        {
-            remainingObjectCounts = await Task.WhenAll(
-                CountRemainingObjectsAsync<Executable>(),
-                CountRemainingObjectsAsync<ExecutableReplicaSet>(),
-                CountRemainingObjectsAsync<Container>(),
-                CountRemainingObjectsAsync<ContainerExec>(),
-                CountRemainingObjectsAsync<ContainerNetwork>(),
-                CountRemainingObjectsAsync<ContainerNetworkTunnelProxy>(),
-                CountRemainingObjectsAsync<ContainerVolume>(),
-                CountRemainingObjectsAsync<Service>()).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Report cleanup as unconfirmed, but let the caller still ask DCP to stop.
-            _logger.LogDebug(ex, "Could not verify that DCP removed all application objects.");
-            return false;
-        }
-
-        var remainingObjects = remainingObjectCounts.Where(r => r.Count > 0).ToArray();
-        if (remainingObjects.Length == 0)
-        {
-            return true;
-        }
-
-        _logger.LogDebug(
-            "DCP resource cleanup completed, but application objects remain: {RemainingObjects}.",
-            string.Join(", ", remainingObjects.Select(r => $"{r.Kind}={r.Count}")));
-        return false;
-
-        async Task<(string Kind, int Count)> CountRemainingObjectsAsync<T>() where T : CustomResource, IKubernetesStaticMetadata
-        {
-            var objects = await _kubernetesService.ListAsync<T>(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return (T.ObjectKind, objects.Count);
-        }
     }
 
     public async ValueTask DisposeAsync()

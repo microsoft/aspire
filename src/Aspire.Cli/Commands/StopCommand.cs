@@ -45,6 +45,9 @@ internal sealed partial class StopCommand : BaseCommand
     // parallel, so a healthy teardown takes seconds. The extra headroom covers slow container runtimes.
     internal const int DefaultResourceTeardownTimeoutSeconds = 120;
 
+    // CancellationTokenSource's underlying timer accepts at most uint.MaxValue - 1 milliseconds.
+    internal const int MaximumResourceTeardownTimeoutSeconds = (int)((uint.MaxValue - 1) / 1000);
+
     private const int MinimumHostingMajorVersionForPersistentResourceCleanup = 13;
     private const int MinimumHostingMinorVersionForPersistentResourceCleanup = 5;
     private const string MinimumHostingVersionForPersistentResourceCleanupDisplay = "13.5.0";
@@ -163,9 +166,9 @@ internal sealed partial class StopCommand : BaseCommand
         {
             result = CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.TimeoutRequiresWait, s_timeoutOption.Name, s_waitOption.Name));
         }
-        else if (timeoutSeconds <= 0)
+        else if (timeoutSeconds is <= 0 or > MaximumResourceTeardownTimeoutSeconds)
         {
-            result = CommandResult.Failure(CliExitCodes.InvalidCommand, StopCommandStrings.TimeoutMustBePositive);
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.TimeoutInvalid, MaximumResourceTeardownTimeoutSeconds));
         }
         else
         {

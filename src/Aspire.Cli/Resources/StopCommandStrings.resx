@@ -237,8 +237,8 @@
   <data name="TimeoutOptionDescription" xml:space="preserve">
     <value>Maximum time in seconds to wait for resources to be torn down (requires --wait)</value>
   </data>
-  <data name="TimeoutMustBePositive" xml:space="preserve">
-    <value>Timeout must be a positive number of seconds.</value>
+  <data name="TimeoutInvalid" xml:space="preserve">
+    <value>Timeout must be between 1 and {0} seconds.</value>
   </data>
   <data name="TimeoutRequiresWait" xml:space="preserve">
     <value>The {0} option requires the {1} option.</value>

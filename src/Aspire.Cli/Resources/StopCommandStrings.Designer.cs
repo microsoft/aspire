@@ -367,11 +367,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Timeout must be a positive number of seconds..
+        ///   Looks up a localized string similar to Timeout must be between 1 and {0} seconds..
         /// </summary>
-        internal static string TimeoutMustBePositive {
+        internal static string TimeoutInvalid {
             get {
-                return ResourceManager.GetString("TimeoutMustBePositive", resourceCulture);
+                return ResourceManager.GetString("TimeoutInvalid", resourceCulture);
             }
         }
 

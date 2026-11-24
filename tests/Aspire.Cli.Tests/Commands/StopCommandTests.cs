@@ -1670,6 +1670,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("stop --wait --non-interactive", StopCommand.DefaultResourceTeardownTimeoutSeconds)]
     [InlineData("stop --wait --timeout 5 --non-interactive", 5)]
+    [InlineData("stop --wait --timeout 4294967 --non-interactive", StopCommand.MaximumResourceTeardownTimeoutSeconds)]
     public async Task StopCommand_Wait_ReportsTimeoutWhenResourceTeardownDoesNotComplete(string commandLine, int expectedTimeoutSeconds)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1711,6 +1712,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [InlineData("stop --timeout 30 --non-interactive")]
     [InlineData("stop --wait --timeout 0 --non-interactive")]
     [InlineData("stop --wait --timeout -1 --non-interactive")]
+    [InlineData("stop --wait --timeout 4294968 --non-interactive")]
     public async Task StopCommand_InvalidTimeout_FailsWithoutStopping(string commandLine)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1731,7 +1733,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, connection.StopAppHostCallCount);
         Assert.Equal(0, connection.StopAppHostAndWaitForResourceCleanupCallCount);
         var expectedError = commandLine.Contains("--wait", StringComparison.Ordinal)
-            ? StopCommandStrings.TimeoutMustBePositive
+            ? string.Format(CultureInfo.CurrentCulture, StopCommandStrings.TimeoutInvalid, StopCommand.MaximumResourceTeardownTimeoutSeconds)
             : string.Format(CultureInfo.CurrentCulture, StopCommandStrings.TimeoutRequiresWait, "--timeout", "--wait");
         Assert.Equal(expectedError, Assert.Single(interactionService.DisplayedErrors));
     }

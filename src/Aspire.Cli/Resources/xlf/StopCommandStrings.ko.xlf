@@ -172,9 +172,9 @@
         <target state="translated">{0} 및 {1} 옵션은 함께 사용할 수 없습니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="TimeoutMustBePositive">
-        <source>Timeout must be a positive number of seconds.</source>
-        <target state="new">Timeout must be a positive number of seconds.</target>
+      <trans-unit id="TimeoutInvalid">
+        <source>Timeout must be between 1 and {0} seconds.</source>
+        <target state="new">Timeout must be between 1 and {0} seconds.</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutOptionDescription">
