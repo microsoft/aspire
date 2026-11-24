@@ -20,16 +20,16 @@
                 ? nameof(Resources.Layout.ResourcePaneActivityFailedSingleTooltip)
                 : nameof(Resources.Layout.ResourcePaneActivityFailedTooltip), failedCount, minutes].Value;
             <a class="aspire-link-button resource-row-insight resource-row-insight-failed" href="@GetTracesUrl(snapshot, failed: true)"
-               aria-label="@failed" data-tooltip="@failed"
+               aria-label="@GetLinkLabel(failed)" data-tooltip="@failed"
                data-tooltip-positioning="above" @onclick:stopPropagation="true">
-                <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="var(--error)" />
+                <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="var(--error)" aria-hidden="true" />
                 <span>@failedCount</span>
             </a>
         }
         <a class="aspire-link-button resource-row-insight resource-row-insight-requests" href="@traceUrl"
-           aria-label="@incoming" data-tooltip="@incoming"
+           aria-label="@GetLinkLabel(incoming)" data-tooltip="@incoming"
            data-tooltip-positioning="above" @onclick:stopPropagation="true">
-            <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" />
+            <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
             <span>@count</span>
         </a>
         @if (activity.P95 is { } percentile)
@@ -37,9 +37,9 @@
             var duration = DurationFormatter.FormatDuration(percentile, CultureInfo.CurrentCulture);
             var p95 = Loc[snapshot.Sampled ? nameof(Resources.Layout.ResourcePaneActivitySampledP95Tooltip) : nameof(Resources.Layout.ResourcePaneActivityP95Tooltip), duration, minutes].Value;
             <a class="aspire-link-button resource-row-insight resource-row-insight-latency" href="@traceUrl"
-               aria-label="@p95" data-tooltip="@p95"
+               aria-label="@GetLinkLabel(p95)" data-tooltip="@p95"
                data-tooltip-positioning="above" @onclick:stopPropagation="true">
-                <FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" />
+                <FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
                 <span>@duration</span>
             </a>
         }

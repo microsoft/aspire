@@ -381,11 +381,8 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                 : sampleCount >= 20 ? "19 incoming traces in the last 5 minutes" : "1 incoming trace in the last 5 minutes", link.GetAttribute("data-tooltip")));
         Assert.All(cut.FindAll(".resource-row-insight-latency"),
             link => Assert.Equal(sampled ? "Sample p95 latency: 19ms in the last 5 minutes" : "P95 latency: 19ms in the last 5 minutes", link.GetAttribute("data-tooltip")));
-        Assert.All(cut.FindAll(".resource-row-insight-failed"), link =>
-        {
-            Assert.Equal(sampled ? "1+ failed traces in the last 5 minutes" : "1 failed trace in the last 5 minutes", link.GetAttribute("data-tooltip"));
-            Assert.Single(link.QuerySelectorAll("svg"));
-        });
+        Assert.All(cut.FindAll(".resource-row-insight-failed"),
+            link => Assert.Equal(sampled ? "1+ failed traces in the last 5 minutes" : "1 failed trace in the last 5 minutes", link.GetAttribute("data-tooltip")));
         Assert.All(cut.FindAll(".resource-row-insight"), link =>
         {
             var url = new Uri(new Uri("http://localhost"), link.GetAttribute("href"));
@@ -402,7 +399,8 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                 Assert.Equal(nameof(OtlpSpanStatusCode.Error), filters[2].Value);
             }
             Assert.Equal(TimeSpan.FromMinutes(5), DateTime.Parse(filters[1].Value) - DateTime.Parse(filters[0].Value));
-            Assert.Equal(link.GetAttribute("data-tooltip"), link.GetAttribute("aria-label"));
+            Assert.Equal($"api-TestId: {link.GetAttribute("data-tooltip")}", link.GetAttribute("aria-label"));
+            Assert.Equal("true", Assert.Single(link.QuerySelectorAll("svg")).GetAttribute("aria-hidden"));
         });
         Assert.Equal(1, Volatile.Read(ref calls));
         Assert.All(cut.FindAll(".resource-row[data-resource-name='quiet'], .resource-row[data-resource-name='key']"),

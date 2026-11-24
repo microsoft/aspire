@@ -24,6 +24,9 @@ public partial class ResourcePaneInsights
     [Parameter, EditorRequired]
     public required ResourceKey ResourceKey { get; set; }
 
+    [Parameter, EditorRequired]
+    public required string ResourceName { get; set; }
+
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
@@ -46,6 +49,8 @@ public partial class ResourcePaneInsights
         var formatted = count.ToString("N0", CultureInfo.CurrentCulture);
         return sampled ? $"{formatted}+" : formatted;
     }
+
+    private string GetLinkLabel(string description) => $"{ResourceName}: {description}";
 
     private string GetTracesUrl(ResourcePaneActivitySnapshot snapshot, bool failed)
     {
