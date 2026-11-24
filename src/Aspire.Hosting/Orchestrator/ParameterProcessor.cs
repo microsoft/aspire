@@ -414,7 +414,7 @@ public sealed class ParameterProcessor(
             confirmationMessage: null,
             iconName: "Delete",
             iconVariant: IconVariant.Regular,
-            isHighlighted: true));
+            isHighlighted: false));
     }
 
     private static bool HasParameterValue(ParameterResource parameterResource)

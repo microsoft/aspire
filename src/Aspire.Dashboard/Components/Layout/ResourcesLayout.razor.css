@@ -1957,11 +1957,6 @@
     min-width: 0;
 }
 
-.resource-row-toggle-spacer {
-    flex: 0 0 20px;
-    margin-right: 6px;
-}
-
 .resource-row-meta-state {
     width: 10px;
 }
@@ -2186,8 +2181,7 @@
     }
 }
 
-.density-compact .resource-row-toggle,
-.density-compact .resource-row-toggle-spacer {
+.density-compact .resource-row-toggle {
     margin-right: 2px;
 }
 
@@ -2206,23 +2200,6 @@
     align-items: center;
     gap: 2px;
     margin-right: 12px;
-}
-
-.resource-row-actions ::deep .resource-row-toggle,
-.resource-row-actions ::deep .resource-row-toggle::part(control) {
-    width: 24px;
-    min-width: 24px;
-    height: 24px;
-    min-height: 24px;
-    margin: 0;
-    padding: 0;
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: center;
-}
-
-.resource-row-actions ::deep .resource-row-toggle.collapsed svg {
-    transform: rotate(-90deg);
 }
 
 .resource-row-actions ::deep .resource-row-action {
@@ -2283,18 +2260,6 @@
     }
 }
 
-@container resource-pane (max-width: 359px) {
-    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-2 {
-        display: none;
-    }
-}
-
-@container resource-pane (max-width: 419px) {
-    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-3 {
-        display: none;
-    }
-}
-
 @container resource-pane (min-width: 420px) {
     /* Fixed action slots reserve a missing endpoint just like missing metadata.
        Narrower panes retain lifecycle commands in the existing overflow menu. */
@@ -2304,13 +2269,6 @@
         grid-column: var(--resource-row-actions-column);
         grid-row: 1;
         gap: 2px;
-        margin-right: 0;
-    }
-
-    .resource-row-actions .resource-row-toggle,
-    .resource-row-actions .resource-row-toggle-spacer {
-        grid-column: 1;
-        grid-row: 1;
         margin-right: 0;
     }
 
@@ -2403,14 +2361,13 @@
     }
 }
 
-/* Sidebar rails reserve only the buttons present. Each endpoint or command adds its target and a 2px gap before
-   the menu. Keep the width explicit so error badges stay stationary when the rail is hidden on hover-capable devices.
+/* Sidebar rails reserve only the actions present, including the menu.
+   Keep the width explicit so error badges stay stationary when the rail is hidden on hover-capable devices.
    Full-canvas metadata has a separate track layout above, never sidebar breakpoints. */
 .resources-layout:not(.pane-full-canvas) .resource-row {
+    --resource-row-action-count: 1;
     --resource-row-action-size: 28px;
-    --resource-row-endpoint-width: 0px;
-    --resource-row-command-width: 0px;
-    --resource-row-actions-width: calc(var(--resource-row-action-size) + var(--resource-row-endpoint-width) + var(--resource-row-command-width));
+    --resource-row-actions-width: calc(var(--resource-row-action-count) * (var(--resource-row-action-size) + 2px) - 2px);
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--resource-row-actions-width);
     column-gap: var(--aspire-space-1);
@@ -2426,18 +2383,18 @@
     column-gap: 0;
 }
 
-.resources-layout:not(.pane-full-canvas) .resource-row:has(.resource-row-primary-endpoint) {
-    --resource-row-endpoint-width: calc(var(--resource-row-action-size) + 2px);
+.resources-layout:not(.pane-full-canvas) .resource-row:has(> .resource-row-actions > :nth-child(2 of .resource-row-action, .aspire-menu-button)) {
+    --resource-row-action-count: 2;
 }
 
-.resources-layout:not(.pane-full-canvas) .resource-row:has(.resource-row-command-slot-0) {
-    --resource-row-command-width: calc(var(--resource-row-action-size) + 2px);
+.resources-layout:not(.pane-full-canvas) .resource-row:has(> .resource-row-actions > :nth-child(3 of .resource-row-action, .aspire-menu-button)) {
+    --resource-row-action-count: 3;
 }
 
-/* Four 22px targets and their 2px gaps fit within the sidebar while keeping target centers 24px apart. */
-.resources-layout:not(.pane-full-canvas) .resource-row:has(.resource-row-command-slot-1) {
+/* Leave room for the row name when there are more than three actions. */
+.resources-layout:not(.pane-full-canvas) .resource-row:has(> .resource-row-actions > :nth-child(4 of .resource-row-action, .aspire-menu-button)) {
+    --resource-row-action-count: 4;
     --resource-row-action-size: 22px;
-    --resource-row-command-width: 48px;
 }
 
 /* The error link shares the identity track with the row link instead of taking the action rail's slot. The row
@@ -2543,10 +2500,6 @@
     max-width: var(--resource-row-actions-width);
     margin: 0;
     overflow: visible;
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-toggle-spacer {
-    display: none;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-primary-endpoint {
