@@ -114,6 +114,12 @@ internal sealed class GitHubFixtureHandler(
             if (path.Contains("/issues/", StringComparison.Ordinal))
             {
                 RequireMethod(request, HttpMethod.Post);
+                var failure = Path.Combine(workingDirectory, "fail-issue-label-add-once");
+                if (File.Exists(failure))
+                {
+                    File.Delete(failure);
+                    return Response(HttpStatusCode.InternalServerError, """{"message":"Injected issue label failure"}""");
+                }
                 if (!_labels.TryGetValue(path, out var labels))
                 {
                     _labels[path] = labels = [];
@@ -122,6 +128,15 @@ internal sealed class GitHubFixtureHandler(
                 foreach (var label in body!["labels"]!.AsArray())
                 {
                     labels.Add(label!.GetValue<string>());
+                }
+                if (File.Exists(Path.Combine(workingDirectory, "persist-issue-effects")))
+                {
+                    var issuePath = Path.Combine(workingDirectory, "issue-details.json");
+                    var issue = JsonNode.Parse(await File.ReadAllTextAsync(issuePath, cancellationToken))!;
+                    var allLabels = issue["labels"]!.AsArray().Select(label => label!["name"]!.GetValue<string>())
+                        .Concat(labels).Distinct(StringComparer.Ordinal);
+                    issue["labels"] = new JsonArray(allLabels.Select(label => (JsonNode)new JsonObject { ["name"] = label }).ToArray());
+                    await File.WriteAllTextAsync(issuePath, issue.ToJsonString(), cancellationToken);
                 }
                 return Response(HttpStatusCode.OK, new JsonArray(labels.Select(label => JsonValue.Create(label)).ToArray()).ToJsonString());
             }

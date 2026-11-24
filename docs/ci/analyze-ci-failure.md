@@ -542,6 +542,46 @@ dotnet run --project tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj -- replay \
 `--working-dir`, `--history-dir` and `--observed-at` support local fixtures.
 `--working-dir` selects the checkout used by subprocesses.
 `--history-dir` optionally selects a new publication history checkout.
+
+### Adopt an existing issue
+
+Explicit adoption lets one independently validated recurring cause use an
+existing issue instead of creating another:
+
+```bash
+dotnet run --project tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj -- publish \
+  --repo microsoft/aspire --evidence-dir ./downloaded-evidence \
+  --analysis-dir ./downloaded-proposal --adopt-issue 12345
+```
+
+`--adopt-issue` accepts one canonical positive issue number, not a URL.
+It requires exactly one validated recurring cause; code-only analyses and
+multi-cause or aggregate reports are rejected. Evidence and proposal validation
+are unchanged. Without this option, publication behavior is unchanged.
+
+Before any history push or GitHub mutation, the publisher reads fresh history,
+the target issue and the managed issue inventory. The target must be an open,
+unlocked ordinary issue in `--repo`. Conflicting cause/type markers, existing
+managed sections without matching identity, a different issue already owning
+the cause, and history linking either side elsewhere all block adoption.
+Unsupported managed sections or an oversized body also fail before writes.
+Closed targets are never reopened by adoption.
+
+The existing cause issue template supplies canonical identity/type markers and
+managed occurrence/test sections. The original body, including legacy CIF
+fingerprints, is retained verbatim inside an `Original issue notes` section.
+Existing issue comments are untouched. Labels are added, never replaced.
+The adopted URL is reserved in the initial cause-history push, before issue
+effects, so an interrupted adoption cannot create a duplicate or be redirected
+to another issue. If the body or label update fails, ordinary publication
+fails closed when the reserved destination lacks managed ownership. Retry
+`publish --adopt-issue` with that same issue number to complete adoption;
+normal publication retains its existing ownership requirements.
+Replaying adoption of a matching issue updates its existing managed sections
+without wrapping the original notes again or duplicating the run occurrence.
+
+### Input and output directories
+
 `replay --evidence-dir` regenerates views from an existing bundle into a fresh
 invocation's `replay/`, without modifying the saved evidence package.
 `collect` requires `--repo` and `--run-id`; an omitted `--run-attempt` selects the
