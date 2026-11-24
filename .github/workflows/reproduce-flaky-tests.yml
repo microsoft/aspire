@@ -1,4 +1,4 @@
-name: Temporary Windows full-shard Go discovery capture
+name: Temporary Windows baseline full-shard Go discovery capture
 'on':
   workflow_dispatch: {}
 permissions:
@@ -16,6 +16,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+      - name: Select baseline one-shot implementation
+        run: git --no-pager show 8aadc2b05baec78e3dd10062759cbabb39d670f4:extension/src/data/appHostCliRunner.ts > extension/src/data/appHostCliRunner.ts
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -97,9 +99,9 @@ jobs:
       fail-fast: false
       matrix:
         variant:
-          - fixed
+          - baseline
   extension_e2e:
-    name: Resource debug discovery (Windows, host ${{ matrix.index }})
+    name: Baseline resource debug discovery (Windows, host ${{ matrix.index }})
     needs: verify_prerequisites
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
@@ -129,7 +131,7 @@ jobs:
             clibinary: aspire.exe
             usexvfb: false
             installresourcedebug: true
-            variant: fixed
+            variant: baseline
             index: 1
           - installdeno: false
             installdotnetdebugger: false
@@ -149,7 +151,7 @@ jobs:
             clibinary: aspire.exe
             usexvfb: false
             installresourcedebug: true
-            variant: fixed
+            variant: baseline
             index: 2
           - installdeno: false
             installdotnetdebugger: false
@@ -169,7 +171,7 @@ jobs:
             clibinary: aspire.exe
             usexvfb: false
             installresourcedebug: true
-            variant: fixed
+            variant: baseline
             index: 3
     defaults:
       run:
@@ -784,7 +786,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: discovery-full-shard-${{ matrix.index }}
+          name: discovery-baseline-full-shard-${{ matrix.index }}
           path: |
             extension/.test-results/**
             extension/.test-storage/**
