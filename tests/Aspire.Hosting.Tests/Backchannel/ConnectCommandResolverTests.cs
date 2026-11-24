@@ -117,6 +117,69 @@ public class ConnectCommandResolverTests
     }
 
     [Fact]
+    public async Task OmitsContainerCommandWhenContainerRuntimeCannotBeResolved()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("db", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client"));
+
+        var connect = await ConnectCommandResolver.ResolveAsync(
+            container.Resource,
+            "db-abcdefgh",
+            _ => Task.FromException<string>(new InvalidOperationException("No service for type 'IContainerRuntime' has been registered.")),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Null(connect);
+    }
+
+    [Fact]
+    public async Task OmitsCommandThatReferencesUndefinedEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("db", "image");
+        container.WithConnectCommand(
+            "client",
+            ConnectCommandLocation.Host,
+            ReferenceExpression.Create($"client --port {container.GetEndpoint("missing").Property(EndpointProperty.Port)}"));
+
+        Assert.Null(await ResolveAsync(container.Resource, "db-abcdefgh", "docker"));
+    }
+
+    [Fact]
+    public async Task OmitsCommandThatReferencesTargetPortThatIsNotFixed()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("db", "image")
+            .WithEndpoint(name: "tcp")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new(e, "localhost", 15432, targetPortExpression: """{{- portForServing "db-abcdefgh" -}}"""));
+        container.WithConnectCommand(
+            "client",
+            ConnectCommandLocation.Container,
+            ReferenceExpression.Create($"exec client --port {container.GetEndpoint("tcp").Property(EndpointProperty.TargetPort)}"));
+
+        Assert.Null(await ResolveAsync(container.Resource, "db-abcdefgh", "docker"));
+    }
+
+    [Theory]
+    [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin)]
+    public async Task OmitsCommandThatReferencesBrowserOrigins(EndpointProperty property)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("web", "image")
+            .WithHttpEndpoint(targetPort: 80, name: "http")
+            .WithEndpoint("http", e => e.AllocatedEndpoint = new(e, "localhost", 18080));
+        container.WithConnectCommand(
+            "curl",
+            ConnectCommandLocation.Host,
+            ReferenceExpression.Create($"curl {container.GetEndpoint("http").Property(property)}"));
+
+        // The browser URLs snapshot is never set here, so resolving the property would wait indefinitely.
+        Assert.Null(await ResolveAsync(container.Resource, "web-abcdefgh", "docker").DefaultTimeout());
+    }
+
+    [Fact]
     public async Task ReturnsNullWithoutAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

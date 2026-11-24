@@ -216,7 +216,7 @@ public static class MongoDBBuilderExtensions
         // certificate trust configuration provides one.
         var port = builder.Resource.PrimaryEndpoint.Property(EndpointProperty.TargetPort);
         var tlsOptions = tls ? $" --tls ${{{ReplCaFileEnvVarName}:+--tlsCAFile ${ReplCaFileEnvVarName}}}" : string.Empty;
-        return builder.WithConnectCommand(
+        return builder.WithDefaultConnectCommand(
             "mongosh",
             ConnectCommandLocation.Container,
             ReferenceExpression.Create($"""exec mongosh --quiet "mongodb://localhost:{port}/admin?directConnection=true" --username "${UserEnvVarName}" --password "${PasswordEnvVarName}" --authenticationDatabase admin{tlsOptions}"""),

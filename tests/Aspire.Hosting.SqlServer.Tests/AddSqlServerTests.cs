@@ -39,6 +39,17 @@ public class AddSqlServerTests
     }
 
     [Fact]
+    public void WithReplKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var sqlServer = builder.AddSqlServer("sql")
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"))
+            .WithRepl(options => options.Command = SqlServerReplCommand.Version17);
+
+        Assert.Equal("my-client", Assert.Single(sqlServer.Resource.Annotations.OfType<ConnectCommandAnnotation>()).Tool);
+    }
+
+    [Fact]
     public void AddSqlServerAddsGeneratedPasswordParameterWithUserSecretsParameterDefaultInRunMode()
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create();

@@ -53,6 +53,21 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task MongoDBWithCertificateKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var certificate = CreateTestCertificate();
+        var mongo = builder.AddMongoDB("mongo").WithHttpsCertificate(certificate)
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"));
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        Assert.True(mongo.Resource.TlsEnabled);
+        Assert.Equal("my-client", Assert.Single(mongo.Resource.Annotations.OfType<ConnectCommandAnnotation>()).Tool);
+    }
+
+    [Fact]
     public void AddMongoDBAddsHealthCheckAnnotationToResource()
     {
         var builder = DistributedApplication.CreateBuilder();

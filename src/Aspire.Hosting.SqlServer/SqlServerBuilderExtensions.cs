@@ -105,7 +105,7 @@ public static partial class SqlServerBuilderExtensions
         // sqlcmd runs in the container over loopback and reads the sa password from the container's
         // MSSQL_SA_PASSWORD variable, so only the variable name is shown by tooling. -C trusts the local server's
         // self-signed certificate, matching the integration's connection string and the REPL.
-        return builder.WithConnectCommand(
+        return builder.WithDefaultConnectCommand(
             "sqlcmd",
             ConnectCommandLocation.Container,
             ReferenceExpression.Create($"""SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec {QuoteForShell(executablePath)} -S 127.0.0.1,{builder.Resource.PrimaryEndpoint.Property(EndpointProperty.TargetPort)} -U sa -C"""),
@@ -190,7 +190,8 @@ public static partial class SqlServerBuilderExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(options.Command, nameof(options.Command));
         var executablePath = options.Command;
 
-        // Keep the connect command on the same client as the REPL, for example the legacy sqlcmd of an older image.
+        // Keep the default connect command on the same client as the REPL, for example the legacy sqlcmd of an older
+        // image. A command declared by the app with WithConnectCommand is left unchanged.
         return builder
             .WithSqlCmdConnectCommand(executablePath)
             .WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, executablePath, ct));

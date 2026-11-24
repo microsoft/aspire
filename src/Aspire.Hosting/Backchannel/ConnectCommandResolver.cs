@@ -74,7 +74,19 @@ internal static class ConnectCommandResolver
         string runs;
         if (annotation.Location == ConnectCommandLocation.Container)
         {
-            var runtime = await getContainerRuntimeName(cancellationToken).ConfigureAwait(false);
+            string runtime;
+            try
+            {
+                runtime = await getContainerRuntimeName(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The resolver caches a faulted task for a misconfigured ASPIRE_CONTAINER_RUNTIME. Omit the optional
+                // entry rather than failing the snapshot, so the resource listing stays available for diagnosis.
+                logger.LogDebug(ex, "Connect command for resource '{ResourceName}' is not shown: the container runtime could not be resolved.", resource.Name);
+                return null;
+            }
+
             command = FormatContainerCommand(runtime, resourceId, command);
             runs = ResourceSnapshotConnect.RunsInContainer;
         }
@@ -135,15 +147,43 @@ internal static class ConnectCommandResolver
                 return IsAllocated(endpoint, out reason);
 
             case EndpointReferenceExpression endpointExpression:
-                return IsAllocated(endpointExpression.Endpoint, out reason);
+                return IsResolvableProperty(endpointExpression, out reason) && IsAllocated(endpointExpression.Endpoint, out reason);
 
             default:
                 reason = $"the command references a value of type '{valueProvider?.GetType().Name}'. Connect commands can reference only endpoint values.";
                 return false;
         }
 
+        static bool IsResolvableProperty(EndpointReferenceExpression endpointExpression, out string? reason)
+        {
+            switch (endpointExpression.Property)
+            {
+                // A target port that is not fixed resolves to a DCP template such as {{- portForServing "..." -}},
+                // which DCP expands only in the specs it renders, never in a command shown by tooling.
+                case EndpointProperty.TargetPort when endpointExpression.Endpoint.Exists && endpointExpression.Endpoint.TargetPort is null:
+                    reason = $"endpoint '{endpointExpression.Endpoint.EndpointName}' has no fixed target port.";
+                    return false;
+
+                // Browser origins wait for URL callbacks to finish even after allocation, which would stall snapshots.
+                case EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin:
+                    reason = $"the command references the '{endpointExpression.Property}' endpoint property, which connect commands do not support.";
+                    return false;
+
+                default:
+                    reason = null;
+                    return true;
+            }
+        }
+
         static bool IsAllocated(EndpointReference endpoint, out string? reason)
         {
+            // EndpointAnnotation throws for an endpoint the resource does not define.
+            if (!endpoint.Exists)
+            {
+                reason = $"endpoint '{endpoint.EndpointName}' is not defined.";
+                return false;
+            }
+
             // Check the network the command is resolved for. Resolving an endpoint that has no allocation on that
             // network waits for one, and EndpointReference.IsAllocated caches a negative result.
             if (!endpoint.EndpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(endpoint.ContextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork, out _))

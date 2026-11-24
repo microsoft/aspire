@@ -252,7 +252,7 @@ public static class RedisBuilderExtensions
         // variable, so only the variable name is shown by tooling. REDISCLI_AUTH is exported only when a password is
         // configured, so a password-less server (WithPassword(null)) is not sent AUTH.
         var port = builder.Resource.GetEndpoint(plainEndpointName).Property(EndpointProperty.TargetPort);
-        return builder.WithConnectCommand(
+        return builder.WithDefaultConnectCommand(
             "redis-cli",
             ConnectCommandLocation.Container,
             ReferenceExpression.Create($"""[ -n "$REDIS_PASSWORD" ] && export REDISCLI_AUTH="$REDIS_PASSWORD"; exec redis-cli -h 127.0.0.1 -p {port}"""),

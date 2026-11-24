@@ -414,7 +414,7 @@ Hosting integrations can declare how to reach their resource with the vendor's o
 
 For `container`, the command uses the configured container runtime (`docker` or `podman`) and the container name, and wraps the integration's script in `sh -c '<script> "$@"' sh` so that appended arguments reach the client. Credentials are read from the container's own environment variables, so only variable names are shown. For `host`, the command uses the resource's published endpoint. Commands are POSIX shell command lines.
 
-A command can reference only literal text and endpoint values, never parameters or connection strings, so it never contains a secret. `connect` is omitted for resources without a declaration, before the referenced endpoints are allocated, and for `container` declarations on resources that are not running as containers.
+A command can reference only literal text and endpoint values, never parameters or connection strings, so it never contains a secret. `connect` is omitted for resources without a declaration, before the referenced endpoints are allocated, when a command references an undefined endpoint, a target port that is not fixed, or browser origins, when the container runtime cannot be resolved, and for `container` declarations on resources that are not running as containers. Integration defaults never replace a command the AppHost declares with `WithConnectCommand`.
 
 For recognized IDE-managed .NET project launches, `project.launchCommand` is `ide`. In that mode,
 `executable.pid`, when present, identifies the application process rather than a `dotnet run` or

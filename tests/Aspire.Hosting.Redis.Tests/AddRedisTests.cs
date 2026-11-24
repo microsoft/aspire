@@ -57,6 +57,23 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
             await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task RedisWithCertificateKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var cert = CreateTestCertificate();
+        var redis = builder.AddRedis("redis").WithHttpsCertificate(cert)
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"));
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        Assert.True(redis.Resource.TlsEnabled);
+        var connect = Assert.Single(redis.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("my-client", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Host, connect.Location);
+    }
+
     private static string GetConnectEndpointName(ConnectCommandAnnotation connect)
         => Assert.IsType<EndpointReferenceExpression>(Assert.Single(connect.Command.ValueProviders)).Endpoint.EndpointName;
 
