@@ -542,7 +542,8 @@ public class ApplicationSummaryTests : DashboardTestContext
         var context = await RenderLiveSummaryAsync(GroupOverview.Summary);
         context.Summary.WaitForAssertion(() => Assert.Single(context.Summary.FindAll(".home-chart-bar")), DefaultWaitTimeout);
 
-        await DisposeComponentsAsync();
+        // Off the dispatcher, bUnit can clear its rendered components before the queued disposal runs.
+        await Renderer.Dispatcher.InvokeAsync(DisposeComponentsAsync);
         var queries = Volatile.Read(ref context.RequestQueries.Count);
         context.Timers.Advance(TimeSpan.FromSeconds(30));
 
