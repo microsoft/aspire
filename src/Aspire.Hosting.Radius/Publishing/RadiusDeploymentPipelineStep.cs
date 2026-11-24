@@ -529,7 +529,7 @@ internal sealed class RadiusDeploymentPipelineStep
 
         // Declared outside the try so the finally can always clean up the temp secrets file, even
         // if resolving/writing it (below) fails partway.
-        string? parametersFilePath = null;
+        DeployParametersFile? parametersFile = null;
 
         var deployTask = await context.ReportingStep.CreateTaskAsync(
             $"Deploying Radius environment '{_environment.Name}' via rad deploy...",
@@ -541,7 +541,7 @@ internal sealed class RadiusDeploymentPipelineStep
             // temporary ARM JSON parameters file. This supplies the `@secure()` Bicep params
             // emitted by publish without inlining secrets into the artifact or exposing them on the
             // `rad` command line. Written inside the try so the finally always deletes it.
-            parametersFilePath = await WriteDeployParametersFileAsync(
+            parametersFile = await WriteDeployParametersFileAsync(
                 context.Services.GetRequiredService<IFileSystemService>().TempDirectory,
                 logger,
                 cancellationToken).ConfigureAwait(false);
@@ -563,12 +563,12 @@ internal sealed class RadiusDeploymentPipelineStep
             };
             process.StartInfo.ArgumentList.Add("deploy");
             process.StartInfo.ArgumentList.Add(bicepPath);
-            if (parametersFilePath is not null)
+            if (parametersFile is not null)
             {
                 // `@<file>` instructs rad to read an ARM JSON parameter file. Forwarded verbatim via
                 // ArgumentList (no shell), so the leading '@' and path survive intact.
                 process.StartInfo.ArgumentList.Add("--parameters");
-                process.StartInfo.ArgumentList.Add("@" + parametersFilePath);
+                process.StartInfo.ArgumentList.Add("@" + parametersFile.Path);
             }
             logger.LogInformation("Running: rad {Args}", string.Join(' ', process.StartInfo.ArgumentList));
 
@@ -646,15 +646,17 @@ internal sealed class RadiusDeploymentPipelineStep
         }
         finally
         {
-            DeleteDeployParametersFile(parametersFilePath, logger);
+            // Disposing the tracked temp directory deletes it (best effort) unless
+            // ASPIRE_PRESERVE_TEMP_FILES is enabled, and stops tracking it for shutdown cleanup.
+            parametersFile?.Dispose();
         }
     }
 
     // Resolves the deploy-time parameter values (from RadiusDeployParametersAnnotation) and writes
-    // them to an owner-only temporary ARM JSON parameters file. Returns the file path, or null when
-    // there are no parameters to supply. The caller is responsible for deleting the file. Internal so
-    // tests can exercise the real file contract (ARM JSON shape + owner-only permissions).
-    internal async Task<string?> WriteDeployParametersFileAsync(ITempFileSystemService temporaryFileSystem, ILogger logger, CancellationToken cancellationToken)
+    // them to an owner-only temporary ARM JSON parameters file. Returns a handle to the file, or null
+    // when there are no parameters to supply. The caller must dispose the handle to clean up. Internal
+    // so tests can exercise the real file contract (ARM JSON shape + owner-only permissions).
+    internal async Task<DeployParametersFile?> WriteDeployParametersFileAsync(ITempFileSystemService temporaryFileSystem, ILogger logger, CancellationToken cancellationToken)
     {
         if (!_environment.TryGetAnnotationsOfType<RadiusDeployParametersAnnotation>(out var annotations))
         {
@@ -693,7 +695,8 @@ internal sealed class RadiusDeploymentPipelineStep
         };
 
         // CreateTempSubdirectory creates the directory with owner-only permissions (0700) on Unix.
-        // The parameters file is returned by path and deleted by DeleteDeployParametersFile.
+        // The directory handle is returned with the file so callers clean up through the tracked
+        // temp directory, which honors ASPIRE_PRESERVE_TEMP_FILES.
         var directory = temporaryFileSystem.CreateTempSubdirectory("radius-deploy-");
         var filePath = Path.Combine(directory.Path, "parameters.json");
         try
@@ -714,7 +717,7 @@ internal sealed class RadiusDeploymentPipelineStep
         {
             // Don't leave a partially-written secrets file behind if writing/perm-setting fails
             // (e.g. on cancellation). The caller only cleans up files we successfully return.
-            DeleteDeployParametersFile(filePath, logger);
+            directory.Dispose();
             throw;
         }
 
@@ -722,31 +725,14 @@ internal sealed class RadiusDeploymentPipelineStep
             "Wrote {Count} deploy parameter value(s) to a temporary owner-only file for environment '{EnvironmentName}'",
             parameters.Count, _environment.Name);
 
-        return filePath;
+        return new DeployParametersFile(directory, filePath);
     }
 
-    // Internal so tests can assert file cleanup.
-    internal static void DeleteDeployParametersFile(string? parametersFilePath, ILogger logger)
+    // Owns the temp directory holding the deploy parameters file. Internal so tests can assert cleanup.
+    internal sealed class DeployParametersFile(TempDirectory directory, string path) : IDisposable
     {
-        if (parametersFilePath is null)
-        {
-            return;
-        }
+        public string Path { get; } = path;
 
-        try
-        {
-            // Delete the whole temp subdirectory so nothing (file or dir) is left behind.
-            var directory = Path.GetDirectoryName(parametersFilePath);
-            if (directory is not null && Directory.Exists(directory))
-            {
-                Directory.Delete(directory, recursive: true);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup: a leftover temp parameters file must not fail an otherwise
-            // successful deploy.
-            logger.LogWarning(ex, "Failed to delete temporary deploy parameters file '{Path}'", parametersFilePath);
-        }
+        public void Dispose() => directory.Dispose();
     }
 }
