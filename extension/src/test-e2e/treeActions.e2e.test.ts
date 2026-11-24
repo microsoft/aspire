@@ -5,7 +5,7 @@ import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTermin
 import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeBaselineActionCliWrapper, writeGatedDeployActionCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
 import { getCliPath, getPrimaryAppHostProjectPath, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
-import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, dismissAllNotifications, executeCommandFromPalette, getActiveQuickPickLabels, getNotificationMessages, openAspireView, waitForChildTreeItem, waitForExplorerSelection, waitForNotificationMessage, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, dismissAllNotifications, executeCommandFromPalette, getActiveQuickPickLabels, getNotificationMessages, openAspireView, openTreeItemContextMenu, waitForChildTreeItem, waitForExplorerSelection, waitForNotificationMessage, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 import { VSBrowser } from './helpers/extester';
 
 interface ActiveEditorInfo {
@@ -379,8 +379,7 @@ suite('Aspire tree action command E2E', function () {
 
         for (const resourceName of ['e2e-image-source', 'e2e-tool-source', 'e2e-suppressed-source', 'e2e-display-source']) {
             await waitForResource(resourceName);
-            const sourceItem = await waitForTreeItem(section, resourceName, 60000);
-            const sourceMenu = await sourceItem.openContextMenu();
+            const sourceMenu = await openTreeItemContextMenu(section, resourceName);
             try {
                 assert.strictEqual(await sourceMenu.hasItem('Open resource source'), false, `Unexpected source action for ${resourceName}.`);
                 await VSBrowser.instance.takeScreenshot(`resource-go-to-source-hidden-${resourceName}`);
@@ -391,8 +390,7 @@ suite('Aspire tree action command E2E', function () {
         }
 
         before = getCommandInvocationCount('aspire-vscode.openResourceSource');
-        const missingSourceItem = await waitForTreeItem(section, 'e2e-missing-source', 60000);
-        const missingSourceMenu = await missingSourceItem.openContextMenu();
+        const missingSourceMenu = await openTreeItemContextMenu(section, 'e2e-missing-source');
         await missingSourceMenu.select('Open resource source');
         await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
         const missingSourcePath = path.join(getWorkspaceRoot(), 'AspireE2E.Worker', 'AspireE2E.Worker.missing.csproj');
@@ -404,8 +402,7 @@ suite('Aspire tree action command E2E', function () {
 
         before = getCommandInvocationCount('aspire-vscode.openResourceSource');
         section = await openAspireView();
-        const outsideWorkspaceSourceItem = await waitForTreeItem(section, 'e2e-outside-workspace-source', 60000);
-        const outsideWorkspaceSourceMenu = await outsideWorkspaceSourceItem.openContextMenu();
+        const outsideWorkspaceSourceMenu = await openTreeItemContextMenu(section, 'e2e-outside-workspace-source');
         await outsideWorkspaceSourceMenu.select('Open resource source');
         await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
         const runRoot = getRunRoot();
@@ -418,8 +415,7 @@ suite('Aspire tree action command E2E', function () {
 
         before = getCommandInvocationCount('aspire-vscode.openResourceSource');
         section = await openAspireView();
-        const directorySourceItem = await waitForTreeItem(section, 'e2e-directory-source', 60000);
-        const directorySourceMenu = await directorySourceItem.openContextMenu();
+        const directorySourceMenu = await openTreeItemContextMenu(section, 'e2e-directory-source');
         await directorySourceMenu.select('Open resource source');
         await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
         await waitForExplorerSelection(['AspireE2E.Worker']);
@@ -429,8 +425,7 @@ suite('Aspire tree action command E2E', function () {
             before = getCommandInvocationCount('aspire-vscode.openResourceSource');
             section = await openAspireView();
             await waitForResource(resourceName);
-            const languageSourceItem = await waitForTreeItem(section, resourceName, 60000);
-            const languageSourceMenu = await languageSourceItem.openContextMenu();
+            const languageSourceMenu = await openTreeItemContextMenu(section, resourceName);
             await languageSourceMenu.select('Open resource source');
             await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
             await waitForExplorerSelection(['AspireE2E.AppHost', resourceName]);
@@ -439,8 +434,7 @@ suite('Aspire tree action command E2E', function () {
 
         before = getCommandInvocationCount('aspire-vscode.openResourceSource');
         section = await openAspireView();
-        const sourceWorkerItem = await waitForTreeItem(section, 'e2e-worker', 60000);
-        const resourceContextMenu = await sourceWorkerItem.openContextMenu();
+        const resourceContextMenu = await openTreeItemContextMenu(section, 'e2e-worker');
         await VSBrowser.instance.takeScreenshot('resource-go-to-source-context-menu');
         // Selecting the action dismisses the menu and transfers focus to the source.
         await resourceContextMenu.select('Open resource source');

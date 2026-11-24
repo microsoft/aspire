@@ -1033,12 +1033,11 @@ public class ParameterProcessorTests
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
 
         // Assert - Command should be added when interaction service is available
-        var setValueCommand = parameter.Annotations.OfType<ResourceCommandAnnotation>()
-            .SingleOrDefault(a => a.Name == KnownResourceCommands.SetParameterCommand);
-        Assert.NotNull(setValueCommand);
+        var commands = parameter.Annotations.OfType<ResourceCommandAnnotation>();
+        var setValueCommand = Assert.Single(commands, a => a.IsHighlighted);
+        Assert.Equal(KnownResourceCommands.SetParameterCommand, setValueCommand.Name);
         Assert.Equal(CommandStrings.SetParameterName, setValueCommand.DisplayName);
         Assert.Equal(CommandStrings.SetParameterDescription, setValueCommand.DisplayDescription);
-        Assert.True(setValueCommand.IsHighlighted);
     }
 
     [Fact]

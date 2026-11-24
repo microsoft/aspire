@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
-
 using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
@@ -505,9 +503,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, reason);
         }
 
-#pragma warning disable ASPIRECOMPUTE002
         var expression = computeEnvironment.GetEndpointPropertyExpression(endpointReferenceExpression);
-#pragma warning restore ASPIRECOMPUTE002
 
         return await expression.GetValueAsync(
             new ValueProviderContext

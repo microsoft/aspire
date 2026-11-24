@@ -21,9 +21,12 @@
       <Output TaskParameter="TargetOutputs" ItemName="_NativeClientCodeGenerationPath" />
     </MSBuild>
     <!-- Client-only generation never writes the server dispatch or TypeScript SDK. -->
-    <Exec Command="&quot;$(DotNetTool)&quot; exec &quot;@(_NativeClientCodeGenerationPath)&quot; &quot;$(NativeGeneratedDirectory)&quot; --csharp" />
+    <!-- Design-time builds don't build project references, so run generation only when the built tool is available. -->
+    <Exec Condition="'$(DesignTimeBuild)' != 'true' or Exists('@(_NativeClientCodeGenerationPath)')"
+          Command="&quot;$(DotNetTool)&quot; exec &quot;@(_NativeClientCodeGenerationPath)&quot; &quot;$(NativeGeneratedDirectory)&quot; --csharp" />
     <ItemGroup>
-      <Compile Include="$(NativeGeneratedDirectory)NativeClient.g.cs" />
+      <Compile Include="$(NativeGeneratedDirectory)NativeClient.g.cs"
+               Condition="'$(DesignTimeBuild)' != 'true' or Exists('$(NativeGeneratedDirectory)NativeClient.g.cs')" />
     </ItemGroup>
   </Target>
 </Project>

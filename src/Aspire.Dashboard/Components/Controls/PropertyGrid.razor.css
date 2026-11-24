@@ -1,3 +1,49 @@
+.property-grid ::deep .fluent-data-grid tr[hover]:hover > td {
+    cursor: default;
+}
+
+.property-grid ::deep .fluent-data-grid .nameColumn {
+    padding-inline-end: var(--aspire-space-2) !important;
+}
+
+.fit-name-column ::deep .fluent-data-grid .nameColumn {
+    min-width: 0;
+}
+
+/* Keep the button in the intrinsic column width so showing it doesn't move the Value column. */
+.fit-name-column ::deep .nameColumn > .container {
+    display: flex;
+    gap: var(--spacingHorizontalXXS);
+}
+
+.fit-name-column ::deep .nameColumn .grid-value {
+    flex: auto;
+}
+
+.fit-name-column ::deep .nameColumn .button-container {
+    margin: 0;
+}
+
+.fit-name-column ::deep .nameColumn .defaultHidden {
+    width: auto;
+}
+
+/* When the button is hidden, let the label use the full cell before it truncates. */
+.fit-name-column ::deep .nameColumn:not(:hover, :focus-visible, :has(:focus-visible)) .grid-value {
+    flex-shrink: 0;
+    max-inline-size: 100%;
+}
+
+.fit-name-column ::deep .nameColumn:not(:hover, :focus-visible, :has(:focus-visible)) .button-container {
+    min-inline-size: 0;
+    overflow: clip;
+    pointer-events: none;
+}
+
+.property-grid ::deep .fluent-data-grid .valueColumn {
+    padding-inline-start: var(--aspire-space-2) !important;
+}
+
 .property-grid ::deep td[multiline] {
     overflow: clip;
 }

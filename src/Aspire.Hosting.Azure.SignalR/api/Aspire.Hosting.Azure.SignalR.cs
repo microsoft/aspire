@@ -41,6 +41,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public Azure.BicepOutputReference NameOutputReference { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(Azure.AzureResourceInfrastructure infra) { throw null; }
@@ -60,6 +62,8 @@ namespace Aspire.Hosting.Azure
         public AzureSignalREmulatorResource(ApplicationModel.AzureSignalRResource innerResource) : base(default!, default) { }
 
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public enum AzureSignalRServiceMode

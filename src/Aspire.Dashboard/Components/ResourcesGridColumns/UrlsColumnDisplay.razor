@@ -11,41 +11,10 @@ else if (DisplayedUrls.Count == 1)
         @WriteUrl(DisplayedUrls[0])
     </div>
 }
-else if (ShowFirstUrlOnly)
-{
-    var moreButtonId = _moreButtonId;
-    <div class="url-container first-url-only" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-        <div class="first-url">
-            @WriteUrl(DisplayedUrls[0])
-        </div>
-        <FluentButton Id="@moreButtonId"
-                      Appearance="ButtonAppearance.Default"
-                      Class="url-button url-button-neutral"
-                      Style="@($"anchor-name: --{moreButtonId}")"
-                      aria-label="@($"{Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]}: {DisplayedUrls.Count - 1}")"
-                      OnClick="() => _popoverVisible = !_popoverVisible">
-            @($"+{DisplayedUrls.Count - 1}")
-        </FluentButton>
-        <FluentPopover AnchorId="@moreButtonId"
-                       @bind-Opened="_popoverVisible"
-                       Class="content-list-popover url-overflow-popover"
-                       Style="@($"--url-overflow-anchor: --{moreButtonId};")">
-            <strong>@Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]</strong>
-            <div class="content-list-popover-items url-popup">
-                @foreach (var item in DisplayedUrls.Skip(1))
-                {
-                    <div class="url-link">
-                        @WriteUrl(item)
-                    </div>
-                }
-            </div>
-        </FluentPopover>
-    </div>
-}
-else if (DisplayedUrls.Count > 1)
+else
 {
     <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-        <FluentOverflow TItem="DisplayedUrl" Items="@DisplayedUrls" Class="url-overflow" MaxRenderedItems="@MaxRenderedOverflowItems" Threshold="0">
+        <FluentOverflow TItem="DisplayedUrl" Items="@DisplayedUrls" Class="url-overflow" MaxRenderedItems="@MaxRenderedItems" Threshold="0">
             <ItemTemplate Context="displayedUrl">
                 <div behavior="@(ReferenceEquals(displayedUrl, DisplayedUrls[0]) ? "ellipsis" : null)">
                     @WriteUrl(displayedUrl)
@@ -53,7 +22,10 @@ else if (DisplayedUrls.Count > 1)
             </ItemTemplate>
             <MoreTemplate Context="overflow">
                 <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" style="display:inherit;">
-                    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
+                    <FluentButton Appearance="@(UseNeutralOverflowButton ? ButtonAppearance.Default : ButtonAppearance.Primary)"
+                                  Class="@(UseNeutralOverflowButton ? "url-button url-button-neutral" : "url-button")"
+                                  aria-label="@($"{Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]}: {overflow.OverflowCount}")"
+                                  OnClick="() => _popoverVisible = !_popoverVisible">
                         @($"+{overflow.OverflowCount}")
                     </FluentButton>
                 </div>

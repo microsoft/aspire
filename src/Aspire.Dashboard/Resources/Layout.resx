@@ -394,6 +394,9 @@
   <data name="ResourcePaneFilterReset" xml:space="preserve">
     <value>Reset</value>
   </data>
+  <data name="ResourceTabHome" xml:space="preserve">
+    <value>Home</value>
+  </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>
   </data>
@@ -499,33 +502,23 @@
     <value>References {0}</value>
     <comment>{0} lists logical resource names referenced by this resource. A reference does not imply waiting for startup.</comment>
   </data>
-  <data name="ResourcePaneActivityCount" xml:space="preserve">
-    <value>{0} incoming</value>
+  <data name="ResourcePaneActivityIncomingTooltip" xml:space="preserve">
+    <value>{0} incoming traces in the last {1} minutes</value>
   </data>
-  <data name="ResourcePaneActivityFailures" xml:space="preserve">
-    <value>{0} failed</value>
+  <data name="ResourcePaneActivityIncomingSingleTooltip" xml:space="preserve">
+    <value>{0} incoming trace in the last {1} minutes</value>
   </data>
-  <data name="ResourcePaneActivityP95" xml:space="preserve">
-    <value>p95 {0}</value>
+  <data name="ResourcePaneActivityFailedTooltip" xml:space="preserve">
+    <value>{0} failed traces in the last {1} minutes</value>
   </data>
-  <data name="ResourcePaneActivitySampledCount" xml:space="preserve">
-    <value>{0}+ incoming</value>
+  <data name="ResourcePaneActivityFailedSingleTooltip" xml:space="preserve">
+    <value>{0} failed trace in the last {1} minutes</value>
   </data>
-  <data name="ResourcePaneActivitySampledFailures" xml:space="preserve">
-    <value>{0}+ failed</value>
+  <data name="ResourcePaneActivityP95Tooltip" xml:space="preserve">
+    <value>P95 latency: {0} in the last {1} minutes</value>
   </data>
-  <data name="ResourcePaneActivitySampledP95" xml:space="preserve">
-    <value>Sample p95 {0}</value>
-  </data>
-  <data name="ResourcePaneActivityContext" xml:space="preserve">
-    <value>{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</value>
-    <comment>{0} is the resource name, {1}-{2} the measured window, {3} the latest span start and {4} the refresh time.</comment>
-  </data>
-  <data name="ResourcePaneActivitySampled" xml:space="preserve">
-    <value>Only the newest 5,000 incoming spans across resources were sampled. Counts are minimums and p95 describes this sample.</value>
-  </data>
-  <data name="ResourcePaneActivitySamples" xml:space="preserve">
-    <value>{0} valid duration samples. P95 appears after at least 20 samples.</value>
+  <data name="ResourcePaneActivitySampledP95Tooltip" xml:space="preserve">
+    <value>Sample p95 latency: {0} in the last {1} minutes</value>
   </data>
   <data name="ResourcePaneSelectionAddHint" xml:space="preserve">
     <value>Add/remove</value>

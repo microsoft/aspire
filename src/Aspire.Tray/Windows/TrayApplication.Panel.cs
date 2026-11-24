@@ -147,7 +147,7 @@ internal sealed unsafe partial class TrayApplication
             NativeCallException.Require(NativeMethods.RegisterClass(ref windowClass) != 0, "RegisterClassW(flyout)");
         }
         _panelClassRegistered = true;
-        _panel = new TrayPanel(controller.State, GetPanelPalette()) { FileManagerName = "File Explorer", QuitVerb = "Exit" };
+        _panel = new TrayPanel(controller.State, GetPanelPalette()) { FileManagerName = "File Explorer", QuitVerb = "Quit" };
         // A tool window keeps the flyout off the taskbar and Alt+Tab; owning it by the
         // message window keeps it above that window's dialogs' z-order rules.
         _panelWindow = NativeMethods.CreateWindowEx(NativeMethods.WsExToolWindow | NativeMethods.WsExTopmost, PanelClassName, "Aspire",

@@ -95,217 +95,217 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="DashboardFeedbackBack">
         <source>Back</source>
-        <target state="new">Back</target>
+        <target state="translated">返回</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackContinue">
         <source>Continue</source>
-        <target state="new">Continue</target>
+        <target state="translated">继续</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopied">
         <source>Feedback copied to the clipboard.</source>
-        <target state="new">Feedback copied to the clipboard.</target>
+        <target state="translated">反馈已复制到剪贴板。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopiedAndOpened">
         <source>Feedback copied. Paste it into the GitHub discussion to share it.</source>
-        <target state="new">Feedback copied. Paste it into the GitHub discussion to share it.</target>
+        <target state="translated">反馈已复制。将其粘贴到 GitHub 讨论中进行分享。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopy">
         <source>Copy feedback</source>
-        <target state="new">Copy feedback</target>
+        <target state="translated">复制反馈</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyAndOpen">
         <source>Copy and open discussion</source>
-        <target state="new">Copy and open discussion</target>
+        <target state="translated">复制并打开讨论</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyFailed">
         <source>The clipboard could not be accessed. Copy the preview manually.</source>
-        <target state="new">The clipboard could not be accessed. Copy the preview manually.</target>
+        <target state="translated">无法访问剪贴板。手动复制预览。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyOpenAndSwitch">
         <source>Open new discussion and switch</source>
-        <target state="new">Open new discussion and switch</target>
+        <target state="translated">打开新讨论并切换</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDescription">
         <source>Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</source>
-        <target state="new">Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</target>
+        <target state="translated">你的答案将保留在此浏览器中，直到你复制它们。GitHub 会在新标签页中打开，你可以自行审阅并提交反馈。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDialogTitle">
         <source>Share dashboard feedback</source>
-        <target state="new">Share dashboard feedback</target>
+        <target state="translated">共享仪表板反馈</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDifficultiesLabel">
         <source>What was harder or less clear than in the previous dashboard?</source>
-        <target state="new">What was harder or less clear than in the previous dashboard?</target>
+        <target state="translated">与之前的仪表板相比，哪些方面更难操作或不够清晰?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationLabel">
         <source>How long have you used the new dashboard?</source>
-        <target state="new">How long have you used the new dashboard?</target>
+        <target state="translated">你使用新仪表板多久了?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationLessThanOneHour">
         <source>Less than an hour</source>
-        <target state="new">Less than an hour</target>
+        <target state="translated">不到一小时</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationMoreThanOneWeek">
         <source>More than a week</source>
-        <target state="new">More than a week</target>
+        <target state="translated">超过一周</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationNotSpecified">
         <source>I'd rather not say</source>
-        <target state="new">I'd rather not say</target>
+        <target state="translated">我不想说</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationOneDay">
         <source>About a day</source>
-        <target state="new">About a day</target>
+        <target state="translated">大约一天</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationTwoToSevenDays">
         <source>2 to 7 days</source>
-        <target state="new">2 to 7 days</target>
+        <target state="translated">2 到 7 天</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackMarkdownTitle">
         <source>Dashboard experience feedback</source>
-        <target state="new">Dashboard experience feedback</target>
+        <target state="translated">仪表板体验反馈</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackMissingLabel">
         <source>What is missing from the new dashboard?</source>
-        <target state="new">What is missing from the new dashboard?</target>
+        <target state="translated">新仪表板中缺少什么?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeAppHost">
         <source>With an AppHost</source>
-        <target state="new">With an AppHost</target>
+        <target state="translated">使用 AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeLabel">
         <source>How do you run the dashboard?</source>
-        <target state="new">How do you run the dashboard?</target>
+        <target state="translated">你如何运行仪表板?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeStandalone">
         <source>Standalone, for telemetry only</source>
-        <target state="new">Standalone, for telemetry only</target>
+        <target state="translated">独立使用，仅用于遥测</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackOtherPlaceholder">
         <source>Tell us what happened</source>
-        <target state="new">Tell us what happened</target>
+        <target state="translated">告诉我们发生了什么</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPreviewDisclosure">
         <source>Preview copied feedback</source>
-        <target state="new">Preview copied feedback</target>
+        <target state="translated">预览已复制的反馈</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPreviewLabel">
         <source>Your feedback</source>
-        <target state="new">Your feedback</target>
+        <target state="translated">你的反馈</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptIgnore">
         <source>Don't ask again</source>
-        <target state="new">Don't ask again</target>
+        <target state="translated">不再询问</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptMessage">
         <source>We'd love your feedback on the new experience.</source>
-        <target state="new">We'd love your feedback on the new experience.</target>
+        <target state="translated">欢迎提供有关搜索体验的反馈。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptShare">
         <source>Share feedback</source>
-        <target state="new">Share feedback</target>
+        <target state="translated">共享反馈</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptTitle">
         <source>Welcome to the new Aspire dashboard!</source>
-        <target state="new">Welcome to the new Aspire dashboard!</target>
+        <target state="translated">欢迎使用全新 Aspire 仪表板!</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
-        <target state="new">I couldn't find my application URLs</target>
+        <target state="translated">我找不到应用程序 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonMissingFeature">
         <source>A feature I need is missing</source>
-        <target state="new">A feature I need is missing</target>
+        <target state="translated">缺少我需要的功能</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonNavigation">
         <source>It was hard to find my way around</source>
-        <target state="new">It was hard to find my way around</target>
+        <target state="translated">很难找到所需内容</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonOther">
         <source>Another reason</source>
-        <target state="new">Another reason</target>
+        <target state="translated">其他原因</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonPerformanceOrAccessibility">
         <source>It was slow or hard to use with assistive technology</source>
-        <target state="new">It was slow or hard to use with assistive technology</target>
+        <target state="translated">使用辅助技术时，速度较慢或难以使用</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonTelemetryWorkflow">
         <source>The telemetry workflow didn't work for me</source>
-        <target state="new">The telemetry workflow didn't work for me</target>
+        <target state="translated">遥测工作流无法正常工作</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonTerminals">
         <source>The terminals didn't work for me</source>
-        <target state="new">The terminals didn't work for me</target>
+        <target state="translated">终端无法正常工作</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonsLabel">
         <source>What made you go back? Select all that apply.</source>
-        <target state="new">What made you go back? Select all that apply.</target>
+        <target state="translated">是什么让你返回?选择所有适用项。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackSkipAndSwitch">
         <source>Skip and switch</source>
-        <target state="new">Skip and switch</target>
+        <target state="translated">跳过并切换</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepOneTitle">
         <source>Why are you going back to the previous dashboard?</source>
-        <target state="new">Why are you going back to the previous dashboard?</target>
+        <target state="translated">你为什么要返回上一个仪表板?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepProgress">
         <source>Step {0} of 2</source>
-        <target state="new">Step {0} of 2</target>
+        <target state="translated">第 {0} 步，共 2 步</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepTwoDescription">
         <source>Both questions are optional, but your answers help us decide what to improve.</source>
-        <target state="new">Both questions are optional, but your answers help us decide what to improve.</target>
+        <target state="translated">这两个问题都是可选的，但你的答案可帮助我们决定要改进的内容。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepTwoTitle">
         <source>Is there anything else you want to tell us?</source>
-        <target state="new">Is there anything else you want to tell us?</target>
+        <target state="translated">还有其他想告诉我们的吗?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackSwitchToLegacy">
         <source>Switch to previous dashboard</source>
-        <target state="new">Switch to previous dashboard</target>
+        <target state="translated">切换到上一个仪表板</target>
         <note />
       </trans-unit>
       <trans-unit id="DialogCloseButtonText">
@@ -630,22 +630,22 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="HelpDialogAspireDocumentationDescription">
         <source>Get started with Aspire, its integrations and deployment.</source>
-        <target state="new">Get started with Aspire, its integrations and deployment.</target>
+        <target state="translated">Aspire 及其集成和部署入门。</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogAspireDocumentationTitle">
         <source>Aspire documentation</source>
-        <target state="new">Aspire documentation</target>
+        <target state="translated">Aspire 文档</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryNavigation">
         <source>General</source>
-        <target state="needs-review-translation">网站范围导航</target>
+        <target state="translated">常规</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPageNavigation">
         <source>Dashboard navigation</source>
-        <target state="needs-review-translation">网页导航</target>
+        <target state="translated">仪表板导航</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPanels">
@@ -655,37 +655,37 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="HelpDialogCategoryResourceGraph">
         <source>Resource graph</source>
-        <target state="new">Resource graph</target>
+        <target state="translated">资源图表</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryTelemetry">
         <source>Logs &amp; telemetry</source>
-        <target state="new">Logs &amp; telemetry</target>
+        <target state="translated">日志和遥测</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCommunityHeading">
         <source>Community and support</source>
-        <target state="new">Community and support</target>
+        <target state="translated">社区和支持</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardDocumentationDescription">
         <source>Guides and reference for using the Aspire dashboard.</source>
-        <target state="new">Guides and reference for using the Aspire dashboard.</target>
+        <target state="translated">使用 Aspire 仪表板的指南和参考。</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardFeedbackDescription">
         <source>Share feedback about the evolving dashboard experience.</source>
-        <target state="new">Share feedback about the evolving dashboard experience.</target>
+        <target state="translated">分享你对不断改进的仪表板体验的反馈。</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardFeedbackTitle">
         <source>Dashboard feedback</source>
-        <target state="new">Dashboard feedback</target>
+        <target state="translated">仪表板反馈</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardVersion">
         <source>Aspire dashboard version {0}</source>
-        <target state="new">Aspire dashboard version {0}</target>
+        <target state="translated">Aspire 仪表板版本 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDecreasePanelSize">
@@ -695,27 +695,27 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="HelpDialogDiscordDescription">
         <source>Chat with the Aspire team and community.</source>
-        <target state="new">Chat with the Aspire team and community.</target>
+        <target state="translated">与 Aspire 团队和社区交流。</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDiscordTitle">
         <source>Discord</source>
-        <target state="new">Discord</target>
+        <target state="translated">Discord</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDocumentationTab">
         <source>Documentation</source>
-        <target state="new">Documentation</target>
+        <target state="translated">文档</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameDescription">
         <source>In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</source>
-        <target state="new">In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</target>
+        <target state="translated">在资源图表中，选择“运行 Aspire Outage”，或将焦点放在图表上并按 O，即可畅玩以你的资源为主角的游戏。按 Esc 可返回到图表。</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameTitle">
         <source>Aspire Outage</source>
-        <target state="new">Aspire Outage</target>
+        <target state="translated">Aspire Outage</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
@@ -725,62 +725,62 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">
         <source>Console logs (all resources)</source>
-        <target state="needs-review-translation">转到“控制台日志”</target>
+        <target state="translated">控制台日志(所有资源)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToExtensions">
         <source>Extensions</source>
-        <target state="new">Extensions</target>
+        <target state="translated">扩展</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToGraph">
         <source>Resource graph</source>
-        <target state="new">Resource graph</target>
+        <target state="translated">资源图表</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToHelp">
         <source>Keyboard shortcuts</source>
-        <target state="needs-review-translation">转到“帮助”</target>
+        <target state="translated">键盘快捷方式</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToMetrics">
         <source>Metrics</source>
-        <target state="needs-review-translation">转到“指标”</target>
+        <target state="translated">指标</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToParameters">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">参数</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToResources">
         <source>Resources</source>
-        <target state="needs-review-translation">转到“资源”</target>
+        <target state="translated">资源</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToSettings">
         <source>Settings</source>
-        <target state="needs-review-translation">转到“设置”</target>
+        <target state="translated">设置</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToStructuredLogs">
         <source>Structured logs</source>
-        <target state="needs-review-translation">转到“结构化日志”</target>
+        <target state="translated">结构化日志</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTelemetrySources">
         <source>Telemetry sources</source>
-        <target state="new">Telemetry sources</target>
+        <target state="translated">遥测源</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
-        <target state="needs-review-translation">转到“终端”</target>
+        <target state="translated">终端</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
         <source>Traces</source>
-        <target state="needs-review-translation">转到“跟踪”</target>
+        <target state="translated">跟踪</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogIncreasePanelSize">
@@ -795,32 +795,32 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="HelpDialogLearnHeading">
         <source>Learn</source>
-        <target state="new">Learn</target>
+        <target state="translated">了解</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogOpensInNewTab">
         <source>Opens in a new tab</source>
-        <target state="new">Opens in a new tab</target>
+        <target state="translated">在新标签页中打开</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogPlayGame">
         <source>Play Aspire Outage, when the graph has focus</source>
-        <target state="new">Play Aspire Outage, when the graph has focus</target>
+        <target state="translated">当图表获得焦点时，即可畅玩 Aspire Outage</target>
         <note>Aspire Outage is the name of a game.</note>
       </trans-unit>
       <trans-unit id="HelpDialogRepoDescription">
         <source>Source code, releases and issues on GitHub.</source>
-        <target state="new">Source code, releases and issues on GitHub.</target>
+        <target state="translated">GitHub 上的源代码、发行版本和问题。</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogReportIssueDescription">
         <source>Found a bug or have an idea? Open an issue on GitHub.</source>
-        <target state="new">Found a bug or have an idea? Open an issue on GitHub.</target>
+        <target state="translated">发现了 bug 或有想法?在 GitHub 上提问。</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogReportIssueTitle">
         <source>Report an issue</source>
-        <target state="new">Report an issue</target>
+        <target state="translated">报告问题</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogResetPanelSize">
@@ -830,7 +830,7 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="HelpDialogShortcutsHint">
         <source>Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</source>
-        <target state="new">Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</target>
+        <target state="translated">在文本字段和终端输入之外使用快捷方式。面板快捷方式适用于已打开的详细信息面板。在终端中按 {0} 键，将焦点置于终端控件上，然后再使用仪表板快捷方式。</target>
         <note>{0} is the F6 key, rendered as a keyboard key.</note>
       </trans-unit>
       <trans-unit id="HelpDialogTogglePanelOpen">
@@ -845,7 +845,7 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="HelpDialogToggleTerminalDock">
         <source>Toggle terminal dock</source>
-        <target state="needs-review-translation">切换终端</target>
+        <target state="translated">切换终端扩展坞</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionButtonCancel">
@@ -985,7 +985,7 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="SettingsDialogAppearanceGroup">
         <source>Appearance</source>
-        <target state="new">Appearance</target>
+        <target state="translated">外观</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDarkTheme">
@@ -995,27 +995,27 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperience">
         <source>Dashboard experience</source>
-        <target state="new">Dashboard experience</target>
+        <target state="translated">仪表板体验</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceDescription">
         <source>Choose which dashboard experience to use.</source>
-        <target state="new">Choose which dashboard experience to use.</target>
+        <target state="translated">选择要使用的仪表板体验。</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceNew">
         <source>New dashboard</source>
-        <target state="new">New dashboard</target>
+        <target state="translated">新建仪表板</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperiencePrevious">
         <source>Previous dashboard</source>
-        <target state="new">Previous dashboard</target>
+        <target state="translated">上一个仪表板</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceSelectorLabel">
         <source>Experience</source>
-        <target state="new">Experience</target>
+        <target state="translated">体验</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardLogsAndTelemetry">
@@ -1025,7 +1025,7 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="SettingsDialogDataAndTelemetryGroup">
         <source>Data and telemetry</source>
-        <target state="new">Data and telemetry</target>
+        <target state="translated">数据和遥测</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDotNetRuntimeVersion">
@@ -1035,17 +1035,17 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="SettingsDialogExperienceGroup">
         <source>Dashboard experience</source>
-        <target state="new">Dashboard experience</target>
+        <target state="translated">仪表板体验</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverview">
         <source>Overview layout</source>
-        <target state="new">Overview layout</target>
+        <target state="translated">概述布局</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
         <source>Summary</source>
-        <target state="new">Summary</target>
+        <target state="translated">摘要</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguage">
@@ -1055,7 +1055,7 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="SettingsDialogLanguageAndTimeGroup">
         <source>Language and time</source>
-        <target state="new">Language and time</target>
+        <target state="translated">语言和时间</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguagePageReloads">
@@ -1070,17 +1070,17 @@ aspire otel logs --dashboard-url {0}
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensity">
         <source>Resource list density</source>
-        <target state="new">Resource list density</target>
+        <target state="translated">资源列表密度</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensityComfortable">
         <source>Comfortable</source>
-        <target state="new">Comfortable</target>
+        <target state="translated">舒适</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensityCompact">
         <source>Compact</source>
-        <target state="new">Compact</target>
+        <target state="translated">精简</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
@@ -1285,9 +1285,9 @@ Configure your app to export logs, traces, and metrics using [OTLP]({0}).</sourc
         <target state="translated">选择格式</target>
         <note />
       </trans-unit>
-      <trans-unit id="TextVisualizerWordWrap">
-        <source>Word wrap</source>
-        <target state="new">Word wrap</target>
+      <trans-unit id="TextVisualizerWordWrapOff">
+        <source>Disable word wrap</source>
+        <target state="new">Disable word wrap</target>
         <note />
       </trans-unit>
     </body>

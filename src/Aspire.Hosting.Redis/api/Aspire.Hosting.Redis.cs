@@ -88,6 +88,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public bool TlsEnabled { get { throw null; } }
 
         public ReferenceExpression UriExpression { get { throw null; } }
@@ -103,6 +105,10 @@ namespace Aspire.Hosting.Redis
     public partial class RedisCommanderResource : ApplicationModel.ContainerResource
     {
         public RedisCommanderResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public partial class RedisInsightResource : ApplicationModel.ContainerResource
@@ -110,5 +116,7 @@ namespace Aspire.Hosting.Redis
         public RedisInsightResource(string name) : base(default!, default) { }
 
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

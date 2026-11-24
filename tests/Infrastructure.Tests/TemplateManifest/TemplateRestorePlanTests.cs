@@ -233,6 +233,42 @@ public sealed class TemplateRestorePlanTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task UsesRenderingHostForHostIdentifierParameter()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var source = workspace.CreateDirectory("source").FullName;
+        WriteTemplate(source, "host", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+              <ItemGroup>
+                <!--#if (HostIdentifier == "dotnetcli") -->
+                <PackageReference Include="Expected" Version="1.0.0" />
+                <!--#else -->
+                <PackageReference Include="WrongHost" Version="2.0.0" />
+                <!--#endif -->
+              </ItemGroup>
+            </Project>
+            """);
+        var configPath = Path.Combine(source, "host", ".template.config", "template.json");
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!;
+        config["symbols"]!["HostIdentifier"] = JsonNode.Parse("""{"type":"parameter","datatype":"string"}""");
+        config["symbols"]!["hostIdentifier"] = JsonNode.Parse("""{"type":"bind","binding":"HostIdentifier"}""");
+        config["sources"] = JsonNode.Parse("""[{"modifiers":[{"condition":"(hostIdentifier != \"dotnetcli\")","exclude":["*.csproj"]}]}]""");
+        File.WriteAllText(configPath, config.ToJsonString());
+
+        var plan = new TemplateRestorePlan();
+        await plan.DiscoverAsync(source, source, workspace.CreateDirectory("work").FullName);
+
+        Assert.Equal(2, plan.ConfigurationCount);
+        Assert.Equal(2, plan.ProjectCount);
+        var project = Assert.Single(plan.Projects);
+        Assert.Equal(["net10.0", "net8.0"], project.Frameworks);
+        var package = Assert.Single(project.Project.Descendants("PackageReference"));
+        Assert.Equal("Expected", package.Attribute("Include")!.Value);
+        Assert.Equal("1.0.0", package.Attribute("Version")!.Value);
+    }
+
+    [Fact]
     public void RejectsUnboundedDependencyParameters()
     {
         var config = JsonNode.Parse("""

@@ -90,6 +90,10 @@ customElements.define = function (name, constructor, options) {
     }
 };
 
+function getLocalStorageItems(keys) {
+    return keys.map(key => localStorage.getItem(key));
+}
+
 function isElementTagName(element, tagName) {
     return element.tagName.toLowerCase() === tagName;
 }

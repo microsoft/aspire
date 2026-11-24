@@ -20,10 +20,8 @@ public class ComputeEnvironmentValidationTests
         IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
         var endpoint = CreateEndpointReference(scheme, port: null, targetPort: 5000);
 
-#pragma warning disable ASPIRECOMPUTE002 // Verify the default deployed endpoint-property contract.
         var error = Assert.Throws<NotSupportedException>(() =>
             environment.GetEndpointPropertyExpression(endpoint.Property(property)));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Equal(
             $"Compute environment 'env' cannot provide browser origins for endpoint '{endpoint.EndpointName}' on resource '{endpoint.Resource.Name}' because it does not implement deployed browser-origin resolution. " +
@@ -95,9 +93,7 @@ public class ComputeEnvironmentValidationTests
         IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
         var endpointReference = CreateEndpointReference("http", port: 8080, targetPort: 5000);
 
-#pragma warning disable ASPIRECOMPUTE002
         var expression = environment.GetEndpointPropertyExpression(endpointReference.Property(property));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Equal(expected, await expression.GetValueAsync(default));
     }
@@ -108,9 +104,7 @@ public class ComputeEnvironmentValidationTests
         IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
         var endpointReference = CreateEndpointReference("redis", port: null, targetPort: 6379);
 
-#pragma warning disable ASPIRECOMPUTE002
         var ex = Assert.Throws<InvalidOperationException>(() => environment.GetEndpointPropertyExpression(endpointReference.Property(EndpointProperty.Url)));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Contains("Endpoint 'redis' must specify a port for scheme 'redis'.", ex.Message);
     }
@@ -126,10 +120,8 @@ public class ComputeEnvironmentValidationTests
 
     private sealed class TestComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
     {
-#pragma warning disable ASPIRECOMPUTE002
         public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
             ReferenceExpression.Create($"{endpointReference.Resource.Name}.example.com");
-#pragma warning restore ASPIRECOMPUTE002
     }
 
     private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEndpoints

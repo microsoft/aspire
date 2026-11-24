@@ -107,11 +107,12 @@
                                  Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]"
                                  IncludeInputSlot="false">
                         <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
-                            <FluentCombobox TOption="SelectViewModel<FieldValue>" TValue="SelectViewModel<FieldValue>"
+                            @* Freeform entries are parsed as TValue; retain suggestion metadata separately in SelectedItems. *@
+                            <FluentCombobox TOption="SelectViewModel<FieldValue>" TValue="string"
                                             Id="filter-dialog-text-value"
                                             slot="input"
-                                            @bind-Value="_selectedValue"
-                                            @bind-Value:after="SelectedValueChanged"
+                                            SelectedItems="@(_selectedValue is { } selectedValue ? [selectedValue] : [])"
+                                            SelectedItemsChanged="SelectedValueChanged"
                                             @bind-ImmediateText="_formModel.Value"
                                             @bind-ImmediateText:after="UpdateValueState"
                                             Immediate="true"
@@ -120,6 +121,7 @@
                                             Width="100%"
                                             Height="400px"
                                             Disabled="@_loadingFieldValues"
+                                            OptionValue="@((SelectViewModel<FieldValue>? c) => c?.Name)"
                                             OptionText="@((SelectViewModel<FieldValue>? c) => c?.Name)">
                                 @* The native dropdown needs a freeform option to retain unmatched text on blur. *@
                                 <FreeOption>

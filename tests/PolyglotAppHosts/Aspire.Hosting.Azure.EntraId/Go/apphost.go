@@ -30,9 +30,9 @@ func main() {
 	vault := builder.AddAzureKeyVault("vault")
 
 	// Existing registrations: configuration only, with literal or parameter IDs in any combination.
-	existingEntra := builder.AddExistingEntraApplication("existing-entra", tenantId, exampleClient)
-	builder.AddExistingEntraApplication("existing-entra-literals", exampleTenant, exampleClient)
-	builder.AddExistingEntraApplication("existing-entra-parameters", tenantId, clientId)
+	existingEntra := builder.AddExistingEntraIdApplication("existing-entra", tenantId, exampleClient)
+	builder.AddExistingEntraIdApplication("existing-entra-literals", exampleTenant, exampleClient)
+	builder.AddExistingEntraIdApplication("existing-entra-parameters", tenantId, clientId)
 	existingEntra.WithInstance("https://login.microsoftonline.com/")
 	existingEntra.WithSignInAudience(aspire.EntraIdSignInAudienceAzureADMultipleOrgs)
 	existingEntra.WithAudience("api://example")
@@ -61,7 +61,7 @@ func main() {
 	fluentExistingEntra.AsExistingApplication(exampleTenant, clientId)
 
 	// An existing API registration is configuration only: its URI and scope IDs describe what the registration already defines.
-	existingApi := builder.AddExistingEntraApplication("existing-api", exampleTenant, exampleClient)
+	existingApi := builder.AddExistingEntraIdApplication("existing-api", exampleTenant, exampleClient)
 	existingApi.WithApplicationIdUri(&aspire.WithApplicationIdUriOptions{ApplicationIdUri: aspire.StringPtr("api://contoso-orders")})
 	existingApi.WithScope("orders.read", "Read orders.", &aspire.WithScopeOptions{
 		Options: &aspire.EntraIdScopeOptions{Id: aspire.StringPtr("33334444-aaaa-5555-bbbb-6666cccc7777")},

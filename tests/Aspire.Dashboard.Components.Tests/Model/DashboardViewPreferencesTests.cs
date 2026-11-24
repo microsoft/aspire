@@ -46,8 +46,6 @@ public class DashboardViewPreferencesTests : DashboardTestContext
     [Fact]
     public async Task Load_RemovedSpaciousDensity_WritesComfortableOnce()
     {
-        // Spacious was removed. A saved choice of it becomes the closest density, Comfortable, rather than the default,
-        // Compact, and it's rewritten once so later loads don't migrate it again.
         object? stored = "Spacious";
         var writes = new List<(string Key, object? Value)>();
         var storage = new TestLocalStorage
@@ -76,6 +74,25 @@ public class DashboardViewPreferencesTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(null, ResourceListDensity.Comfortable)]
+    [InlineData("invalid", ResourceListDensity.Comfortable)]
+    [InlineData("Compact", ResourceListDensity.Compact)]
+    public async Task Load_UsesComfortableUnlessCompactIsSaved(string? stored, ResourceListDensity expected)
+    {
+        var storage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourceListDensity && stored is not null ? (true, stored) : (false, null),
+            OnSetUnprotectedAsync = (_, _) => Assert.Fail("Loading the density should not write a preference.")
+        };
+        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: storage);
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+
+        await preferences.EnsureLoadedAsync();
+
+        Assert.Equal(expected, preferences.Density);
+    }
+
+    [Theory]
     [InlineData(null, GroupOverview.Summary)]
     [InlineData("", GroupOverview.Summary)]
     [InlineData("invalid", GroupOverview.Summary)]
@@ -100,9 +117,6 @@ public class DashboardViewPreferencesTests : DashboardTestContext
 
         Assert.Equal(expected, preferences.GroupOverview);
         Assert.Equal([GroupOverview.Summary, GroupOverview.Graph], Enum.GetValues<GroupOverview>());
-        // Nothing stored for the density, so the list starts compact.
-        Assert.Equal(ResourceListDensity.Compact, preferences.Density);
-        Assert.Equal(RecordingsStyle.Panel, preferences.RecordingsStyle);
     }
 
     [Fact]

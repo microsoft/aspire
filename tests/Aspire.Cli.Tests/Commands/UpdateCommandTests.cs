@@ -1161,6 +1161,45 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(MigrationStrings.NothingToMigrate, subtleMessages);
     }
 
+    [Theory]
+    [InlineData("""<Project Sdk="Aspire.AppHost.Sdk/13.2.0"></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><Sdk Name="Aspire.AppHost.Sdk" Version="13.2.0" /></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Aspire.Hosting.AppHost" Version="17.0.0" /></ItemGroup></Project>""", false)]
+    public async Task UpdateCommand_WithMigrateFlag_AndNothingPending_ReportsObsoleteAppHostSdk(string projectContent, bool expectObsoleteSdkMessage)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), projectContent);
+
+        var migration = new TestMigration("test-no-pending-migration", 100, descriptor: null);
+
+        var subtleMessages = new List<string>();
+        var interactionService = new TestInteractionService()
+        {
+            DisplaySubtleMessageCallback = subtleMessages.Add
+        };
+        var services = CreateMigrationUpdateServices(workspace, interactionService, migration);
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj --migrate --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(migration.ApplyInvoked);
+        if (expectObsoleteSdkMessage)
+        {
+            Assert.Contains(MigrationStrings.NoAutomaticMigrationsAppHostSdkObsolete, subtleMessages);
+            Assert.DoesNotContain(MigrationStrings.NothingToMigrate, subtleMessages);
+        }
+        else
+        {
+            Assert.Contains(MigrationStrings.NothingToMigrate, subtleMessages);
+            Assert.DoesNotContain(MigrationStrings.NoAutomaticMigrationsAppHostSdkObsolete, subtleMessages);
+        }
+    }
+
     private IServiceCollection CreateMigrationUpdateServices(
         TemporaryWorkspace workspace,
         TestInteractionService interactionService,
@@ -1538,6 +1577,33 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.False(promptForSelectionInvoked, "Channel prompt should not be shown when --channel is provided");
         Assert.Equal("daily", capturedChannel);
+    }
+
+    [Theory]
+    [InlineData("daily", "staging")]
+    [InlineData("local", "staging")]
+    [InlineData("pr-123", "staging")]
+    [InlineData("daily", "StAgInG")]
+    public async Task UpdateCommand_SelfUpdate_WhenStagingUnavailable_DisplaysReason(string identityChannel, string requestedChannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: identityChannel);
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = sp => ActivatorUtilities.CreateInstance<CliDownloader>(sp);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"update --self --channel {requestedChannel}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var expectedReason = string.Format(PackagingStrings.StagingChannelUnavailableOnDailyCli, identityChannel);
+        Assert.Equal($"Failed to update CLI: {expectedReason}", Assert.Single(interactionService.DisplayedErrors));
     }
 
     [Fact]
@@ -2908,6 +2974,53 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("update --channel daily", false, true)]
+    [InlineData("update --channel daily --dry-run", true, true)]
+    [InlineData("update --quality daily --dry-run --non-interactive", true, true)]
+    [InlineData("update", false, false)]
+    public async Task UpdateCommand_PassesDryRunToProjectUpdater(string arguments, bool dryRun, bool hasExplicitChannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (exitCode, context, _, _) = await RunUpdateAndCaptureContextAsync(
+            workspace, arguments, workspace.WorkspaceRoot, "local", includeLocalInChannels: false,
+            selectedChannelName: null, KnownLanguageId.CSharp, "AppHost.csproj");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(context);
+        Assert.Equal(dryRun, context.DryRun);
+        Assert.Equal(hasExplicitChannel, context.HasExplicitChannel);
+    }
+
+    [Theory]
+    [InlineData("update --dry-run")]
+    [InlineData("update --channel daily --dry-run --self")]
+    [InlineData("update --channel daily --dry-run --migrate")]
+    public void UpdateCommand_RejectsInvalidDryRunOptions(string arguments)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(arguments);
+
+        Assert.Equal(UpdateCommandStrings.DryRunRequiresChannel, Assert.Single(result.Errors).Message);
+    }
+
+    [Theory]
+    [InlineData(KnownLanguageId.TypeScript, "apphost.mts")]
+    [InlineData(KnownLanguageId.Python, "apphost.py")]
+    public async Task UpdateCommand_RejectsGuestDryRun(string languageId, string fileName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (exitCode, context, promptInvoked, _) = await RunUpdateAndCaptureContextAsync(
+            workspace, "update --channel daily --dry-run", workspace.WorkspaceRoot, "local",
+            includeLocalInChannels: false, selectedChannelName: null, languageId, fileName);
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Null(context);
+        Assert.False(promptInvoked);
+    }
+
+    [Theory]
     [InlineData("parent", "daily")]
     [InlineData("parent", "staging")]
     [InlineData("global", "daily")]
@@ -3116,6 +3229,11 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
+                FindAppHostProjectFilesAsyncCallback = (_, _, _, skipValidation) =>
+                {
+                    Assert.True(skipValidation);
+                    return Task.FromResult(new List<FileInfo> { new(Path.Combine(projectDirectory.FullName, appHostFileName)) });
+                },
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
                 {
                     return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(projectDirectory.FullName, appHostFileName)));

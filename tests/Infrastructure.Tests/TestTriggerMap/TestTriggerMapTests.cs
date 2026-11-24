@@ -87,7 +87,6 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData(".github/workflows/analyze-ci-failure.md")]
     [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
-    [InlineData(".github/workflows/analyze-ci-failure/prepare-report-templates.js")]
     public void AnalyzerReportingInputsSelectScriptBehaviorTests(string path)
     {
         var result = SelectWithRealMap(path);
@@ -358,6 +357,10 @@ public sealed class TestTriggerMapTests
             ["job:cli-starter-validation"]
         },
         {
+            "eng/scripts/stage-cli-starter-validation-diagnostics.ps1",
+            ["test:Infrastructure.Tests", "job:cli-starter-validation"]
+        },
+        {
             "eng/scripts/test-native-dashboard.ps1",
             ["job:native-dashboard-validation"]
         },
@@ -569,6 +572,7 @@ public sealed class TestTriggerMapTests
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalTitle.test.mjs")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalDock.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/d3.v7.min.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraph.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph-game.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraphGame.test.mjs")]
