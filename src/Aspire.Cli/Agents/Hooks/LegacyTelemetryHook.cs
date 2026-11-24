@@ -44,7 +44,7 @@ internal sealed class LegacyTelemetryHook
             .ToArray();
         _scriptPaths = scriptPaths
             .Select(Normalize)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparers.FileSystemPath)
             .ToArray();
 
         // Aspire 13.5 and 13.6 wrote shell-command hooks with the script path single-quoted as the final token,
@@ -54,7 +54,7 @@ internal sealed class LegacyTelemetryHook
         _scriptReferences = scriptPaths
             .SelectMany(path => new[] { path, $"'{path.Replace("'", "'\\''")}'", $"'{path.Replace("'", "''")}'" })
             .Select(Normalize)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparers.FileSystemPath)
             .ToArray();
     }
 
@@ -151,7 +151,7 @@ internal sealed class LegacyTelemetryHook
         };
 
     private bool IsScriptPath(string? value)
-        => value is not null && _scriptPaths.Contains(Normalize(value), StringComparer.OrdinalIgnoreCase);
+        => value is not null && _scriptPaths.Contains(Normalize(value), StringComparers.FileSystemPath);
 
     // Returns the last value for a repeated name, matching JSON.parse. A strictly parsed document has at most one.
     private static JsonElement? GetProperty(JsonElement element, string name)
@@ -188,11 +188,11 @@ internal sealed class LegacyTelemetryHook
 
         // Require an Aspire-owned script path as the whole value or as its final whitespace-separated token, so
         // user hooks such as `bash /work/project/hooks/track-telemetry.sh` or
-        // `bash '/home/me/.aspire/hooks/track-telemetry.sh.backup'` are left alone. Paths compare without regard
-        // to case because Windows and macOS file systems are case-insensitive by default.
+        // `bash '/home/me/.aspire/hooks/track-telemetry.sh.backup'` are left alone. Paths compare with the
+        // platform's file-system rules, so a path that differs only by case is a different file on Linux.
         var value = Normalize(text.Trim());
         return _scriptReferences.Any(reference =>
-            value.EndsWith(reference, StringComparison.OrdinalIgnoreCase) &&
+            value.EndsWith(reference, StringComparisons.FileSystemPath) &&
             (value.Length == reference.Length || char.IsWhiteSpace(value[value.Length - reference.Length - 1])));
     }
 

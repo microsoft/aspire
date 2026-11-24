@@ -120,6 +120,21 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CheckAsync_DoesNotWarnForLegacyPathThatDiffersByCaseOnLinux()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Case-sensitive filesystem test only runs on Linux.");
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var config = context.WithLegacyScriptPaths(
+            """{"hooks":{"postToolUse":[{"bash":"bash '{sh}'","powershell":"pwsh -File '{ps1}'"}],"PostToolUse":[{"hooks":[{"command":"bash","args":["{sh}"]},{"command":"pwsh -File '{ps1}'"}]}]}}""")
+            .Replace("track-telemetry", "Track-Telemetry");
+        await AgentConfigurationTestContext.WriteAsync(
+            Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json"), config);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"), config);
+
+        Assert.Empty(await CreateCheck(context).CheckAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task CheckAsync_UnreadableCopilotConfigurationDoesNotHideClaudeWarning()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
