@@ -31,14 +31,22 @@ internal static class SharedAIHelpers
     /// Agent harnesses commonly replace tool results larger than about 20 KB with a pointer to a
     /// spill file (for example, Copilot CLI writes them to disk and shows only the first 500 characters),
     /// so the model reads the data through extra file reads instead of the tool result.
-    /// <see cref="EstimateTokenCount"/> uses four characters per token, so this keeps the list itself
+    /// <see cref="EstimateTokenCount"/> uses four UTF-8 bytes per token, so this keeps the list itself
     /// at about 16 KB and leaves room for the response header.
     /// See https://github.com/microsoft/aspire/issues/22507.
     /// </remarks>
     public const int CompactListTokenLength = 4096;
 
     public const int MaximumStringLength = 2048;
+
+    // Summary strings and shortened attribute values are bounded by their serialized size in UTF-8 bytes rather than
+    // by character count, because one character can be written as up to six bytes (a control character is escaped as
+    // "\u0001") and the response budget is in serialized bytes.
     private const int MaximumSummaryStringLength = 512;
+    private const int MaximumSummaryResourceCount = 16;
+    private const int MaximumSummaryResourceNameLength = 128;
+
+    private const string TruncatedMarker = "...[TRUNCATED]";
 
     internal static readonly JsonSerializerOptions s_jsonSerializerOptions = new JsonSerializerOptions
     {
@@ -49,9 +57,14 @@ internal static class SharedAIHelpers
     /// Estimates the token count for a string.
     /// This is a rough estimate - use a library for exact calculation.
     /// </summary>
+    /// <remarks>
+    /// The estimate counts UTF-8 bytes rather than UTF-16 characters: responses are written as UTF-8, and token budgets
+    /// exist to keep that output under a byte size. Counting characters would let non-ASCII text, such as CJK characters
+    /// that take three bytes each, produce roughly three times the intended output.
+    /// </remarks>
     public static int EstimateTokenCount(string text)
     {
-        return text.Length / 4;
+        return Encoding.UTF8.GetByteCount(text) / 4;
     }
 
     /// <summary>
@@ -88,12 +101,12 @@ internal static class SharedAIHelpers
             .ToList();
         var promptContext = new PromptContext();
 
-        // GetLimitFromEndWithSummary stops at the first entry that doesn't fit, so a single newest log with many
-        // large attributes would otherwise hide every log. Bound each entry's attributes to a quarter of the budget:
-        // the budget is in tokens and EstimateTokenCount counts four characters per token, so maximumTokenLength
-        // characters is a quarter of it. Message and exception are each capped at MaximumStringLength, so a bounded
-        // entry always fits.
-        var maximumAttributesLength = maximumTokenLength;
+        // GetLimitFromEndWithSummary stops at the first entry that doesn't fit, so a single newest log with large
+        // content would otherwise hide every log. Bound the serialized size of each entry's attributes, message and
+        // exception to a quarter of the budget each: the budget is in tokens and EstimateTokenCount counts four UTF-8
+        // bytes per token, so maximumTokenLength bytes is a quarter of it. The remaining quarter is left for the other,
+        // short fields, so a bounded entry always fits.
+        var maximumFieldLength = maximumTokenLength;
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
             logRecords,
@@ -102,7 +115,7 @@ internal static class SharedAIHelpers
             maximumTokenLength,
             "log entry",
             "log entries",
-            i => GetLogEntryDto(i, promptContext, getResourceName, dashboardBaseUrl, maximumAttributesLength),
+            i => GetLogEntryDto(i, promptContext, getResourceName, dashboardBaseUrl, maximumFieldLength),
             EstimateSerializedJsonTokenSize);
 
         var jsonArray = new JsonArray(trimmedItems.ToArray());
@@ -241,20 +254,31 @@ internal static class SharedAIHelpers
             ? OtlpHelpers.UnixNanoSecondsToDateTime(startNano)
             : (DateTime?)null;
 
-        var resources = spansByStart
+        var distinctResources = spansByStart
             .Select(s => getResourceName(s.Resource))
             .Distinct(StringComparer.Ordinal)
-            .Select(name => (JsonNode)name)
+            .ToList();
+        var resources = distinctResources
+            .Take(MaximumSummaryResourceCount)
+            .Select(name => (JsonNode)LimitSerializedLength(name, MaximumSummaryResourceNameLength))
             .ToArray();
+        var resourcesOmitted = distinctResources.Count - resources.Length;
 
+        // Every string in a summary is bounded by its serialized size and the resource list is capped, so a summary
+        // is at most about 11 KB, well under the CompactListTokenLength budget (about 16 KB). That guarantees the newest
+        // trace always fits: GetLimitFromEndWithSummary stops at the first trace that doesn't fit, so an oversized
+        // newest summary would hide every older trace too. Trace and span IDs are left whole because callers use them
+        // to request full detail; OTLP defines them as 16 and 8 byte identifiers, so they are short.
         var summary = new JsonObject
         {
             ["traceId"] = trace.TraceId,
-            ["title"] = LimitLength(rootSpan?.Span.Name, MaximumSummaryStringLength),
+            ["title"] = LimitSerializedLength(rootSpan?.Span.Name, MaximumSummaryStringLength),
             ["timestamp"] = timestamp,
             ["durationMs"] = CalculateTraceDurationMs(trace.Spans),
             ["spanCount"] = trace.Spans.Count,
             ["resources"] = new JsonArray(resources),
+            // Tells the agent the resource list is incomplete; requesting the trace by ID returns every span.
+            ["resourcesOmitted"] = resourcesOmitted > 0 ? resourcesOmitted : null,
             ["hasError"] = firstErrorSpan is not null,
             ["rootSpan"] = rootSpan is null ? null : GetSpanSummaryDto(rootSpan, getResourceName),
             ["slowestSpan"] = slowestSpan is null ? null : GetSpanSummaryDto(slowestSpan, getResourceName),
@@ -291,10 +315,10 @@ internal static class SharedAIHelpers
         var spanObj = new JsonObject
         {
             ["spanId"] = span.SpanId,
-            ["name"] = LimitLength(span.Name, MaximumSummaryStringLength),
+            ["name"] = LimitSerializedLength(span.Name, MaximumSummaryStringLength),
             ["kind"] = GetSpanKindName(span.Kind),
-            ["source"] = getResourceName(spanDto.Resource),
-            ["destination"] = GetAttributeStringValue(span.Attributes, OtlpHelpers.AspireDestinationNameAttribute),
+            ["source"] = LimitSerializedLength(getResourceName(spanDto.Resource), MaximumSummaryResourceNameLength),
+            ["destination"] = LimitSerializedLength(GetAttributeStringValue(span.Attributes, OtlpHelpers.AspireDestinationNameAttribute), MaximumSummaryResourceNameLength),
             ["durationMs"] = CalculateDurationMs(span.StartTimeUnixNano, span.EndTimeUnixNano),
             ["status"] = span.Status?.Code switch
             {
@@ -302,10 +326,10 @@ internal static class SharedAIHelpers
                 2 => "Error",
                 _ => null
             },
-            ["statusMessage"] = LimitLength(span.Status?.Message, MaximumSummaryStringLength),
+            ["statusMessage"] = LimitSerializedLength(span.Status?.Message, MaximumSummaryStringLength),
             ["httpStatus"] = httpStatus,
-            ["statement"] = LimitLength(statement, MaximumSummaryStringLength),
-            ["exception"] = LimitLength(GetSpanExceptionText(span), MaximumSummaryStringLength)
+            ["statement"] = LimitSerializedLength(statement, MaximumSummaryStringLength),
+            ["exception"] = LimitSerializedLength(GetSpanExceptionText(span), MaximumSummaryStringLength)
         };
 
         return StripNullProperties(spanObj);
@@ -991,15 +1015,17 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
-        return GetLogEntryDto(logEntry, context, getResourceName, dashboardBaseUrl, maximumAttributesLength: null);
+        return GetLogEntryDto(logEntry, context, getResourceName, dashboardBaseUrl, maximumFieldLength: null);
     }
 
+    // When maximumFieldLength is set, it is the maximum serialized size in UTF-8 bytes of the attributes, and separately
+    // of the message and of the exception.
     private static JsonObject GetLogEntryDto(
         OtlpLogEntryDto logEntry,
         PromptContext context,
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl,
-        int? maximumAttributesLength)
+        int? maximumFieldLength)
     {
         // `aspire otel logs --format json` uses this shape;
         // keep docs/specs/cli-output-formats.md in sync when changing it.
@@ -1013,9 +1039,10 @@ internal static class SharedAIHelpers
             .ToList();
 
         // Decide whether to bound attributes before any value is registered with the prompt context.
-        // Registered values become "Duplicate of ..." references in later entries, so registering a value
+        // Registered values become "Duplicate of ..." references in entries converted afterwards, so registering a value
         // that is then shortened or dropped here would point those references at data that isn't in the output.
-        var attributesTruncated = maximumAttributesLength is { } maxLength
+        // Sizes are measured as serialized, so escaped characters such as control characters count at their written size.
+        var attributesTruncated = maximumFieldLength is { } maxLength
             && attributes.Sum(a => EstimateAttributeLength(a.Key, LimitLength(a.Value, MaximumStringLength))) > maxLength;
 
         var attributesObject = new JsonObject();
@@ -1024,9 +1051,9 @@ internal static class SharedAIHelpers
         {
             if (attributesTruncated)
             {
-                var boundedValue = LimitLength(value, MaximumSummaryStringLength);
+                var boundedValue = LimitSerializedLength(value, MaximumSummaryStringLength);
                 attributesLength += EstimateAttributeLength(key, boundedValue);
-                if (attributesLength > maximumAttributesLength)
+                if (attributesLength > maximumFieldLength)
                 {
                     break;
                 }
@@ -1045,14 +1072,14 @@ internal static class SharedAIHelpers
             ["logId"] = logId,
             ["spanId"] = logEntry.LogRecord.SpanId,
             ["traceId"] = logEntry.LogRecord.TraceId,
-            ["message"] = context.AddValue(message, id => $@"Duplicate of ""message"" for log entry {id}", logId),
+            ["message"] = AddBoundedValue(message, id => $@"Duplicate of ""message"" for log entry {id}"),
             ["severity"] = logEntry.LogRecord.SeverityText ?? "Unknown",
             ["resourceName"] = resourceName,
             ["attributes"] = attributesObject,
             // Tells the agent that attribute values were shortened or omitted; the full entry is available
             // from the dashboard (dashboardUrl).
             ["attributesTruncated"] = attributesTruncated ? true : null,
-            ["exception"] = context.AddValue(exceptionText, id => $@"Duplicate of ""exception"" for log entry {id}", logId),
+            ["exception"] = AddBoundedValue(exceptionText, id => $@"Duplicate of ""exception"" for log entry {id}"),
             ["source"] = logEntry.ScopeName
         };
 
@@ -1062,12 +1089,83 @@ internal static class SharedAIHelpers
         }
 
         return StripNullProperties(log);
+
+        string? AddBoundedValue(string? value, Func<long?, string> getKey)
+        {
+            // The prompt context caps values at MaximumStringLength characters, which is enough for ASCII text but
+            // not for text written as several bytes per character (CJK text, escaped control characters). Shorten
+            // such values to the field budget instead, without registering them for the same reason as attributes.
+            if (value is not null
+                && maximumFieldLength is { } maxLength
+                && GetSerializedLength(LimitLength(value, MaximumStringLength)) > maxLength)
+            {
+                return LimitSerializedLength(value, maxLength);
+            }
+
+            return context.AddValue(value, getKey, logId);
+        }
     }
 
-    // Approximates the serialized size of "key":"value", including quotes, colon and separator.
+    // Size of "key":"value" as serialized, including quotes, colon and separator.
     private static int EstimateAttributeLength(string key, string value)
     {
-        return key.Length + value.Length + 6;
+        return GetSerializedLength(key) + GetSerializedLength(value) + 6;
+    }
+
+    /// <summary>
+    /// Gets the size in UTF-8 bytes of a string value as written with <see cref="s_jsonSerializerOptions"/>, excluding quotes.
+    /// </summary>
+    /// <remarks>
+    /// Escapes count at their written size: for example, a control character is written as the six bytes <c>\u0001</c>.
+    /// </remarks>
+    private static int GetSerializedLength(ReadOnlySpan<char> value)
+    {
+        return JsonEncodedText.Encode(value, s_jsonSerializerOptions.Encoder).EncodedUtf8Bytes.Length;
+    }
+
+    /// <summary>
+    /// Limits a string so that its serialized size, as measured by <see cref="GetSerializedLength"/>, is at most
+    /// <paramref name="maximumLength"/> UTF-8 bytes, appending a truncation marker if needed.
+    /// </summary>
+    [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(value))]
+    private static string? LimitSerializedLength(string? value, int maximumLength)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        // Every character is written as at least one byte, so no prefix longer than maximumLength characters fits.
+        var candidate = value.AsSpan(0, Math.Min(value.Length, maximumLength));
+        if (candidate.Length == value.Length && GetSerializedLength(candidate) <= maximumLength)
+        {
+            return value;
+        }
+
+        // Find the longest prefix that fits. The serialized size grows with the prefix length, and the candidate is at most
+        // maximumLength characters, so this encodes a short span a few times.
+        var low = 0;
+        var high = candidate.Length;
+        while (low < high)
+        {
+            var middle = (low + high + 1) / 2;
+            if (GetSerializedLength(candidate[..middle]) <= maximumLength)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        // Don't split a surrogate pair: a lone high surrogate isn't valid UTF-16.
+        if (low > 0 && char.IsHighSurrogate(candidate[low - 1]))
+        {
+            low--;
+        }
+
+        return string.Concat(candidate[..low], TruncatedMarker);
     }
 
     /// <summary>
@@ -1122,10 +1220,7 @@ internal static class SharedAIHelpers
             return value;
         }
 
-        return
-            $"""
-            {value.AsSpan(0, maximumLength)}...[TRUNCATED]
-            """;
+        return string.Concat(value.AsSpan(0, maximumLength), TruncatedMarker);
     }
 
     /// <summary>
@@ -1148,26 +1243,28 @@ internal static class SharedAIHelpers
             : values[^limit..];
 
         var currentTokenCount = 0;
-        var serializedValuesCount = 0;
-        var dtos = trimmedItems.Select(i => convertToDto(i)).ToList();
+        var dtos = new List<TResult>();
 
-        // Loop backwards to prioritize the latest items.
-        for (var i = dtos.Count - 1; i >= 0; i--)
+        // Convert from newest to oldest to prioritize the latest items, and stop at the first item that doesn't fit so
+        // items that are not returned are never converted. The order also matters for conversions that deduplicate values
+        // with a PromptContext: a repeated value is written in full in the newest item that has it, and older items refer
+        // to that newer item. The returned items are always a suffix of the list, so every referenced item is returned too.
+        // Converting oldest first would let a returned item refer to an older item that was dropped to fit the budget.
+        for (var i = trimmedItems.Count - 1; i >= 0; i--)
         {
-            var obj = dtos[i];
-            var tokenCount = estimateTokenSize(obj);
+            var dto = convertToDto(trimmedItems[i]);
+            var tokenCount = estimateTokenSize(dto);
 
             if (currentTokenCount + tokenCount > maximumTokenLength)
             {
                 break;
             }
 
-            serializedValuesCount++;
+            dtos.Add(dto);
             currentTokenCount += tokenCount;
         }
 
-        // Trim again with what fits in the token limit.
-        dtos = dtos[^serializedValuesCount..];
+        dtos.Reverse();
 
         return (dtos, GetLimitSummary(totalValues, dtos.Count, itemName, pluralItemName));
     }

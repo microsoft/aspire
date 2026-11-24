@@ -623,6 +623,39 @@ public class ListConsoleLogsToolTests
             ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
     }
 
+    [Fact]
+    public async Task ListConsoleLogsTool_HeadWithSearch_OrdersUntimestampedMatchesByPrecedingReplicaTimestamp()
+    {
+        // The untimestamped continuation line from replica a matches the search, but the timestamped
+        // line it continues doesn't. It must still be ordered at 00:00:03, after replica b's 00:00:01
+        // failure that arrives later.
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            LogLines =
+            [
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 1, Content = "2026-01-01T00:00:03.0000000Z replica a unhandled exception", IsError = true },
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 2, Content = "   at ReplicaA.Startup() failure", IsError = true },
+                new ResourceLogLine { ResourceName = "api-service-def", LineNumber = 1, Content = "2026-01-01T00:00:01.0000000Z replica b failure binding port", IsError = true }
+            ]
+        };
+        monitor.AddConnection("socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement("api-service"),
+            ["from"] = JsonSerializer.SerializeToElement("head"),
+            ["search"] = JsonSerializer.SerializeToElement("failure"),
+            ["limit"] = JsonSerializer.SerializeToElement(1)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith("Returned first 1 console log. Later 1 console log not returned because of size limits.", text, StringComparison.Ordinal);
+        Assert.Equal("replica b failure binding port", ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
+    }
+
     [Theory]
     [InlineData("""{"from":"middle"}""", "Argument 'from' must be one of: tail, head.")]
     [InlineData("""{"limit":2001}""", "Argument 'limit' must be an integer from 1 through 2000.")]

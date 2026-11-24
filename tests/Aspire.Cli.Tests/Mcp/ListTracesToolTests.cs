@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
@@ -782,8 +783,87 @@ public class ListTracesToolTests
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
-        Assert.InRange(text.Length, 1, 20_000);
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
         Assert.StartsWith("Returned latest ", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ListTracesTool_DefaultResponseStaysCompact_WhenTracesHaveNonAsciiText()
+    {
+        // CJK characters are written as three UTF-8 bytes each, so these summaries are three times larger than their
+        // character count.
+        var spans = Enumerable.Range(0, 20).SelectMany(traceIndex => new[]
+        {
+            new OtlpSpanJson
+            {
+                TraceId = $"trace{traceIndex:D2}",
+                SpanId = $"root{traceIndex:D2}",
+                Name = new string((char)(0x4E00 + traceIndex), 1000),
+                StartTimeUnixNano = 1706540400000000000 + (ulong)traceIndex * 1000,
+                EndTimeUnixNano = 1706540400100000000 + (ulong)traceIndex * 1000,
+                Status = new OtlpSpanStatusJson { Code = 2, Message = new string((char)(0x5E00 + traceIndex), 1000) }
+            },
+            new OtlpSpanJson
+            {
+                TraceId = $"trace{traceIndex:D2}",
+                SpanId = $"child{traceIndex:D2}",
+                ParentSpanId = $"root{traceIndex:D2}",
+                Name = new string((char)(0x6E00 + traceIndex), 1000),
+                StartTimeUnixNano = 1706540400000000001 + (ulong)traceIndex * 1000,
+                EndTimeUnixNano = 1706540400090000000 + (ulong)traceIndex * 1000,
+                Status = new OtlpSpanStatusJson { Code = 2, Message = new string((char)(0x7E00 + traceIndex), 1000) },
+                Attributes = [new OtlpKeyValueJson { Key = "db.query.text", Value = new OtlpAnyValueJson { StringValue = new string((char)(0x8E00 + traceIndex), 1000) } }]
+            }
+        }).ToArray();
+        using var handler = CreateHandler(CreateTracesResponse(CreateResourceSpans("api", spans)), ["api"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+        Assert.StartsWith("Returned latest 3 traces. Earlier 17 traces not returned because of size limits.", text, StringComparison.Ordinal);
+        var traces = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["trace17", "trace18", "trace19"], traces.Select(trace => trace!["traceId"]!.GetValue<string>()));
+
+        // 512 bytes hold 170 three-byte characters.
+        Assert.Equal($"{new string((char)(0x4E00 + 19), 170)}...[TRUNCATED]", traces[^1]!["title"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ListTracesTool_BoundsResources_WhenNewestTraceHasManyResources()
+    {
+        // 300 distinct 64-character resource names exceed the whole list budget by themselves, so without bounding
+        // the newest trace would not fit and the response would contain no traces at all.
+        var resourceNames = Enumerable.Range(0, 300).Select(index => $"resource{index:D3}".PadRight(64, 'x')).ToArray();
+        var newestTrace = resourceNames.Select((name, index) => CreateResourceSpans(name, new OtlpSpanJson
+        {
+            TraceId = "newest",
+            SpanId = $"span{index:D3}",
+            ParentSpanId = index == 0 ? null : "span000",
+            Name = $"operation {index}",
+            StartTimeUnixNano = 1706540400000001000 + (ulong)index,
+            EndTimeUnixNano = 1706540400100000000
+        }));
+        var olderTraces = CreateResourceSpans("api",
+            new OtlpSpanJson { TraceId = "older1", SpanId = "older1", Name = "GET /older1", StartTimeUnixNano = 1706540400000000001, EndTimeUnixNano = 1706540400100000000 },
+            new OtlpSpanJson { TraceId = "older2", SpanId = "older2", Name = "GET /older2", StartTimeUnixNano = 1706540400000000002, EndTimeUnixNano = 1706540400100000000 });
+        using var handler = CreateHandler(CreateTracesResponse([olderTraces, .. newestTrace]), ["api", .. resourceNames]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+        Assert.StartsWith("Returned 3 traces.", text, StringComparison.Ordinal);
+        var traces = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["older1", "older2", "newest"], traces.Select(trace => trace!["traceId"]!.GetValue<string>()));
+
+        var newest = traces[^1]!;
+        Assert.Equal(300, newest["spanCount"]!.GetValue<int>());
+        Assert.Equal(resourceNames[..16], newest["resources"]!.AsArray().Select(resource => resource!.GetValue<string>()));
+        Assert.Equal(284, newest["resourcesOmitted"]!.GetValue<int>());
+        Assert.Null(traces[0]!["resourcesOmitted"]);
     }
 
     [Fact]

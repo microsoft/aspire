@@ -103,32 +103,62 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                 // Keep the earliest matching lines, but read the whole stream so the summary can report how many
                 // later lines were not returned. Replicas of a resource stream their histories concurrently, so
                 // arrival order isn't log order: a slower replica's startup failure can arrive after a faster
-                // replica's later lines. Entries are ordered like the tail path (and the dashboard) with
-                // LogEntries.InsertSorted, and the latest entry is dropped whenever more than limit are kept.
-                // The buffer has room for one extra entry because a full LogEntries evicts its earliest entry,
-                // which is the one head needs to keep.
-                var headEntries = new LogEntries(maximumEntryCount: limit + 1) { BaseLineNumber = 1 };
+                // replica's later lines.
+                //
+                // Each line gets a sort key before the search filter is applied. A timestamped line uses its own
+                // timestamp. An untimestamped line (for example a stack trace continuation) uses the latest
+                // timestamp seen so far from the same replica, so it stays next to the line it continues. Lines
+                // a replica writes before its first timestamped line are treated as its first output and sort
+                // before everything else (DateTime.MinValue). Ties keep arrival order. Anchoring has to happen
+                // before filtering because a continuation line can match the search while the timestamped line it
+                // continues doesn't; filtering first would leave the match without a position in the log.
+                //
+                // Only the limit smallest keys are kept, in a max-heap, so memory is bounded by limit rather than
+                // by the size of the log.
+                var headEntries = new PriorityQueue<LogEntry, HeadSortKey>(limit + 1, HeadSortKeyDescendingComparer.Instance);
+                var lastTimestampByReplica = new Dictionary<string, DateTime>(StringComparer.Ordinal);
                 var totalLogsCount = 0;
+                var arrivalIndex = 0L;
                 await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
                 {
                     var entry = logParser.CreateLogEntry(logLine.Content, logLine.IsError, resourceName);
+
+                    DateTime timestamp;
+                    if (entry.Timestamp is { } entryTimestamp)
+                    {
+                        timestamp = entryTimestamp;
+                        lastTimestampByReplica[logLine.ResourceName] = entryTimestamp;
+                    }
+                    else if (!lastTimestampByReplica.TryGetValue(logLine.ResourceName, out timestamp))
+                    {
+                        timestamp = DateTime.MinValue;
+                    }
+
+                    var key = new HeadSortKey(timestamp, arrivalIndex++);
+
                     if (!Matches(entry, fragments))
                     {
                         continue;
                     }
 
                     totalLogsCount++;
-                    headEntries.InsertSorted(entry);
-
-                    var entries = headEntries.GetEntries();
-                    if (entries.Count > limit)
+                    if (headEntries.Count < limit)
                     {
-                        entries.RemoveAt(entries.Count - 1);
+                        headEntries.Enqueue(entry, key);
+                    }
+                    else if (headEntries.TryPeek(out _, out var latestKey) && key.CompareTo(latestKey) < 0)
+                    {
+                        headEntries.DequeueEnqueue(entry, key);
                     }
                 }
 
+                var orderedHeadEntries = headEntries.UnorderedItems
+                    .OrderBy(item => item.Priority)
+                    .Select(item => item.Element)
+                    .ToList();
+
                 (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromStartWithSummary(
-                    headEntries.GetEntries().ToList(),
+                    orderedHeadEntries,
                     totalLogsCount,
                     limit,
                     SharedAIHelpers.CompactListTokenLength,
@@ -209,5 +239,26 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                 state.Item1.Contains(fragment, StringComparisons.FullTextSearch) ||
                 state.Item2.Contains(fragment, StringComparisons.FullTextSearch) ||
                 state.Item3.Contains(fragment, StringComparisons.FullTextSearch));
+    }
+
+    private readonly record struct HeadSortKey(DateTime Timestamp, long ArrivalIndex) : IComparable<HeadSortKey>
+    {
+        public int CompareTo(HeadSortKey other)
+        {
+            var result = Timestamp.CompareTo(other.Timestamp);
+            return result != 0 ? result : ArrivalIndex.CompareTo(other.ArrivalIndex);
+        }
+    }
+
+    // PriorityQueue dequeues the smallest priority first; inverting the order makes its root the latest kept entry,
+    // which is the one to evict when an earlier match arrives.
+    private sealed class HeadSortKeyDescendingComparer : IComparer<HeadSortKey>
+    {
+        public static readonly HeadSortKeyDescendingComparer Instance = new();
+
+        public int Compare(HeadSortKey x, HeadSortKey y)
+        {
+            return y.CompareTo(x);
+        }
     }
 }

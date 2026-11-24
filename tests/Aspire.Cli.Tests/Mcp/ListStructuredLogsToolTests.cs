@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
@@ -698,7 +700,7 @@ public class ListStructuredLogsToolTests
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
-        Assert.InRange(text.Length, 1, 20_000);
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
         Assert.StartsWith("Returned latest ", text, StringComparison.Ordinal);
     }
 
@@ -724,7 +726,7 @@ public class ListStructuredLogsToolTests
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
-        Assert.InRange(text.Length, 1, 20_000);
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
         Assert.StartsWith("Returned 2 log entries.", text, StringComparison.Ordinal);
         var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
         Assert.Equal(["older small", "newest large"], logs.Select(log => log!["message"]!.GetValue<string>()));
@@ -737,6 +739,89 @@ public class ListStructuredLogsToolTests
         var attributes = newest["attributes"]!.AsObject();
         Assert.Equal(["large.0", "large.1", "large.2", "large.3", "large.4", "large.5", "large.6"], attributes.Select(a => a.Key));
         Assert.Equal($"{new string('a', 512)}...[TRUNCATED]", attributes["large.0"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_DuplicateReferencesPointToReturnedLogs_WhenOriginalIsOutsideBudget()
+    {
+        // The newest log repeats the oldest message, which falls outside the budget. Its message must be written in full
+        // instead of referring to the dropped log. Log 9 repeats the message of log 7, and both are returned.
+        var messages = Enumerable.Range(0, 9).Select(index => new string((char)('a' + index), 2048)).ToList();
+        messages.Add(messages[7]);
+        messages.Add(messages[0]);
+        using var handler = CreateHandler(CreateLogsResponse(messages.ToArray()));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        var logIds = logs.Select(log => log!["logId"]!.GetValue<long>()).ToList();
+        Assert.Equal([3, 4, 5, 6, 7, 8, 9, 10], logIds);
+        Assert.Equal(messages[0], logs[^1]!["message"]!.GetValue<string>());
+        Assert.Equal(messages[7], logs[^2]!["message"]!.GetValue<string>());
+
+        var references = logs
+            .Select(log => log!["message"]!.GetValue<string>())
+            .Where(message => message.StartsWith("Duplicate of ", StringComparison.Ordinal))
+            .ToList();
+        Assert.Equal(["""Duplicate of "message" for log entry 9"""], references);
+        Assert.All(references, reference => Assert.Contains(long.Parse(reference[(reference.LastIndexOf(' ') + 1)..], CultureInfo.InvariantCulture), logIds));
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_DefaultResponseStaysCompact_WhenLogsHaveNonAsciiMessages()
+    {
+        // CJK characters are written as three UTF-8 bytes each, so these messages are three times larger than their
+        // character count. Each exceeds the per-field budget and is shortened to fit it.
+        var messages = Enumerable.Range(0, 9).Select(index => new string((char)(0x4E00 + index), 1500)).ToArray();
+        using var handler = CreateHandler(CreateLogsResponse(messages));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+        Assert.StartsWith("Returned latest 3 log entries. Earlier 6 log entries not returned because of size limits.", text, StringComparison.Ordinal);
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(
+            messages[6..].Select(message => $"{message[..1365]}...[TRUNCATED]"),
+            logs.Select(log => log!["message"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_BoundsAttributes_WhenNewestLogHasEscapedAttributeValues()
+    {
+        // Control characters are written as six-byte escapes such as \u0001, so these values are small when counted in
+        // characters but serialize beyond the whole list budget.
+        var resourceLogs = CreateResourceLogs("api", (0, "older small"), (1, "newest escaped"));
+        var newestLog = resourceLogs.ScopeLogs![0].LogRecords![1];
+        newestLog.Attributes =
+        [
+            .. newestLog.Attributes!,
+            .. Enumerable.Range(0, 7).Select(index => new OtlpKeyValueJson
+            {
+                Key = $"control.{index}",
+                Value = new OtlpAnyValueJson { StringValue = new string((char)(1 + index), 512) }
+            })
+        ];
+        using var handler = CreateHandler(CreateResourceLogsResponse(resourceLogs));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+        Assert.StartsWith("Returned 2 log entries.", text, StringComparison.Ordinal);
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["older small", "newest escaped"], logs.Select(log => log!["message"]!.GetValue<string>()));
+
+        var newest = logs[1]!;
+        Assert.True(newest["attributesTruncated"]!.GetValue<bool>());
+        Assert.Equal(
+            Enumerable.Range(0, 7).Select(index => ($"control.{index}", $"{new string((char)(1 + index), 85)}...[TRUNCATED]")),
+            newest["attributes"]!.AsObject().Select(a => (a.Key, a.Value!.GetValue<string>())));
     }
 
     [Theory]
