@@ -2,9 +2,24 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../WaitCommandStrings.resx">
     <body>
+      <trans-unit id="AllOptionDescription">
+        <source>Wait for every resource the AppHost starts. Resources that wait for an explicit start are skipped.</source>
+        <target state="new">Wait for every resource the AppHost starts. Resources that wait for an explicit start are skipped.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AllResourcesDone">
+        <source>Done waiting for {0} resources. ({1:F1}s)</source>
+        <target state="new">Done waiting for {0} resources. ({1:F1}s)</target>
+        <note>{0} is the number of resources waited for; {1} is the elapsed time in seconds.</note>
+      </trans-unit>
       <trans-unit id="Description">
-        <source>Wait for a resource to reach a target status</source>
-        <target state="translated">Aguarde até que um recurso alcance um status de destino</target>
+        <source>Wait for one or more resources to reach a target status</source>
+        <target state="needs-review-translation">Aguarde até que um recurso alcance um status de destino</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="new">Output format (Table or Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidStatusValue">
@@ -12,19 +27,79 @@
         <target state="translated">Valor de status inválido "{0}". Os valores válidos são: íntegro, para cima, para baixo.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourceArgumentDescription">
-        <source>The name of the resource to wait for</source>
-        <target state="translated">O nome do recurso a ser aguardado</target>
+      <trans-unit id="NoResourcesToWaitFor">
+        <source>No resources to wait for.</source>
+        <target state="new">No resources to wait for.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourceAndAllConflict">
+        <source>Resource names cannot be combined with --all.</source>
+        <target state="new">Resource names cannot be combined with --all.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceArgumentDescription">
+        <source>The names of the resources to wait for</source>
+        <target state="needs-review-translation">O nome do recurso a ser aguardado</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceCompleted">
+        <source>Resource '{0}' completed successfully (exit code 0). ({1:F1}s)</source>
+        <target state="new">Resource '{0}' completed successfully (exit code 0). ({1:F1}s)</target>
+        <note>{0} is the resource name; {1} is the elapsed time in seconds.</note>
       </trans-unit>
       <trans-unit id="ResourceEnteredFailedState">
         <source>Resource '{0}' entered a failed state: {1}</source>
         <target state="translated">O recurso "{0}" entrou em um estado de falha: {1}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceLineCancelled">
+        <source>{0}: not {1}, stopped waiting after another resource failed, {2}</source>
+        <target state="new">{0}: not {1}, stopped waiting after another resource failed, {2}</target>
+        <note>{0} is the resource name; {1} is the target status; {2} is the current resource state.</note>
+      </trans-unit>
+      <trans-unit id="ResourceLineCompleted">
+        <source>{0}: completed (exit code 0)</source>
+        <target state="new">{0}: completed (exit code 0)</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceLineFailed">
+        <source>{0}: failed, {1}</source>
+        <target state="new">{0}: failed, {1}</target>
+        <note>{0} is the resource name; {1} is the resource state or error.</note>
+      </trans-unit>
+      <trans-unit id="ResourceLineNotFound">
+        <source>{0}: not found</source>
+        <target state="new">{0}: not found</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceLineReady">
+        <source>{0}: {1}</source>
+        <target state="new">{0}: {1}</target>
+        <note>{0} is the resource name; {1} is the target status.</note>
+      </trans-unit>
+      <trans-unit id="ResourceLineSkipped">
+        <source>{0}: skipped, waiting for an explicit start</source>
+        <target state="new">{0}: skipped, waiting for an explicit start</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceLineTimedOut">
+        <source>{0}: not {1} before the timeout, {2}</source>
+        <target state="new">{0}: not {1} before the timeout, {2}</target>
+        <note>{0} is the resource name; {1} is the target status; {2} is the current resource state.</note>
+      </trans-unit>
+      <trans-unit id="ResourceLineWithEndpoints">
+        <source>{0} - {1}</source>
+        <target state="new">{0} - {1}</target>
+        <note>{0} is the resource line; {1} is a comma-separated list of endpoint URLs.</note>
+      </trans-unit>
       <trans-unit id="ResourceNotFound">
         <source>Resource '{0}' was not found.</source>
         <target state="translated">O recurso "{0}" não foi encontrado.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOrAllRequired">
+        <source>Specify one or more resource names, or use --all.</source>
+        <target state="new">Specify one or more resource names, or use --all.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceReachedTargetStatus">
@@ -32,10 +107,25 @@
         <target state="translated">O recurso "{0}" é {1}. ({2:F1}s)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesFailed">
+        <source>{0} of {1} resources failed.</source>
+        <target state="new">{0} of {1} resources failed.</target>
+        <note>{0} is the number of failed resources; {1} is the number of resources waited for.</note>
+      </trans-unit>
+      <trans-unit id="ResourcesTimedOut">
+        <source>{0} of {1} resources were not {2} after {3}s.</source>
+        <target state="new">{0} of {1} resources were not {2} after {3}s.</target>
+        <note>{0} is the number of resources that timed out; {1} is the number of resources waited for; {2} is the target status; {3} is the timeout in seconds.</note>
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>connect to</source>
         <target state="translated">conectar a</target>
         <note />
+      </trans-unit>
+      <trans-unit id="StateWithExitCode">
+        <source>{0} (exit code: {1})</source>
+        <target state="new">{0} (exit code: {1})</target>
+        <note>{0} is the resource state; {1} is the process exit code.</note>
       </trans-unit>
       <trans-unit id="StatusOptionDescription">
         <source>The target status to wait for (healthy, up, down). Defaults to healthy.</source>
@@ -52,15 +142,30 @@
         <target state="translated">Tempo máximo de espera em segundos. O padrão é 120.</target>
         <note />
       </trans-unit>
+      <trans-unit id="UnknownState">
+        <source>Unknown</source>
+        <target state="new">Unknown</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WaitTimedOut">
         <source>Timed out waiting for resource '{0}' to be {1} after {2}s.</source>
         <target state="translated">Tempo limite atingido ao aguardar o recurso "{0}" ser {1} após {2}s.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WaitingForAllResources">
+        <source>Waiting for all resources to be {0}...</source>
+        <target state="new">Waiting for all resources to be {0}...</target>
+        <note>{0} is the target status.</note>
+      </trans-unit>
       <trans-unit id="WaitingForResource">
         <source>Waiting for resource '{0}' to be {1}...</source>
         <target state="translated">Aguardando o recurso "{0}" ser {1}...</target>
         <note />
+      </trans-unit>
+      <trans-unit id="WaitingForResources">
+        <source>Waiting for {0} resources to be {1}...</source>
+        <target state="new">Waiting for {0} resources to be {1}...</target>
+        <note>{0} is the number of resources; {1} is the target status.</note>
       </trans-unit>
     </body>
   </file>

@@ -43,7 +43,7 @@ C# AppHosts created with Aspire 17 or later use package directives instead of th
 | `start <resource>` | Start a stopped resource. |
 | `stop [<resource>]` | Stop a running apphost or the specified resource. |
 | `restart <resource>` | Restart a running resource. |
-| `wait <resource>` | Wait for a resource to reach a target status. |
+| `wait <resource>... \| --all` | Wait for one or more resources, or every resource, to reach a target status. |
 | `command <resource> <command>` | Execute a command on a resource. |
 
 ### Monitoring
@@ -306,6 +306,10 @@ aspire stop
 # Wait for a resource to be healthy (CI/scripts)
 aspire start
 aspire wait webapi --timeout 60
+
+# Wait for several resources, or for every resource the AppHost starts
+aspire wait webapi cache --timeout 60
+aspire wait --all
 
 # Add an integration
 aspire add redis
