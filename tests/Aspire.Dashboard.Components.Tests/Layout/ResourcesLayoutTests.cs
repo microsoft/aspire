@@ -2067,7 +2067,7 @@ public class ResourcesLayoutTests : DashboardTestContext
                 [
                     Command("custom", "Custom", CommandViewModelState.Enabled, customHighlighted),
                     Command(CommandViewModel.SetParameterCommand, "Set parameter", setState, setHighlighted),
-                    Command(CommandViewModel.DeleteParameterCommand, "Delete parameter", hasValue ? CommandViewModelState.Enabled : CommandViewModelState.Hidden, true)
+                    Command(CommandViewModel.DeleteParameterCommand, "Delete parameter", hasValue ? CommandViewModelState.Enabled : CommandViewModelState.Hidden, highlighted: false)
                 ]),
                 ModelTestHelpers.CreateResource("api")
             ],
@@ -2101,11 +2101,6 @@ public class ResourcesLayoutTests : DashboardTestContext
             if (showSetInline)
             {
                 expectedActions.Add(("Set parameter setting", readOnly || setState == CommandViewModelState.Disabled));
-            }
-
-            if (hasValue && expectedActions.Count < 2)
-            {
-                expectedActions.Add(("Delete parameter setting", readOnly));
             }
 
             expectedActions.Add(("Actions for setting", false));
