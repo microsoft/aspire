@@ -21,6 +21,7 @@ internal sealed class DcpConnectionTestProcess(
     internal const string SessionDirectoryFileName = "dcp-session-directory";
     internal const string StandardOutputFileName = "dcp-stdout.log";
     internal const string StandardErrorFileName = "dcp-stderr.log";
+    internal const int StartupAndReadinessTimeoutSeconds = 30;
 
     public string FileName => inner.FileName;
     public IReadOnlyList<string> Arguments => inner.Arguments;
@@ -91,11 +92,11 @@ internal sealed class DcpConnectionTestProcess(
                 startInfo.StandardErrorHandle = standardError;
                 var execution = new ProcessExecution(startInfo, NullLogger.Instance, options, new HostEnvironment());
                 return new DcpConnectionTestProcess(execution, (process, cancellationToken) =>
-                    NotifyAsync(readinessName, "guardian", ProcessTestIdentity.Capture(process.ProcessId), cancellationToken));
+                    NotifyAsync(readinessName, "supervisor", ProcessTestIdentity.Capture(process.ProcessId), cancellationToken));
             }
         };
         DcpConnectionChecker.DcpConnectionTestSession session;
-        using (var startup = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+        using (var startup = new CancellationTokenSource(TimeSpan.FromSeconds(StartupAndReadinessTimeoutSeconds)))
         {
             session = await DcpConnectionChecker.DcpConnectionTestSession.StartAsync(
                 dcpDirectory,
@@ -114,14 +115,14 @@ internal sealed class DcpConnectionTestProcess(
         {
             var process = Assert.Single(recordingFactory.CreatedExecutions);
             var sessionDirectory = Assert.IsType<string>(process.EnvironmentVariables["DCP_SESSION_FOLDER"]);
-            using (var readiness = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+            using (var readiness = new CancellationTokenSource(TimeSpan.FromSeconds(StartupAndReadinessTimeoutSeconds)))
             {
                 var controllerIdentity = await ReadControllerAsync(
                     standardOutputPath, standardErrorPath, process.FileName, readiness.Token);
                 await WaitForApiAsync(Path.Combine(sessionDirectory, "kubeconfig"), readiness.Token);
                 Assert.True(ProcessStartTimeHelper.IsProcessRunning(controllerIdentity.ProcessId, controllerIdentity.StartTime));
                 await Task.WhenAll(
-                    NotifyAsync(readinessName, "runtime", ProcessTestIdentity.Capture(process.ProcessId), readiness.Token),
+                    NotifyAsync(readinessName, "target", ProcessTestIdentity.Capture(process.ProcessId), readiness.Token),
                     NotifyAsync(readinessName, "worker", controllerIdentity, readiness.Token));
             }
 

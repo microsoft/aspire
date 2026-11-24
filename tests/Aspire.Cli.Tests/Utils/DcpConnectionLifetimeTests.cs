@@ -145,10 +145,13 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
         {
             // Capture the root before waiting for controller readiness so startup failures can
             // still clean up the exact owned API server.
-            var apiServer = await readiness.ReadGuardianAsync();
+            var apiServer = await readiness.ReadSupervisorAsync();
             identities.Add(apiServer);
             processes.Add(Process.GetProcessById(apiServer.ProcessId));
-            var tree = await readiness.ReadTreeAsync();
+            // Account for DcpConnectionTestProcess startup and readiness times, plus a buffer for slower CI machines.
+            var treeReadinessTimeout = TimeSpan.FromSeconds(2 * DcpConnectionTestProcess.StartupAndReadinessTimeoutSeconds)
+                + TestConstants.DefaultTimeoutTimeSpan;
+            var tree = await readiness.ReadTreeAsync(treeReadinessTimeout);
             Assert.Equal(apiServer, tree[0]);
             identities.Add(tree[1]);
             processes.Add(Process.GetProcessById(tree[1].ProcessId));
