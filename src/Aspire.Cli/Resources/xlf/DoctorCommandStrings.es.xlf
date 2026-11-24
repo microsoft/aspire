@@ -581,7 +581,7 @@ El archivo heredado sigue funcionando; se trata de una advertencia que no impide
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
         <source>Run 'aspire update --migrate' to apply the recommended migration.</source>
-        <target state="translated">Ejecute "update --migrate" para aplicar la migración recomendada.</target>
+        <target state="translated">Ejecute "aspire update --migrate" para aplicar la migración recomendada.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">

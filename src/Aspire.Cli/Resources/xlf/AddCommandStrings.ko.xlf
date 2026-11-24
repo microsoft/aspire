@@ -94,7 +94,7 @@
       </trans-unit>
       <trans-unit id="IntegrationSourceExplanation">
         <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
-        <target state="translated">하나 이상의 통합 원본이 구성되었습니다. 통합 소스를 사용하면 organization에서 통합을 공유하여 개발 환경을 사용자 지정할 수 있습니다.</target>
+        <target state="translated">하나 이상의 통합 원본이 구성되었습니다. 통합 소스를 사용하면 조직에서 통합을 공유하여 개발 환경을 사용자 지정할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">

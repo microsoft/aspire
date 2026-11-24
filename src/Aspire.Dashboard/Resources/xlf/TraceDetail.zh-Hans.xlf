@@ -9,7 +9,7 @@
       </trans-unit>
       <trans-unit id="TotalItemsFooterSingularText">
         <source>Showing &lt;strong&gt;{0} span&lt;/strong&gt;</source>
-        <target state="translated">显示了 {0} 个跨度&lt;strong&gt;&lt;/strong&gt;</target>
+        <target state="translated">显示了 &lt;strong&gt;{0} 个跨度&lt;/strong&gt;</target>
         <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
       </trans-unit>
       <trans-unit id="TraceDetailBackToTraces">

@@ -169,7 +169,7 @@
       </trans-unit>
       <trans-unit id="OverviewGraphAccessibleLabel">
         <source>Resource graph. The resource list shows the same resources in an accessible format</source>
-        <target state="translated">Ressourcendiagramm Die Ressourcenliste zeigt dieselben Ressourcen in einem barrierefreien Format an.</target>
+        <target state="translated">Ressourcendiagramm. Die Ressourcenliste zeigt dieselben Ressourcen in einem barrierefreien Format an.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterDeleteValueAction">

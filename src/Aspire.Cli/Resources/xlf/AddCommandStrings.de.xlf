@@ -94,7 +94,7 @@
       </trans-unit>
       <trans-unit id="IntegrationSourceExplanation">
         <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
-        <target state="translated">Mindestens eine Integrationsquelle ist konfiguriert. Eine Integrationsquelle ermöglicht es einer organization, Integrationen freizugeben, um Ihre Entwicklungserfahrung anzupassen.</target>
+        <target state="translated">Mindestens eine Integrationsquelle ist konfiguriert. Eine Integrationsquelle ermöglicht es einer Organisation, Integrationen freizugeben, um Ihre Entwicklungserfahrung anzupassen.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">

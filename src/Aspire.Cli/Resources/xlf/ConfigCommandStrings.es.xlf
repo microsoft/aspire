@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="ConfigurationArrayIndexOutOfRange">
         <source>Array index {0} in configuration key '{1}' is out of range. Edit an existing element or append at index {2}.</source>
-        <target state="translated">El índice de matriz {0} en la clave de configuración '{1}' está fuera del intervalo. Edite un elemento o anexar existente en el índice {2}.</target>
+        <target state="translated">El índice de matriz {0} en la clave de configuración '{1}' está fuera del intervalo. Edite un elemento existente o añada uno en el índice {2}.</target>
         <note>{0} is the requested index, {1} is the configuration key, and {2} is the array length.</note>
       </trans-unit>
       <trans-unit id="ConfigurationArrayRequired">

@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to wait for</source>
-        <target state="translated">Der Name der Ressource, die neu gestartet werden soll</target>
+        <target state="translated">Der Name der Ressource, auf die gewartet werden soll</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceEnteredFailedState">

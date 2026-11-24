@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerUnitPerInterval">
         <source>{0} per interval</source>
-        <target state="translated">間隔ごとに {0} 件</target>
+        <target state="translated">間隔ごとの {0}</target>
         <note>{0} is the instrument's unit, e.g. "Requests"</note>
       </trans-unit>
       <trans-unit id="ClearAllResources">
