@@ -126,6 +126,17 @@ public static partial class JavaScriptHostingExtensions
     /// you can add one and configure the install and run scripts using the provided extension methods.
     ///
     /// If the application directory contains a <c>package.json</c> file, npm will be added as the default package manager.
+    ///
+    /// The resource receives the standard OpenTelemetry environment variables, such as <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>
+    /// and <c>OTEL_SERVICE_NAME</c>. They only take effect when the app registers an OpenTelemetry SDK: without one, the
+    /// app sends no traces, metrics, or logs to the dashboard. A minimal setup installs the
+    /// <c>@opentelemetry/auto-instrumentations-node</c> package in the app and loads its <c>register</c> module when Node
+    /// starts, for example through <c>NODE_OPTIONS</c>:
+    /// <code lang="csharp">
+    /// builder.AddNodeApp("frontend", "../frontend", "app.js")
+    ///        .WithEnvironment("NODE_OPTIONS", "--require @opentelemetry/auto-instrumentations-node/register");
+    /// </code>
+    /// See <see href="https://opentelemetry.io/docs/zero-code/js/"/> for other registration options.
     /// </remarks>
     /// <example>
     /// Add a Node app to the application model using yarn and 'yarn run dev' for running during development:
@@ -456,6 +467,11 @@ public static partial class JavaScriptHostingExtensions
     ///
     /// If the application directory contains a <c>package.json</c> file, Bun will be added as the default package manager.
     /// When publishing to a container, the default base image is <c>oven/bun:1</c> for both the build and runtime stages.
+    ///
+    /// The resource receives the standard OpenTelemetry environment variables, such as <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>
+    /// and <c>OTEL_SERVICE_NAME</c>. They only take effect when the app registers an OpenTelemetry SDK: without one, the
+    /// app sends no traces, metrics, or logs to the dashboard. See <see href="https://opentelemetry.io/docs/languages/js/"/>
+    /// for how to register the OpenTelemetry JavaScript SDK.
     /// </remarks>
     /// <example>
     /// Add a Bun app to the application model:
@@ -1158,6 +1174,17 @@ public static partial class JavaScriptHostingExtensions
     /// If a Dockerfile does not exist in the application's directory, one will be generated
     /// automatically when publishing. The method configures the resource with Node.js defaults and sets up npm
     /// integration.
+    ///
+    /// The resource receives the standard OpenTelemetry environment variables, such as <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>
+    /// and <c>OTEL_SERVICE_NAME</c>. They only take effect when the app registers an OpenTelemetry SDK: without one, the
+    /// app sends no traces, metrics, or logs to the dashboard. A minimal setup installs the
+    /// <c>@opentelemetry/auto-instrumentations-node</c> package in the app and loads its <c>register</c> module when Node
+    /// starts, for example through <c>NODE_OPTIONS</c>:
+    /// <code lang="csharp">
+    /// builder.AddJavaScriptApp("frontend", "../frontend")
+    ///        .WithEnvironment("NODE_OPTIONS", "--require @opentelemetry/auto-instrumentations-node/register");
+    /// </code>
+    /// See <see href="https://opentelemetry.io/docs/zero-code/js/"/> for other registration options.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = DefaultJavaScriptRunScriptName)
@@ -1974,6 +2001,18 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
+    /// <para>
+    /// The resource receives the standard OpenTelemetry environment variables, such as <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>
+    /// and <c>OTEL_SERVICE_NAME</c>. They only take effect when the app registers an OpenTelemetry SDK: without one, the
+    /// app sends no traces, metrics, or logs to the dashboard. A minimal setup installs the
+    /// <c>@opentelemetry/auto-instrumentations-node</c> package in the app and loads its <c>register</c> module when Node
+    /// starts, for example through <c>NODE_OPTIONS</c>:
+    /// <code lang="csharp">
+    /// builder.AddViteApp("frontend", "./frontend")
+    ///        .WithEnvironment("NODE_OPTIONS", "--require @opentelemetry/auto-instrumentations-node/register");
+    /// </code>
+    /// See <see href="https://opentelemetry.io/docs/zero-code/js/"/> for other registration options.
+    /// </para>
     /// <example>
     /// The following example creates a Vite app using npm as the package manager.
     /// <code lang="csharp">
@@ -2176,6 +2215,12 @@ public static partial class JavaScriptHostingExtensions
     /// The standalone output check runs before the container image build during publish and deployment,
     /// including Azure Container Apps and App Service. Resources excluded from publishing are not validated.
     /// Use <see cref="DisableBuildValidation"/> when the configuration cannot be statically inspected.
+    /// </para>
+    /// <para>
+    /// The resource receives the standard OpenTelemetry environment variables, such as <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>
+    /// and <c>OTEL_SERVICE_NAME</c>. They only take effect when the app registers an OpenTelemetry SDK: without one, the
+    /// app sends no traces, metrics, or logs to the dashboard. Next.js apps register it in their <c>instrumentation</c>
+    /// file; see <see href="https://nextjs.org/docs/app/guides/open-telemetry"/>.
     /// </para>
     /// <example>
     /// The following example creates a Next.js app.

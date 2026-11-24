@@ -311,6 +311,11 @@ is available, the cell shows only the state. This presentation applies only to
 the table without `--follow`; JSON and NDJSON retain the separate `state` and
 numeric `exitCode` fields.
 
+Without `--follow`, when the dashboard reports no telemetry from a `Running` resource
+whose AppHost configured OTLP export for it, the table is followed by a note naming those
+resources and explaining that the `OTEL_*` settings only take effect when the app registers
+an OpenTelemetry SDK. JSON snapshot output carries the same information in `telemetryReceived`.
+
 `aspire resources` is an alias for `aspire describe`. Use `--format mermaid` to export a resource graph snapshot directly to stdout:
 
 ```bash
@@ -382,6 +387,7 @@ Progress and informational messages go to stderr, so redirection captures only M
 | `exitCode` | Process exit code, when the resource has exited. |
 | `healthStatus` | Current health status, when available. |
 | `dashboardUrl` | Dashboard URL for the resource, when available. |
+| `telemetryReceived` | Whether the dashboard has received any telemetry from the resource. Present only in snapshot output (not `--follow`), when the AppHost configured OTLP export for the resource (the AppHost set `OTEL_EXPORTER_OTLP_ENDPOINT` on it; an inherited or image-defined value doesn't count) and the dashboard telemetry API could be read. `false` usually means the app doesn't register an OpenTelemetry SDK, or hasn't done any work yet. |
 | `relationships` | Related resources as `{ "type": "...", "resourceName": "..." }`. |
 | `urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`. |
 | `volumes` | Volume objects with `source`, `target`, `mountType`, and `isReadOnly`. |

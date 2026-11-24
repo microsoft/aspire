@@ -54,6 +54,41 @@ The runtime used for local development must be installed and available on `PATH`
 entry point directly by default; use `WithDenoTask`, `WithDenoServe`, and the other `WithDeno*` APIs
 to select another mode or configure permissions and runtime flags.
 
+### OpenTelemetry
+
+The Node.js, Bun, Vite, Next.js, and generic JavaScript resources receive the standard OpenTelemetry
+environment variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_SERVICE_NAME`. These variables
+only take effect when the app registers an OpenTelemetry SDK. Without one, the app sends no traces,
+metrics, or logs, and the dashboard, `aspire otel`, and the MCP server show no telemetry for it.
+`aspire describe` and the MCP `list_resources` tool flag running resources that are configured for
+OpenTelemetry but haven't sent any telemetry. Deno resources use Deno's built-in OpenTelemetry
+support and don't need an SDK.
+
+For a Node.js-based app, a minimal setup installs the auto-instrumentation package in the app:
+
+```bash
+npm install @opentelemetry/auto-instrumentations-node
+```
+
+Then load its `register` module when Node starts, for example through `NODE_OPTIONS` on the resource:
+
+**C#**
+
+```csharp
+builder.AddViteApp("frontend", "../frontend")
+       .WithEnvironment("NODE_OPTIONS", "--require @opentelemetry/auto-instrumentations-node/register");
+```
+
+**TypeScript**
+
+```typescript
+await builder.addViteApp("frontend", "../frontend")
+    .withEnvironment("NODE_OPTIONS", "--require @opentelemetry/auto-instrumentations-node/register");
+```
+
+See the [OpenTelemetry JavaScript zero-code instrumentation documentation](https://opentelemetry.io/docs/zero-code/js/)
+for other registration options.
+
 ### Publishing
 
 Next.js hosting and the JavaScript publishing helpers are stable APIs and do not require suppressing

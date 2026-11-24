@@ -90,6 +90,13 @@ internal sealed class ResourceJson
     public string? DashboardUrl { get; set; }
 
     /// <summary>
+    /// Whether the dashboard has received any telemetry from the resource. Only set when the AppHost configured
+    /// OTLP export for the resource and the dashboard telemetry API could be read. <see langword="false"/> means the
+    /// app has exported nothing so far, for example because it doesn't register an OpenTelemetry SDK.
+    /// </summary>
+    public bool? TelemetryReceived { get; set; }
+
+    /// <summary>
     /// The relationships of the resource.
     /// </summary>
     public ResourceRelationshipJson[]? Relationships { get; set; }

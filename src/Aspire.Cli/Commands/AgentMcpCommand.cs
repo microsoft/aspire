@@ -191,7 +191,7 @@ internal sealed class AgentMcpCommand : BaseCommand
         {
             var dashboardInfoProvider = new BackchannelDashboardInfoProvider(_auxiliaryBackchannelMonitor, _logger);
 
-            _knownTools[KnownMcpTools.ListResources] = new ListResourcesTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListResourcesTool>());
+            _knownTools[KnownMcpTools.ListResources] = new ListResourcesTool(_auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListResourcesTool>());
             _knownTools[KnownMcpTools.WaitForResources] = new WaitForResourcesTool(
                 _auxiliaryBackchannelMonitor,
                 _resourceWaitService,

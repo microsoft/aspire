@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Dashboard.Model;
+using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -18,12 +21,13 @@ namespace Aspire.Cli.Tests.Mcp;
 public class ListResourcesToolTests(ITestOutputHelper outputHelper)
 {
     private const string AppHostPath = "/repo/TestAppHost/TestAppHost.csproj";
+    private static readonly TestHttpClientFactory s_httpClientFactory = new();
 
     [Fact]
     public async Task ListResourcesTool_ThrowsException_WhenNoAppHostRunning()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var exception = await Assert.ThrowsAsync<McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
@@ -39,7 +43,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         var connection = CreateConnection("/other/Private/Private.AppHost.csproj");
         connection.IsInScope = false;
         monitor.AddConnection("hash1", "socket.hash1", connection);
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var exception = await Assert.ThrowsAsync<McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
@@ -56,7 +60,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection());
 
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         Assert.True(result.IsError is null or false);
@@ -80,7 +84,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                 ResourceTypeDisplayName = "ASP.NET Core",
                 State = "Running"
             }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -142,7 +146,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                     ResourceType = "Container",
                     State = "Running"
                 }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(
             CallToolContextTestHelper.Create(),
@@ -200,7 +204,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                     ResourceType = "Container",
                     State = "Hidden"
                 }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(
             CallToolContextTestHelper.Create(),
@@ -250,7 +254,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                     ResourceType = "Container",
                     State = "Hidden"
                 }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(
             CallToolContextTestHelper.Create(),
@@ -295,7 +299,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         };
         var connection = CreateConnection(realAppHostPath);
         monitor.AddConnection("hash1", "socket.hash1", connection);
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -331,7 +335,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
             });
         monitor.AddConnection("hash1", "socket.hash1", connection);
 
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         using var json = GetResourceData(result);
@@ -343,7 +347,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ListResourcesTool_DescribesPaginationInputs()
     {
-        var tool = new ListResourcesTool(new TestAuxiliaryBackchannelMonitor(), NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(new TestAuxiliaryBackchannelMonitor(), s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         await Verify(tool.GetInputSchema().GetRawText(), "json");
     }
@@ -366,7 +370,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
     public async Task ListResourcesTool_RejectsInvalidPaginationBeforeReadingResources(string json, string invalidArgument)
     {
         using var arguments = JsonDocument.Parse(json);
-        var tool = new ListResourcesTool(new TestAuxiliaryBackchannelMonitor(), NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(new TestAuxiliaryBackchannelMonitor(), s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var context = CallToolContextTestHelper.Create(
             arguments.RootElement.EnumerateObject().ToDictionary(property => property.Name, property => property.Value));
 
@@ -403,7 +407,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         });
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket.hash1", connection);
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var returnedNames = new List<string?>();
 
         foreach (var offset in new[] { 0, 64, 128 })
@@ -447,7 +451,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
             new ResourceSnapshot { Name = "first" },
             new ResourceSnapshot { Name = "second" },
             new ResourceSnapshot { Name = "third" }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var context = CallToolContextTestHelper.Create(new Dictionary<string, JsonElement>
         {
             ["offset"] = JsonSerializer.SerializeToElement(offset),
@@ -490,7 +494,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         snapshots.Add(new ResourceSnapshot { Name = "redis-hidden", DisplayName = "Redis", IsHidden = true });
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection([.. snapshots]));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var context = CallToolContextTestHelper.Create(new Dictionary<string, JsonElement>
         {
             ["limit"] = JsonSerializer.SerializeToElement(1)
@@ -559,7 +563,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                 new ResourceSnapshotCommand { Name = "none", State = "Enabled", Visibility = "None" }
             ]
         }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -590,7 +594,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         }).ToArray();
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection(new ResourceSnapshot { Name = "api", Commands = commands }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var context = CallToolContextTestHelper.Create(new Dictionary<string, JsonElement>
         {
             ["limit"] = JsonSerializer.SerializeToElement(1)
@@ -642,7 +646,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                 ResourceType = "Custom",
                 State = state
             }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -693,7 +697,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         }).ToArray();
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection(snapshots));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -743,7 +747,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                         [KnownProperties.Executable.Path] = JsonValue.Create(@"C:\repo\bin\worker.exe")
                     }
                 }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -794,7 +798,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                         [KnownProperties.Container.Image] = JsonValue.Create("redis:8")
                     }
                 }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -822,7 +826,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                     [KnownProperties.Container.Image] = JsonValue.Create(sourceValue)
                 }
             }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -855,7 +859,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                     new ResourceSnapshotUrl { Name = "windows", Url = @"C:\repo\private.txt" }
                 ]
             }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(
             CallToolContextTestHelper.Create(),
@@ -1011,7 +1015,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         };
         monitor.AddConnection("hash1", "socket.hash1", connection);
 
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         using var json = GetResourceData(result);
@@ -1062,7 +1066,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
                     ["unrelated.full.property"] = JsonValue.Create<object>(cyclicValue)
                 }
             }));
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
@@ -1084,7 +1088,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         var sink = new TestSink();
         var logger = new TestLogger<ListResourcesTool>(
             new TestLoggerFactory(sink, enabled: true));
-        var tool = new ListResourcesTool(monitor, logger);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, logger);
 
         var exception = await Assert.ThrowsAsync<McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
@@ -1121,7 +1125,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
             throw expectedException;
         };
         monitor.AddConnection("hash1", "socket.hash1", connection);
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), cancellationSource.Token).AsTask()).DefaultTimeout();
@@ -1136,7 +1140,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection("/repo/First/First.AppHost.csproj"));
         monitor.AddConnection("hash2", "socket.hash2", CreateConnection("/repo/Second/Second.AppHost.csproj"));
 
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var exception = await Assert.ThrowsAsync<McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
@@ -1158,7 +1162,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         };
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection("/repo/Other/Other.AppHost.csproj"));
 
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var exception = await Assert.ThrowsAsync<McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
@@ -1181,7 +1185,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection(pinnedAppHostPath));
         monitor.AddConnection("hash2", "socket.hash2", CreateConnection(pinnedAppHostPath));
 
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
 
         var exception = await Assert.ThrowsAsync<McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
@@ -1191,6 +1195,75 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
             "Multiple running AppHost instances match the selected path. Stop the extra instance and retry.",
             exception.Message);
         Assert.DoesNotContain(pinnedAppHostPath, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ListResourcesTool_ReportsWhetherOtlpConfiguredResourcesSentTelemetry()
+    {
+        var resourcesJson = JsonSerializer.Serialize(
+            new ResourceInfoJson[] { new() { Name = "api", InstanceId = "abc", DisplayName = "api-abc", HasTraces = true } },
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+        using var handler = new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(resourcesJson, System.Text.Encoding.UTF8, "application/json")
+        });
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnectionWithDashboardApi(
+            CreateOtlpResource("api-abc", "api"),
+            CreateOtlpResource("frontend-xyz", "frontend"),
+            new ResourceSnapshot { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Running" }));
+        var tool = new ListResourcesTool(monitor, new MockHttpClientFactory(handler), NullLogger<ListResourcesTool>.Instance);
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        using var json = GetResourceData(result);
+        Assert.Equal(
+            new (string?, bool?)[] { ("api-abc", true), ("cache", null), ("frontend-xyz", false) },
+            json.RootElement.EnumerateArray().Select(resource => (
+                resource.GetProperty("name").GetString(),
+                resource.TryGetProperty("telemetry_received", out var received) ? received.GetBoolean() : (bool?)null)));
+        Assert.Single(
+            GetResultText(result).Split('\n'),
+            line => line.StartsWith("telemetry_received: false means the AppHost configured OpenTelemetry export", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ListResourcesTool_OmitsTelemetryStatusWhenDashboardApiFails()
+    {
+        using var handler = new MockHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnectionWithDashboardApi(CreateOtlpResource("frontend-xyz", "frontend")));
+        var tool = new ListResourcesTool(monitor, new MockHttpClientFactory(handler), NullLogger<ListResourcesTool>.Instance);
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        using var json = GetResourceData(result);
+        var resource = Assert.Single(json.RootElement.EnumerateArray());
+        Assert.Equal("frontend-xyz", resource.GetProperty("name").GetString());
+        Assert.False(resource.TryGetProperty("telemetry_received", out _));
+    }
+
+    private static ResourceSnapshot CreateOtlpResource(string name, string displayName) => new()
+    {
+        Name = name,
+        DisplayName = displayName,
+        ResourceType = "Executable",
+        State = "Running",
+        EnvironmentVariables = [new ResourceSnapshotEnvironmentVariable { Name = "OTEL_EXPORTER_OTLP_ENDPOINT", Value = "http://localhost:4318", IsFromSpec = true }]
+    };
+
+    private static TestAppHostAuxiliaryBackchannel CreateConnectionWithDashboardApi(params ResourceSnapshot[] snapshots)
+    {
+        var connection = CreateConnection(snapshots);
+        connection.DashboardInfoResponse = new GetDashboardInfoResponse
+        {
+            ApiBaseUrl = "http://localhost:5000",
+            ApiToken = "test-token",
+            DashboardUrls = ["http://localhost:18888"]
+        };
+        return connection;
     }
 
     private static TestAppHostAuxiliaryBackchannel CreateConnection(params ResourceSnapshot[] snapshots)
