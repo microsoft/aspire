@@ -1285,9 +1285,9 @@ Configurez votre application pour exporter des journaux, des traces et des métr
         <target state="translated">Sélectionner un format</target>
         <note />
       </trans-unit>
-      <trans-unit id="TextVisualizerWordWrapOff">
-        <source>Disable word wrap</source>
-        <target state="new">Disable word wrap</target>
+      <trans-unit id="TextVisualizerWordWrap">
+        <source>Word wrap</source>
+        <target state="translated">Retour automatique à la ligne</target>
         <note />
       </trans-unit>
     </body>
