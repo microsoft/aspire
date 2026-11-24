@@ -1,0 +1,8 @@
+﻿parameters: {}
+secrets: {}
+config:
+  web:
+    Logging__LogLevel__Microsoft.AspNetCore: "Warning"
+    Logging__LogLevel__Microsoft_AspNetCore: "Information"
+    1.feature: "enabled"
+    2FA_ENABLED: "enabled"

@@ -2306,6 +2306,47 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_NonIdentifierEnvironmentVariableKeysUseHelmIndex()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        builder.AddContainer("web", "nginx")
+            .WithEnvironment("Logging__LogLevel__Microsoft.AspNetCore", "Warning")
+            .WithEnvironment("Logging__LogLevel__Microsoft_AspNetCore", "Information")
+            .WithEnvironment("1.feature", "enabled")
+            .WithEnvironment("2FA_ENABLED", "enabled");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/web/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesScalarEnvironmentVariableTypes()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

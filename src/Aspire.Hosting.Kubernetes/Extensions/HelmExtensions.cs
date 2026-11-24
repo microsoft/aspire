@@ -43,7 +43,15 @@ internal static partial class HelmExtensions
         => $"{ValuesSegment}.{SecretsKey}.{resourceName}.{parameterName}".ToHelmValuesSectionName().ToHelmExpression();
 
     public static string ToHelmConfigExpression(this string parameterName, string resourceName)
-        => $"{ValuesSegment}.{ConfigKey}.{resourceName}.{parameterName}".ToHelmValuesSectionName().ToHelmExpression();
+    {
+        var section = $"{ValuesSegment}.{ConfigKey}.{resourceName}".ToHelmValuesSectionName();
+        var key = parameterName.ToHelmValuesSectionName();
+
+        // Go template key chains require identifiers, so use index for other keys. https://pkg.go.dev/text/template#hdr-Arguments
+        return (GoIdentifierPattern().IsMatch(key)
+            ? $"{section}.{key}"
+            : $"index {section} {ToGoStringLiteral(key)}").ToHelmExpression();
+    }
 
     public static string ToHelmChartName(this string applicationName)
         => applicationName.ToLowerInvariant().Replace("_", "-").Replace(".", "-");
@@ -174,6 +182,9 @@ internal static partial class HelmExtensions
                 : match.Value;
         });
     }
+
+    [GeneratedRegex(@"\A[A-Za-z_][A-Za-z0-9_]*\z")]
+    private static partial Regex GoIdentifierPattern();
 
     [GeneratedRegex(@"^\{\{\s*if\b")]
     internal static partial Regex HelmFlowControlPattern();
