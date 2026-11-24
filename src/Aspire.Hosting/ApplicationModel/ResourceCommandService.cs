@@ -596,9 +596,32 @@ public class ResourceCommandService
                 // when the dynamic callback could not run because its dependencies were incomplete.
                 // A callback that ran may intentionally retain a harmless default while leaving the
                 // input disabled, such as Browser Logs keeping the default profile when Shared mode is off.
-                if (loadedDynamicArgumentNames is not null && !string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && !loadedDynamicArgumentNames.Contains(argument.Name))
+                // File inputs carry their value as attached files rather than in Value.
+                var hasValue = argument.InputType == InputType.File
+                    ? argument.GetFiles().Count > 0
+                    : !string.IsNullOrEmpty(value);
+                if (loadedDynamicArgumentNames is not null && hasValue && argument.DynamicLoading is not null && !loadedDynamicArgumentNames.Contains(argument.Name))
                 {
                     context.AddValidationError(argument, "Argument is disabled.");
+                }
+
+                continue;
+            }
+
+            if (argument.InputType == InputType.File)
+            {
+                var files = argument.GetFiles();
+                if (argument.Required && files.Count == 0)
+                {
+                    context.AddValidationError(argument, "Value is required.");
+                }
+                else
+                {
+                    var maxFileCount = InteractionHelpers.GetMaxFileCount(argument.AllowMultipleFiles);
+                    if (files.Count > maxFileCount)
+                    {
+                        context.AddValidationError(argument, $"File count exceeds the maximum of {maxFileCount}.");
+                    }
                 }
 
                 continue;
@@ -776,7 +799,20 @@ public class ResourceCommandService
             return arguments;
         }
 
-        return CreateArguments(annotation.Arguments, CreateArgumentValues(arguments));
+        var normalizedArguments = CreateArguments(annotation.Arguments, CreateArgumentValues(arguments));
+        foreach (var argument in normalizedArguments)
+        {
+            if (argument.InputType == InputType.File &&
+                arguments.TryGetByName(argument.Name, out var suppliedArgument) &&
+                suppliedArgument.GetFiles().Count > 0)
+            {
+                // File content is carried separately from scalar argument values. Keep the transferred
+                // collection attached while rebuilding inputs from the command's authoritative metadata.
+                argument.SetFiles(suppliedArgument.GetFiles());
+            }
+        }
+
+        return normalizedArguments;
     }
 
     private static IReadOnlyDictionary<string, string?>? CreateArgumentValues(InteractionInputCollection arguments)
@@ -811,7 +847,10 @@ public class ResourceCommandService
             Placeholder = input.Placeholder,
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
-            MaxLength = input.MaxLength
+            MaxLength = input.MaxLength,
+            AllowMultipleFiles = input.AllowMultipleFiles,
+            FileFilter = input.FileFilter,
+            MaxFileSize = input.MaxFileSize
         };
     }
 
