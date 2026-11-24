@@ -169,32 +169,32 @@
       </trans-unit>
       <trans-unit id="GitAuthenticationFailed">
         <source>Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</source>
-        <target state="new">Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</target>
+        <target state="translated">Error de autenticación de Git. Configure las credenciales de GIT o la autenticación SSH antes de ejecutar este comando; Las solicitudes de credenciales de terminal están deshabilitadas.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitCommandFailed">
         <source>The Git command failed. Check the repository and selected reference.</source>
-        <target state="new">The Git command failed. Check the repository and selected reference.</target>
+        <target state="translated">Se produjo un error en el comando de Git. Compruebe el repositorio y la referencia seleccionada.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitRepositoryUnavailable">
         <source>The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</source>
-        <target state="new">The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</target>
+        <target state="translated">No se pudo acceder al repositorio de Git. Compruebe su dirección, conectividad de red y sus permisos de acceso.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitTimedOut">
         <source>The Git operation timed out after two minutes.</source>
-        <target state="new">The Git operation timed out after two minutes.</target>
+        <target state="translated">La operación de Git agotó el tiempo de espera tras dos minutos.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnattendedSshUnsupported">
         <source>Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</source>
-        <target state="new">Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</target>
+        <target state="translated">Git sin supervisión requiere un ejecutable de OpenSSH verificado, no un comando SSH personalizado ni un contenedor. Ejecútelo de forma interactiva o seleccione OpenSSH mediante GIT_SSH, y configure las claves y las opciones de host en la configuración de OpenSSH en lugar de usar GIT_SSH_COMMAND o core.sshCommand.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">No se pudo iniciar Git. Instale Git y asegúrese de que está en PATH.</target>
         <note />
       </trans-unit>
       <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="InvalidIntegrationSource">
         <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
-        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <target state="translated">Configuración de origen de integración no válida en '{0}'. Especifique un origen de NuGet sin credenciales incrustadas y, opcionalmente, una lista no vacía de patrones de paquete permitidos (identificadores exactos, prefijos que terminen en * o *).</target>
         <note>{0} is the configuration key. Do not translate NuGet or *.</note>
       </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
@@ -244,7 +244,7 @@
       </trans-unit>
       <trans-unit id="InvalidSourceName">
         <source>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
-        <target state="new">Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <target state="translated">Nombre de origen no válido en '{0}'. Los nombres de origen deben ser de 1 a 64 letras ASCII, dígitos, puntos, guiones o guiones bajos, empezando por una letra o un dígito.</target>
         <note>{0} is the configuration key. Do not translate ASCII.</note>
       </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
@@ -279,7 +279,7 @@
       </trans-unit>
       <trans-unit id="NuGetSourceKeyAlreadyInUse">
         <source>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</source>
-        <target state="new">NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</target>
+        <target state="translated">La clave de origen de NuGet '{0}' ya está reservada por otro origen o su configuración. Elija otra clave de origen de integración o actualice la configuración de NuGet manualmente.</target>
         <note>{0} is the source key. Do not translate NuGet.</note>
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">

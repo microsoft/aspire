@@ -72,5 +72,7 @@ namespace Aspire.Hosting
         public string ProjectDirectory { get { throw null; } }
 
         public string ProjectPath { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

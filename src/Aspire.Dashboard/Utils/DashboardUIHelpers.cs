@@ -6,7 +6,9 @@ using System.Text;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using LayoutResources = Aspire.Dashboard.Resources.Layout;
 
 namespace Aspire.Dashboard.Utils;
 
@@ -90,6 +92,29 @@ internal static class DashboardUIHelpers
         const int TooltipLengthThreshold = 30;
 
         return value is { Length: > TooltipLengthThreshold } ? value : null;
+    }
+
+    /// <summary>
+    /// Formats an elapsed interval using localized relative-time text, such as "5 minutes ago" or "5m ago".
+    /// </summary>
+    public static string FormatTimeAgo(TimeSpan age, IStringLocalizer<LayoutResources> loc, bool useShortFormat, string lessThanMinuteText)
+    {
+        // Negative ages caused by clock skew use the same text as times less than a minute ago.
+        return age switch
+        {
+            { TotalMinutes: < 1 } => lessThanMinuteText,
+            { TotalMinutes: < 2 } when !useShortFormat => loc[nameof(LayoutResources.DashboardRunSelectMinuteAgo)],
+            { TotalHours: < 1 } => loc[
+                useShortFormat ? nameof(LayoutResources.ResourceStartedAgeMinutes) : nameof(LayoutResources.DashboardRunSelectMinutesAgo),
+                (int)age.TotalMinutes],
+            { TotalDays: < 1 } => loc[
+                useShortFormat ? nameof(LayoutResources.ResourceStartedAgeHours) : nameof(LayoutResources.DashboardRunSelectHoursAgo),
+                (int)age.TotalHours],
+            { TotalDays: < 2 } when !useShortFormat => loc[nameof(LayoutResources.DashboardRunSelectDayAgo)],
+            _ => loc[
+                useShortFormat ? nameof(LayoutResources.ResourceStartedAgeDays) : nameof(LayoutResources.DashboardRunSelectDaysAgo),
+                (int)age.TotalDays]
+        };
     }
 
     /// <summary>

@@ -1,0 +1,73 @@
+.overview-status-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: var(--aspire-radius-large);
+    background: var(--aspire-control-background);
+}
+
+.overview-status-header {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    margin-bottom: 10px;
+}
+
+.overview-status-header h2 {
+    margin: 0;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
+    line-height: 20px;
+}
+
+.overview-status-actions {
+    margin-inline-start: auto;
+}
+
+.overview-status-grid {
+    --status-row-height: 28px;
+    min-height: 0;
+    max-height: var(--overview-card-height, none);
+    overflow: auto;
+}
+
+.overview-status-grid ::deep .fluent-data-grid td {
+    /* Fluent sets the default cell height inline. */
+    height: var(--status-row-height) !important;
+    padding-block: 0;
+    border-bottom: none !important;
+    font-size: var(--aspire-font-size-body);
+}
+
+.overview-status-grid ::deep .nameColumn .grid-value {
+    color: var(--colorNeutralForeground3);
+}
+
+.overview-status-grid ::deep td .button-container fluent-button,
+.overview-status-grid ::deep td .button-container fluent-button::part(control) {
+    width: var(--status-row-height);
+    min-width: var(--status-row-height);
+    height: var(--status-row-height);
+    min-height: var(--status-row-height);
+    max-height: var(--status-row-height);
+}
+
+.overview-status-grid ::deep td:first-child {
+    padding-inline-start: 0;
+}
+
+.overview-status-grid ::deep td:last-child {
+    padding-inline-end: 0;
+}
+
+.status-error {
+    color: var(--error);
+    font-weight: var(--aspire-font-weight-semibold);
+}
+
+.overview-status-source {
+    font-family: var(--aspire-font-mono);
+    font-size: var(--aspire-font-size-secondary);
+}

@@ -21,6 +21,7 @@ public sealed class ProcessInvocationOptionsTests
             StandardOutputCallback = _ => { },
             StandardErrorCallback = _ => { },
             NoLaunchProfile = true,
+            NoAutoResponse = true,
             NoRestore = true,
             ExcludeRestorePackageImports = true,
             NuGetRestoreTargetsFile = new FileInfo(Path.Combine(Path.GetFullPath("."), "Candidate.targets")),

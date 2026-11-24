@@ -61,13 +61,13 @@ var parameterWithCustomInput = builder.AddParameter("customInput")
 // Optional parameter without a value: never prompted for and resolves to null.
 var optionalUnset = builder.AddParameter("optionalUnset")
     .WithDescription("Optional parameter with no configured value. It should not be prompted for.")
-    .WithOptional();
+    .AsOptional();
 AddProgrammaticValueCommands(optionalUnset);
 
 // Optional parameter with a value from appsettings.json: behaves like a normal parameter.
 var optionalConfigured = builder.AddParameter("optionalConfigured")
     .WithDescription("Optional parameter with a value configured in appsettings.json.")
-    .WithOptional();
+    .AsOptional();
 AddProgrammaticValueCommands(optionalConfigured);
 
 // Required parameter without configuration whose value is supplied by AppHost code,
@@ -83,8 +83,8 @@ AddProgrammaticValueCommands(programmaticValue);
 // Marking optional and then required again restores normal required behavior (prompted when missing).
 var requiredAfterOptional = builder.AddParameter("requiredAfterOptional")
     .WithDescription("Parameter marked optional and then required again. It should be prompted for.")
-    .WithOptional()
-    .WithRequired();
+    .AsOptional()
+    .AsRequired();
 
 builder.AddDotnetProject("api", "../ParameterEndToEnd.ApiService/ParameterEndToEnd.ApiService.csproj")
        .WithExternalHttpEndpoints()

@@ -2987,6 +2987,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
@@ -3394,16 +3399,17 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -3618,11 +3624,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -3670,6 +3671,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -3737,6 +3743,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -7322,6 +7333,11 @@ type CSharpAppResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) CSharpAppResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -7612,16 +7628,17 @@ type CSharpAppResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) CSharpAppResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -7845,11 +7862,6 @@ type CSharpAppResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) CSharpAppResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -7897,6 +7909,11 @@ type CSharpAppResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) CSharpAppResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -7964,6 +7981,11 @@ type CSharpAppResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) CSharpAppResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -12474,6 +12496,11 @@ type ContainerRegistryResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ContainerRegistryResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -12715,11 +12742,6 @@ type ContainerRegistryResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerRegistryResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -12767,6 +12789,11 @@ type ContainerRegistryResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ContainerRegistryResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -12834,6 +12861,11 @@ type ContainerRegistryResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ContainerRegistryResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -14813,6 +14845,11 @@ type ContainerResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ContainerResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
@@ -15220,16 +15257,17 @@ type ContainerResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ContainerResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -15444,11 +15482,6 @@ type ContainerResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -15496,6 +15529,11 @@ type ContainerResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ContainerResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -15563,6 +15601,11 @@ type ContainerResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ContainerResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -21249,6 +21292,11 @@ type DotnetToolResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) DotnetToolResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -21551,16 +21599,17 @@ type DotnetToolResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) DotnetToolResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -21775,11 +21824,6 @@ type DotnetToolResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) DotnetToolResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -21827,6 +21871,11 @@ type DotnetToolResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) DotnetToolResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -21967,6 +22016,11 @@ type DotnetToolResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) DotnetToolResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -26526,6 +26580,11 @@ type ExecutableResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ExecutableResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -26828,16 +26887,17 @@ type ExecutableResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ExecutableResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -27052,11 +27112,6 @@ type ExecutableResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExecutableResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -27104,6 +27159,11 @@ type ExecutableResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ExecutableResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -27171,6 +27231,11 @@ type ExecutableResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ExecutableResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -30358,6 +30423,11 @@ type ExternalServiceResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ExternalServiceResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -30606,11 +30676,6 @@ type ExternalServiceResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExternalServiceResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -30658,6 +30723,11 @@ type ExternalServiceResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ExternalServiceResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -30725,6 +30795,11 @@ type ExternalServiceResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ExternalServiceResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -34817,6 +34892,25 @@ func (s *loggerFactory) CreateLogger(categoryName string) Logger {
 type ParameterResource interface {
 	handleReference
 
+	// AsOptional marks the parameter resource as optional.
+	//
+	// Optional parameters that do not have values are not prompted for during run
+	// or publish operations. When referenced as environment variables or other
+	// value providers, unset optional parameters resolve to nil. The manifest
+	// publisher does not currently support optional parameters and throws a
+	// DistributedApplicationException.
+	//
+	// Returns: The configured resource builder.
+	AsOptional() ParameterResource
+
+	// AsRequired marks the parameter resource as required.
+	//
+	// Parameters are required by default. Use this method to make a parameter
+	// required again after it was marked with AsOptional.
+	//
+	// Returns: The configured resource builder.
+	AsRequired() ParameterResource
+
 	// CreateExecutionConfiguration creates an execution configuration builder for
 	// the specified resource.
 	//
@@ -35050,6 +35144,11 @@ type ParameterResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ParameterResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -35171,17 +35270,6 @@ type ParameterResource interface {
 	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) ParameterResource
 
-	// WithOptional marks the parameter resource as optional.
-	//
-	// Optional parameters that do not have values are not prompted for during run
-	// or publish operations. When referenced as environment variables or other
-	// value providers, unset optional parameters resolve to nil. The manifest
-	// publisher does not currently support optional parameters and throws a
-	// DistributedApplicationException.
-	//
-	// Returns: The configured resource builder.
-	WithOptional() ParameterResource
-
 	// WithOptionalCallback configures with optional callback
 	//
 	// Parameters:
@@ -35266,14 +35354,6 @@ type ParameterResource interface {
 	// Returns: A resource builder.
 	WithRelationship(resourceBuilder Resource, type_ string) ParameterResource
 
-	// WithRequired sets whether the parameter resource requires a value.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithRequiredOption].
-	//
-	// Returns: The configured resource builder.
-	WithRequired(options ...WithRequiredOption) ParameterResource
-
 	// WithRequiredCommand declares that a resource requires a specific
 	// command/executable to be available on the local machine PATH before it can
 	// start.
@@ -35310,11 +35390,6 @@ type ParameterResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ParameterResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -35362,6 +35437,11 @@ type ParameterResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ParameterResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -35429,6 +35509,11 @@ type ParameterResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ParameterResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -35479,6 +35564,36 @@ type parameterResource struct {
 // newParameterResourceFromHandle wraps an existing handle as ParameterResource.
 func newParameterResourceFromHandle(h *handle, c *client) ParameterResource {
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsOptional marks the parameter resource as optional.
+func (s *parameterResource) AsOptional() ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asOptional", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// AsRequired marks the parameter resource as required.
+func (s *parameterResource) AsRequired() ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asRequired", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
 }
 
 // CreateExecutionConfiguration creates an execution configuration builder for
@@ -36410,21 +36525,6 @@ func (s *parameterResource) WithNestedConfig(config *TestNestedDto) ParameterRes
 	return s
 }
 
-// WithOptional marks the parameter resource as optional.
-func (s *parameterResource) WithOptional() ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptional", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithOptionalCallback configures with optional callback
 func (s *parameterResource) WithOptionalCallback(options ...WithOptionalCallbackOption) ParameterResource {
 	if s.Err() != nil {
@@ -36639,32 +36739,6 @@ func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ str
 	reqArgs["resourceBuilder"] = serializeValue(resourceBuilder)
 	reqArgs["type"] = serializeValue(type_)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderRelationship", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// WithRequired sets whether the parameter resource requires a value.
-func (s *parameterResource) WithRequired(options ...WithRequiredOption) ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithRequiredOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequired", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -38412,6 +38486,11 @@ type ProjectResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ProjectResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -38702,16 +38781,17 @@ type ProjectResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ProjectResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -38935,11 +39015,6 @@ type ProjectResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ProjectResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -38987,6 +39062,11 @@ type ProjectResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ProjectResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -39054,6 +39134,11 @@ type ProjectResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ProjectResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -42378,11 +42463,6 @@ type RequiredCommandValidationContext interface {
 
 	// CancellationToken gets a cancellation token that can be used to cancel the
 	// validation.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	CancellationToken() (*CancellationToken, error)
 
 	// Failure creates a failed validation result with the specified message.
@@ -42392,37 +42472,17 @@ type RequiredCommandValidationContext interface {
 	//
 	// Returns: A [RequiredCommandValidationResult] indicating the command is
 	// invalid.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Failure(validationMessage string) RequiredCommandValidationResult
 
 	// ResolvedPath gets the resolved full path to the command executable.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	ResolvedPath() (string, error)
 
 	// Services gets the service provider for accessing application services.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Services() ServiceProvider
 
 	// Success creates a successful validation result.
 	//
 	// Returns: A [RequiredCommandValidationResult] indicating the command is valid.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Success() RequiredCommandValidationResult
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -42543,24 +42603,17 @@ func (s *requiredCommandValidationContext) Success() RequiredCommandValidationRe
 
 // RequiredCommandValidationResult represents the result of validating a
 // required command.
+//
+// Failed validation logs a warning but does not prevent the resource from
+// attempting to start.
 type RequiredCommandValidationResult interface {
 	handleReference
 
 	// IsValid gets a value indicating whether the command validation succeeded.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	IsValid() (bool, error)
 
 	// ValidationMessage gets an optional validation message describing why
 	// validation failed.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	ValidationMessage() (*string, error)
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -44700,6 +44753,11 @@ type TestDatabaseResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) TestDatabaseResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
@@ -45107,16 +45165,17 @@ type TestDatabaseResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) TestDatabaseResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -45331,11 +45390,6 @@ type TestDatabaseResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestDatabaseResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -45383,6 +45437,11 @@ type TestDatabaseResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) TestDatabaseResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -45450,6 +45509,11 @@ type TestDatabaseResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) TestDatabaseResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -49270,6 +49334,11 @@ type TestRedisResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) TestRedisResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
@@ -49677,16 +49746,17 @@ type TestRedisResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) TestRedisResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -49936,11 +50006,6 @@ type TestRedisResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestRedisResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -49994,6 +50059,11 @@ type TestRedisResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) TestRedisResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -50061,6 +50131,11 @@ type TestRedisResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) TestRedisResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -54886,10 +54961,13 @@ func (o *WithHttpHealthCheckOptions) ToMap() map[string]any {
 // WithMcpServerOptions carries optional parameters for WithMcpServer.
 type WithMcpServerOptions struct {
 	// Path is an optional path to append to the endpoint URL when forming the MCP
-	// server address. Defaults to "/mcp".
+	// server address. Defaults to "/mcp". A leading slash is added if missing. A
+	// null or empty value uses the endpoint URL without an additional path.
 	Path *string `json:"path,omitempty"`
 	// EndpointName is an optional name of the endpoint that hosts the MCP server.
-	// If not specified, defaults to the first HTTPS or HTTP endpoint.
+	// If not specified, selects the endpoint named https, falling back to the
+	// endpoint named http. Names are matched case-insensitively; endpoints with
+	// other names must be selected explicitly, regardless of their URI scheme.
 	EndpointName *string `json:"endpointName,omitempty"`
 }
 
@@ -55136,42 +55214,6 @@ func (o *WithDescriptionOptions) ToMap() map[string]any {
 	}
 	if o.EnableMarkdown != nil {
 		m["enableMarkdown"] = serializeValue(o.EnableMarkdown)
-	}
-	return m
-}
-
-// WithRequiredOptions carries optional parameters for WithRequired.
-type WithRequiredOptions struct {
-	// Required is a value indicating whether the parameter must have a value before
-	// it can be resolved.
-	Required *bool `json:"required,omitempty"`
-}
-
-// WithRequiredOption configures WithRequired.
-type WithRequiredOption interface {
-	apply(*WithRequiredOptions)
-}
-
-func (option *WithRequiredOptions) apply(options *WithRequiredOptions) {
-	if option != nil {
-		*options = *deepUpdate(options, option)
-	}
-}
-
-// RequiredRequired sets Required for WithRequired.
-type RequiredRequired bool
-
-func (value RequiredRequired) apply(options *WithRequiredOptions) {
-	options.Required = (*bool)(&value)
-}
-
-func (o *WithRequiredOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil {
-		return m
-	}
-	if o.Required != nil {
-		m["required"] = serializeValue(o.Required)
 	}
 	return m
 }

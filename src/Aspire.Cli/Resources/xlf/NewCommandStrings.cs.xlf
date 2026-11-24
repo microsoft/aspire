@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BuiltInTemplates">
         <source>Built-in templates</source>
-        <target state="new">Built-in templates</target>
+        <target state="translated">Integrované šablony</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelOptionDescription">
@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredTemplateConflictingOptions">
         <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
-        <target state="new">Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</target>
+        <target state="translated">Šablony z nakonfigurovaných zdrojů nelze kombinovat s parametry --source, --version, --channel ani --language.</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="InvalidConfiguredTemplateSource">
         <source>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</source>
-        <target state="new">Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</target>
+        <target state="translated">Očekává se objekt zdroje s absolutní cestou path nebo s položkou repository a volitelnými položkami ref/path. Zdroj nakonfigurujete příkazem aspire template source add.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -64,17 +64,17 @@
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
         <source>Could not create the local template ({0}): {1}</source>
-        <target state="new">Could not create the local template ({0}): {1}</target>
+        <target state="translated">Nelze vytvořit místní šablonu ({0}): {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateLoadFailed">
         <source>Could not load the local template: {0}</source>
-        <target state="new">Could not load the local template: {0}</target>
+        <target state="translated">Místní šablonu se nepodařilo načíst: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateSelectionRequiresInteraction">
         <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
-        <target state="new">The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</target>
+        <target state="translated">Adresář obsahuje více šablon. Při interaktivním spuštění vyberte jednu z nich, nebo nasměrujte --template-path na adresář s jedinou šablonou.</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
@@ -89,12 +89,12 @@
       </trans-unit>
       <trans-unit id="NoConfiguredTemplateSources">
         <source>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</source>
-        <target state="new">No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</target>
+        <target state="translated">Nejsou nakonfigurované žádné použitelné zdroje šablon. Použijte aspire template source add &lt;name&gt; s parametrem --path nebo --repository. Zdroje se ukládají globálně.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
-        <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <target state="translated">V umístění {0} nebyly nalezeny žádné šablony .NET. Očekával se soubor .template.config/template.json v adresáři nebo v některém z jeho podadresářů.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
@@ -174,212 +174,212 @@
       </trans-unit>
       <trans-unit id="TemplateCommandDescription">
         <source>Manage project templates.</source>
-        <target state="new">Manage project templates.</target>
+        <target state="translated">Správa šablon projektů.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
         <source>The template directory '{0}' does not exist.</source>
-        <target state="new">The template directory '{0}' does not exist.</target>
+        <target state="translated">Adresář šablon {0} neexistuje.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathConflictingOptions">
         <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
-        <target state="new">--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</target>
+        <target state="translated">Volby --template-path a --template-repository vyžadují neprázdné hodnoty a nelze je kombinovat s podpříkazem šablony ani s volbami --source, --version, --channel nebo --language.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathOptionDescription">
         <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
-        <target state="new">Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</target>
+        <target state="translated">Cesta k adresáři rozbaleného balíčku šablony .NET (při zadání --template-repository relativní vůči úložišti)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitExited">
         <source>Git failed with exit code {0}: {1}</source>
-        <target state="new">Git failed with exit code {0}: {1}</target>
+        <target state="translated">Git selhal s ukončovacím kódem {0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitFailed">
         <source>Could not access the template repository: {0}</source>
-        <target state="new">Could not access the template repository: {0}</target>
+        <target state="translated">K úložišti šablon se nepodařilo získat přístup: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Git se nepodařilo spustit. Nainstalujte Git a zajistěte, aby byl v proměnné PATH.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryOptionDescription">
         <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
-        <target state="new">Clone a Git repository containing templates; --template-path is relative to its root</target>
+        <target state="translated">Naklonuje úložiště Git obsahující šablony; --template-path je relativní vůči jeho kořenu.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
         <source>Template repository paths must be relative and stay within the repository without traversing symbolic links.</source>
-        <target state="new">Template repository paths must be relative and stay within the repository without traversing symbolic links.</target>
+        <target state="translated">Cesty k úložištím šablon musí být relativní a musí zůstat v rámci úložiště bez procházení symbolických odkazů.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">
         <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
-        <target state="new">Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</target>
+        <target state="translated">Referenci úložiště šablon {0} se nepodařilo přeložit na SHA potvrzení. Zadejte větev, značku nebo úplnou hodnotu SHA potvrzení.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefOptionDescription">
         <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
-        <target state="new">Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</target>
+        <target state="translated">Větev, značka nebo úplná hodnota SHA potvrzení úložiště šablon (vyžaduje --template-repository; výchozí hodnotou je vzdálený HEAD)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
-        <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <target state="translated">Volba --template-repository-ref vyžaduje --template-repository a neprázdnou hodnotu reference.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAddDescription">
         <source>Add a named template source to global configuration after confirming you trust it.</source>
-        <target state="new">Add a named template source to global configuration after confirming you trust it.</target>
+        <target state="translated">Po potvrzení, že pojmenovanému zdroji šablon důvěřujete, ho přidejte do globální konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAdded">
         <source>Template source '{0}' added to global configuration.</source>
-        <target state="new">Template source '{0}' added to global configuration.</target>
+        <target state="translated">Zdroj šablon {0} se přidal do globální konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAlreadyExists">
         <source>A template source with this name already exists. Remove it before adding a replacement.</source>
-        <target state="new">A template source with this name already exists. Remove it before adding a replacement.</target>
+        <target state="translated">Zdroj šablon s tímto názvem už existuje. Než přidáte náhradu, odeberte ho.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceCannotExtendString">
         <source>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</source>
-        <target state="new">This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</target>
+        <target state="translated">Tento zdroj je řetězec. Před nastavením polí objektu ho odstraňte příkazem aspire config delete {0} --global.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceCommandDescription">
         <source>Manage global template sources.</source>
-        <target state="new">Manage global template sources.</target>
+        <target state="translated">Spravovat globální zdroje šablon.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceConfigurationHeader">
         <source>Configuration</source>
-        <target state="new">Configuration</target>
+        <target state="translated">Konfigurace</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceDisplayNameInvalid">
         <source>Expected a display name string without control characters, or null to use the source alias.</source>
-        <target state="new">Expected a display name string without control characters, or null to use the source alias.</target>
+        <target state="translated">Očekává se řetězec zobrazovaného názvu bez řídicích znaků nebo hodnota null pro použití aliasu zdroje.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceExplanation">
         <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
-        <target state="new">One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</target>
+        <target state="translated">Je nakonfigurovaný minimálně jeden zdroj šablon. Zdroj šablon umožňuje organizaci sdílet šablony Aspire a přizpůsobit vám tak prostředí pro vývoj.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceInvalidRepository">
         <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
-        <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
+        <target state="translated">Očekává se adresa URL úložiště Git přes HTTPS nebo SSH bez hesel, tokenů, dotazů a fragmentů. Uživatelská jména SSH jsou povolená.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceLegacyConfiguration">
         <source>Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</source>
-        <target state="new">Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</target>
+        <target state="translated">Zdroje šablon vyžadují soubor aspire.config.json. Spusťte aspire config info a převeďte starší globální konfiguraci. Potom to zkuste znovu.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListDescription">
         <source>List named template sources without discovering templates.</source>
-        <target state="new">List named template sources without discovering templates.</target>
+        <target state="translated">Vypište pojmenované zdroje šablon bez zjišťování šablon.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListEmpty">
         <source>No template sources are configured. Use 'aspire template source add' to add one.</source>
-        <target state="new">No template sources are configured. Use 'aspire template source add' to add one.</target>
+        <target state="translated">Nejsou nakonfigurované žádné zdroje šablon. Přidejte zdroj příkazem aspire template source add.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceMissingLocation">
         <source>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</source>
-        <target state="new">Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</target>
+        <target state="translated">Zadejte absolutní cestu path pro místní zdroj nebo repository pro zdroj Git. Položka ref vyžaduje repository.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameDescription">
         <source>The name of the template source.</source>
-        <target state="new">The name of the template source.</target>
+        <target state="translated">Název zdroje šablon.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">
         <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
-        <target state="new">Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <target state="translated">Názvy zdrojů šablon musí obsahovat 1 až 64 písmen ASCII, číslic, teček, spojovníků nebo podtržítek a začínat písmenem nebo číslicí.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNotFound">
         <source>Template source '{0}' was not found in global configuration.</source>
-        <target state="new">Template source '{0}' was not found in global configuration.</target>
+        <target state="translated">Zdroj šablon {0} se v globální konfiguraci nenašel.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcePathDescription">
         <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
-        <target state="new">An absolute local template directory, or a repository-relative directory when --repository is specified.</target>
+        <target state="translated">Absolutní cesta k místnímu adresáři šablon nebo relativní adresář v úložišti, pokud je zadaný parametr --repository.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceReadFailed">
         <source>Could not read global template sources. Check the configuration file's JSON format and file permissions.</source>
-        <target state="new">Could not read global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <target state="translated">Nelze číst zdroje globálních šablon. Zkontrolujte formát JSON a oprávnění k souboru konfiguračního souboru.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRefDescription">
         <source>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</source>
-        <target state="new">A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</target>
+        <target state="translated">Větev Gitu, značka nebo úplný hash SHA commitu (vyžaduje --repository, výchozí hodnota: HEAD).</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRemoveDescription">
         <source>Remove a named template source from global configuration.</source>
-        <target state="new">Remove a named template source from global configuration.</target>
+        <target state="translated">Odebrat pojmenovaný zdroj šablon z globální konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRemoved">
         <source>Template source '{0}' removed from global configuration.</source>
-        <target state="new">Template source '{0}' removed from global configuration.</target>
+        <target state="translated">Zdroj šablon {0} se odebral z globální konfigurace.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRepositoryDescription">
         <source>An HTTPS or SSH Git repository URL containing templates.</source>
-        <target state="new">An HTTPS or SSH Git repository URL containing templates.</target>
+        <target state="translated">Adresa URL úložiště Git HTTPS nebo SSH obsahující šablony.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceSearchFailed">
         <source>Could not search template source '{0}': {1}</source>
-        <target state="new">Could not search template source '{0}': {1}</target>
+        <target state="translated">Nepodařilo se prohledat zdroj šablon {0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceSettingInvalid">
         <source>Invalid template setting '{0}': {1}</source>
-        <target state="new">Invalid template setting '{0}': {1}</target>
+        <target state="translated">Neplatné nastavení šablony {0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceStringRequired">
         <source>Expected a nonempty string without control characters.</source>
-        <target state="new">Expected a nonempty string without control characters.</target>
+        <target state="translated">Očekává se neprázdný řetězec bez řídicích znaků.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceTrustPrompt">
         <source>Do you trust template source '{0}' ({1})?</source>
-        <target state="new">Do you trust template source '{0}' ({1})?</target>
+        <target state="translated">Důvěřujete zdroji šablony {0} ({1})?</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceUnknownField">
         <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
-        <target state="new">Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</target>
+        <target state="translated">Neznámé pole zdroje. Použijte path, repository, ref nebo displayName.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceWriteFailed">
         <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
-        <target state="new">Could not update global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <target state="translated">Nelze aktualizovat zdroje globálních šablon. Zkontrolujte formát JSON a oprávnění k souboru konfiguračního souboru.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceYesOptionDescription">
         <source>Trust the template source and skip confirmation.</source>
-        <target state="new">Trust the template source and skip confirmation.</target>
+        <target state="translated">Důvěřovat zdroji šablony a přeskočit potvrzení</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcesMustBeObject">
         <source>The global 'templateSources' setting must be an object containing named template sources.</source>
-        <target state="new">The global 'templateSources' setting must be an object containing named template sources.</target>
+        <target state="translated">Globální nastavení templateSources musí být objekt obsahující pojmenované zdroje šablon.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

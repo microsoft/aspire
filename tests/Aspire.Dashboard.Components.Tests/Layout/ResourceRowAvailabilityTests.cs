@@ -434,9 +434,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Assert.Equal(unavailable, cut.Find("[data-resource-name='test-TestId']").ClassList.Contains("resource-row-unavailable"));
     }
 
-    // The "No logs" and "Not applicable" badges are on the second line of a row, so these tests use a two-line
-    // density. The list starts compact, where an unavailable row is only muted (see
-    // CompactDensity_UnavailableRowKeepsReasonWithoutBadge). Set after loading, which applies stored preferences.
+    // The "No logs" and "Not applicable" badges are on the second line of a row.
     private Task UseComfortableDensityAsync(IRenderedComponent<ResourcesLayout> cut) =>
         cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
 }

@@ -1161,6 +1161,45 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(MigrationStrings.NothingToMigrate, subtleMessages);
     }
 
+    [Theory]
+    [InlineData("""<Project Sdk="Aspire.AppHost.Sdk/13.2.0"></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><Sdk Name="Aspire.AppHost.Sdk" Version="13.2.0" /></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Aspire.Hosting.AppHost" Version="17.0.0" /></ItemGroup></Project>""", false)]
+    public async Task UpdateCommand_WithMigrateFlag_AndNothingPending_ReportsObsoleteAppHostSdk(string projectContent, bool expectObsoleteSdkMessage)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), projectContent);
+
+        var migration = new TestMigration("test-no-pending-migration", 100, descriptor: null);
+
+        var subtleMessages = new List<string>();
+        var interactionService = new TestInteractionService()
+        {
+            DisplaySubtleMessageCallback = subtleMessages.Add
+        };
+        var services = CreateMigrationUpdateServices(workspace, interactionService, migration);
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj --migrate --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(migration.ApplyInvoked);
+        if (expectObsoleteSdkMessage)
+        {
+            Assert.Contains(MigrationStrings.NoAutomaticMigrationsAppHostSdkObsolete, subtleMessages);
+            Assert.DoesNotContain(MigrationStrings.NothingToMigrate, subtleMessages);
+        }
+        else
+        {
+            Assert.Contains(MigrationStrings.NothingToMigrate, subtleMessages);
+            Assert.DoesNotContain(MigrationStrings.NoAutomaticMigrationsAppHostSdkObsolete, subtleMessages);
+        }
+    }
+
     private IServiceCollection CreateMigrationUpdateServices(
         TemporaryWorkspace workspace,
         TestInteractionService interactionService,
@@ -1538,6 +1577,33 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.False(promptForSelectionInvoked, "Channel prompt should not be shown when --channel is provided");
         Assert.Equal("daily", capturedChannel);
+    }
+
+    [Theory]
+    [InlineData("daily", "staging")]
+    [InlineData("local", "staging")]
+    [InlineData("pr-123", "staging")]
+    [InlineData("daily", "StAgInG")]
+    public async Task UpdateCommand_SelfUpdate_WhenStagingUnavailable_DisplaysReason(string identityChannel, string requestedChannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: identityChannel);
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = sp => ActivatorUtilities.CreateInstance<CliDownloader>(sp);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"update --self --channel {requestedChannel}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var expectedReason = string.Format(PackagingStrings.StagingChannelUnavailableOnDailyCli, identityChannel);
+        Assert.Equal($"Failed to update CLI: {expectedReason}", Assert.Single(interactionService.DisplayedErrors));
     }
 
     [Fact]

@@ -68,7 +68,7 @@ public static class ProjectResourceBuilderExtensions
     /// <remarks>This method is not available in polyglot app hosts. Use the overload with projectPath instead.</remarks>
     /// </remarks>
     [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
-    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead. There is no generic AddDotnetProject<TProject>; pass the project path instead of the TProject type.")]
     public static IResourceBuilder<ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, [ResourceName] string name) where TProject : IProjectMetadata, new()
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -107,7 +107,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
-    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -121,7 +121,7 @@ public static class ProjectResourceBuilderExtensions
     /// Adds a .NET project resource
     /// </summary>
     [AspireExport("addProject")]
-    [Obsolete("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.")]
     internal static IResourceBuilder<ProjectResource> AddProjectForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -185,7 +185,7 @@ public static class ProjectResourceBuilderExtensions
     /// <remarks>This method is not available in polyglot app hosts. Use the overload with projectPath instead.</remarks>
     /// </remarks>
     [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
-    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead. There is no generic AddDotnetProject<TProject>; pass the project path instead of the TProject type.")]
     public static IResourceBuilder<ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, [ResourceName] string name, string? launchProfileName) where TProject : IProjectMetadata, new()
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -229,7 +229,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
-    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, string? launchProfileName)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -285,7 +285,7 @@ public static class ProjectResourceBuilderExtensions
     /// <remarks>This method is not available in polyglot app hosts. Use the overload with projectPath instead.</remarks>
     /// </remarks>
     [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
-    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead. There is no generic AddDotnetProject<TProject>; pass the project path instead of the TProject type.")]
     public static IResourceBuilder<ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<ProjectResourceOptions> configure) where TProject : IProjectMetadata, new()
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -333,7 +333,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
-    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -380,7 +380,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path)
     {
@@ -394,7 +394,7 @@ public static class ProjectResourceBuilderExtensions
     /// <summary>
     /// Adds a C# application resource
     /// </summary>
-    [Obsolete("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.")]
     [AspireExport("addCSharpApp")]
     internal static IResourceBuilder<CSharpAppResource> AddCSharpAppForPolyglot(
         this IDistributedApplicationBuilder builder,
@@ -435,7 +435,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
+    [Obsolete("Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
     public static IResourceBuilder<CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {

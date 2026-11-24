@@ -10,7 +10,11 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.4" />
     <PackageVersion Include="Microsoft.DotNet.RemoteExecutor" Version="$(MicrosoftDotNetRemoteExecutorVersion)" />
     <PackageVersion Include="Microsoft.DotNet.XUnitV3Extensions" Version="$(MicrosoftDotNetXUnitV3ExtensionsVersion)" />
+    <!-- bUnit/Fluent UI retain an RC dependency: https://github.com/advisories/GHSA-m28h-pj36-4364 -->
+    <PackageVersion Include="Microsoft.Extensions.Validation" Version="11.0.0" Condition="'$(TargetFramework)' == 'net11.0'" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
+    <!-- Microsoft.Identity.Web.TokenCache retains an older dependency: https://github.com/advisories/GHSA-7hqp-7c5m-4vq6 -->
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.15" Condition="'$(TargetFramework)' == 'net10.0'" />
     <PackageVersion Include="Testcontainers.Kafka" Version="$(TestcontainersPackageVersion)" />
     <PackageVersion Include="Testcontainers.MongoDb" Version="$(TestcontainersPackageVersion)" />
     <PackageVersion Include="Testcontainers.MsSql" Version="$(TestcontainersPackageVersion)" />

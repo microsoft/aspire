@@ -39,12 +39,12 @@ public sealed partial class SqliteTelemetryRepository
                 .ToArray();
             var traceIds = incomingSpans
                 .Select(span => span.TraceId)
-                .Distinct(StringComparer.Ordinal)
+                .Distinct(StringComparers.OtlpTraceId)
                 .ToArray();
             var ingestionState = LoadTraceIngestionState(connection, transaction, incomingSpans, traceIds);
-            var traces = new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
+            var traces = new Dictionary<string, OtlpTrace>(StringComparers.OtlpTraceId);
             var pendingSpans = new List<PendingSpan>();
-            var latestReceivedTimestampTicks = new Dictionary<string, long>(StringComparer.Ordinal);
+            var latestReceivedTimestampTicks = new Dictionary<string, long>(StringComparers.OtlpTraceId);
             var resourcesWithTraces = new HashSet<CachedResource>();
 
             foreach (var resourceSpansItem in resourceSpans)
@@ -134,7 +134,7 @@ public sealed partial class SqliteTelemetryRepository
         IReadOnlyList<IncomingSpanIdentity> incomingSpans,
         IReadOnlyList<string> traceIds)
     {
-        var existingTraces = new Dictionary<string, IngestionTraceRecord>(StringComparer.Ordinal);
+        var existingTraces = new Dictionary<string, IngestionTraceRecord>(StringComparers.OtlpTraceId);
         foreach (var batch in traceIds.Chunk(MaxTraceBatchSize))
         {
             foreach (var record in connection.Query<IngestionTraceRecord>("""
@@ -185,7 +185,7 @@ public sealed partial class SqliteTelemetryRepository
         var ancestors = new List<IngestionAncestorRecord>();
         foreach (var traceBatch in existingTraces.Keys.Chunk(MaxTraceBatchSize))
         {
-            var traceIdSet = traceBatch.ToHashSet(StringComparer.Ordinal);
+            var traceIdSet = traceBatch.ToHashSet(StringComparers.OtlpTraceId);
             var traceIncomingSpans = incomingSpansForExistingTraces
                 .Where(span => traceIdSet.Contains(span.TraceId))
                 .ToArray();
@@ -1053,14 +1053,14 @@ public sealed partial class SqliteTelemetryRepository
             var spanUpdates = new List<PeerSpanUpdateRecord>(MaxSpanDetailBatchSize);
             var traceResourceDeltas = new List<TraceResourceDelta>(MaxSpanDetailBatchSize * 2);
             var uninstrumentedPeerResourceIds = new HashSet<long>();
-            var latestReceivedTimestampTicks = new Dictionary<string, long>(StringComparer.Ordinal);
+            var latestReceivedTimestampTicks = new Dictionary<string, long>(StringComparers.OtlpTraceId);
             var spanAttributes = new List<KeyValuePair<string, string>>();
             PeerRecalculationRowRecord? currentSpan = null;
 
             foreach (var row in rows)
             {
                 if (currentSpan is not null &&
-                    (!string.Equals(currentSpan.TraceId, row.TraceId, StringComparison.Ordinal) ||
+                    (!string.Equals(currentSpan.TraceId, row.TraceId, StringComparisons.OtlpTraceId) ||
                      !string.Equals(currentSpan.SpanId, row.SpanId, StringComparison.Ordinal)))
                 {
                     ProcessSpan(currentSpan, spanAttributes);

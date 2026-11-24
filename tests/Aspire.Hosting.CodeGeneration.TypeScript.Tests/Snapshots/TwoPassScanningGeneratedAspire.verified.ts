@@ -317,7 +317,11 @@ type ReferenceExpressionBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ap
 /** Provides context for validating a required command. */
 type RequiredCommandValidationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext'>;
 
-/** Represents the result of validating a required command. */
+/**
+ * Represents the result of validating a required command.
+ *
+ * Failed validation logs a warning but does not prevent the resource from attempting to start.
+ */
 type RequiredCommandValidationResultHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult'>;
 
 /** A service to execute resource commands. */
@@ -1983,9 +1987,9 @@ export interface WithImageOptions {
 }
 
 export interface WithMcpServerOptions {
-    /** An optional path to append to the endpoint URL when forming the MCP server address. Defaults to `"/mcp"`. */
+    /** An optional path to append to the endpoint URL when forming the MCP server address. Defaults to `"/mcp"`. A leading slash is added if missing. A null or empty value uses the endpoint URL without an additional path. */
     path?: string;
-    /** An optional name of the endpoint that hosts the MCP server. If not specified, defaults to the first HTTPS or HTTP endpoint. */
+    /** An optional name of the endpoint that hosts the MCP server. If not specified, selects the endpoint named `https`, falling back to the endpoint named `http`. Names are matched case-insensitively; endpoints with other names must be selected explicitly, regardless of their URI scheme. */
     endpointName?: string;
 }
 
@@ -2050,11 +2054,6 @@ export interface WithRequiredCommandOptions {
 export interface WithRequiredCommandValidationOptions {
     /** An optional help link URL to guide users when the command is missing or fails validation. */
     helpLink?: string;
-}
-
-export interface WithRequiredOptions {
-    /** A value indicating whether the parameter must have a value before it can be resolved. */
-    required?: boolean;
 }
 
 export interface WithTerminalOptions {
@@ -7963,63 +7962,41 @@ const ReferenceExpressionBuilderPromiseImpl = $aspireCreateFluentPromiseClass<Re
 /** Provides context for validating a required command. */
 export interface RequiredCommandValidationContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the resolved full path to the command executable.
-     * @experimental
-     */
+    /** Gets the resolved full path to the command executable. */
     resolvedPath(): Promise<string>;
-    /**
-     * Gets the service provider for accessing application services.
-     * @experimental
-     */
+    /** Gets the service provider for accessing application services. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets a cancellation token that can be used to cancel the validation.
-     * @experimental
-     */
+    /** Gets a cancellation token that can be used to cancel the validation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
-     * @experimental
      */
     success(): RequiredCommandValidationResultPromise;
     /**
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
-     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise;
 }
 
 export interface RequiredCommandValidationContextPromise extends PromiseLike<RequiredCommandValidationContext> {
-    /**
-     * Gets the resolved full path to the command executable.
-     * @experimental
-     */
+    /** Gets the resolved full path to the command executable. */
     resolvedPath(): Promise<string>;
-    /**
-     * Gets the service provider for accessing application services.
-     * @experimental
-     */
+    /** Gets the service provider for accessing application services. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets a cancellation token that can be used to cancel the validation.
-     * @experimental
-     */
+    /** Gets a cancellation token that can be used to cancel the validation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
-     * @experimental
      */
     success(): RequiredCommandValidationResultPromise;
     /**
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
-     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise;
 }
@@ -8074,7 +8051,6 @@ class RequiredCommandValidationContextImpl implements RequiredCommandValidationC
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
-     * @experimental
      */
     success(): RequiredCommandValidationResultPromise {
         return new RequiredCommandValidationResultPromiseImpl(this._successInternal(), this._client);
@@ -8094,7 +8070,6 @@ class RequiredCommandValidationContextImpl implements RequiredCommandValidationC
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
-     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise {
         return new RequiredCommandValidationResultPromiseImpl(this._failureInternal(validationMessage), this._client);
@@ -8115,31 +8090,23 @@ const RequiredCommandValidationContextPromiseImpl = $aspireCreateFluentPromiseCl
 // RequiredCommandValidationResult
 // ============================================================================
 
-/** Represents the result of validating a required command. */
+/**
+ * Represents the result of validating a required command.
+ *
+ * Failed validation logs a warning but does not prevent the resource from attempting to start.
+ */
 export interface RequiredCommandValidationResult {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets a value indicating whether the command validation succeeded.
-     * @experimental
-     */
+    /** Gets a value indicating whether the command validation succeeded. */
     isValid(): Promise<boolean>;
-    /**
-     * Gets an optional validation message describing why validation failed.
-     * @experimental
-     */
+    /** Gets an optional validation message describing why validation failed. */
     validationMessage(): Promise<string | null>;
 }
 
 export interface RequiredCommandValidationResultPromise extends PromiseLike<RequiredCommandValidationResult> {
-    /**
-     * Gets a value indicating whether the command validation succeeded.
-     * @experimental
-     */
+    /** Gets a value indicating whether the command validation succeeded. */
     isValid(): Promise<boolean>;
-    /**
-     * Gets an optional validation message describing why validation failed.
-     * @experimental
-     */
+    /** Gets an optional validation message describing why validation failed. */
     validationMessage(): Promise<string | null>;
 }
 
@@ -8147,7 +8114,11 @@ export interface RequiredCommandValidationResultPromise extends PromiseLike<Requ
 // RequiredCommandValidationResultImpl
 // ============================================================================
 
-/** Represents the result of validating a required command. */
+/**
+ * Represents the result of validating a required command.
+ *
+ * Failed validation logs a warning but does not prevent the resource from attempting to start.
+ */
 class RequiredCommandValidationResultImpl implements RequiredCommandValidationResult {
     constructor(private _handle: RequiredCommandValidationResultHandle, private _client: AspireClientRpc) {}
 
@@ -10317,13 +10288,13 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10541,13 +10512,13 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -11048,7 +11019,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise {
         let launchProfileOrOptions = options?.launchProfileOrOptions;
@@ -11070,7 +11041,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a C# application resource
      * @param optionsBag Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
         let options = optionsBag?.options;
@@ -13517,7 +13488,6 @@ export interface ContainerRegistryResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise;
     /**
@@ -13709,18 +13679,21 @@ export interface ContainerRegistryResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerRegistryResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ContainerRegistryResourcePromise;
     /**
@@ -13917,7 +13890,6 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise;
     /**
@@ -14109,18 +14081,21 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerRegistryResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ContainerRegistryResourcePromise;
     /**
@@ -14387,7 +14362,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise {
         const helpLink = options?.helpLink;
@@ -15030,6 +15004,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -15049,6 +15024,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -15068,6 +15044,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -16026,9 +16003,12 @@ export interface ContainerResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
     /**
@@ -16067,7 +16047,6 @@ export interface ContainerResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise;
     /**
@@ -16528,18 +16507,21 @@ export interface ContainerResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ContainerResourcePromise;
     /**
@@ -16922,9 +16904,12 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
     /**
@@ -16963,7 +16948,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise;
     /**
@@ -17424,18 +17408,21 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ContainerResourcePromise;
     /**
@@ -18168,9 +18155,12 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise {
         const path = options?.path;
@@ -18273,7 +18263,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise {
         const helpLink = options?.helpLink;
@@ -19774,6 +19763,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -19793,6 +19783,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -19812,6 +19803,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -20739,9 +20731,12 @@ export interface CSharpAppResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
     /**
@@ -20793,7 +20788,6 @@ export interface CSharpAppResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise;
     /**
@@ -21260,18 +21254,21 @@ export interface CSharpAppResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): CSharpAppResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): CSharpAppResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): CSharpAppResourcePromise;
     /**
@@ -21475,9 +21472,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
     /**
@@ -21529,7 +21529,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise;
     /**
@@ -21996,18 +21995,21 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): CSharpAppResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): CSharpAppResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): CSharpAppResourcePromise;
     /**
@@ -22262,9 +22264,12 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise {
         const path = options?.path;
@@ -22413,7 +22418,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise {
         const helpLink = options?.helpLink;
@@ -23934,6 +23938,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -23953,6 +23958,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -23972,6 +23978,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -24956,9 +24963,12 @@ export interface DotnetToolResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise;
     /**
@@ -24989,7 +24999,6 @@ export interface DotnetToolResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise;
     /**
@@ -25458,18 +25467,21 @@ export interface DotnetToolResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): DotnetToolResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): DotnetToolResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): DotnetToolResourcePromise;
     /**
@@ -25728,9 +25740,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise;
     /**
@@ -25761,7 +25776,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise;
     /**
@@ -26230,18 +26244,21 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): DotnetToolResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): DotnetToolResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): DotnetToolResourcePromise;
     /**
@@ -26673,9 +26690,12 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise {
         const path = options?.path;
@@ -26757,7 +26777,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise {
         const helpLink = options?.helpLink;
@@ -28283,6 +28302,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -28302,6 +28322,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -28321,6 +28342,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -29259,9 +29281,12 @@ export interface ExecutableResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise;
     /**
@@ -29292,7 +29317,6 @@ export interface ExecutableResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise;
     /**
@@ -29761,18 +29785,21 @@ export interface ExecutableResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExecutableResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExecutableResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ExecutableResourcePromise;
     /**
@@ -29992,9 +30019,12 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise;
     /**
@@ -30025,7 +30055,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise;
     /**
@@ -30494,18 +30523,21 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExecutableResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExecutableResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ExecutableResourcePromise;
     /**
@@ -30827,9 +30859,12 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise {
         const path = options?.path;
@@ -30911,7 +30946,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise {
         const helpLink = options?.helpLink;
@@ -32437,6 +32471,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -32456,6 +32491,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -32475,6 +32511,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -33401,7 +33438,6 @@ export interface ExternalServiceResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise;
     /**
@@ -33593,18 +33629,21 @@ export interface ExternalServiceResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExternalServiceResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExternalServiceResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ExternalServiceResourcePromise;
     /**
@@ -33806,7 +33845,6 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise;
     /**
@@ -33998,18 +34036,21 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExternalServiceResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExternalServiceResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ExternalServiceResourcePromise;
     /**
@@ -34300,7 +34341,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise {
         const helpLink = options?.helpLink;
@@ -34943,6 +34983,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -34962,6 +35003,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -34981,6 +35023,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -35770,13 +35813,14 @@ export interface ParameterResource {
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise;
+    asOptional(): ParameterResourcePromise;
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    asRequired(): ParameterResourcePromise;
     /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
@@ -35806,7 +35850,6 @@ export interface ParameterResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise;
     /**
@@ -35998,18 +36041,21 @@ export interface ParameterResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ParameterResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ParameterResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ParameterResourcePromise;
     /**
@@ -36217,13 +36263,14 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise;
+    asOptional(): ParameterResourcePromise;
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    asRequired(): ParameterResourcePromise;
     /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
@@ -36253,7 +36300,6 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise;
     /**
@@ -36445,18 +36491,21 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ParameterResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ParameterResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ParameterResourcePromise;
     /**
@@ -36712,10 +36761,10 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalInternal(): Promise<ParameterResource> {
+    private async _asOptionalInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withOptional',
+            'Aspire.Hosting/asOptional',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
@@ -36729,29 +36778,28 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withOptionalInternal(), this._client);
+    asOptional(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._asOptionalInternal(), this._client);
     }
 
     /** @internal */
-    private async _withRequiredInternal(required?: boolean): Promise<ParameterResource> {
+    private async _asRequiredInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
-        if (required !== undefined) rpcArgs.required = required;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withRequired',
+            'Aspire.Hosting/asRequired',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
     }
 
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise {
-        const required = options?.required;
-        return new ParameterResourcePromiseImpl(this._withRequiredInternal(required), this._client);
+    asRequired(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._asRequiredInternal(), this._client);
     }
 
     /** @internal */
@@ -36827,7 +36875,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise {
         const helpLink = options?.helpLink;
@@ -37470,6 +37517,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -37489,6 +37537,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -37508,6 +37557,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -38227,8 +38277,8 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
-    ["withOptional"]: () => ParameterResourcePromiseImpl,
-    ["withRequired"]: () => ParameterResourcePromiseImpl,
+    ["asOptional"]: () => ParameterResourcePromiseImpl,
+    ["asRequired"]: () => ParameterResourcePromiseImpl,
     ["withCustomInput"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommand"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ParameterResourcePromiseImpl,
@@ -38329,9 +38379,12 @@ export interface ProjectResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
     /**
@@ -38383,7 +38436,6 @@ export interface ProjectResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise;
     /**
@@ -38850,18 +38902,21 @@ export interface ProjectResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ProjectResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ProjectResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ProjectResourcePromise;
     /**
@@ -39065,9 +39120,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
     /**
@@ -39119,7 +39177,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise;
     /**
@@ -39586,18 +39643,21 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ProjectResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ProjectResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ProjectResourcePromise;
     /**
@@ -39853,9 +39913,12 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise {
         const path = options?.path;
@@ -40004,7 +40067,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise {
         const helpLink = options?.helpLink;
@@ -41525,6 +41587,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -41544,6 +41607,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -41563,6 +41627,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -42666,9 +42731,12 @@ export interface TestDatabaseResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
     /**
@@ -42707,7 +42775,6 @@ export interface TestDatabaseResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise;
     /**
@@ -43168,18 +43235,21 @@ export interface TestDatabaseResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestDatabaseResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestDatabaseResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestDatabaseResourcePromise;
     /**
@@ -43562,9 +43632,12 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
     /**
@@ -43603,7 +43676,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise;
     /**
@@ -44064,18 +44136,21 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestDatabaseResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestDatabaseResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestDatabaseResourcePromise;
     /**
@@ -44807,9 +44882,12 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise {
         const path = options?.path;
@@ -44912,7 +44990,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise {
         const helpLink = options?.helpLink;
@@ -46413,6 +46490,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -46432,6 +46510,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -46451,6 +46530,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -47558,9 +47638,12 @@ export interface TestRedisResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
     /**
@@ -47599,7 +47682,6 @@ export interface TestRedisResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise;
     /**
@@ -48076,18 +48158,21 @@ export interface TestRedisResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestRedisResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestRedisResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestRedisResourcePromise;
     /**
@@ -48538,9 +48623,12 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
     /**
@@ -48579,7 +48667,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise;
     /**
@@ -49056,18 +49143,21 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestRedisResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestRedisResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestRedisResourcePromise;
     /**
@@ -49867,9 +49957,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise {
         const path = options?.path;
@@ -49972,7 +50065,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise {
         const helpLink = options?.helpLink;
@@ -51509,6 +51601,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -51528,6 +51621,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -51547,6 +51641,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -52947,9 +53042,12 @@ export interface TestVaultResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
     /**
@@ -52988,7 +53086,6 @@ export interface TestVaultResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise;
     /**
@@ -53449,18 +53546,21 @@ export interface TestVaultResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestVaultResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestVaultResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestVaultResourcePromise;
     /**
@@ -53845,9 +53945,12 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
     /**
@@ -53886,7 +53989,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise;
     /**
@@ -54347,18 +54449,21 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestVaultResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestVaultResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestVaultResourcePromise;
     /**
@@ -55092,9 +55197,12 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise {
         const path = options?.path;
@@ -55197,7 +55305,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise {
         const helpLink = options?.helpLink;
@@ -56698,6 +56805,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -56717,6 +56825,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -56736,6 +56845,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -57981,7 +58091,6 @@ export interface Resource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise;
     /**
@@ -58173,18 +58282,21 @@ export interface Resource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ResourcePromise;
     /**
@@ -58381,7 +58493,6 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise;
     /**
@@ -58573,18 +58684,21 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ResourcePromise;
     /**
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ResourcePromise;
     /**
@@ -58852,7 +58966,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise {
         const helpLink = options?.helpLink;
@@ -59495,6 +59608,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -59514,6 +59628,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ResourcePromise {
         return new ResourcePromiseImpl(this._withTagsInternal(tags), this._client);
@@ -59533,6 +59648,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
      * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
     withDisplayOrder(order: number): ResourcePromise {
         return new ResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
@@ -60720,9 +60836,12 @@ export interface ResourceWithEndpoints {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     /**
@@ -60821,9 +60940,12 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     /**
@@ -60943,9 +61065,12 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise {
         const path = options?.path;

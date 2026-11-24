@@ -1,5 +1,10 @@
 ﻿{
   Sources:
+          Name:  default
+    Git source:  https://github.com/microsoft/aspire-skills
+   Marketplace:  aspire-skills
+       Plugins:  aspire@aspire-skills
+
           Name:  pluginsOnly
     Git source:  https://github.com/example/plugins
        Plugins:  aspire@pluginsOnly
