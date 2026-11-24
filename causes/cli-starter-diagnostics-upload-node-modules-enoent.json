@@ -10,6 +10,13 @@
       "job": "Tests / Aspire CLI Starter Validation (macOS x64) / Validate",
       "observed_at": "2026-11-24T22:21:30Z",
       "pr_number": 22322
+    },
+    {
+      "run_id": 43968755832,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/43968755832",
+      "job": "Tests / Aspire CLI Starter Validation (Windows ARM64) / Validate, Tests / Aspire CLI Starter Validation (macOS x64) / Validate",
+      "observed_at": "2026-11-24T22:22:40Z",
+      "pr_number": 22340
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/22347"
