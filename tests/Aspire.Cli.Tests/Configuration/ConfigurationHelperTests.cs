@@ -282,6 +282,57 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WriteSettingsFileAtomically_RetriesWhileStagingFileIsTransientlyLocked(bool destinationExists)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Move and Replace sharing violations are specific to Windows.");
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        if (destinationExists)
+        {
+            await File.WriteAllTextAsync(path, "{}");
+        }
+        FileStream? scanner = null;
+        var attempts = 0;
+
+        try
+        {
+            // Mimic a scanner that opens the freshly written staging file. A new destination is published
+            // with File.Move and an existing one with File.Replace. Releasing the lock in the second
+            // beforeReplace call gates the retry deterministically.
+            await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
+                path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None,
+                beforeReplace: _ =>
+                {
+                    if (++attempts == 1)
+                    {
+                        var staging = Assert.Single(Directory.GetFiles(workspace.Path, "*.tmp"));
+                        scanner = new FileStream(staging, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    }
+                    else
+                    {
+                        scanner?.Dispose();
+                    }
+                    return Task.CompletedTask;
+                }).WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        finally
+        {
+            scanner?.Dispose();
+        }
+
+        Assert.True(attempts >= 2, $"Expected at least one retry, but publication was attempted {attempts} time(s).");
+        Assert.Equal("updated", JsonNode.Parse(await File.ReadAllTextAsync(path))!["custom"]!.GetValue<string>());
+        Assert.Equal(path, Assert.Single(Directory.GetFiles(workspace.Path)));
+    }
+
+    [Theory]
     [InlineData(unchecked((int)0x80070020), true)] // ERROR_SHARING_VIOLATION
     [InlineData(unchecked((int)0x80070021), true)] // ERROR_LOCK_VIOLATION
     [InlineData(unchecked((int)0x80070497), true)] // ERROR_UNABLE_TO_REMOVE_REPLACED

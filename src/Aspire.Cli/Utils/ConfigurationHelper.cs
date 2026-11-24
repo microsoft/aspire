@@ -377,9 +377,10 @@ internal static partial class ConfigurationHelper
             {
                 File.SetUnixFileMode(temporaryPath, mode);
             }
-            // Validation runs before every publication attempt, not just the first. Another process can
-            // edit the destination while a retry waits out a transient lock, and the next attempt must
-            // not silently overwrite that edit.
+            // Validation runs before every publication attempt, not just the first, so a caller's
+            // beforeReplace check can refuse a destination that another process edited while a retry
+            // waited out a transient lock. Writes without beforeReplace overwrite such an edit, just as
+            // they would overwrite one made before the first attempt.
             async Task ValidateBeforePublishAsync()
             {
                 if (unixMetadata is not null && unixMetadata != await ReadUnixMetadataAsync(filePath, cancellationToken))
@@ -416,7 +417,7 @@ internal static partial class ConfigurationHelper
             // An unpublished staging file means an exception is already propagating. Cleanup is best
             // effort so that the process still holding the staging file open (the same kind of lock
             // the retry waits out) cannot replace that exception, including cancellation, with its
-            // own sharing violation. The cost is a leftover hidden .tmp sibling in that rare case.
+            // own sharing violation. The cost is a leftover dot-prefixed .tmp sibling in that rare case.
             if (created && !published)
             {
                 try
@@ -432,8 +433,10 @@ internal static partial class ConfigurationHelper
 
     // Win32 errors that indicate another process briefly has one of the files open. Processes that
     // watch the file system, such as antivirus scanners, indexers, and editor or source control
-    // watchers, can open a freshly written file without FILE_SHARE_DELETE, which makes
-    // ReplaceFile/MoveFileEx fail until they close it.
+    // watchers, can open a file right after it is written. ReplaceFile opens the staging file with no
+    // sharing mode, so any handle on it makes the replace fail. A handle on the destination, or on the
+    // source of a File.Move, only blocks the operation when it was opened without FILE_SHARE_DELETE.
+    // Either way the operation fails until that process closes its handle.
     // See https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-replacefilew.
     // The list is exact rather than any IOException so that deterministic failures, such as a full
     // disk or ERROR_ALREADY_EXISTS from a tracked edit that refuses to overwrite a competing file,
