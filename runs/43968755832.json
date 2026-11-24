@@ -3,7 +3,7 @@
   "run_attempt": 1,
   "run_url": "https://github.com/microsoft/aspire/actions/runs/43968755832",
   "run_scope": "pull-request",
-  "analyzed_at": "2026-11-24T22:22:40Z",
+  "analyzed_at": "2026-11-24T22:24:05Z",
   "verdict": "transient-infra",
   "pr": {
     "number": 22340,
