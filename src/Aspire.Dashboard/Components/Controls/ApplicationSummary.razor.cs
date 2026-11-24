@@ -59,6 +59,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private TelemetryRefreshGeneration? _telemetryRefresh;
     private bool _isLoaded;
     private IReadOnlyList<string>? _scopedResourceNames;
+    private IReadOnlyList<ResourceKey>? _scopedTelemetryKeys;
     private DotNetObjectReference<ApplicationSummaryInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
     private bool _graphInitializing;
@@ -75,6 +76,10 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     /// </summary>
     [Parameter]
     public IReadOnlyList<string>? ResourceNames { get; set; }
+
+    // Null queries all sources; an empty scope has no telemetry. The overview resolves these keys the same way as Traces.
+    [Parameter]
+    public IReadOnlyList<ResourceKey>? TelemetryResourceKeys { get; set; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
@@ -266,15 +271,23 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
 
         // Resolve the first selection after the resource snapshot is available, not from a temporary unscoped query.
-        var scopeChanged = _scopedResourceNames is null != ResourceNames is null ||
+        var resourceNamesChanged = _scopedResourceNames is null != ResourceNames is null ||
             (_scopedResourceNames is not null && ResourceNames is not null && !_scopedResourceNames.SequenceEqual(ResourceNames, StringComparers.ResourceName));
-        if (scopeChanged)
+        if (resourceNamesChanged)
         {
             _scopedResourceNames = ResourceNames?.ToList();
         }
 
-        UpdateTelemetryRefresh(scopeChanged);
-        if (scopeChanged)
+        // Hiding telemetry-only sources can change the keys without changing the selected names.
+        var telemetryKeysChanged = _scopedTelemetryKeys is null != TelemetryResourceKeys is null ||
+            (_scopedTelemetryKeys is not null && TelemetryResourceKeys is not null && !_scopedTelemetryKeys.SequenceEqual(TelemetryResourceKeys));
+        if (telemetryKeysChanged)
+        {
+            _scopedTelemetryKeys = TelemetryResourceKeys;
+        }
+
+        UpdateTelemetryRefresh(resourceNamesChanged || telemetryKeysChanged);
+        if (resourceNamesChanged)
         {
             await UpdateResourceGraphResourcesAsync();
         }
@@ -295,7 +308,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
 
         _telemetry = null;
-        var refresh = showSummary ? new TelemetryRefreshGeneration(_scopedResourceNames) : null;
+        var refresh = showSummary ? new TelemetryRefreshGeneration(_scopedTelemetryKeys) : null;
         Volatile.Write(ref _telemetryRefresh, refresh);
         previousRefresh?.Dispose();
         if (refresh is not null)
@@ -349,7 +362,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                     Interlocked.Exchange(ref refresh.Pending, 1);
 
                     cancellationToken.ThrowIfCancellationRequested();
-                    var telemetry = await LoadTelemetryAsync(refresh.ResourceNames, cancellationToken).ConfigureAwait(false);
+                    var telemetry = await LoadTelemetryAsync(refresh.ResourceKeys, cancellationToken).ConfigureAwait(false);
                     var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
                     await InvokeAsync(() =>
                     {
@@ -377,13 +390,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }, CancellationToken.None);
     }
 
-    private async Task<HomeTelemetry> LoadTelemetryAsync(IReadOnlyList<string>? resourceNames, CancellationToken cancellationToken)
+    private async Task<HomeTelemetry> LoadTelemetryAsync(IReadOnlyList<ResourceKey>? resourceKeys, CancellationToken cancellationToken)
     {
         var repository = TelemetryRepository;
 
-        // Telemetry queries take resource keys, where an empty list means every resource. A selection of resources
-        // that send no telemetry has nothing to summarize.
-        var resourceKeys = GetScopedResourceKeys(resourceNames);
+        // The repository interprets an empty list as unrestricted, so don't query it for an empty pane scope.
         if (resourceKeys is { Count: 0 })
         {
             return HomeTelemetry.Empty;
@@ -427,7 +438,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     /// Aggregates recent incoming requests (server and consumer spans) into fixed time buckets, plus per-resource
     /// and per-endpoint breakdowns used by the activity chart and insight cards.
     /// </summary>
-    private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, List<ResourceKey> resourceKeys, Task<OverviewLogs> logsTask, CancellationToken cancellationToken)
+    private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, IReadOnlyList<ResourceKey> resourceKeys, Task<OverviewLogs> logsTask, CancellationToken cancellationToken)
     {
         // Align the window to bucket boundaries so bars don't shift between refreshes.
         var now = await GetActivityTimeAsync(repository, resourceKeys, logsTask, cancellationToken).ConfigureAwait(false);
@@ -581,7 +592,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // A recording ended some time ago, so a window ending at the current time would show it as empty. Its activity window
     // ends at its last request instead, or at its last error log when it has no requests, so error hotspots still show.
     // Only that one item needs to be read, and a recording doesn't get new ones.
-    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, List<ResourceKey> resourceKeys, Task<OverviewLogs> logsTask, CancellationToken cancellationToken)
+    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, IReadOnlyList<ResourceKey> resourceKeys, Task<OverviewLogs> logsTask, CancellationToken cancellationToken)
     {
         var now = TimeProvider.GetUtcNow().UtcDateTime;
         if (!repository.IsReadOnly)
@@ -625,30 +636,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         values.Sort();
         var index = (int)Math.Ceiling(percentile * values.Count) - 1;
         return values[Math.Clamp(index, 0, values.Count - 1)];
-    }
-
-    /// <summary>
-    /// Gets the telemetry keys of the summarized resources, or <see langword="null"/> when every resource is summarized.
-    /// </summary>
-    private List<ResourceKey>? GetScopedResourceKeys(IReadOnlyList<string>? names)
-    {
-        if (names is null)
-        {
-            return null;
-        }
-
-        var keys = new List<ResourceKey>();
-        foreach (var name in names)
-        {
-            // Selections name resources as the resource list shows them, which can be a display name or a replica's name.
-            var resourceName = ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource) ? resource.Name : name;
-            if (TelemetryRepository.GetResourceByCompositeName(resourceName) is { } telemetryResource)
-            {
-                keys.Add(telemetryResource.ResourceKey);
-            }
-        }
-
-        return keys;
     }
 
     private bool IsInScope(ResourceViewModel resource) => _scopedResourceNames is not { } names ||
@@ -969,13 +956,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     {
         private readonly CancellationTokenSource _cts = new();
 
-        public TelemetryRefreshGeneration(IReadOnlyList<string>? resourceNames)
+        public TelemetryRefreshGeneration(IReadOnlyList<ResourceKey>? resourceKeys)
         {
-            ResourceNames = resourceNames;
+            ResourceKeys = resourceKeys;
             CancellationToken = _cts.Token;
         }
 
-        public IReadOnlyList<string>? ResourceNames { get; }
+        public IReadOnlyList<ResourceKey>? ResourceKeys { get; }
         public CancellationToken CancellationToken { get; }
         // The generation starts with its immediate refresh already reserved.
         public int Pending = 1;
