@@ -307,6 +307,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // overlap that snapshot instead of waiting until each pane key has been applied.
         var viewPreferencesTask = ViewPreferences.EnsureLoadedAsync();
         var showHiddenResourcesTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
+        var settingsLoaded = DashboardClient.IsEnabled
+            ? Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync())
+            : Task.CompletedTask;
 
         // When the AppHost client is already connected, the application name is known now, so
         // collapsed tree state can ride in the same initial storage wave.
@@ -379,10 +382,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         TagStore.Changed += OnTagsChanged;
         ViewPreferences.Changed += OnViewPreferencesChanged;
         OrderStore.Changed += OnOrderChanged;
-
-        // Subscribe before loading so a change raised while the stores read is observed. The read still
-        // overlaps the hidden-resource session value and the dashboard connection.
-        var settingsLoaded = Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync());
 
         var showHiddenResources = await showHiddenResourcesTask;
         if (showHiddenResources.Success)

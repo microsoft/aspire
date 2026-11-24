@@ -27,8 +27,12 @@ public sealed class TestLocalStorage : ILocalStorage
     /// </summary>
     public Func<string, bool>? IsUnprotectedReadFailed { get; set; }
 
+    public int SnapshotReadCount => _snapshotReadCount;
+    private int _snapshotReadCount;
+
     public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
     {
+        Interlocked.Increment(ref _snapshotReadCount);
         // Match the browser snapshot: every key is requested before any of those reads completes.
         var reads = keys.Select(key => (key, task: GetUnprotectedAsync<object>(key))).ToArray();
         var values = new Dictionary<string, StorageResult<object>>(StringComparer.Ordinal);

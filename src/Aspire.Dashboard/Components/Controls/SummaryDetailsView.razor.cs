@@ -100,27 +100,31 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
         if (ShowDetails != _internalShowDetails)
         {
             // If show details is changing from false to true, read saved state.
-            if (ShowDetails)
+            if (ShowDetails && (RememberOrientation || RememberSize))
             {
-                var orientationTask = RememberOrientation
-                    ? LocalStore.GetUnprotectedAsync<Orientation>(GetOrientationStorageKey())
-                    : null;
-                var sizeTask = RememberSize
-                    ? LocalStore.GetUnprotectedAsync<float>(GetSizeStorageKey())
-                    : null;
-
-                if (orientationTask is not null)
+                var orientationKey = RememberOrientation ? GetOrientationStorageKey() : null;
+                var sizeKey = RememberSize ? GetSizeStorageKey() : null;
+                string[] keys = (orientationKey, sizeKey) switch
                 {
-                    var orientationResult = await orientationTask;
+                    ({ } o, { } s) => [o, s],
+                    ({ } o, null) => [o],
+                    (null, { } s) => [s],
+                    _ => []
+                };
+
+                var snapshot = await LocalStore.ReadUnprotectedSnapshotAsync(keys);
+                if (orientationKey is not null)
+                {
+                    var orientationResult = snapshot.Get<Orientation>(orientationKey);
                     if (orientationResult.Success)
                     {
                         Orientation = orientationResult.Value;
                     }
                 }
 
-                if (sizeTask is not null)
+                if (sizeKey is not null)
                 {
-                    var panel1FractionResult = await sizeTask;
+                    var panel1FractionResult = snapshot.Get<float>(sizeKey);
                     if (panel1FractionResult.Success)
                     {
                         var fraction = Math.Clamp(panel1FractionResult.Value, 0, 1);

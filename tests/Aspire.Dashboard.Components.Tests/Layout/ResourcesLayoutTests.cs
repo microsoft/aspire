@@ -3754,6 +3754,9 @@ public class ResourcesLayoutTests : DashboardTestContext
             configureServices: services => services.AddSingleton<ISessionStorage>(sessionStorage));
 
         var localStorage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        var appName = Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Aspire.Dashboard.Configuration.DashboardOptions>>().Value.GetApplicationNameOrDefault();
+        expectedKeys.Add(BrowserStorageKeys.ResourceTagsKey(appName));
+        expectedKeys.Add(BrowserStorageKeys.ResourceOrderKey(appName));
         localStorage.OnBeforeGetAsync = key =>
         {
             RecordKey(key);

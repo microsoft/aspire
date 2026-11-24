@@ -170,6 +170,7 @@ public class DashboardViewPreferencesTests : DashboardTestContext
 
         await preferences.EnsureLoadedAsync().DefaultTimeout();
 
+        Assert.Equal(1, storage.SnapshotReadCount);
         Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
         Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
     }

@@ -468,6 +468,8 @@ public partial class MainLayoutTests : DashboardTestContext
             Assert.Equal(TimeFormat.TwentyFourHour, timeProvider.ConfiguredTimeFormat);
             Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
             Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
+            // One snapshot for DashboardViewPreferences and one for MainLayout's dismissed message keys.
+            Assert.Equal(2, localStorage.SnapshotReadCount);
         });
     }
 

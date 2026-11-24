@@ -157,22 +157,35 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         try
         {
+            var unsecuredEndpointsMessage = GetUnsecuredEndpointsMessage();
+
             // Run independent browser storage and JS interop reads concurrently so Blazor Server
             // pipelines them in a single round-trip wave instead of awaiting each sequentially.
             var viewPreferencesTask = ViewPreferences.EnsureLoadedAsync();
             var selectedRunTask = RestoreSelectedRunAsync();
             var browserInfoTask = InitializeBrowserInfoAsync();
-            var unsecuredEndpointsMessageTask = GetUnsecuredEndpointsMessageToShowAsync();
+            var dismissedSnapshotTask = unsecuredEndpointsMessage is not null
+                ? LocalStorage.ReadUnprotectedSnapshotAsync([
+                    // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
+                    BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey,
+                    BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey
+                ])
+                : null;
 
             await Task.WhenAll(
                 viewPreferencesTask,
                 selectedRunTask,
                 browserInfoTask,
-                unsecuredEndpointsMessageTask);
+                dismissedSnapshotTask ?? Task.CompletedTask);
 
-            if (await unsecuredEndpointsMessageTask is { } unsecuredEndpointsMessage)
+            if (unsecuredEndpointsMessage is not null)
             {
-                await ShowUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
+                var dismissedSnapshot = await dismissedSnapshotTask!;
+                if (!IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey) &&
+                    !IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey))
+                {
+                    await ShowUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
+                }
             }
         }
         catch (JSDisconnectedException ex)
@@ -183,6 +196,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         {
             Logger.LogDebug(ex, "Dashboard layout initialization stopped because the layout was disposed.");
         }
+    }
+
+    private static bool IsDismissed(IUnprotectedLocalStorageSnapshot snapshot, string key)
+    {
+        var result = snapshot.Get<bool>(key);
+        return result.Success && result.Value;
     }
 
     private async Task RestoreSelectedRunAsync()
@@ -230,7 +249,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private async Task<string?> GetUnsecuredEndpointsMessageToShowAsync()
+    private string? GetUnsecuredEndpointsMessage()
     {
         var unsecuredEndpointsMessage = new StringBuilder();
         if (ShouldShowUnsecuredTelemetryMessage())
@@ -242,24 +261,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointApiBody)]);
         }
 
-        if (unsecuredEndpointsMessage.Length == 0)
-        {
-            return null;
-        }
-
-        // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
-        var endpointDismissedTask = LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey);
-        var telemetryDismissedTask = LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey);
-
-        var endpointDismissed = await endpointDismissedTask;
-        var telemetryDismissed = await telemetryDismissedTask;
-        if ((endpointDismissed.Success && endpointDismissed.Value) ||
-            (telemetryDismissed.Success && telemetryDismissed.Value))
-        {
-            return null;
-        }
-
-        return unsecuredEndpointsMessage.ToString();
+        return unsecuredEndpointsMessage.Length > 0 ? unsecuredEndpointsMessage.ToString() : null;
     }
 
     private Task ShowUnsecuredEndpointsMessageAsync(string unsecuredEndpointsMessage)
