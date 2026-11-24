@@ -73,7 +73,12 @@ card shows are driven by its lane and its signal pills:
   while the current board remains visible, then applied in one update. The compact
   **Auto** toolbar switch can pause automatic UI updates; when paused, an **Apply
   update** pill appears only after changed data is ready. The refresh button tooltip
-  counts down to the next background data check.
+  counts down to the next background data check. GitHub requests time out after
+  30 seconds, including stalled response bodies, so a provider cannot block tab
+  changes indefinitely. Failed sources show an error and can be retried with Refresh.
+- **Responsive navigation** — tabs select immediately while their complete board
+  loads. Additional clicks during a load retain only the latest destination instead
+  of queuing a full provider refresh for every click. Settings remain accessible.
 - **Multiple GitHub accounts** — every detected credential (gh CLI, environment,
   Copilot) appears on the Accounts screen. Activate any number of them and their
   results **interleave across every tab**, de-duplicated by PR/issue URL. Each

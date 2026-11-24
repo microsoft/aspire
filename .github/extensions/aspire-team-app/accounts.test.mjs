@@ -472,6 +472,39 @@ test("resolveAccounts reads legacy login-only preferences for github.com account
   assert.equal(accounts[0].active, true);
 });
 
+test("account discovery settles and reports a stalled identity response body", { timeout: 5000 }, async (t) => {
+  resetAccountEnv({
+    COPILOT_GH_ACCOUNT_github_2E_com_octo: "token-dotcom",
+    COPILOT_GH_ACCOUNT_msft_2E_ghe_2E_com_octo: "token-proxima",
+  });
+  const timeout = AbortSignal.timeout.bind(AbortSignal);
+  t.mock.method(AbortSignal, "timeout", () => timeout(20));
+  const safety = new AbortController();
+  const timer = setTimeout(() => safety.abort(), 2000);
+  t.after(() => { clearTimeout(timer); safety.abort(); });
+  const base = accountFetch();
+  globalThis.fetch = async (url, options) => {
+    if (String(url) !== "https://api.github.com/graphql") return base(url, options);
+    const signal = options.signal ?? safety.signal;
+    return {
+      ok: true,
+      json: () => new Promise((_, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }),
+    };
+  };
+  const { resolveAccounts } = await import(`./accounts.mjs?test=stalled-identity-${Date.now()}`);
+
+  const { accounts } = await resolveAccounts(() => ["microsoft/aspire"], () => true);
+
+  assert.equal(safety.signal.aborted, false);
+  assert.equal(accounts.length, 2);
+  assert.equal(accounts[0].status, "ok");
+  const failed = accounts.find((account) => account.host === "github.com");
+  assert.equal(failed.status, "failed");
+  assert.match(failed.reason, /GitHub request timed out after 30 seconds/);
+});
+
 function resetAccountEnv(extra) {
   for (const key of Object.keys(process.env)) {
     if (key.startsWith("COPILOT_GH_ACCOUNT_")) {

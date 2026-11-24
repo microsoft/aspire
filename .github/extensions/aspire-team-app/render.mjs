@@ -1082,6 +1082,8 @@ let refreshInFlight = 0;
 let refreshGen = 0;
 let rescanning = false;
 let loadError = null;
+let requestedMode = null;
+let modeSwitch = null;
 // A dashboard pushed over SSE while the user is on a form-bearing view (accounts editor,
 // settings, etc.) is stashed here and applied when they return to the queue, so a
 // background refresh never clobbers an in-progress edit.
@@ -1531,7 +1533,31 @@ async function openLinkedPr(link) {
 }
 
 const refresh = () => withRefresh(() => postJSON("api/refresh"));
-const setMode = (mode) => { if (state && state.mode === mode) return; goView("queue", false); return withRefresh(() => postJSON("api/mode", { mode })); };
+function setMode(mode) {
+  requestedMode = mode;
+  goView("queue", false);
+  if (modeSwitch) return modeSwitch;
+  if (state && state.mode === mode) {
+    requestedMode = null;
+    return;
+  }
+  // A complete board can take many paginated requests. Select the tab immediately and
+  // collapse clicks made during that load to the latest destination, not more full refreshes.
+  modeSwitch = (async () => {
+    try {
+      while (requestedMode && requestedMode !== state?.mode) {
+        const next = requestedMode;
+        await withRefresh(() => postJSON("api/mode", { mode: next }));
+        if (loadError) break;
+      }
+    } finally {
+      requestedMode = null;
+      modeSwitch = null;
+      render();
+    }
+  })();
+  return modeSwitch;
+}
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
 
 function captureSettingsDraft() {
@@ -2797,7 +2823,7 @@ function reviewBoardHtml() {
 /* ---- topbar ---- */
 
 function tabs() {
-  const mode = state ? state.mode : "review";
+  const mode = requestedMode || (state ? state.mode : "review");
   const defs = [["review", "Review"], ["issues", "Issues"], ["ship", "Ship"], ["health", "Health"]];
   return '<div class="tabs">' + defs.map(([id, label]) =>
     '<button class="tab ' + (mode === id ? "active" : "") + '" data-mode="' + id + '">' + label + "</button>"
@@ -3400,7 +3426,12 @@ function render(forward) {
   if (!state) return; // skeleton (initial HTML) stays until first load resolves
 
   let inner;
-  if (!state.authenticated && view === "queue" && state.mode !== "health") inner = authPicker();
+  if (view === "queue" && requestedMode && requestedMode !== state.mode) {
+    const label = { review: "Review", issues: "Issues", ship: "Ship", health: "Health" }[requestedMode];
+    inner = '<div class="state" role="status"><h2>Loading ' + esc(label) +
+      '</h2><p>Checking watched repositories. You can switch tabs or open Settings while this loads.</p></div>';
+  }
+  else if (!state.authenticated && view === "queue" && state.mode !== "health") inner = authPicker();
   else if (view === "settings") inner = settingsView();
   else if (view === "filters") inner = filtersView();
   else if (view === "accounts") inner = accountsView();

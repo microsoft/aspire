@@ -13,6 +13,7 @@ import { createHash } from "node:crypto";
 
 import { coreTeamMemberAliasSuffixes } from "./constants.mjs";
 import { createCliRunner } from "./cli.mjs";
+import { withGitHubTimeout } from "./github-request.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -217,23 +218,32 @@ export async function detectCandidates({ run = execFileAsync, env = process.env,
 
 async function gql(token, query, host) {
   const { graphql } = endpoints(host);
-  const res = await fetch(graphql, {
-    method: "POST",
-    headers: { Authorization: `bearer ${token}`, "Content-Type": "application/json", "User-Agent": UA },
-    body: JSON.stringify({ query }),
+  return withGitHubTimeout(async (signal) => {
+    const res = await fetch(graphql, {
+      method: "POST",
+      headers: { Authorization: `bearer ${token}`, "Content-Type": "application/json", "User-Agent": UA },
+      body: JSON.stringify({ query }),
+      signal,
+    });
+    const json = await res.json().catch((error) => {
+      if (signal.aborted) throw error;
+      return {};
+    });
+    return { ok: res.ok, data: json.data, errors: json.errors };
   });
-  const json = await res.json().catch(() => ({}));
-  return { ok: res.ok, data: json.data, errors: json.errors };
 }
 
 async function fetchScopes(token, host) {
   try {
     const { rest } = endpoints(host);
-    const res = await fetch(`${rest}/`, {
-      headers: { Authorization: `bearer ${token}`, "User-Agent": UA },
+    return await withGitHubTimeout(async (signal) => {
+      const res = await fetch(`${rest}/`, {
+        headers: { Authorization: `bearer ${token}`, "User-Agent": UA },
+        signal,
+      });
+      const raw = res.headers.get("x-oauth-scopes");
+      return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
     });
-    const raw = res.headers.get("x-oauth-scopes");
-    return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
   } catch {
     return [];
   }

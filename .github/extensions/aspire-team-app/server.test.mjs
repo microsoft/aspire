@@ -286,6 +286,78 @@ test("a fresh unauthenticated dashboard preserves diagnostics and navigation to 
   }
 });
 
+for (const stall of ["headers", "body"]) {
+  test(`navigation recovers from stalled GitHub ${stall} during a background refresh`, { timeout: 15_000 }, async (t) => {
+    await resetTestHome({
+      accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+    });
+    process.env.GH_TOKEN = "test-token";
+
+    const provider = http.createServer((_req, res) => {
+      if (stall === "body") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.write('{"data":');
+      }
+    });
+    await new Promise((resolve) => provider.listen(0, "127.0.0.1", resolve));
+    const providerUrl = `http://127.0.0.1:${provider.address().port}`;
+    t.after(async () => {
+      provider.closeAllConnections();
+      await new Promise((resolve) => provider.close(resolve));
+    });
+
+    // Shorten the real transport deadline, not the fetch implementation: the loopback provider
+    // really leaves headers or JSON unfinished, so this exercises cancellation of both waits.
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    const deadlines = [];
+    t.mock.method(AbortSignal, "timeout", (ms) => {
+      deadlines.push(ms);
+      return timeout(100);
+    });
+    const safety = new AbortController();
+    const safetyTimer = setTimeout(() => safety.abort(), 10_000);
+    t.after(() => { clearTimeout(safetyTimer); safety.abort(); });
+    let stalled = false;
+    let fetchStarted;
+    const base = makeGitHubMock();
+    globalThis.fetch = (url, options = {}) => {
+      const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+      if (stalled && String(url).startsWith("https://api.github.com") && query.includes("repository(")) {
+        fetchStarted?.();
+        return originalFetch(providerUrl, { ...options, signal: options.signal ?? safety.signal });
+      }
+      return base(url, options);
+    };
+    t.after(() => { globalThis.fetch = originalFetch; });
+
+    const server = await import(`./server.mjs?test=stalled-${stall}-${Date.now()}`);
+    const entry = await server.startInstance(`stalled-${stall}-test`, () => {});
+    t.after(() => server.stopInstance(`stalled-${stall}-test`));
+    await (await fetch(new URL("api/state", entry.url))).json();
+    stalled = true;
+
+    for (const mode of ["issues", "ship", "health", "review"]) {
+      const started = new Promise((resolve) => { fetchStarted = resolve; });
+      const background = server.refreshInBackground();
+      await started;
+      const response = await postJson(entry.url, "api/mode", { mode });
+      await background;
+      assert.equal(safety.signal.aborted, false, "navigation must settle without the test's emergency abort");
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      assert.equal(result.dashboard.mode, mode);
+      assert.ok(result.dashboard.errors.some((error) => error.includes("GitHub request timed out after 30 seconds")));
+      assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).mode, mode);
+    }
+    assert.ok(deadlines.length > 0);
+    assert.ok(deadlines.every((ms) => ms === 30_000));
+    stalled = false;
+    const retried = await server.forceRefresh();
+    assert.equal(retried.dashboard.mode, "review");
+    assert.deepEqual(retried.dashboard.errors, []);
+  });
+}
+
 test("applyHealthOrder keeps related provider sources contiguous", async () => {
   const server = await import(`./server.mjs?test=group-order-${Date.now()}`);
   const github = { id: "github:github.com/microsoft/aspire", groupId: "repository:github.com/microsoft/aspire" };

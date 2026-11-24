@@ -10,6 +10,18 @@ test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+test("GitHub connection timeouts explain connectivity failures without hiding other request errors", async () => {
+  for (const [error, message] of [
+    [new TypeError("fetch failed", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } }),
+      "Connection to GitHub timed out. Check network connectivity and try refreshing again."],
+    [new Error("GitHub API 403 Forbidden"), "GitHub API 403 Forbidden"],
+  ]) {
+    globalThis.fetch = async () => { throw error; };
+    const dashboard = await loadReview();
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire: ${message}`]);
+  }
+});
+
 test("Needs attention serializes a strict ten-card prefix and the complete deduplicated remainder", async () => {
   for (const count of [0, 4, 10, 11, 25]) {
     const createdAt = isoAgo(3 * dayMs);

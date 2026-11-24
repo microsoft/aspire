@@ -5,6 +5,7 @@
 // same provider-neutral card shape.
 
 import { dayMs } from "./constants.mjs";
+import { withGitHubTimeout } from "./github-request.mjs";
 import {
   azurePipelineRemovalKey,
   discoverAzureDevOpsPipelines,
@@ -714,19 +715,22 @@ function consecutiveFailures(history) {
 }
 
 async function gql(fetchImpl, token, query, variables, graphqlUrl) {
-  const response = await fetchImpl(graphqlUrl || GRAPHQL, {
-    method: "POST",
-    headers: {
-      Authorization: `bearer ${token}`,
-      "Content-Type": "application/json",
-      "User-Agent": "aspire-team-app-canvas",
-    },
-    body: JSON.stringify({ query, variables }),
+  return withGitHubTimeout(async (signal) => {
+    const response = await fetchImpl(graphqlUrl || GRAPHQL, {
+      method: "POST",
+      headers: {
+        Authorization: `bearer ${token}`,
+        "Content-Type": "application/json",
+        "User-Agent": "aspire-team-app-canvas",
+      },
+      body: JSON.stringify({ query, variables }),
+      signal,
+    });
+    if (!response.ok) throw new Error(`GitHub API ${response.status} ${response.statusText}`);
+    const json = await response.json();
+    if (json.errors?.length) throw new Error(json.errors.map((error) => error.message).join("; "));
+    return json.data;
   });
-  if (!response.ok) throw new Error(`GitHub API ${response.status} ${response.statusText}`);
-  const json = await response.json();
-  if (json.errors?.length) throw new Error(json.errors.map((error) => error.message).join("; "));
-  return json.data;
 }
 
 function splitRepository(repository) {

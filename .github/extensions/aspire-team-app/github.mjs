@@ -23,6 +23,7 @@ import {
   visibleCheckState,
 } from "./model.mjs";
 import { currentRelease } from "./constants.mjs";
+import { withGitHubTimeout } from "./github-request.mjs";
 
 // The current milestone has a single source of truth in constants.mjs
 // (`currentRelease`). Re-export it here under the name the run-mode lane logic
@@ -54,24 +55,27 @@ const GRAPHQL = "https://api.github.com/graphql";
 // ---------------------------------------------------------------------------
 
 async function gql(token, query, variables, graphqlUrl = GRAPHQL, { allowPartialData = false } = {}) {
-  const res = await fetch(graphqlUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `bearer ${token}`,
-      "Content-Type": "application/json",
-      "User-Agent": "aspire-team-app-canvas",
-    },
-    body: JSON.stringify({ query, variables }),
+  return withGitHubTimeout(async (signal) => {
+    const res = await fetch(graphqlUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `bearer ${token}`,
+        "Content-Type": "application/json",
+        "User-Agent": "aspire-team-app-canvas",
+      },
+      body: JSON.stringify({ query, variables }),
+      signal,
+    });
+    if (!res.ok) {
+      throw new Error(`GitHub API ${res.status} ${res.statusText}`);
+    }
+    const json = await res.json();
+    if (allowPartialData) {
+      return { data: json.data, errors: json.errors ?? [] };
+    }
+    if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join("; "));
+    return json.data;
   });
-  if (!res.ok) {
-    throw new Error(`GitHub API ${res.status} ${res.statusText}`);
-  }
-  const json = await res.json();
-  if (allowPartialData) {
-    return { data: json.data, errors: json.errors ?? [] };
-  }
-  if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join("; "));
-  return json.data;
 }
 
 // ---------------------------------------------------------------------------

@@ -219,6 +219,71 @@ test("an unauthenticated initial load keeps Settings, Accounts, and Health navig
   assert.match(app.innerHTML, /No health sources configured/);
 });
 
+test("tab clicks select immediately and coalesce slow loads to the latest destination", async () => {
+  const requests = [];
+  const { app, api } = createRendererHarness({
+    fetch: (url, options) => {
+      if (String(url) === "api/state") return new Promise(() => {});
+      assert.equal(String(url), "api/mode");
+      const mode = JSON.parse(options.body).mode;
+      return new Promise((resolve) => requests.push({ mode, resolve }));
+    },
+  });
+  api.setState({ ...reviewDashboard(1), seq: 1 });
+  api.setPrefs({ notifications: {}, azurePipelines: [], release: "13.5" });
+  api.render();
+
+  const switching = api.setMode("issues");
+  assert.match(app.innerHTML, /class="tab active" data-mode="issues"/);
+  assert.match(app.innerHTML, /Loading Issues/);
+  api.setMode("ship");
+  api.setMode("health");
+  assert.deepEqual(requests.map((request) => request.mode), ["issues"]);
+  assert.match(app.innerHTML, /class="tab active" data-mode="health"/);
+  assert.match(app.innerHTML, /Loading Health/);
+  api.goView("settings");
+  assert.match(app.innerHTML, /id="pipeline-url-input"/);
+  api.goView("queue");
+
+  requests[0].resolve(jsonResponse({
+    dashboard: { ...reviewDashboard(1), mode: "issues", seq: 2 },
+    prefs: { notifications: {}, azurePipelines: [] },
+  }));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(requests.map((request) => request.mode), ["issues", "health"]);
+  assert.match(app.innerHTML, /Loading Health/);
+  requests[1].resolve(jsonResponse({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 3 },
+    prefs: { notifications: {}, azurePipelines: [] },
+  }));
+  await switching;
+  assert.equal(api.getState().mode, "health");
+  assert.match(app.innerHTML, /No health sources configured/);
+});
+
+test("a failed tab load restores the last complete board and allows another attempt", async () => {
+  let fails = true;
+  const { app, api } = createRendererHarness({
+    fetch: async (url) => {
+      if (String(url) === "api/state") return new Promise(() => {});
+      if (fails) throw new Error("Connection to GitHub timed out.");
+      return jsonResponse({
+        dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 2 },
+        prefs: {},
+      });
+    },
+  });
+  api.setState({ ...reviewDashboard(1), seq: 1 });
+  await api.setMode("health");
+  assert.equal(api.getState().mode, "review");
+  assert.match(app.innerHTML, /class="tab active" data-mode="review"/);
+  assert.match(app.innerHTML, /Connection to GitHub timed out/);
+  fails = false;
+  await api.setMode("health");
+  assert.equal(api.getState().mode, "health");
+  assert.equal(api.getLoadError(), null);
+});
+
 test("deleteRepo completes once when both the animation and fallback timeout fire", () => {
   const row = {
     classList: { add() {} },
@@ -1916,7 +1981,7 @@ function createRendererHarness(overrides = {}) {
   vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
-  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill })", sandbox));
+  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill, setMode, goView })", sandbox));
   return { app, api: sandbox.__test, events, document };
 }
 
