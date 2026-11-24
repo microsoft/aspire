@@ -181,6 +181,15 @@ internal static class AgentInstructionsFile
         var relativeAppHostPath = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(directory.FullName, appHostPath));
         var filePath = Path.Combine(directory.FullName, FileName);
 
+        // AGENTS.md is often a link to another agent's instructions file (AGENTS.md -> CLAUDE.md) so every
+        // agent reads one file. Work on the link's final target so a dangling link gets its target created,
+        // and the link kept, instead of failing to read through it.
+        if (new FileInfo(filePath).LinkTarget is not null &&
+            File.ResolveLinkTarget(filePath, returnFinalTarget: true) is { } linkTarget)
+        {
+            filePath = linkTarget.FullName;
+        }
+
         if (!File.Exists(filePath))
         {
             var newLine = Environment.NewLine;
@@ -217,6 +226,16 @@ internal static class AgentInstructionsFile
             : existing.IndexOf(CommentEnd, endMarker + SectionEndMarkerPrefix.Length, StringComparison.Ordinal);
         if (endMarkerClose >= 0 &&
             existing.AsSpan(endMarker + SectionEndMarkerPrefix.Length, endMarkerClose - endMarker - SectionEndMarkerPrefix.Length).Contains(CommentStart, StringComparison.Ordinal))
+        {
+            endMarkerClose = -1;
+        }
+
+        // A second begin marker before the end marker means the first one is not the start of this section,
+        // for example an inline mention such as "`<!-- aspire:begin`" in the user's notes, or an unterminated
+        // section above a complete one. Pairing the first begin marker with the later end marker would delete
+        // the user's text between them, so the section is treated as malformed.
+        if (endMarkerClose >= 0 &&
+            existing.IndexOf(SectionStartMarkerPrefix, start + SectionStartMarkerPrefix.Length, endMarker - start - SectionStartMarkerPrefix.Length, StringComparison.Ordinal) >= 0)
         {
             endMarkerClose = -1;
         }

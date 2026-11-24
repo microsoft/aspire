@@ -76,6 +76,40 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WriteAsync_CreatesTargetOfDanglingSymbolicLink()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var target = Path.Combine(workspace.WorkspaceRoot.FullName, "CLAUDE.md");
+        TestSymlinkHelper.TryCreateSymlink(GetFilePath(workspace), "CLAUDE.md", isDirectory: false);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Created, change);
+        Assert.Equal("CLAUDE.md", new FileInfo(GetFilePath(workspace)).LinkTarget);
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("apphost.cs", [], newLine)}{newLine}",
+            await File.ReadAllTextAsync(target));
+    }
+
+    [Theory]
+    [InlineData("Our generated block starts with `<!-- aspire:begin` and is refreshed by the CLI.\n")]
+    [InlineData("<!-- aspire:begin -->\nAn unterminated section.\n")]
+    public async Task WriteAsync_LeavesFileWithAnotherBeginMarkerBeforeTheEndMarkerUnchanged(string earlierText)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var existing = $"# Rules\n\n{earlierText}\nKeep this team rule.\n\n{AgentInstructionsFile.CreateSection("old.cs", [], "\n")}\n";
+        await File.WriteAllTextAsync(GetFilePath(workspace), existing);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
+        Assert.Equal(existing, await ReadFileAsync(workspace));
+    }
+
+    [Fact]
     public async Task WriteAsync_LeavesFileWithUnterminatedSectionUnchanged()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

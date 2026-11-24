@@ -378,12 +378,23 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // selected project so any unintended chained MCP configuration changes this file.
         var mcpConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp", ".mcp.json");
         const string originalMcpConfig = """{"mcpServers":{"custom":{"command":"custom"}}}""";
+        var agentInstructionsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp", "AGENTS.md");
 
         // Explicit client and skill choices leave only the scope prompt.
         await auto.AspireNewAcceptingAgentInitAsync(
             "StarterApp",
             extraArguments: "--agents claude --skills aspire",
-            beforeAcceptingAgentInit: () => File.WriteAllTextAsync(mcpConfigPath, originalMcpConfig));
+            beforeAcceptingAgentInit: async () =>
+            {
+                await File.WriteAllTextAsync(mcpConfigPath, originalMcpConfig);
+
+                // aspire new writes AGENTS.md before it offers agent init. Add the team's own instructions,
+                // which the chained agent init must keep while it adds the installed skills to the Aspire
+                // section. The container can own the generated file, so it is replaced, not edited in place.
+                var generated = await File.ReadAllTextAsync(agentInstructionsPath);
+                File.Delete(agentInstructionsPath);
+                await File.WriteAllTextAsync(agentInstructionsPath, generated + "\n## Team rules\nRun `make lint` before committing.\n");
+            });
 
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         var scopeScreen = auto.CreateSnapshot().GetScreenText();
@@ -405,6 +416,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             counter);
         Assert.False(Directory.Exists(Path.Combine(
             workspace.WorkspaceRoot.FullName, "StarterApp", ".claude", "skills", "aspireify")));
+
+        // One Aspire section, naming the nested AppHost project and the installed skills, followed by the
+        // team's instructions unchanged.
+        await Verify(await File.ReadAllTextAsync(agentInstructionsPath), "md");
     }
 
     [Theory]
