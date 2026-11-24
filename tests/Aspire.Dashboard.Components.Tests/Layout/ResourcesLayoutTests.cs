@@ -418,7 +418,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, "postgres:17")]
     [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path, "worker.exe")]
     [InlineData("PostgresDatabase", KnownProperties.Resource.Source, "catalogdb")]
-    public void FullCanvas_SourceUsesProductValuesAndPreservesEmptyTrack(string type, string property, string value)
+    public async Task FullCanvas_SourceUsesProductValuesAndPreservesEmptyTrack(string type, string property, string value)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var original = type is KnownResourceTypes.Project or KnownResourceTypes.Executable ? Path.Combine("workspace", value) : value;
@@ -433,6 +433,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Compact));
         Assert.Empty(cut.FindAll(".resource-row-source"));
         ResourceSetupHelpers.ToggleResourceList(cut);
         // The Source column is the source alone; the type is in the name column, before the state dot.
@@ -1270,7 +1271,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
-        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneCollapsed ? (true, collapsed) : (false, null);
+        storage.OnGetUnprotectedAsync = key => key switch
+        {
+            BrowserStorageKeys.ResourcePaneCollapsed => (true, collapsed),
+            BrowserStorageKeys.ResourceListDensity => (true, nameof(ResourceListDensity.Compact)),
+            _ => (false, null)
+        };
         await AddTelemetryAsync("api");
         Services.GetRequiredService<NavigationManager>().NavigateTo("/structuredlogs");
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
@@ -1503,15 +1509,10 @@ public class ResourcesLayoutTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
-        // The list starts compact.
-        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
-        AssertCompactRows();
-
         // The setting applies right away, without reloading the page.
-        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
-        await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Comfortable));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name] .resource-row-sub").Count));
         Assert.Empty(cut.FindAll(".resource-row-meta"));
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
         await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Compact));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
         AssertCompactRows();
