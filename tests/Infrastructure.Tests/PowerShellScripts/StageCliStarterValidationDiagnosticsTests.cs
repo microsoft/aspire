@@ -44,7 +44,10 @@ public sealed class StageCliStarterValidationDiagnosticsTests : IDisposable
         WriteFile(sourceRoot, "aspire-ts-starter/AspireCliTsStarterSmoke/node_modules/vite/package.json");
         WriteFile(destinationRoot, "starter-validation.tar");
 
-        var result = await RunScript(sourceRoot, destinationRoot);
+        using var cmd = new PowerShellCommand(_scriptPath, _output).WithTimeout(TimeSpan.FromMinutes(2));
+        var result = await cmd.ExecuteAsync(
+            "-SourceRoot", $"\"{sourceRoot}\"",
+            "-DestinationRoot", $"\"{destinationRoot}\"");
 
         result.EnsureSuccessful();
         Assert.Equal(
@@ -75,7 +78,10 @@ public sealed class StageCliStarterValidationDiagnosticsTests : IDisposable
             Path.Combine(_workspace.Path, "missing.log"));
         Directory.CreateSymbolicLink(Path.Combine(sourceRoot, "aspire-ts-starter", "linked"), outsideDirectory);
 
-        var result = await RunScript(sourceRoot, destinationRoot);
+        using var cmd = new PowerShellCommand(_scriptPath, _output).WithTimeout(TimeSpan.FromMinutes(2));
+        var result = await cmd.ExecuteAsync(
+            "-SourceRoot", $"\"{sourceRoot}\"",
+            "-DestinationRoot", $"\"{destinationRoot}\"");
 
         result.EnsureSuccessful();
         Assert.Equal(["aspire-ts-starter/diagnostics/aspire-stop.log"], ReadArchiveFiles(destinationRoot, sourceRoot));
@@ -100,7 +106,10 @@ public sealed class StageCliStarterValidationDiagnosticsTests : IDisposable
         WriteFile(destinationRoot, "starter-validation.tar");
         WriteFile(destinationRoot, "starter-validation.tar.partial");
 
-        var result = await RunScript(Path.Combine(_workspace.Path, "missing"), destinationRoot);
+        using var cmd = new PowerShellCommand(_scriptPath, _output).WithTimeout(TimeSpan.FromMinutes(2));
+        var result = await cmd.ExecuteAsync(
+            "-SourceRoot", $"\"{Path.Combine(_workspace.Path, "missing")}\"",
+            "-DestinationRoot", $"\"{destinationRoot}\"");
 
         result.EnsureSuccessful();
         Assert.Empty(Directory.EnumerateFileSystemEntries(destinationRoot));
@@ -139,16 +148,6 @@ public sealed class StageCliStarterValidationDiagnosticsTests : IDisposable
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains($"tar exit code {tarExitCode}", result.Output);
         Assert.Empty(Directory.EnumerateFileSystemEntries(destinationRoot));
-    }
-
-    private async Task<CommandResult> RunScript(string sourceRoot, string destinationRoot)
-    {
-        using var cmd = new PowerShellCommand(_scriptPath, _output)
-            .WithTimeout(TimeSpan.FromMinutes(2));
-
-        return await cmd.ExecuteAsync(
-            "-SourceRoot", $"\"{sourceRoot}\"",
-            "-DestinationRoot", $"\"{destinationRoot}\"");
     }
 
     private static void WriteFile(string root, string relativePath)
