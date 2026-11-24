@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Backchannel;
@@ -654,6 +655,55 @@ public class ListConsoleLogsToolTests
         var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
         Assert.StartsWith("Returned first 1 console log. Later 1 console log not returned because of size limits.", text, StringComparison.Ordinal);
         Assert.Equal("replica b failure binding port", ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
+    }
+
+    [Theory]
+    [InlineData("tail", 200, 200, 'a', 1000)]
+    [InlineData("head", 200, 200, 'a', 1000)]
+    // CJK characters take three UTF-8 bytes each, so the size budget is reached after fewer lines.
+    [InlineData("tail", 200, 200, '界', 1000)]
+    [InlineData("head", 200, 200, '界', 1000)]
+    // Many short lines at the maximum limit: the line terminators and per-line rounding add up,
+    // so they must be counted against the budget too.
+    [InlineData("tail", 2000, 2000, 'a', 4)]
+    [InlineData("head", 2000, 2000, 'a', 4)]
+    public async Task ListConsoleLogsTool_StopsAtSizeBudgetBeforeLimit(string from, int lineCount, int limit, char filler, int fillerLength)
+    {
+        // Each line starts with a unique index so the retained lines can be identified.
+        var lines = Enumerable.Range(1, lineCount)
+            .Select(index => $"{index:D6} {new string(filler, fillerLength)}")
+            .ToList();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            LogLines = [.. lines.Select((content, i) => new ResourceLogLine { ResourceName = "api-service", LineNumber = i + 1, Content = content, IsError = false })]
+        };
+        monitor.AddConnection("socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement("api-service"),
+            ["limit"] = JsonSerializer.SerializeToElement(limit),
+            ["from"] = JsonSerializer.SerializeToElement(from)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        // The 4,096-token budget is four UTF-8 bytes per token. Each returned line costs its bytes plus its line
+        // terminator, rounded up to whole tokens, so the returned lines never exceed 16 KB.
+        var lineTokens = (Encoding.UTF8.GetByteCount(lines[0]) + Environment.NewLine.Length + 3) / 4;
+        var expectedCount = 4096 / lineTokens;
+        Assert.InRange(expectedCount, 1, limit - 1);
+        var omittedCount = lineCount - expectedCount;
+        var expectedLines = from == "head" ? lines[..expectedCount] : lines[^expectedCount..];
+        var expectedSummary = from == "head"
+            ? $"Returned first {expectedCount} console logs. Later {omittedCount} console logs not returned because of size limits."
+            : $"Returned latest {expectedCount} console logs. Earlier {omittedCount} console logs not returned because of size limits.";
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.Equal(expectedSummary, text.ReplaceLineEndings("\n").Split('\n')[0]);
+        Assert.Equal(string.Join("\n", expectedLines), ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
     }
 
     [Theory]

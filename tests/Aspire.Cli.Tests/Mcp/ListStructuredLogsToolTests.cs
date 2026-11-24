@@ -824,6 +824,31 @@ public class ListStructuredLogsToolTests
             newest["attributes"]!.AsObject().Select(a => (a.Key, a.Value!.GetValue<string>())));
     }
 
+    [Fact]
+    public async Task ListStructuredLogsTool_BoundsSource_WhenNewestLogHasLongScopeName()
+    {
+        // The instrumentation scope name is producer-supplied and copied into "source". A name this long exceeds the
+        // whole list budget, so without bounding the newest log would not fit and the response would contain no logs.
+        var resourceLogs = CreateResourceLogs("api", (0, "older small"), (1, "newest long scope"));
+        var scopeLogs = resourceLogs.ScopeLogs![0];
+        resourceLogs.ScopeLogs =
+        [
+            new OtlpScopeLogsJson { Scope = scopeLogs.Scope, LogRecords = [scopeLogs.LogRecords![0]] },
+            new OtlpScopeLogsJson { Scope = new OtlpInstrumentationScopeJson { Name = new string('s', 18_000) }, LogRecords = [scopeLogs.LogRecords[1]] }
+        ];
+        using var handler = CreateHandler(CreateResourceLogsResponse(resourceLogs));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+        Assert.StartsWith("Returned 2 log entries.", text, StringComparison.Ordinal);
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["older small", "newest long scope"], logs.Select(log => log!["message"]!.GetValue<string>()));
+        Assert.Equal(["Api", $"{new string('s', 128)}...[TRUNCATED]"], logs.Select(log => log!["source"]!.GetValue<string>()));
+    }
+
     [Theory]
     [InlineData("""{"severity":"Fatal"}""", "Argument 'severity' must be one of: Trace, Debug, Information, Warning, Error, Critical.")]
     [InlineData("""{"limit":801}""", "Argument 'limit' must be an integer from 1 through 800.")]

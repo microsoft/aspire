@@ -104,8 +104,9 @@ internal static class SharedAIHelpers
         // GetLimitFromEndWithSummary stops at the first entry that doesn't fit, so a single newest log with large
         // content would otherwise hide every log. Bound the serialized size of each entry's attributes, message and
         // exception to a quarter of the budget each: the budget is in tokens and EstimateTokenCount counts four UTF-8
-        // bytes per token, so maximumTokenLength bytes is a quarter of it. The remaining quarter is left for the other,
-        // short fields, so a bounded entry always fits.
+        // bytes per token, so maximumTokenLength bytes is a quarter of it. The remaining quarter is left for the other
+        // fields, which are identifiers or bounded to MaximumSummaryResourceNameLength bytes (severity, resource name
+        // and source), so a bounded entry always fits.
         var maximumFieldLength = maximumTokenLength;
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
@@ -1019,7 +1020,8 @@ internal static class SharedAIHelpers
     }
 
     // When maximumFieldLength is set, it is the maximum serialized size in UTF-8 bytes of the attributes, and separately
-    // of the message and of the exception.
+    // of the message and of the exception. The severity, resource name and source are then also bounded to
+    // MaximumSummaryResourceNameLength bytes each.
     private static JsonObject GetLogEntryDto(
         OtlpLogEntryDto logEntry,
         PromptContext context,
@@ -1073,14 +1075,14 @@ internal static class SharedAIHelpers
             ["spanId"] = logEntry.LogRecord.SpanId,
             ["traceId"] = logEntry.LogRecord.TraceId,
             ["message"] = AddBoundedValue(message, id => $@"Duplicate of ""message"" for log entry {id}"),
-            ["severity"] = logEntry.LogRecord.SeverityText ?? "Unknown",
-            ["resourceName"] = resourceName,
+            ["severity"] = LimitShortValue(logEntry.LogRecord.SeverityText ?? "Unknown"),
+            ["resourceName"] = LimitShortValue(resourceName),
             ["attributes"] = attributesObject,
             // Tells the agent that attribute values were shortened or omitted; the full entry is available
             // from the dashboard (dashboardUrl).
             ["attributesTruncated"] = attributesTruncated ? true : null,
             ["exception"] = AddBoundedValue(exceptionText, id => $@"Duplicate of ""exception"" for log entry {id}"),
-            ["source"] = logEntry.ScopeName
+            ["source"] = LimitShortValue(logEntry.ScopeName)
         };
 
         if (dashboardBaseUrl is not null && logId is not null)
@@ -1089,6 +1091,15 @@ internal static class SharedAIHelpers
         }
 
         return StripNullProperties(log);
+
+        // Severity, resource name and scope name are producer-supplied and normally short, but nothing prevents a very
+        // long value, which would make the entry exceed the budget and hide every older entry. Bound them in the
+        // budgeted projection only so the CLI output is unchanged. logId, spanId, traceId and dashboardUrl are
+        // identifiers or derived from them, so they stay short and aren't bounded.
+        string? LimitShortValue(string? value)
+        {
+            return maximumFieldLength is null ? value : LimitSerializedLength(value, MaximumSummaryResourceNameLength);
+        }
 
         string? AddBoundedValue(string? value, Func<long?, string> getKey)
         {

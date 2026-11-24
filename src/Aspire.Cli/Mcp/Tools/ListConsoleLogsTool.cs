@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Shared.ConsoleLogs;
@@ -165,7 +166,7 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                     "console log",
                     "console logs",
                     SharedAIHelpers.SerializeLogEntry,
-                    SharedAIHelpers.EstimateTokenCount);
+                    EstimateLineTokenCount);
             }
             else
             {
@@ -197,7 +198,7 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                     "console log",
                     "console logs",
                     SharedAIHelpers.SerializeLogEntry,
-                    SharedAIHelpers.EstimateTokenCount);
+                    EstimateLineTokenCount);
             }
 
             var consoleLogsText = SharedAIHelpers.SerializeConsoleLogs(trimmedItems);
@@ -226,6 +227,15 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                 IsError = true
             };
         }
+    }
+
+    // SharedAIHelpers.EstimateTokenCount rounds down and doesn't see the line terminator that SerializeConsoleLogs
+    // appends, which loses up to four bytes per line. With up to ConsoleLogsLimit short lines that adds up: 2,000
+    // eleven-byte lines are estimated at 4,000 tokens but take about 24 KB. Counting the terminator and rounding up
+    // keeps the returned lines within four bytes per budgeted token.
+    private static int EstimateLineTokenCount(string line)
+    {
+        return (Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length + 3) / 4;
     }
 
     // Console logs have no structured attributes, so all search text is treated as
