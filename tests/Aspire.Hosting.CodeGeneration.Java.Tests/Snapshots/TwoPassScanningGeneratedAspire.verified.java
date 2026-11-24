@@ -2286,6 +2286,34 @@ public class CSharpAppResource extends ProjectResource {
         super(handle, client);
     }
 
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public CSharpAppResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public CSharpAppResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private CSharpAppResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
+    }
+
     /** Configures the resource to use the specified container registry for container image operations. */
     public CSharpAppResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4810,6 +4838,33 @@ public final class CompleteTaskOptions {
 
 }
 
+// ===== aspire/ConnectCommandLocation.java =====
+// ConnectCommandLocation.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** ConnectCommandLocation enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum ConnectCommandLocation implements WireValueEnum {
+    CONTAINER("Container"),
+    HOST("Host");
+
+    private final String value;
+
+    ConnectCommandLocation(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static ConnectCommandLocation fromValue(String value) {
+        for (ConnectCommandLocation e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
 // ===== aspire/ConnectionStringAvailableEvent.java =====
 // ConnectionStringAvailableEvent.java - GENERATED CODE - DO NOT EDIT
 
@@ -5535,6 +5590,34 @@ import java.util.Map;
 public class ContainerRegistryResource extends ResourceBuilderBase {
     ContainerRegistryResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public ContainerRegistryResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public ContainerRegistryResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private ContainerRegistryResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
     }
 
     /** Configures the resource to use the specified container registry for container image operations. */
@@ -6491,6 +6574,34 @@ import java.util.Set;
 public class ContainerResource extends ResourceBuilderBase {
     ContainerResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public ContainerResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public ContainerResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private ContainerResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
     }
 
     /** Configures the resource to use the specified container registry for container image operations. */
@@ -9522,6 +9633,34 @@ public class DotnetToolResource extends ExecutableResource {
         super(handle, client);
     }
 
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public DotnetToolResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public DotnetToolResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private DotnetToolResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
+    }
+
     /** Configures the resource to use the specified container registry for container image operations. */
     public DotnetToolResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12114,6 +12253,34 @@ public class ExecutableResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public ExecutableResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public ExecutableResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private ExecutableResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
+    }
+
     /** Configures the resource to use the specified container registry for container image operations. */
     public ExecutableResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14084,6 +14251,34 @@ import java.util.Map;
 public class ExternalServiceResource extends ResourceBuilderBase {
     ExternalServiceResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public ExternalServiceResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public ExternalServiceResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private ExternalServiceResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
     }
 
     /** Configures the resource to use the specified container registry for container image operations. */
@@ -19006,6 +19201,34 @@ public class ParameterResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public ParameterResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public ParameterResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private ParameterResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
+    }
+
     /** Configures the resource to use the specified container registry for container image operations. */
     public ParameterResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -20686,6 +20909,34 @@ import java.util.Set;
 public class ProjectResource extends ResourceBuilderBase {
     ProjectResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public ProjectResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public ProjectResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private ProjectResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
     }
 
     /** Configures the resource to use the specified container registry for container image operations. */
@@ -24053,6 +24304,34 @@ public class TestDatabaseResource extends ContainerResource {
         super(handle, client);
     }
 
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public TestDatabaseResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public TestDatabaseResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private TestDatabaseResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
+    }
+
     /** Configures the resource to use the specified container registry for container image operations. */
     public TestDatabaseResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -26370,6 +26649,34 @@ import java.util.Set;
 public class TestRedisResource extends ContainerResource {
     TestRedisResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public TestRedisResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public TestRedisResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private TestRedisResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
     }
 
     /** Configures the resource to use the specified container registry for container image operations. */
@@ -28929,6 +29236,34 @@ public class TestVaultResource extends ContainerResource {
         super(handle, client);
     }
 
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    public TestVaultResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command, WithConnectCommandOptions optionsBag) {
+        var append = optionsBag == null ? null : optionsBag.getAppend();
+        var note = optionsBag == null ? null : optionsBag.getNote();
+        return withConnectCommandImpl(tool, location, command, append, note);
+    }
+
+    public TestVaultResource withConnectCommand(String tool, ConnectCommandLocation location, ReferenceExpression command) {
+        return withConnectCommand(tool, location, command, null);
+    }
+
+    /** Describes the command that reaches the resource with its own client. Repeated calls replace the command. */
+    private TestVaultResource withConnectCommandImpl(String tool, ConnectCommandLocation location, ReferenceExpression command, String append, String note) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tool", AspireClient.serializeValue(tool));
+        reqArgs.put("location", AspireClient.serializeValue(location));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        if (append != null) {
+            reqArgs.put("append", AspireClient.serializeValue(append));
+        }
+        if (note != null) {
+            reqArgs.put("note", AspireClient.serializeValue(note));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withConnectCommand", reqArgs);
+        return this;
+    }
+
     /** Configures the resource to use the specified container registry for container image operations. */
     public TestVaultResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -31238,6 +31573,31 @@ public interface WireValueEnum {
     String getValue();
 }
 
+// ===== aspire/WithConnectCommandOptions.java =====
+// WithConnectCommandOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for WithConnectCommand. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class WithConnectCommandOptions {
+    private String append;
+    private String note;
+
+    public String getAppend() { return append; }
+    public WithConnectCommandOptions append(String value) {
+        this.append = value;
+        return this;
+    }
+
+    public String getNote() { return note; }
+    public WithConnectCommandOptions note(String value) {
+        this.note = value;
+        return this;
+    }
+
+}
+
 // ===== aspire/WithContainerCertificatePathsOptions.java =====
 // WithContainerCertificatePathsOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -31970,6 +32330,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/CompleteStepOptions.java
 .aspire/modules/aspire/CompleteTaskMarkdownOptions.java
 .aspire/modules/aspire/CompleteTaskOptions.java
+.aspire/modules/aspire/ConnectCommandLocation.java
 .aspire/modules/aspire/ConnectionStringAvailableEvent.java
 .aspire/modules/aspire/ContainerBuildOptionsCallbackContext.java
 .aspire/modules/aspire/ContainerFileSystemCallbackContext.java
@@ -32156,6 +32517,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/WellKnownPipelineSteps.java
 .aspire/modules/aspire/WellKnownPipelineTags.java
 .aspire/modules/aspire/WireValueEnum.java
+.aspire/modules/aspire/WithConnectCommandOptions.java
 .aspire/modules/aspire/WithContainerCertificatePathsOptions.java
 .aspire/modules/aspire/WithDataVolumeOptions.java
 .aspire/modules/aspire/WithDockerfileBaseImageOptions.java

@@ -10,10 +10,26 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.PostgreSQL.Tests;
 
 public class AddPostgresTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task AddPostgresDeclaresPsqlConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("postgres", port: 15432);
+
+        var connect = Assert.Single(postgres.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("psql", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Container, connect.Location);
+        Assert.Equal("""PGPASSWORD="$POSTGRES_PASSWORD" exec psql -w -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d postgres""",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<psql options>, for example -c 'SELECT 1'", connect.Append);
+    }
+
     [Fact]
     public void AddPostgresAddsHealthCheckAnnotationToResource()
     {

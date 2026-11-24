@@ -16,10 +16,26 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
 {
+    [Fact]
+    public async Task CosmosDBEmulatorDeclaresHostCurlConnectCommandForGateway()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator(emulator => emulator
+            .WithEndpoint("emulator", e => e.AllocatedEndpoint = new(e, "localhost", 18081)));
+
+        var connect = Assert.Single(cosmos.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("curl", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Host, connect.Location);
+        Assert.Equal("curl -sS http://localhost:18081/", await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<curl options>, for example -i", connect.Append);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(8081)]

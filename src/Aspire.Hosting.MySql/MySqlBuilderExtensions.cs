@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRETERMINAL001
+#pragma warning disable ASPIRECONNECT001 // The integration declares how to reach its server with mysql.
 
 using System.Globalization;
 using Aspire.Hosting;
@@ -89,7 +90,14 @@ public static class MySqlBuilderExtensions
                       {
                           context.EnvironmentVariables[PasswordEnvVarName] = resource.PasswordParameter;
                       })
-                      .WithHealthCheck(healthCheckKey);
+                      .WithHealthCheck(healthCheckKey)
+                      // The mysql client runs in the container over loopback. MYSQL_PWD is read from the container's
+                      // root password variable so that only the variable name is shown by tooling.
+                      .WithConnectCommand(
+                          "mysql",
+                          ConnectCommandLocation.Container,
+                          ReferenceExpression.Create($"""MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --no-defaults --no-login-paths --user=root --host=127.0.0.1 --port={resource.PrimaryEndpoint.Property(EndpointProperty.TargetPort)}"""),
+                          append: "<mysql options>, for example -e 'SELECT 1'");
     }
 
     /// <summary>

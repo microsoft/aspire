@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECONNECT001 // The emulator declares how to reach it with the Azure CLI.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -206,7 +207,18 @@ public static class AzureStorageExtensions
                    Registry = StorageEmulatorContainerImageTags.Registry,
                    Image = StorageEmulatorContainerImageTags.Image,
                    Tag = StorageEmulatorContainerImageTags.Tag
-               });
+               })
+               // The Azurite image has no client, so the Azure CLI runs on the host against the published endpoints.
+               // The connection string only contains the endpoints and Azurite's publicly documented development
+               // account key, so it is safe to show. az storage reads it from AZURE_STORAGE_CONNECTION_STRING, which
+               // lets the caller append the command group, e.g. "container list".
+               // See https://learn.microsoft.com/azure/storage/common/storage-use-azurite#connection-strings.
+               .WithConnectCommand(
+                   "az",
+                   ConnectCommandLocation.Host,
+                   ReferenceExpression.Create($"env AZURE_STORAGE_CONNECTION_STRING='{builder.Resource.GetEmulatorConnectionString()}' az storage"),
+                   append: "<command group and options>, for example container list",
+                   note: "Requires the Azure CLI on the host. The account key is Azurite's well-known development key.");
 
         BlobServiceClient? blobServiceClient = null;
         QueueServiceClient? queueServiceClient = null;

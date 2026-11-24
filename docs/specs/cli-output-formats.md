@@ -389,6 +389,32 @@ Progress and informational messages go to stderr, so redirection captures only M
 | `environment` | Environment variables keyed by variable name. |
 | `healthReports` | Health report objects keyed by report name. |
 | `commands` | Resource command metadata keyed by command name. |
+| `connect` | The command that reaches the resource with its own client, when its integration declares one. See [Connect commands](#connect-commands). |
+
+#### Connect commands
+
+Hosting integrations can declare how to reach their resource with the vendor's own client, for example `psql` or `redis-cli`. The resolved declaration appears as `connect` in `aspire describe --format json` and in the MCP `list_resources` output:
+
+```json
+"connect": {
+  "command": "docker exec cache-abcdefgh sh -c '[ -n \"$REDIS_PASSWORD\" ] && export REDISCLI_AUTH=\"$REDIS_PASSWORD\"; exec redis-cli -h 127.0.0.1 -p 6379 \"$@\"' sh",
+  "runs": "container",
+  "tool": "redis-cli",
+  "append": "<command>, for example INFO"
+}
+```
+
+| Field | Description |
+| ----- | ----------- |
+| `command` | The command, ending where the client's own arguments go. Run it with those arguments appended. |
+| `runs` | `container` when the client runs inside the resource's container, or `host` when it runs on the host (for example because the image has no client). |
+| `tool` | The client the command runs. For `host` commands, the client must be installed on the host. |
+| `append` | What to append to the command, when the integration describes it. |
+| `note` | Additional guidance, when the integration provides it. |
+
+For `container`, the command uses the configured container runtime (`docker` or `podman`) and the container name, and wraps the integration's script in `sh -c '<script> "$@"' sh` so that appended arguments reach the client. Credentials are read from the container's own environment variables, so only variable names are shown. For `host`, the command uses the resource's published endpoint. Commands are POSIX shell command lines.
+
+A command can reference only literal text and endpoint values, never parameters or connection strings, so it never contains a secret. `connect` is omitted for resources without a declaration, before the referenced endpoints are allocated, and for `container` declarations on resources that are not running as containers.
 
 For recognized IDE-managed .NET project launches, `project.launchCommand` is `ide`. In that mode,
 `executable.pid`, when present, identifies the application process rather than a `dotnet run` or

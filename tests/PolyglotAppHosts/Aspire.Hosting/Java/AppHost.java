@@ -115,6 +115,9 @@ void main() throws Exception {
         var endpointHost = endpoint.property(EndpointProperty.HOST);
         var endpointPort = endpoint.property(EndpointProperty.PORT);
         var endpointUrl = ReferenceExpression.refExpr("http://%s:%s", endpointHost, endpointPort);
+        // withConnectCommand — host client with the published port, and an in-container client
+        dockerContainer.withConnectCommand("curl", ConnectCommandLocation.HOST, ReferenceExpression.refExpr("curl -sS http://localhost:%s/", endpointPort), new WithConnectCommandOptions().append("<curl options>, for example -i").note("Requires curl on the host."));
+        container.withConnectCommand("nginx", ConnectCommandLocation.CONTAINER, ReferenceExpression.refExpr("exec nginx"));
         var builtConnectionString = builder.addConnectionString("customcs", expr);
         var envConnectionString = builder.addConnectionString("envcs");
         var expressionConnectionString = builder.addConnectionString("exprcs", expr);

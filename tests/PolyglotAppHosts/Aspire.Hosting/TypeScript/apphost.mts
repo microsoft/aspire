@@ -5,6 +5,7 @@ import {
     WellKnownPipelineTags,
     createBuilder,
     CertificateTrustScope,
+    ConnectCommandLocation,
     ContainerImageDestination,
     ContainerImageFormat,
     ContainerTargetPlatform,
@@ -211,6 +212,10 @@ const expr = refExpr`Host=${endpoint}`;
 const endpointHost = await dockerContainer.getEndpoint("http").property(EndpointProperty.Host);
 const endpointPort = await dockerContainer.getEndpoint("http").property(EndpointProperty.Port);
 const endpointUrl = refExpr`http://${endpointHost}:${endpointPort}`;
+
+// withConnectCommand — host client with the published port, and an in-container client
+await dockerContainer.withConnectCommand("curl", ConnectCommandLocation.Host, refExpr`curl -sS http://localhost:${endpointPort}/`, { append: "<curl options>, for example -i", note: "Requires curl on the host." });
+await container.withConnectCommand("nginx", ConnectCommandLocation.Container, refExpr`exec nginx`);
 
 const builtConnectionString = await builder.addConnectionString("customcs", { environmentVariableNameOrExpression: expr });
 

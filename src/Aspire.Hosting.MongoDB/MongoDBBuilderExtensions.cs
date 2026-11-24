@@ -1,5 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
+
+#pragma warning disable ASPIRECONNECT001 // The integration declares how to reach its server with mongosh.
+
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Dashboard.Model;
@@ -26,6 +29,7 @@ public static class MongoDBBuilderExtensions
 
     private const string UserEnvVarName = "MONGO_INITDB_ROOT_USERNAME";
     private const string PasswordEnvVarName = "MONGO_INITDB_ROOT_PASSWORD";
+    private const string ReplCaFileEnvVarName = "ASPIRE_MONGODB_REPL_CA_FILE";
 
     /// <summary>
     /// Adds a MongoDB resource to the application model. A container is used for local development.
@@ -114,7 +118,7 @@ public static class MongoDBBuilderExtensions
                     {
                         // docker/podman exec inherits this environment. mongosh needs an explicit CA bundle,
                         // because Node.js does not use the OpenSSL certificate directories configured by Aspire.
-                        context.EnvironmentVariables["ASPIRE_MONGODB_REPL_CA_FILE"] = context.CertificateBundlePath;
+                        context.EnvironmentVariables[ReplCaFileEnvVarName] = context.CertificateBundlePath;
                     }
                 }
 
@@ -135,7 +139,8 @@ public static class MongoDBBuilderExtensions
                 }
 
                 return Task.CompletedTask;
-            });
+            })
+            .WithMongoConnectCommand(tls: false);
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -159,6 +164,7 @@ public static class MongoDBBuilderExtensions
                 // segment of the connection string — light up.
                 mongoBuilder
                     .WithEndpoint(MongoDBServerResource.PrimaryEndpointName, endpoint => endpoint.TlsEnabled = true)
+                    .WithMongoConnectCommand(tls: true)
                     .WithArgs(context =>
                     {
                         context.Args.Add("--tlsMode");
@@ -198,6 +204,23 @@ public static class MongoDBBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    private static IResourceBuilder<MongoDBServerResource> WithMongoConnectCommand(this IResourceBuilder<MongoDBServerResource> builder, bool tls)
+    {
+        // mongosh runs in the container and reads the root credentials from the container's own variables, so only
+        // the variable names are shown by tooling. It connects directly over loopback even for replica set members,
+        // whose advertised addresses can refer to host-side proxies; localhost also matches the developer
+        // certificate's subject alternative name. With TLS, mongosh needs an explicit CA bundle because Node.js does
+        // not use the OpenSSL certificate directories configured by Aspire; the bundle path is passed when the
+        // certificate trust configuration provides one.
+        var port = builder.Resource.PrimaryEndpoint.Property(EndpointProperty.TargetPort);
+        var tlsOptions = tls ? $" --tls ${{{ReplCaFileEnvVarName}:+--tlsCAFile ${ReplCaFileEnvVarName}}}" : string.Empty;
+        return builder.WithConnectCommand(
+            "mongosh",
+            ConnectCommandLocation.Container,
+            ReferenceExpression.Create($"""exec mongosh --quiet "mongodb://localhost:{port}/admin?directConnection=true" --username "${UserEnvVarName}" --password "${PasswordEnvVarName}" --authenticationDatabase admin{tlsOptions}"""),
+            append: "<mongosh options>, for example --eval 'db.runCommand({ ping: 1 })'");
     }
 
     /// <summary>

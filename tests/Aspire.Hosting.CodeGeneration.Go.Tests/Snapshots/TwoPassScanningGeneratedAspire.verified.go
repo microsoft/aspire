@@ -38,6 +38,21 @@ const (
 	ContainerMountTypeVolume ContainerMountType = "Volume"
 )
 
+// ConnectCommandLocation specifies where the command described by a
+// ConnectCommandAnnotation runs.
+type ConnectCommandLocation string
+
+const (
+	// ConnectCommandLocationContainer - The client runs inside the resource's
+	// container. The command is a shell script that the container's sh interprets,
+	// so it can read credentials from the container's own environment variables.
+	ConnectCommandLocationContainer ConnectCommandLocation = "Container"
+	// ConnectCommandLocationHost is the client runs on the host, for example
+	// because the container image has no client. The command is a host command line
+	// that typically reaches the resource through its published endpoint.
+	ConnectCommandLocationHost ConnectCommandLocation = "Host"
+)
+
 // ContainerLifetime - Lifetime modes for container resources.
 type ContainerLifetime string
 
@@ -2763,6 +2778,34 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -4490,6 +4533,44 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(con
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -7094,6 +7175,34 @@ type CSharpAppResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) CSharpAppResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) CSharpAppResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -8599,6 +8708,44 @@ func (s *cSharpAppResource) WithConfig(config *TestConfigDto) CSharpAppResource 
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *cSharpAppResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) CSharpAppResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -12189,6 +12336,34 @@ type ContainerRegistryResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) ContainerRegistryResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ContainerRegistryResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -12960,6 +13135,44 @@ func (s *containerRegistryResource) WithConfig(config *TestConfigDto) ContainerR
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *containerRegistryResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ContainerRegistryResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -14323,6 +14536,34 @@ type ContainerResource interface {
 
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) ContainerResource
+
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ContainerResource
 
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
@@ -16048,6 +16289,44 @@ func (s *containerResource) WithConfig(config *TestConfigDto) ContainerResource 
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *containerResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ContainerResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -20756,6 +21035,34 @@ type DotnetToolResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) DotnetToolResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) DotnetToolResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -22293,6 +22600,44 @@ func (s *dotnetToolResource) WithConfig(config *TestConfigDto) DotnetToolResourc
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *dotnetToolResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) DotnetToolResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -25945,6 +26290,34 @@ type ExecutableResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) ExecutableResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ExecutableResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -27409,6 +27782,44 @@ func (s *executableResource) WithConfig(config *TestConfigDto) ExecutableResourc
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *executableResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ExecutableResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -29720,6 +30131,34 @@ type ExternalServiceResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) ExternalServiceResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ExternalServiceResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -30498,6 +30937,44 @@ func (s *externalServiceResource) WithConfig(config *TestConfigDto) ExternalServ
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *externalServiceResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ExternalServiceResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -34324,6 +34801,34 @@ type ParameterResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) ParameterResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ParameterResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -35192,6 +35697,44 @@ func (s *parameterResource) WithConfig(config *TestConfigDto) ParameterResource 
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *parameterResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -37554,6 +38097,34 @@ type ProjectResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) ProjectResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ProjectResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -39059,6 +39630,44 @@ func (s *projectResource) WithConfig(config *TestConfigDto) ProjectResource {
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *projectResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) ProjectResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -43406,6 +44015,34 @@ type TestDatabaseResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) TestDatabaseResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) TestDatabaseResource
+
 	// WithContainerBuildOptions configures container build options for a compute
 	// resource using an async callback.
 	//
@@ -45130,6 +45767,44 @@ func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseRes
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *testDatabaseResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -47861,6 +48536,34 @@ type TestRedisResource interface {
 	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) TestRedisResource
 
+	// WithConnectCommand describes the command that reaches the resource with its
+	// own client. Repeated calls replace the command.
+	//
+	// The resolved command appears as the connect entry of the resource in aspire
+	// describe --format json and in the Aspire MCP server's resource listing. A
+	// container command runs with sh -c in the resource's container through the
+	// configured container runtime, and arguments appended by the caller are
+	// forwarded to it.
+	//
+	// Parameters:
+	//   - tool: The name of the client tool the command runs, such as psql.
+	//   - location: Where the command runs. For Container, command is a shell
+	//     script that runs in the resource's container. For Host, it is a host
+	//     command line.
+	//   - command: The command, ending where the client's own arguments go. It is
+	//     displayed by tooling, so it can reference only literal text and endpoint
+	//     values, never secrets. Read credentials from the container's environment
+	//     variables instead.
+	//   - options: Optional parameters; see [WithConnectCommandOption].
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) TestRedisResource
+
 	// WithConnectionProperty adds a connection property annotation to the resource
 	// being built.
 	//
@@ -49874,6 +50577,44 @@ func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource 
 		reqArgs["config"] = serializeValue(config)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithConnectCommand describes the command that reaches the resource with its
+// own client. Repeated calls replace the command.
+func (s *testRedisResource) WithConnectCommand(tool string, location ConnectCommandLocation, command *ReferenceExpression, options ...WithConnectCommandOption) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
+	if command != nil {
+		if err := command.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["tool"] = serializeValue(tool)
+	reqArgs["location"] = serializeValue(location)
+	if command != nil {
+		reqArgs["command"] = serializeValue(command)
+	}
+	if len(options) > 0 {
+		merged := &WithConnectCommandOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectCommand", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -52895,6 +53636,53 @@ func (s *userSecretsManager) TrySetSecret(name string, value string) (bool, erro
 // ============================================================================
 // Options structs
 // ============================================================================
+
+// WithConnectCommandOptions carries optional parameters for WithConnectCommand.
+type WithConnectCommandOptions struct {
+	// Append is a description of what to append to the command, such as -c '<sql>'.
+	Append *string `json:"append,omitempty"`
+	// Note is an optional note about using the command.
+	Note *string `json:"note,omitempty"`
+}
+
+// WithConnectCommandOption configures WithConnectCommand.
+type WithConnectCommandOption interface {
+	apply(*WithConnectCommandOptions)
+}
+
+func (option *WithConnectCommandOptions) apply(options *WithConnectCommandOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ConnectCommandAppend sets Append for WithConnectCommand.
+type ConnectCommandAppend string
+
+func (value ConnectCommandAppend) apply(options *WithConnectCommandOptions) {
+	options.Append = (*string)(&value)
+}
+
+// ConnectCommandNote sets Note for WithConnectCommand.
+type ConnectCommandNote string
+
+func (value ConnectCommandNote) apply(options *WithConnectCommandOptions) {
+	options.Note = (*string)(&value)
+}
+
+func (o *WithConnectCommandOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil {
+		return m
+	}
+	if o.Append != nil {
+		m["append"] = serializeValue(o.Append)
+	}
+	if o.Note != nil {
+		m["note"] = serializeValue(o.Note)
+	}
+	return m
+}
 
 // AddContainerRegistryOptions carries optional parameters for AddContainerRegistry.
 type AddContainerRegistryOptions struct {

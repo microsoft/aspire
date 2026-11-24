@@ -412,6 +412,38 @@ public class ResourceSnapshotMapperTests
     }
 
     [Fact]
+    public async Task MapToResourceJson_MapsConnectCommandAndOmitsItWhenAbsent()
+    {
+        var withConnect = new ResourceSnapshot
+        {
+            Name = "cache-abcdefgh",
+            DisplayName = "cache",
+            ResourceType = "Container",
+            Connect = new ResourceSnapshotConnect
+            {
+                Command = "docker exec cache-abcdefgh sh -c 'exec redis-cli -p 6379 \"$@\"' sh",
+                Runs = "container",
+                Tool = "redis-cli",
+                Append = "<command>, for example INFO"
+            }
+        };
+        var withoutConnect = new ResourceSnapshot { Name = "api", DisplayName = "api", ResourceType = "Project" };
+
+        var json = JsonSerializer.Serialize(
+            ResourceSnapshotMapper.MapToResourceJson(withConnect, [withConnect, withoutConnect]),
+            ResourcesCommandJsonContext.RelaxedEscaping.ResourceJson);
+        using var document = JsonDocument.Parse(json);
+
+        var withoutConnectJson = JsonSerializer.Serialize(
+            ResourceSnapshotMapper.MapToResourceJson(withoutConnect, [withConnect, withoutConnect]),
+            ResourcesCommandJsonContext.RelaxedEscaping.ResourceJson);
+        using var withoutConnectDocument = JsonDocument.Parse(withoutConnectJson);
+        Assert.False(withoutConnectDocument.RootElement.TryGetProperty("connect", out _));
+
+        await Verify(document.RootElement.GetProperty("connect").GetRawText(), "json");
+    }
+
+    [Fact]
     public void MapToResourceJson_UsesUniqueWaitingForNamesForReplicas()
     {
         var firstDependency = new ResourceSnapshot

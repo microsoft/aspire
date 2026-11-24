@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Publishing;
 using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +22,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
 #pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRECONTAINERRUNTIME001 // The connect command uses the configured container runtime.
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -1204,6 +1206,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             })
             .ToArray();
 
+        var connect = await ConnectCommandResolver.ResolveAsync(
+            resource,
+            resourceEvent.ResourceId,
+            async ct =>
+            {
+                var runtime = await serviceProvider.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(ct).ConfigureAwait(false);
+                return runtime.Name.ToLowerInvariant();
+            },
+            logger,
+            cancellationToken).ConfigureAwait(false);
+
         return new ResourceSnapshot
         {
             Name = resourceEvent.ResourceId,
@@ -1227,7 +1240,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             EnvironmentVariables = environmentVariables,
             Properties = properties,
             McpServer = mcpServer,
-            Commands = commands
+            Commands = commands,
+            Connect = connect
         };
     }
 

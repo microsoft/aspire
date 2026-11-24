@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECT001 // The integration declares how to reach its server with sqlcmd.
+
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Text;
@@ -94,8 +96,25 @@ public static partial class SqlServerBuilderExtensions
                           {
                               await CreateDatabaseAsync(sqlConnection, sqlDatabase, @event.Services, ct).ConfigureAwait(false);
                           }
-                      });
+                      })
+                      .WithSqlCmdConnectCommand(SqlServerContainerImageTags.ReplCommand);
     }
+
+    private static IResourceBuilder<SqlServerServerResource> WithSqlCmdConnectCommand(this IResourceBuilder<SqlServerServerResource> builder, string executablePath)
+    {
+        // sqlcmd runs in the container over loopback and reads the sa password from the container's
+        // MSSQL_SA_PASSWORD variable, so only the variable name is shown by tooling. -C trusts the local server's
+        // self-signed certificate, matching the integration's connection string and the REPL.
+        return builder.WithConnectCommand(
+            "sqlcmd",
+            ConnectCommandLocation.Container,
+            ReferenceExpression.Create($"""SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec {QuoteForShell(executablePath)} -S 127.0.0.1,{builder.Resource.PrimaryEndpoint.Property(EndpointProperty.TargetPort)} -U sa -C"""),
+            append: "<sqlcmd options>, for example -Q 'SELECT @@VERSION'");
+    }
+
+    // Quotes a value for a POSIX shell only when it contains characters the shell would interpret.
+    private static string QuoteForShell(string value)
+        => Regex.IsMatch(value, "^[A-Za-z0-9_./-]+$") ? value : $"'{value.Replace("'", "'\\''", StringComparison.Ordinal)}'";
 
     /// <summary>
     /// Creates the connection string used by the SQL Server health checks.
@@ -171,7 +190,10 @@ public static partial class SqlServerBuilderExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(options.Command, nameof(options.Command));
         var executablePath = options.Command;
 
-        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, executablePath, ct));
+        // Keep the connect command on the same client as the REPL, for example the legacy sqlcmd of an older image.
+        return builder
+            .WithSqlCmdConnectCommand(executablePath)
+            .WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, executablePath, ct));
     }
 
     /// <summary>

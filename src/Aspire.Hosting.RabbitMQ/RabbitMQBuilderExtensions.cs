@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECT001 // The integration declares how to reach its broker with rabbitmqctl.
+
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RabbitMQ;
@@ -83,7 +85,15 @@ public static class RabbitMQBuilderExtensions
                                   context.EnvironmentVariables["RABBITMQ_DEFAULT_USER"] = rabbitMq.UserNameReference;
                                   context.EnvironmentVariables["RABBITMQ_DEFAULT_PASS"] = rabbitMq.PasswordParameter;
                               })
-                              .WithHealthCheck(healthCheckKey);
+                              .WithHealthCheck(healthCheckKey)
+                              // rabbitmqctl in the image authenticates to the local node with its Erlang cookie,
+                              // so the command needs no credentials. It honors RABBITMQ_NODENAME when a stable
+                              // node name is configured.
+                              .WithConnectCommand(
+                                  "rabbitmqctl",
+                                  ConnectCommandLocation.Container,
+                                  ReferenceExpression.Create($"exec rabbitmqctl"),
+                                  append: "<command>, for example list_queues");
 
         return rabbitmq;
     }

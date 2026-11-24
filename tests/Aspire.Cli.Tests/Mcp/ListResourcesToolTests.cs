@@ -568,6 +568,35 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ListResourcesTool_ListsConnectCommandAndDropsCommandsThatWouldBeTruncated()
+    {
+        var connect = new ResourceSnapshotConnect
+        {
+            Command = "docker exec pg-abcdefgh sh -c 'PGPASSWORD=\"$POSTGRES_PASSWORD\" exec psql -w -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d postgres \"$@\"' sh",
+            Runs = "container",
+            Tool = "psql",
+            Append = "<psql options>, for example -c 'SELECT 1'"
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(
+            new ResourceSnapshot { Name = "pg-abcdefgh", Connect = connect },
+            new ResourceSnapshot
+            {
+                Name = "too-long",
+                Connect = new ResourceSnapshotConnect { Command = "client " + new string('x', 2048), Runs = "host", Tool = "client" }
+            }));
+        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        using var json = GetResourceData(result);
+        Assert.Equal("pg-abcdefgh", json.RootElement[0].GetProperty("name").GetString());
+        Assert.Equal("too-long", json.RootElement[1].GetProperty("name").GetString());
+        Assert.False(json.RootElement[1].TryGetProperty("connect", out _));
+        await Verify(json.RootElement[0].GetProperty("connect").GetRawText(), "json");
+    }
+
+    [Fact]
     public async Task ListResourcesTool_BoundsCommandDescriptionsWithoutTruncatingInvocationMetadata()
     {
         var description = new string('x', 255) + "\U0001F680\ntrailing text";

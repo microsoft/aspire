@@ -166,6 +166,40 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_IncludesResolvedConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        var resource = builder.AddResource(new CustomResource("tool"))
+            .WithConnectCommand("tool-cli", ConnectCommandLocation.Host, ReferenceExpression.Create($"tool-cli --local"), append: "<command>", note: "Install tool-cli.");
+#pragma warning restore ASPIRECONNECT001
+        builder.AddResource(new CustomResource("other"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var connect = Assert.Single(result, r => r.Name == "tool").Connect;
+        Assert.NotNull(connect);
+        Assert.Equal("tool-cli --local", connect.Command);
+        Assert.Equal("host", connect.Runs);
+        Assert.Equal("tool-cli", connect.Tool);
+        Assert.Equal("<command>", connect.Append);
+        Assert.Equal("Install tool-cli.", connect.Note);
+        Assert.Null(Assert.Single(result, r => r.Name == "other").Connect);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_MapsSnapshotData()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

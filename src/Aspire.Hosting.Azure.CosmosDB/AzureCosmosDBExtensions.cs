@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // HTTPS certificate APIs are experimental
+#pragma warning disable ASPIRECONNECT001 // The emulator declares how to reach its gateway from the host.
 
 using System.Globalization;
 using Aspire.Hosting;
@@ -216,6 +217,15 @@ public static class AzureCosmosExtensions
                     ep.UriScheme = "https";
                 });
             });
+
+            // The emulator image has no client. Its gateway serves HTTPS on the documented HTTP port once Aspire
+            // provides a certificate, so the command uses the endpoint URL, which reflects the current scheme.
+            builder.WithConnectCommand(
+                "curl",
+                ConnectCommandLocation.Host,
+                ReferenceExpression.Create($"curl -sS {builder.Resource.GetEndpoint("emulator")}/"),
+                append: "<curl options>, for example -i",
+                note: "Reaches the emulator gateway. Data requests need Azure Cosmos DB REST authorization headers built from the emulator's well-known key, so use an SDK or the Data Explorer to query data.");
         }
         else
         {

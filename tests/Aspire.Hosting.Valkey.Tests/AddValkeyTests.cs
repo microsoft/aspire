@@ -7,10 +7,26 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.Valkey.Tests;
 
 public class AddValkeyTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task AddValkeyDeclaresValkeyCliConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var valkey = builder.AddValkey("valkey", port: 16379);
+
+        var connect = Assert.Single(valkey.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("valkey-cli", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Container, connect.Location);
+        Assert.Equal("""[ -n "$VALKEY_PASSWORD" ] && export VALKEYCLI_AUTH="$VALKEY_PASSWORD"; exec valkey-cli -h 127.0.0.1 -p 6379""",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<command>, for example INFO", connect.Append);
+    }
+
     [Fact]
     public void AddValkeyContainerWithDefaultsAddsAnnotationMetadata()
     {
