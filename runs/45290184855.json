@@ -1,0 +1,127 @@
+{
+  "run_id": 45290184855,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45290184855",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-24T00:15:47Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22533,
+    "title": "Validate dashboard telemetry API limits",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/telemetry-api-limit-validation",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22533",
+    "merged_at": "2026-11-23T23:35:44Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "6fb7b8a7edb8e27ea14de331f2c6272bdd801645",
+    "failed_sha": "9f94f126053f5e04a949429d20d88ab245a46e8c",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "b22f904393c5bd9406d1c8c095e9e6695893a756",
+        "message": "Share the Status card across resource and parameter Overview (#22517)",
+        "html_url": "https://github.com/microsoft/aspire/commit/b22f904393c5bd9406d1c8c095e9e6695893a756",
+        "pull_request": {
+          "number": 22517,
+          "title": "Share the Status card across resource and parameter Overview",
+          "url": "https://github.com/microsoft/aspire/pull/22517",
+          "merged_at": "2026-11-23T23:13:15Z"
+        }
+      },
+      {
+        "sha": "4f1bb47056e6a1312866dacec2f5a0d2a99df7fd",
+        "message": "Unify dashboard sidebar group headers (#22524)",
+        "html_url": "https://github.com/microsoft/aspire/commit/4f1bb47056e6a1312866dacec2f5a0d2a99df7fd",
+        "pull_request": {
+          "number": 22524,
+          "title": "Unify dashboard sidebar group headers",
+          "url": "https://github.com/microsoft/aspire/pull/22524",
+          "merged_at": "2026-11-23T23:20:39Z"
+        }
+      },
+      {
+        "sha": "3433a49405d74622d9159a8c565597d871441925",
+        "message": "Reduce dashboard Summary and resource Overview load times (#22534)",
+        "html_url": "https://github.com/microsoft/aspire/commit/3433a49405d74622d9159a8c565597d871441925",
+        "pull_request": {
+          "number": 22534,
+          "title": "Reduce dashboard Summary and resource Overview load times",
+          "url": "https://github.com/microsoft/aspire/pull/22534",
+          "merged_at": "2026-11-23T23:34:16Z"
+        }
+      },
+      {
+        "sha": "9f94f126053f5e04a949429d20d88ab245a46e8c",
+        "message": "Validate dashboard telemetry API limits (#22533)",
+        "html_url": "https://github.com/microsoft/aspire/commit/9f94f126053f5e04a949429d20d88ab245a46e8c",
+        "pull_request": {
+          "number": 22533,
+          "title": "Validate dashboard telemetry API limits",
+          "url": "https://github.com/microsoft/aspire/pull/22533",
+          "merged_at": "2026-11-23T23:35:44Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "id": 138100072409,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45290184855/job/138100072409",
+      "classification": "flaky-test",
+      "reason": "bUnit WaitFor timeout in a single dashboard component test; 1566 others passed",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "id": 138107753268,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45290184855/job/138107753268",
+      "classification": "flaky-test",
+      "reason": "Go resource debug E2E failed applying control after first traffic attempt timed out",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire resource debug language model tool E2E attaches to a Go resource launched with Run Without Debugging, hits a breakpoint, and detaches",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "error": "Failed to apply E2E control revision 1795478610466: E2E control command failed.",
+      "stack_trace": "Error: Failed to apply E2E control revision 1795478610466: E2E control command failed.\n    at applyE2eControl (out\\test-e2e\\test-e2e\\helpers\\assertions.js:389:15)\n    at async executeE2eControlCommand (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:170:12)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\resourceDebugTools.e2e.test.js:368:24)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Traffic to go-api timed out in Windows E2E before control command failed; timing/environment related",
+      "job_id": 138107753268,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    },
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "error": "Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.\n\nIf this test does not fail consistently, the reason may be that\nthe wait timeout is too short, and the runtime did not have enough\ntime to complete the necessary number of renders of the component under test.\nThis can happen on highly utilized or slower hardware, for example.\n\nTo determine if this is the cause, compare the check and render count(s) below\nand see if they match what is expected. If they do not,\nconsider increasing the timeout, either at the individual\nmethod call level, e.g. WaitForElement(\"div\", TimeSpan.FromSeconds(15)),\nor via the static TestContext.DefaultWaitTimeout property.\n\nCheck count: 1.\nComponent render count: 2.\nTotal render count across all components: 0.\n---- Assert.Equal() Failure: Strings differ\n                                 ↓ (pos 22)\nExpected: \"Localized:HomeActivityWaiting\"\nActual:   \"Localized:HomeActivityLoading\"\n                        ",
+      "stack_trace": "   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertionAsync[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 125\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 148\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.<>c__DisplayClass6_0.<Render_ActivityAndInsights_UseLocalizedText>b__0() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 148\n   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.<>c__DisplayClass6_0.<.ctor>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.<>c__DisplayClass32_0.<WrapSynchronousChecker>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226",
+      "standard_output": "Temporary workspace created at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/k4d0uybw.sfi\nDisposing temporary workspace at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/k4d0uybw.sfi\n",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "bUnit WaitForFailedException timeout reporting a render-timing wait on a slow runner",
+      "job_id": 138100072409,
+      "execution_id": "cf6443cf-de8a-4fae-ba4a-4c544c8390f2",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dashboard-components-messagebar-linkasaction-waitfor-timeout",
+    "vscode-e2e-resource-debug-go-control-command-timeout"
+  ]
+}
