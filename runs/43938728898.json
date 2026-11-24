@@ -1,0 +1,36 @@
+{
+  "run_id": 43938728898,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43938728898",
+  "run_scope": "pull-request",
+  "analyzed_at": "2026-11-24T22:21:30Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 22322,
+    "title": "Consolidate AppHost template package references",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-consolidate-template-package-references",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22322"
+  },
+  "triggering_merge_pr": null,
+  "main_context": null,
+  "failed_jobs": [
+    {
+      "name": "Tests / Aspire CLI Starter Validation (macOS x64) / Validate",
+      "id": 133556560566,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43938728898/job/133556560566",
+      "classification": "transient-infra",
+      "reason": "Starter creation passed; diagnostics upload failed while statting frontend/node_modules. The same upload failure recurs on unrelated PRs whose changes do not modify upload machinery. This is shared CI infrastructure, not a test assertion or a network failure.",
+      "failed_steps": [
+        "Upload starter validation diagnostics"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "cli-starter-diagnostics-upload-node-modules-enoent"
+  ]
+}

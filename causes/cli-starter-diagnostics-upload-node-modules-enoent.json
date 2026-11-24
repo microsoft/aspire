@@ -1,0 +1,16 @@
+{
+  "id": "cli-starter-diagnostics-upload-node-modules-enoent",
+  "type": "infra-failure",
+  "title": "Starter diagnostics upload fails with ENOENT on changing node_modules paths",
+  "error_pattern": "ENOENT: no such file or directory, stat '<workspace>/aspire-go-starter/AspireCliGoStarterSmoke/frontend/node_modules'\nAlso observed on Windows ARM64 at frontend/node_modules/@babel/core during Upload starter validation diagnostics.",
+  "occurrences": [
+    {
+      "run_id": 43938728898,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/43938728898",
+      "job": "Tests / Aspire CLI Starter Validation (macOS x64) / Validate",
+      "observed_at": "2026-11-24T22:21:30Z",
+      "pr_number": 22322
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/22347"
+}
