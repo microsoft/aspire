@@ -19,8 +19,8 @@
       </trans-unit>
       <trans-unit id="RebuildName">
         <source>Rebuild</source>
-        <target state="translated">再構築</target>
-        <note />
+        <target state="needs-review-translation">再構築</target>
+        <note>Button label for rebuilding a project from source and restarting its resource. Translate as an imperative verb, not a noun.</note>
       </trans-unit>
       <trans-unit id="ResourceDeletedParameter">
         <source>Successfully deleted parameter '{0}'.</source>
@@ -59,8 +59,8 @@
       </trans-unit>
       <trans-unit id="RestartName">
         <source>Restart</source>
-        <target state="translated">再起動</target>
-        <note />
+        <target state="needs-review-translation">再起動</target>
+        <note>Button label for restarting a resource. Translate as an imperative verb, not a noun.</note>
       </trans-unit>
       <trans-unit id="RestartProjectDescription">
         <source>Restart resource. Source code is not recompiled.</source>
@@ -84,8 +84,8 @@
       </trans-unit>
       <trans-unit id="StartName">
         <source>Start</source>
-        <target state="translated">開始</target>
-        <note />
+        <target state="needs-review-translation">開始</target>
+        <note>Button label for starting a resource. Translate as an imperative verb, not a noun meaning beginning.</note>
       </trans-unit>
       <trans-unit id="StopDescription">
         <source>Stop resource</source>
@@ -94,8 +94,8 @@
       </trans-unit>
       <trans-unit id="StopName">
         <source>Stop</source>
-        <target state="translated">停止</target>
-        <note />
+        <target state="needs-review-translation">停止</target>
+        <note>Button label for stopping a resource. Translate as an imperative verb, not a noun.</note>
       </trans-unit>
       <trans-unit id="RebuilderResourceNotFound">
         <source>Rebuilder resource for '{0}' not found.</source>

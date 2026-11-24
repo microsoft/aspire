@@ -125,18 +125,21 @@
   </data>
   <data name="RestartName" xml:space="preserve">
     <value>Restart</value>
+    <comment>Button label for restarting a resource. Translate as an imperative verb, not a noun.</comment>
   </data>
   <data name="StartDescription" xml:space="preserve">
     <value>Start resource</value>
   </data>
   <data name="StartName" xml:space="preserve">
     <value>Start</value>
+    <comment>Button label for starting a resource. Translate as an imperative verb, not a noun meaning beginning.</comment>
   </data>
   <data name="StopDescription" xml:space="preserve">
     <value>Stop resource</value>
   </data>
   <data name="StopName" xml:space="preserve">
     <value>Stop</value>
+    <comment>Button label for stopping a resource. Translate as an imperative verb, not a noun.</comment>
   </data>
   <data name="SetParameterDescription" xml:space="preserve">
     <value>Set parameter value</value>
@@ -155,6 +158,7 @@
   </data>
   <data name="RebuildName" xml:space="preserve">
     <value>Rebuild</value>
+    <comment>Button label for rebuilding a project from source and restarting its resource. Translate as an imperative verb, not a noun.</comment>
   </data>
   <data name="RebuilderResourceNotFound" xml:space="preserve">
     <value>Rebuilder resource for '{0}' not found.</value>
