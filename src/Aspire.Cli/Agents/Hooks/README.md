@@ -6,7 +6,9 @@ directly. Plugins provide skills and references; they do not register
 telemetry hooks.
 
 `aspire doctor` warns about user-level hooks that still invoke legacy telemetry
-scripts and recommends `aspire agent init --agents <client>` to refresh them.
+scripts and recommends
+`aspire agent init --agents <client> --skills none --mcp=false` to refresh them
+without changing skills or MCP configuration.
 
 The skills and references that may be reported are listed in
 [`telemetry-catalog.json`](telemetry-catalog.json), which is embedded in the

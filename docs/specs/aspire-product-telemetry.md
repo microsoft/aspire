@@ -194,7 +194,7 @@ Each registration includes a tool-name `matcher` ([CopilotAgentClient](../../src
 
 Older CLIs installed `track-telemetry.sh` and `track-telemetry.ps1` in the Aspire home `hooks` directory (`~/.aspire/hooks/` by default) and registered hooks that ran them. Current CLIs no longer ship or refresh those scripts. When `aspire agent init` refreshes a supported client's hook, it replaces legacy script registrations with a direct `aspire agent telemetry --hook` command. Until a registration is refreshed, the previously installed scripts continue to work because they invoke supported `aspire agent telemetry` options. The command applies the catalog and GUID rules to the values those scripts forward and drops anything that does not pass.
 
-`aspire doctor` warns when a supported client's user-level telemetry hook still invokes a legacy script and recommends `aspire agent init --agents <client>` to refresh it. The check honors `COPILOT_HOME` and `CLAUDE_CONFIG_DIR`. Leftover script files without a legacy hook registration do not produce a warning.
+`aspire doctor` warns when a supported client's user-level telemetry hook still invokes a legacy script and recommends `aspire agent init --agents <client> --skills none --mcp=false` to refresh it without changing skills or MCP configuration. The check honors `COPILOT_HOME` and `CLAUDE_CONFIG_DIR`. Leftover script files without a legacy hook registration do not produce a warning.
 
 The classifier produces event type, client name, timestamp, and the applicable skill, tool, or skills-relative reference identifier. It includes a session ID only when the incoming value is a GUID. It does not export the raw hook payload, prompts, tool arguments, file contents, or absolute paths.
 
