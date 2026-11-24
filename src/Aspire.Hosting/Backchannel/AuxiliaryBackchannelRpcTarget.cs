@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
@@ -716,7 +717,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 State = resourceEvent.Snapshot.State?.Text,
                 HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString(),
                 ExitCode = resourceEvent.Snapshot.ExitCode,
-                ErrorMessage = $"Stopped waiting for resource '{target.DisplayName}' to become healthy because it failed to start."
+                // A resource that ran and then exited did start, so name the state and exit code instead.
+                ErrorMessage = resourceEvent.Snapshot.ExitCode is int exitCode
+                    ? $"Stopped waiting for resource '{target.DisplayName}' to become healthy because it stopped in state '{resourceEvent.Snapshot.State?.Text}' with exit code {exitCode}."
+                    : $"Stopped waiting for resource '{target.DisplayName}' to become healthy because it failed to start."
             };
         }
 
@@ -1244,7 +1248,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             WaitingFor = waitingFor,
             StateStyle = snapshot.State?.Style,
             IsHidden = snapshot.IsHidden,
-            IsExplicitStart = resource.HasAnnotationOfType<ExplicitStartupAnnotation>(),
+            IsExplicitStart = IsExplicitStartResource(resource),
             HealthStatus = snapshot.HealthStatus?.ToString(),
             ExitCode = snapshot.ExitCode,
             CreatedAt = snapshot.CreationTimeStamp,
@@ -1259,6 +1263,35 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             McpServer = mcpServer,
             Commands = commands
         };
+    }
+
+    /// <summary>
+    /// Determines whether a resource stays idle until something explicitly starts it.
+    /// </summary>
+    /// <remarks>
+    /// A child without its own lifetime, such as a database on a server container, follows its parent's state
+    /// (see <see cref="ApplicationOrchestrator.ResourceHasOwnLifetime(IResource)"/>). When an ancestor
+    /// that owns that lifetime uses <c>WithExplicitStart</c>, the child cannot start either, so it is reported as
+    /// explicit-start too. Children that run on their own, such as a container parented to another resource, only
+    /// report their own annotation.
+    /// </remarks>
+    internal static bool IsExplicitStartResource(IResource resource)
+    {
+        var current = resource;
+        while (true)
+        {
+            if (current.HasAnnotationOfType<ExplicitStartupAnnotation>())
+            {
+                return true;
+            }
+
+            if (ApplicationOrchestrator.ResourceHasOwnLifetime(current) || current is not IResourceWithParent { Parent: var parent })
+            {
+                return false;
+            }
+
+            current = parent;
+        }
     }
 
     /// <summary>

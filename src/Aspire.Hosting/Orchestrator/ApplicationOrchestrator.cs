@@ -864,7 +864,8 @@ internal sealed class ApplicationOrchestrator
     // TODO: We need to introduce a formal way to resources to opt into propagating state and events to children.
     // This fixes the immediate problem of not propagating to top-level resources, but there are other
     // resources that may want to have their own lifetime, that this code will be unaware of.
-    private static bool ResourceHasOwnLifetime(IResource resource) =>
+    // The backchannel uses this too, so explicit-start inheritance matches the children that receive state here.
+    internal static bool ResourceHasOwnLifetime(IResource resource) =>
         resource.IsContainer() ||
         resource is ProjectResource ||
         resource is ExecutableResource ||

@@ -170,7 +170,7 @@ Older AppHosts omit `ResourceSnapshot.Version`, which deserializes as `0`. Witho
 
 Resource listings include only resources that have published a state, so a listing taken while the AppHost is starting can be partial. When the AppHost advertises `resource-inventory.v1`, `WaitForResourcesInitializedAsync(WaitForResourcesInitializedRequest)` completes once every resource in the application model has published its initial snapshot. `aspire wait --all` calls it before listing resources.
 
-The same capability means `ResourceSnapshot.IsExplicitStart` reports whether the resource has `ExplicitStartupAnnotation`. Older AppHosts omit the field, which deserializes as `false`, so the CLI only relies on it when the capability is advertised. Without the capability, `aspire wait --all` falls back to `WaitForAppHostReadyAsync` and treats `NotStarted` resources as waiting for an explicit start.
+The same capability means `ResourceSnapshot.IsExplicitStart` reports whether the resource has `ExplicitStartupAnnotation`, or inherits it from the nearest parent that owns its lifetime. For example, a database added to a server container that uses `WithExplicitStart` reports `true`, because it follows the server's state and cannot start on its own. A child that runs on its own, such as a container or project with a parent, only reports its own annotation. Older AppHosts omit the field, which deserializes as `false`, so the CLI only relies on it when the capability is advertised. Without the capability, `aspire wait --all` falls back to `WaitForAppHostReadyAsync` and treats `NotStarted` resources as waiting for an explicit start.
 
 ### Resource Wait Response Compatibility
 

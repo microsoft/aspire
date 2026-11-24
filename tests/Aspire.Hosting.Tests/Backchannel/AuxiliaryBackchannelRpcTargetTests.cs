@@ -171,7 +171,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
 
         builder.AddResource(new CustomResource("auto"));
-        builder.AddResource(new CustomResource("manual")).WithExplicitStart();
+        var manual = builder.AddResource(new CustomResource("manual")).WithExplicitStart();
+        var manualChild = builder.AddResource(new CustomChildResource("manual-child", manual.Resource));
+        builder.AddResource(new CustomChildResource("manual-grandchild", manualChild.Resource));
 
         using var app = builder.Build();
         await app.StartAsync().DefaultTimeout();
@@ -188,8 +190,33 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.True(initialized.IsInitialized);
         Assert.False(Assert.Single(result, r => r.Name == "auto").IsExplicitStart);
         Assert.True(Assert.Single(result, r => r.Name == "manual").IsExplicitStart);
+        Assert.True(Assert.Single(result, r => r.Name == "manual-child").IsExplicitStart);
+        Assert.True(Assert.Single(result, r => r.Name == "manual-grandchild").IsExplicitStart);
 
         await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public void IsExplicitStartResource_InheritsOnlyFromParentThatOwnsChildLifetime()
+    {
+        // Mirrors AddPostgres(...).WithExplicitStart().AddDatabase(...): the database has no lifetime of its own,
+        // so it cannot start until the server does. A container parented to the server runs on its own.
+        var server = new ContainerResource("server");
+        server.Annotations.Add(new ContainerImageAnnotation { Image = "server" });
+        server.Annotations.Add(new ExplicitStartupAnnotation());
+        var database = new CustomChildResource("database", server);
+        var sidecar = new CustomChildContainerResource("sidecar", server);
+        sidecar.Annotations.Add(new ContainerImageAnnotation { Image = "sidecar" });
+        var sidecarDatabase = new CustomChildResource("sidecar-database", sidecar);
+        var manualSidecar = new CustomChildContainerResource("manual-sidecar", server);
+        manualSidecar.Annotations.Add(new ContainerImageAnnotation { Image = "manual-sidecar" });
+        manualSidecar.Annotations.Add(new ExplicitStartupAnnotation());
+
+        Assert.True(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(server));
+        Assert.True(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(database));
+        Assert.False(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(sidecar));
+        Assert.False(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(sidecarDatabase));
+        Assert.True(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(manualSidecar));
     }
 
     [Fact]
@@ -1355,7 +1382,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(
             status == "healthy"
-                ? "Stopped waiting for resource 'migrations' to become healthy because it failed to start."
+                ? "Stopped waiting for resource 'migrations' to become healthy because it stopped in state 'Finished' with exit code 0."
                 : "Resource 'migrations' failed to reach 'Running' state. Current state: Finished.",
             result.ErrorMessage);
 
@@ -1714,6 +1741,16 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
     private sealed class CustomResourceWithEnvironment(string name) : Resource(name), IResourceWithEnvironment
     {
+    }
+
+    private sealed class CustomChildResource(string name, IResource parent) : Resource(name), IResourceWithParent
+    {
+        public IResource Parent { get; } = parent;
+    }
+
+    private sealed class CustomChildContainerResource(string name, IResource parent) : ContainerResource(name), IResourceWithParent
+    {
+        public IResource Parent { get; } = parent;
     }
 
     private sealed class CustomResourceWithEndpoints(string name) : Resource(name), IResourceWithEndpoints

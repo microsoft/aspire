@@ -1233,8 +1233,9 @@ internal sealed class ResourceSnapshot
 
     /// <summary>
     /// Gets a value indicating whether the resource only starts when it is started explicitly, for example with
-    /// <c>WithExplicitStart</c>. Older AppHosts omit this value, so clients only rely on it when the AppHost
-    /// advertises <see cref="AuxiliaryBackchannelCapabilities.ResourceInventory_V1"/>.
+    /// <c>WithExplicitStart</c>. A child that follows its parent's lifetime, such as a database on a server
+    /// container, inherits the value from that parent. Older AppHosts omit this value, so clients only rely on it
+    /// when the AppHost advertises <see cref="AuxiliaryBackchannelCapabilities.ResourceInventory_V1"/>.
     /// </summary>
     public bool IsExplicitStart { get; init; }
 

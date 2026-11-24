@@ -485,4 +485,158 @@ public class ResourceWaitServiceTests
             batch.Results.Select(static r => (r.ResourceName, r.Outcome)));
         Assert.Equal(1, backchannel.GetResourceSnapshotsCallCount);
     }
+
+    [Fact]
+    public async Task WaitUntilDoneAsync_WaitsForExitCodeOfResourceThatStoppedAfterItsWaitSucceeded()
+    {
+        var stopObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waitReturned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new ResourceSnapshot { Name = "seed", State = "Running", HealthStatus = "Healthy", Version = 1 };
+
+            // DCP publishes the stop before the exit code.
+            yield return new ResourceSnapshot { Name = "seed", State = "Finished", HealthStatus = "Healthy", Version = 2 };
+            stopObserved.TrySetResult();
+
+            await waitReturned.Task.WaitAsync(cancellationToken);
+            yield return new ResourceSnapshot { Name = "seed", State = "Finished", HealthStatus = "Healthy", ExitCode = 0, Version = 3 };
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
+            WaitForResourceHandler = async (_, _, _, cancellationToken) =>
+            {
+                await stopObserved.Task.WaitAsync(cancellationToken);
+                waitReturned.TrySetResult();
+                return new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" };
+            }
+        };
+        var service = new ResourceWaitService(new FakeTimeProvider(), NullLogger<ResourceWaitService>.Instance);
+
+        var batch = await service.WaitUntilDoneAsync(
+            backchannel, ["seed"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var result = Assert.Single(batch.Results);
+        Assert.Equal((ResourceWaitOutcome.Completed, "Finished", (int?)0), (result.Outcome, result.State, result.ExitCode));
+    }
+
+    [Fact]
+    public async Task WaitUntilDoneAsync_FailedWaitWaitsForDelayedExitCodeWithoutFailingTheBatch()
+    {
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(2));
+        var readCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exitCodeObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new ResourceSnapshot { Name = "api", State = "Running", HealthStatus = "Healthy", Version = 1 };
+            yield return new ResourceSnapshot { Name = "migrations", State = "Running", Version = 1 };
+
+            // The watch falls behind until the snapshot read showed the stop without an exit code.
+            await readCompleted.Task.WaitAsync(cancellationToken);
+            yield return new ResourceSnapshot { Name = "migrations", State = "Finished", ExitCode = 0, Version = 3 };
+            exitCodeObserved.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
+            GetResourceSnapshotsHandler = _ =>
+            {
+                readCompleted.TrySetResult();
+                return Task.FromResult<List<ResourceSnapshot>>(
+                [
+                    new ResourceSnapshot { Name = "api", State = "Running", HealthStatus = "Healthy", Version = 1 },
+                    new ResourceSnapshot { Name = "migrations", State = "Finished", Version = 2 }
+                ]);
+            },
+            WaitForResourceHandler = async (resourceName, _, _, cancellationToken) =>
+            {
+                if (resourceName == "api")
+                {
+                    // A failure of migrations would cancel this wait before the exit code arrives.
+                    await exitCodeObserved.Task.WaitAsync(cancellationToken);
+                    return new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" };
+                }
+
+                return new WaitForResourceResponse
+                {
+                    Success = false,
+                    State = "Finished",
+                    ErrorMessage = "Stopped waiting for resource 'migrations' to become healthy because it failed to start."
+                };
+            }
+        };
+        var service = new ResourceWaitService(timeProvider, NullLogger<ResourceWaitService>.Instance);
+
+        var batchTask = service.WaitUntilDoneAsync(
+            backchannel, ["migrations", "api"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken);
+
+        // Expire the grace period so the stop is only learned from the snapshot read.
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
+        var batch = await batchTask.DefaultTimeout();
+
+        Assert.Equal(
+            [
+                ("migrations", ResourceWaitOutcome.Completed, "Finished", (int?)0),
+                ("api", ResourceWaitOutcome.Success, "Running", null)
+            ],
+            batch.Results.Select(static r => (r.ResourceName, r.Outcome, r.State, r.ExitCode)));
+        Assert.Equal(1, backchannel.GetResourceSnapshotsCallCount);
+    }
+
+    [Fact]
+    public async Task WaitUntilDoneAsync_ReportsTimeoutWhenExitCodeIsStillUnknownAtDeadline()
+    {
+        var timeProvider = new FakeTimeProvider();
+        var stopsObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new ResourceSnapshot { Name = "seed", State = "Running", HealthStatus = "Healthy", Version = 1 };
+            yield return new ResourceSnapshot { Name = "migrations", State = "Running", Version = 1 };
+            yield return new ResourceSnapshot { Name = "seed", State = "Finished", HealthStatus = "Healthy", Version = 2 };
+            yield return new ResourceSnapshot { Name = "migrations", State = "Finished", Version = 2 };
+            stopsObserved.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
+            WaitForResourceHandler = async (resourceName, _, _, cancellationToken) =>
+            {
+                await stopsObserved.Task.WaitAsync(cancellationToken);
+                return resourceName == "seed"
+                    ? new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" }
+                    : new WaitForResourceResponse
+                    {
+                        Success = false,
+                        State = "Finished",
+                        ErrorMessage = "Stopped waiting for resource 'migrations' to become healthy because it failed to start."
+                    };
+            }
+        };
+        var service = new ResourceWaitService(timeProvider, NullLogger<ResourceWaitService>.Instance);
+
+        var batchTask = service.WaitUntilDoneAsync(
+            backchannel, ["seed", "migrations"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken);
+
+        await stopsObserved.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(30));
+        var batch = await batchTask.DefaultTimeout();
+
+        Assert.Equal(
+            [
+                ("seed", ResourceWaitOutcome.Timeout, "Finished", (int?)null, (string?)null),
+                ("migrations", ResourceWaitOutcome.Timeout, "Finished", null, null)
+            ],
+            batch.Results.Select(static r => (r.ResourceName, r.Outcome, r.State, r.ExitCode, r.ErrorMessage)));
+    }
 }

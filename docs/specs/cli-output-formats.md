@@ -414,11 +414,14 @@ a resource that exits with code 0, such as a database migration, also counts as 
 as `completed`. The first resource that fails, for example by exiting with a nonzero code, stops the
 remaining waits, which are reported as `cancelled`. A resource without health checks is healthy as soon
 as it runs, so exits are also watched until the whole wait ends: a resource that exits after its own
-wait succeeded is still reported as `completed` or `failure`. `--all` first waits until the AppHost reports
+wait succeeded is still reported as `completed` or `failure`. A resource can stop before its exit code is
+reported; such a stop is neither `completed` nor `failure`, so the wait continues until the exit code arrives
+and reports `timeout` if it is still unknown when `--timeout` expires. `--all` first waits until the AppHost reports
 every resource, so it does not miss resources that are still being registered while the AppHost starts.
 This wait counts toward `--timeout`. `--all` then excludes hidden resources and skips explicit-start
-resources, such as those using `WithExplicitStart`, that have not been started yet. An explicit-start
-resource that is already running is waited on. AppHosts that predate the `resource-inventory.v1`
+resources, such as those using `WithExplicitStart`, that have not been started yet. This includes
+child resources that follow such a parent's lifetime, such as a database on an explicit-start server. An
+explicit-start resource that is already running is waited on. AppHosts that predate the `resource-inventory.v1`
 backchannel capability do not report explicit-start resources, so `--all` skips resources whose state is
 `NotStarted` instead.
 

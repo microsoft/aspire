@@ -148,6 +148,11 @@ internal sealed class ResourceWaitService(
     /// is healthy as soon as it runs, so a one-shot resource can satisfy its own wait and exit later. A nonzero
     /// exit observed before the batch ends still fails the batch, and an exit with code 0 is reported as completed.
     /// </item>
+    /// <item>
+    /// A resource can stop before its exit code is reported. Such a stop neither completes nor fails the resource:
+    /// the batch keeps waiting for the exit code, within the timeout, and reports the resource as timed out if the
+    /// code is still unknown, or as cancelled if another resource failed the batch first.
+    /// </item>
     /// </list>
     /// </remarks>
     public async Task<ResourceWaitBatchResult> WaitUntilDoneAsync(
@@ -173,6 +178,7 @@ internal sealed class ResourceWaitService(
         var watchTask = WatchSnapshotsAsync(connection, monitor, failFastCts, watchCts.Token);
 
         BatchWaitOutcome[] outcomes;
+        bool[] unresolvedExits;
         try
         {
             var waitTasks = resourceNames
@@ -189,6 +195,10 @@ internal sealed class ResourceWaitService(
                 .ToArray();
 
             outcomes = await Task.WhenAll(waitTasks).ConfigureAwait(false);
+
+            unresolvedExits = target is ResourceWaitTarget.Down
+                ? new bool[outcomes.Length]
+                : await WaitForPendingExitCodesAsync(outcomes, monitor, resolutionCts.Token, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -212,11 +222,84 @@ internal sealed class ResourceWaitService(
                     result = ApplyExit(result, snapshot.State, snapshot.HealthStatus, snapshot.ExitCode);
                 }
 
-                return ApplyObservedExit(result, monitor.GetObservedExit(index));
+                result = ApplyObservedExit(result, monitor.GetObservedExit(index));
+
+                // A resource that satisfied its wait and then stopped without an exit code before the batch
+                // stopped waiting for it cannot be reported as ready or as completed.
+                if (unresolvedExits[index] &&
+                    result.Outcome == ResourceWaitOutcome.Success &&
+                    FindResourceSnapshots(snapshots, result.ResourceName) is [var latest] &&
+                    IsPendingExit(latest))
+                {
+                    result = ApplyPendingExit(result, latest.State, latest.HealthStatus, failFastCts.IsCancellationRequested);
+                }
+
+                return result;
             })
             .ToArray();
 
         return new ResourceWaitBatchResult(results, snapshots);
+    }
+
+    /// <summary>
+    /// Keeps the batch open while a resource that already satisfied its wait has stopped without an exit code yet,
+    /// and returns which resources were still in that state when the batch stopped waiting.
+    /// </summary>
+    /// <remarks>
+    /// DCP publishes the <c>Finished</c> or <c>Exited</c> state before the exit code, which arrives in a later
+    /// snapshot. Ending the batch in between would report a resource that ran to completion, or crashed, as ready.
+    /// Batches without such a resource end immediately.
+    /// </remarks>
+    private static async Task<bool[]> WaitForPendingExitCodesAsync(
+        BatchWaitOutcome[] outcomes,
+        BatchSnapshotMonitor monitor,
+        CancellationToken resolutionToken,
+        CancellationToken cancellationToken)
+    {
+        var pending = FindPendingExitCodes(out var changed, out var watchEnded);
+
+        // Once the watch ended the exit codes can no longer arrive.
+        while (!watchEnded && pending.Contains(true))
+        {
+            try
+            {
+                await changed.WaitAsync(resolutionToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // The deadline passed or a resource failed. Report the exits that are still pending.
+                return FindPendingExitCodes(out _, out _);
+            }
+
+            pending = FindPendingExitCodes(out changed, out watchEnded);
+        }
+
+        return pending;
+
+        bool[] FindPendingExitCodes(out Task changed, out bool watchEnded)
+        {
+            changed = Task.CompletedTask;
+            watchEnded = false;
+            var pending = new bool[outcomes.Length];
+            for (var i = 0; i < outcomes.Length; i++)
+            {
+                var view = monitor.Find(outcomes[i].Result.ResourceName);
+
+                // Take the change notification from the first lookup: a change between lookups completes it,
+                // which only causes another pass.
+                if (i == 0)
+                {
+                    changed = view.Changed;
+                    watchEnded = view.WatchEnded;
+                }
+
+                pending[i] = outcomes[i].Result.Outcome == ResourceWaitOutcome.Success &&
+                    view.Matches is [var snapshot] &&
+                    IsPendingExit(snapshot);
+            }
+
+            return pending;
+        }
     }
 
     private async Task WatchSnapshotsAsync(
@@ -308,14 +391,51 @@ internal sealed class ResourceWaitService(
         return IsExited(snapshot) && !IsSuccessfulCompletion(snapshot);
     }
 
+    private static bool IsPendingExit(ResourceSnapshot snapshot)
+    {
+        return IsPendingExit(snapshot.State, snapshot.ExitCode);
+    }
+
+    /// <summary>
+    /// Returns whether the resource stopped but its exit code has not been reported yet.
+    /// </summary>
+    /// <remarks>
+    /// DCP publishes the <c>Finished</c> or <c>Exited</c> state before the exit code, which arrives in a later
+    /// snapshot. Until then the stop is neither a successful completion nor a failure.
+    /// </remarks>
+    private static bool IsPendingExit(string? state, int? exitCode)
+    {
+        return exitCode is null &&
+            (string.Equals(state, KnownResourceStates.Finished, StringComparisons.ResourceState) ||
+             string.Equals(state, KnownResourceStates.Exited, StringComparisons.ResourceState));
+    }
+
+    /// <summary>
+    /// Reports a resource whose exit code was still unknown when the batch stopped waiting for it: the deadline
+    /// passed (or the watch that delivers the code ended), or another resource failed the batch.
+    /// </summary>
+    private static ResourceWaitResult ApplyPendingExit(ResourceWaitResult result, string? state, string? health, bool batchFailed)
+    {
+        return result with
+        {
+            Outcome = batchFailed ? ResourceWaitOutcome.Cancelled : ResourceWaitOutcome.Timeout,
+            State = state,
+            Health = health,
+            ErrorMessage = null,
+            ExitCode = null
+        };
+    }
+
     /// <summary>
     /// Returns whether <paramref name="snapshot"/> shows a state at which the AppHost's healthy or up wait stops.
     /// </summary>
     private static bool IsStoppedWaitState(ResourceSnapshot snapshot)
     {
-        // Mirrors the AppHost predicates: the healthy wait also stops on RuntimeUnhealthy, and the up wait
-        // stops on any exit code or a state with the "error" style (KnownResourceStateStyles.Error).
+        // Mirrors the AppHost predicates: both waits stop on terminal states, the healthy wait also stops on
+        // RuntimeUnhealthy, and the up wait stops on any exit code or a state with the "error" style
+        // (KnownResourceStateStyles.Error).
         return IsExited(snapshot) ||
+            IsPendingExit(snapshot) ||
             snapshot.ExitCode is not null ||
             string.Equals(snapshot.State, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState) ||
             string.Equals(snapshot.StateStyle, "error", StringComparisons.ResourceState);
@@ -380,9 +500,11 @@ internal sealed class ResourceWaitService(
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
-                    // The deadline passed or another resource failed. The AppHost's failure is still known,
-                    // so keep it and let the batch reconcile it with the watcher's final snapshots.
+                    // The deadline passed or another resource failed. The AppHost's failure is still known, so keep
+                    // it unless the resource is known to have stopped, and let the batch reconcile it with the
+                    // watcher's final snapshots.
                     resolutionInterrupted = true;
+                    result = ApplyInterruptedResolution(result, monitor, failFastCts.IsCancellationRequested);
                 }
             }
         }
@@ -421,6 +543,11 @@ internal sealed class ResourceWaitService(
 
             if (view.Matches is [var snapshot] && IsStoppedWaitState(snapshot))
             {
+                if (IsPendingExit(snapshot))
+                {
+                    return await WaitForExitCodeAsync(result, monitor, resolutionToken).ConfigureAwait(false);
+                }
+
                 return IsExited(snapshot) ? ApplyExit(result, snapshot.State, snapshot.HealthStatus, snapshot.ExitCode) : result;
             }
 
@@ -465,9 +592,21 @@ internal sealed class ResourceWaitService(
             return result;
         }
 
-        return FindResourceSnapshots(snapshots, result.ResourceName) is [var readSnapshot] && IsExited(readSnapshot)
-            ? ApplyExit(result, readSnapshot.State, readSnapshot.HealthStatus, readSnapshot.ExitCode)
-            : result;
+        if (FindResourceSnapshots(snapshots, result.ResourceName) is [var readSnapshot])
+        {
+            if (IsExited(readSnapshot))
+            {
+                return ApplyExit(result, readSnapshot.State, readSnapshot.HealthStatus, readSnapshot.ExitCode);
+            }
+
+            // The read is stored as the latest snapshot unless the watch already has a newer one.
+            if (IsPendingExit(readSnapshot))
+            {
+                return await WaitForExitCodeAsync(result, monitor, resolutionToken).ConfigureAwait(false);
+            }
+        }
+
+        return result;
 
         bool ExplainsFailure(IReadOnlyList<ResourceSnapshot> readSnapshots)
         {
@@ -475,6 +614,70 @@ internal sealed class ResourceWaitService(
             var matches = FindResourceSnapshots(readSnapshots, result.ResourceName);
             return matches.Count > 1 || matches is [var match] && IsStoppedWaitState(match);
         }
+    }
+
+    /// <summary>
+    /// Waits on the snapshot watch for the exit code of a resource that stopped without one.
+    /// </summary>
+    /// <remarks>
+    /// An unknown exit code must neither complete the resource nor fail the batch, so this waits until the code
+    /// arrives or the batch's resolution is cancelled by the deadline or another resource's failure. The AppHost
+    /// does not resend a snapshot that was already published, so once the watch ended the code cannot arrive and
+    /// the wait is reported as timed out.
+    /// </remarks>
+    private static async Task<ResourceWaitResult> WaitForExitCodeAsync(
+        ResourceWaitResult result,
+        BatchSnapshotMonitor monitor,
+        CancellationToken resolutionToken)
+    {
+        while (true)
+        {
+            resolutionToken.ThrowIfCancellationRequested();
+            var view = monitor.Find(result.ResourceName);
+            if (view.Matches is not [var snapshot])
+            {
+                return result;
+            }
+
+            if (IsExited(snapshot))
+            {
+                return ApplyExit(result, snapshot.State, snapshot.HealthStatus, snapshot.ExitCode);
+            }
+
+            // A resource that started again no longer explains the AppHost's failure with an exit.
+            if (!IsPendingExit(snapshot))
+            {
+                return result;
+            }
+
+            if (view.WatchEnded)
+            {
+                return ApplyPendingExit(result, snapshot.State, snapshot.HealthStatus, batchFailed: false);
+            }
+
+            await view.Changed.WaitAsync(resolutionToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Settles a failed wait whose completion resolution was cancelled by the deadline or by another resource's failure.
+    /// </summary>
+    private static ResourceWaitResult ApplyInterruptedResolution(ResourceWaitResult result, BatchSnapshotMonitor monitor, bool batchFailed)
+    {
+        var latest = monitor.Find(result.ResourceName).Matches is [var snapshot] ? snapshot : null;
+        if (latest is not null && IsExited(latest))
+        {
+            return ApplyExit(result, latest.State, latest.HealthStatus, latest.ExitCode);
+        }
+
+        // The AppHost's response can report the stop before the watch shows it. Either way, a stop without an
+        // exit code is not known to be a failure, so it must not fail the batch.
+        if (IsPendingExit(result.State, result.ExitCode) || latest is not null && IsPendingExit(latest))
+        {
+            return ApplyPendingExit(result, latest?.State ?? result.State, latest?.HealthStatus ?? result.Health, batchFailed);
+        }
+
+        return result;
     }
 
     private static ResourceWaitResult ApplyExit(ResourceWaitResult result, string? state, string? health, int? exitCode)
