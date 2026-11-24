@@ -26,9 +26,10 @@ internal sealed class LegacyTelemetryHook
     private readonly string[] _scriptReferences;
 
     /// <summary>
-    /// Creates a matcher for the scripts in every Aspire home directory that older CLIs could have used: the
-    /// current CLI's Aspire home, which depends on the install route, the <c>ASPIRE_HOME</c> directory, and the
-    /// default <c>~/.aspire</c> directory.
+    /// Creates a matcher for the scripts in the Aspire home directories older CLIs most likely used: the current
+    /// CLI's Aspire home, which depends on the install route, the <c>ASPIRE_HOME</c> directory, and the default
+    /// <c>~/.aspire</c> directory. A home under a custom install prefix from a different install route is not
+    /// checked.
     /// </summary>
     internal LegacyTelemetryHook(CliExecutionContext context, IEnvironment environment)
     {
