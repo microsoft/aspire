@@ -1541,6 +1541,46 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_All_ReportsThatResourceTeardownMayContinueForCollectedOrphanedAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+        var connection = CreateConnection(appHostPath, int.MaxValue - 1);
+        // The launching CLI process does not exist, so the AppHost is orphaned.
+        connection.AppHostInfo = new AppHostInformation { AppHostPath = appHostPath, ProcessId = int.MaxValue - 1, CliProcessId = int.MaxValue - 3 };
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        monitor.AddConnection(connection.SocketPath, connection);
+        // Like the real monitor, a scan drops connections whose socket file has been deleted.
+        monitor.ScanAsyncCallback = _ =>
+        {
+            if (!File.Exists(connection.SocketPath))
+            {
+                monitor.RemoveConnection(connection.SocketPath);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, new TestProcessExecutionFactory(), interactive: false);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("stop --all --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(0, connection.StopAppHostAndWaitForResourceCleanupCallCount);
+        Assert.False(File.Exists(connection.SocketPath));
+        Assert.Equal(
+            [
+                SharedCommandStrings.AppHostNotRunning,
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownMayContinue, "--wait")
+            ],
+            interactionService.DisplayedMessages.Where(message => message.Emoji.Name == KnownEmojis.Information.Name).Select(message => message.Message));
+    }
+
+    [Fact]
     public async Task StopCommand_AllWait_TearsDownResourcesOfOrphanedAppHost()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

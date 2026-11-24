@@ -593,6 +593,9 @@ internal sealed partial class StopCommand : BaseCommand
             if (collected > 0)
             {
                 _logger.LogDebug("Collected {Count} orphaned AppHost(s) before stopping the rest.", collected);
+
+                // Collection only waits for each process to exit, so these AppHosts' resources may still be stopping.
+                Interlocked.Add(ref _appHostsStoppedWithoutTeardownWait, collected);
             }
         }
 
