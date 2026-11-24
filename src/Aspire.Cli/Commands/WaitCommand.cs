@@ -511,12 +511,17 @@ internal sealed class WaitCommand : BaseCommand
         CancellationToken cancellationToken)
     {
         bool reportsExplicitStart;
+        IReadOnlyList<ResourceSnapshot> snapshots;
+
+        // The listing is part of the inventory step: building snapshots can take several seconds per
+        // MCP endpoint on the AppHost, so it shares the --timeout deadline with the inventory wait.
         using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds), _timeProvider))
         using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
         {
             try
             {
                 reportsExplicitStart = await WaitForResourceInventoryAsync(connection, linkedCts.Token).ConfigureAwait(false);
+                snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, linkedCts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
@@ -524,7 +529,6 @@ internal sealed class WaitCommand : BaseCommand
             }
         }
 
-        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
         var visible = snapshots.Where(static snapshot => !ResourceSnapshotMapper.IsHiddenResource(snapshot)).ToArray();
 
         var skippedNames = visible

@@ -696,6 +696,15 @@ internal sealed class WaitForResourceResponse
     public string? HealthStatus { get; init; }
 
     /// <summary>
+    /// Gets the exit code of the resource when the wait ended on a resource that exited.
+    /// </summary>
+    /// <remarks>
+    /// Older AppHosts omit this value, and their healthy wait also omits <see cref="State"/> when it stops
+    /// because the resource exited.
+    /// </remarks>
+    public int? ExitCode { get; init; }
+
+    /// <summary>
     /// Gets whether the resource was not found.
     /// </summary>
     public bool ResourceNotFound { get; init; }

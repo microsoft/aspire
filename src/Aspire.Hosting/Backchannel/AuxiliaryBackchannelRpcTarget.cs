@@ -707,7 +707,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         if (resourceEvent.Snapshot.HealthStatus != HealthStatus.Healthy)
         {
-            throw new DistributedApplicationException($"Stopped waiting for resource '{target.DisplayName}' to become healthy because it failed to start.");
+            // Return the snapshot that stopped the wait instead of only an error. Callers read the snapshots on a
+            // separate stream, so the state and exit code here are the only reliable way for them to tell a
+            // resource that ran to completion (for example, a migration that exited with 0) from one that crashed.
+            return new WaitForResourceResponse
+            {
+                Success = false,
+                State = resourceEvent.Snapshot.State?.Text,
+                HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString(),
+                ExitCode = resourceEvent.Snapshot.ExitCode,
+                ErrorMessage = $"Stopped waiting for resource '{target.DisplayName}' to become healthy because it failed to start."
+            };
         }
 
         resourceEvent = await WaitForResourceEventAsync(
@@ -747,6 +757,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Success = isRunning,
             State = state,
             HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString(),
+            ExitCode = resourceEvent.Snapshot.ExitCode,
             ErrorMessage = isRunning ? null : $"Resource '{target.DisplayName}' failed to reach 'Running' state. Current state: {state ?? "Unknown"}."
         };
     }
@@ -764,7 +775,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             Success = true,
             State = resourceEvent.Snapshot.State?.Text,
-            HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString()
+            HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString(),
+            ExitCode = resourceEvent.Snapshot.ExitCode
         };
     }
 

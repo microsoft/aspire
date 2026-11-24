@@ -982,7 +982,12 @@ public static class EFResourceBuilderExtensions
         string style) =>
         resourceNotificationService.PublishUpdateAsync(migrationResource, s => s with
         {
-            State = new ResourceStateSnapshot(state, style)
+            State = new ResourceStateSnapshot(state, style),
+            // Finished is only published after a successful operation. Clients such as `aspire wait` treat a
+            // Finished resource as successfully completed only when it reports exit code 0. Every other state
+            // clears the exit code so a previous operation's result is not reported for the operation that is
+            // now waiting, running, canceled, or failed.
+            ExitCode = state == KnownResourceStates.Finished ? 0 : null
         });
 
     private static Task<ExecuteCommandResult> ExecuteAddMigrationCommandAsync(

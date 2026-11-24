@@ -172,6 +172,12 @@ Resource listings include only resources that have published a state, so a listi
 
 The same capability means `ResourceSnapshot.IsExplicitStart` reports whether the resource has `ExplicitStartupAnnotation`. Older AppHosts omit the field, which deserializes as `false`, so the CLI only relies on it when the capability is advertised. Without the capability, `aspire wait --all` falls back to `WaitForAppHostReadyAsync` and treats `NotStarted` resources as waiting for an explicit start.
 
+### Resource Wait Response Compatibility
+
+When a `healthy` or `up` wait stops because the resource reached a terminal state, `WaitForResourceAsync` returns `Success = false` with the `State`, `HealthStatus`, and `ExitCode` of the snapshot that stopped the wait, so the CLI can report a resource that exited with code 0 as completed. `ErrorMessage` keeps the same text as before.
+
+Older AppHosts omit `ExitCode`, and their `healthy` wait returns only `ErrorMessage` when it stops. For those AppHosts the CLI reads the exit code from the resource snapshot watch and, if the watch has not caught up after a short grace period, from a `GetResourceSnapshotsAsync` read bounded by the wait timeout.
+
 ### Compatibility Matrix
 
 | CLI | AppHost | Behavior |

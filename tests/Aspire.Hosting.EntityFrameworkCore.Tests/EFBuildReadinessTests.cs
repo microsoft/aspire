@@ -119,6 +119,40 @@ public class EFBuildReadinessTests
         }
     }
 
+    [Fact]
+    public async Task SuccessfulAutomaticMigrationReportsExitCodeZeroUntilNextOperationStarts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var buildCompletion = Task.CompletedTask;
+        var project = builder.AddProject<Projects.ServiceA>("api")
+            .WithAnnotation(new DotnetProgramBuildCompletionAnnotation((_, token) => buildCompletion.WaitAsync(token)));
+        var migrations = project.AddEFMigrations("migrations").RunDatabaseUpdateOnStart();
+        var tool = new TestEfTool();
+        migrations.Resource.ToolResource = tool.Resource;
+        using var app = builder.Build();
+        var token = TestContext.Current.CancellationToken;
+
+        await builder.Eventing.PublishAsync(
+            new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), token);
+        var finished = await app.ResourceNotifications.WaitForResourceAsync(
+            migrations.Resource.Name, e => e.Snapshot.State?.Text == KnownResourceStates.Finished, token);
+        Assert.Equal(0, finished.Snapshot.ExitCode);
+
+        var nextBuild = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        buildCompletion = nextBuild.Task;
+        var nextOperation = app.Services.GetRequiredService<ResourceCommandService>().ExecuteCommandAsync(
+            migrations.Resource, "ef-database-update", token);
+        var running = await app.ResourceNotifications.WaitForResourceAsync(
+            migrations.Resource.Name, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token);
+        Assert.Null(running.Snapshot.ExitCode);
+
+        nextBuild.SetResult();
+        Assert.True((await nextOperation.WaitAsync(token)).Success);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(migrations.Resource.Name, out var state));
+        Assert.Equal(KnownResourceStates.Finished, state.Snapshot.State?.Text);
+        Assert.Equal(0, state.Snapshot.ExitCode);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

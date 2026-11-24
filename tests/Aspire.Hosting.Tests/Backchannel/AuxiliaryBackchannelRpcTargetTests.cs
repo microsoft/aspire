@@ -1317,6 +1317,51 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await app.StopAsync().DefaultTimeout();
     }
 
+    [Theory]
+    [InlineData("healthy")]
+    [InlineData("up")]
+    public async Task WaitForResourceAsync_ReturnsStateAndExitCodeWhenResourceFinishes(string status)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("migrations"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Finished, KnownResourceStateStyles.Success),
+            ExitCode = 0
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.WaitForResourceAsync(new WaitForResourceRequest
+        {
+            ResourceName = custom.Resource.Name,
+            Status = status,
+            TimeoutSeconds = 30
+        }).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(result.TimedOut);
+        Assert.Equal(KnownResourceStates.Finished, result.State);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            status == "healthy"
+                ? "Stopped waiting for resource 'migrations' to become healthy because it failed to start."
+                : "Resource 'migrations' failed to reach 'Running' state. Current state: Finished.",
+            result.ErrorMessage);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
     [Fact]
     public async Task GetResourceSnapshotsAsync_MapsNonStringPropertiesAsStringsForLegacyCallers()
     {

@@ -828,6 +828,30 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             interactionService.DisplayedErrors);
     }
 
+    [Fact]
+    public async Task WaitCommand_All_ResourceListingSharesInventoryTimeout()
+    {
+        var timeProvider = new FakeTimeProvider();
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsResourceInventoryV1 = true,
+            GetResourceSnapshotsHandler = async cancellationToken =>
+            {
+                timeProvider.Advance(TimeSpan.FromSeconds(2));
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return [];
+            }
+        };
+        var interactionService = new TestInteractionService();
+
+        var exitCode = await RunWaitAsync("wait --all --timeout 1", backchannel, interactionService, timeProvider);
+
+        Assert.Equal(CliExitCodes.WaitTimeout, exitCode);
+        Assert.Equal(
+            [string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceInventoryTimedOut, 1)],
+            interactionService.DisplayedErrors);
+    }
+
     private async Task<int> RunWaitAsync(string commandLine, TestAppHostAuxiliaryBackchannel backchannel, TestInteractionService interactionService, FakeTimeProvider? timeProvider = null)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
