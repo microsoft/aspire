@@ -165,7 +165,14 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 echo "# generated tap" > "$tap_root/README.md"
                 exit 0
                 ;;
-              style|info)
+              style)
+                if [[ $# -ne 3 || "$2" != "--cask" || "$3" != "local/aspire/aspire" ]]; then
+                  echo "Expected brew style to target the qualified cask name: $*" >&2
+                  exit 1
+                fi
+                exit 0
+                ;;
+              info)
                 exit 0
                 ;;
               trust)
