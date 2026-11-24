@@ -39,18 +39,35 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 
     public Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key) => GetJsonAsync<TValue>(key);
 
+    public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
+    {
+        keys = keys.ToArray();
+        var result = await ReadAsync("local storage snapshot", async () =>
+        {
+            var values = await _jsRuntime.InvokeAsync<string?[]>("getLocalStorageItems", (object)keys).ConfigureAwait(false);
+            return new StorageResult<string?[]>(true, values);
+        }).ConfigureAwait(false);
+
+        return new UnprotectedSnapshot(this, keys, result);
+    }
+
     private Task<StorageResult<TValue>> GetJsonAsync<TValue>(string key)
         => ReadAsync(key, async () =>
         {
             var json = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", key).ConfigureAwait(false);
-            if (json is null)
-            {
-                return new StorageResult<TValue>(false, default);
-            }
-
-            var typeInfo = (JsonTypeInfo<TValue>)_serializerOptions.GetTypeInfo(typeof(TValue));
-            return new StorageResult<TValue>(true, JsonSerializer.Deserialize(json, typeInfo));
+            return Deserialize<TValue>(json);
         });
+
+    private StorageResult<TValue> Deserialize<TValue>(string? json)
+    {
+        if (json is null)
+        {
+            return new StorageResult<TValue>(false, default);
+        }
+
+        var typeInfo = (JsonTypeInfo<TValue>)_serializerOptions.GetTypeInfo(typeof(TValue));
+        return new StorageResult<TValue>(true, JsonSerializer.Deserialize(json, typeInfo));
+    }
 
     public async Task SetUnprotectedAsync<TValue>(string key, TValue value)
     {
@@ -74,4 +91,37 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 
     private ValueTask SetJsonAsync(string key, string json)
         => _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, json);
+
+    private sealed class UnprotectedSnapshot(LocalBrowserStorage storage, string[] keys, StorageResult<string?[]> result)
+        : IUnprotectedLocalStorageSnapshot
+    {
+        public StorageResult<TValue> Get<TValue>(string key)
+        {
+            var index = Array.IndexOf(keys, key);
+            if (index < 0)
+            {
+                throw new ArgumentException($"Key '{key}' was not requested when loading the snapshot.", nameof(key));
+            }
+
+            if (!result.Success)
+            {
+                return new StorageResult<TValue>(false, default) { ReadFailed = result.ReadFailed, InvalidValue = result.InvalidValue };
+            }
+
+            try
+            {
+                return storage.Deserialize<TValue>(result.Value![index]);
+            }
+            catch (JsonException ex)
+            {
+                storage.Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+                return new StorageResult<TValue>(false, default) { InvalidValue = true };
+            }
+            catch (NotSupportedException ex)
+            {
+                storage.Logger.LogWarning(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+                return new StorageResult<TValue>(false, default) { InvalidValue = true };
+            }
+        }
+    }
 }

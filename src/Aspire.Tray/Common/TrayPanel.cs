@@ -194,8 +194,7 @@ internal sealed class TrayPanel
     }
 
     /// <summary>
-    /// The platform's verb for leaving an app: "Quit" on macOS, "Exit" on Windows, as tray apps
-    /// there say. The button only closes the tray, so its tooltip says the AppHosts keep running.
+    /// The verb for leaving the tray app. All platforms use "Quit".
     /// </summary>
     public string QuitVerb
     {
@@ -1473,16 +1472,13 @@ internal sealed class TrayPanel
     private void AddFooter(List<PanelCommand> commands, List<PanelHitTarget> targets, PanelRect footer, TrayPanelPalette palette)
     {
         // Three icon buttons on the right, each with a tooltip: Settings, Documentation, Quit.
-        // Quit closes only the tray, never the AppHosts, so it isn't called "Quit Aspire" and its
-        // tooltip and accessibility description say so.
         var right = RowContentRight;
-        var quitDescription = $"{_quitVerb} the tray. AppHosts keep running.";
         foreach (var (kind, icon, name, tooltip, description, x) in new[]
         {
             (PanelTargetKind.Settings, PanelIcon.Gear, _settings is null ? "Settings" : "Close settings",
                 _settings is null ? "Settings" : "Close settings", (string?)null, right - 3 * ButtonSize - 2 * ButtonGap),
             (PanelTargetKind.Documentation, PanelIcon.Globe, "Open Aspire documentation", "Documentation", null, right - 2 * ButtonSize - ButtonGap),
-            (PanelTargetKind.Quit, PanelIcon.Power, _quitVerb, quitDescription, quitDescription, right - ButtonSize)
+            (PanelTargetKind.Quit, PanelIcon.Power, _quitVerb, _quitVerb, _quitVerb, right - ButtonSize)
         })
         {
             var bounds = new PanelRect(x, footer.Y + 8, ButtonSize, ButtonSize);

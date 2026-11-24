@@ -19,10 +19,10 @@ public class HomebrewCompletionTests(ITestOutputHelper testOutput)
         using var environment = new TestEnvironment();
         var repoRoot = TestUtils.FindRepoRoot()!.FullName;
         var template = await File.ReadAllTextAsync(Path.Combine(repoRoot, "eng", "homebrew", "aspire.rb.template"));
-        // The cask embeds the loader as: generated_script "...", content: <<~'POWERSHELL'.
-        // Exercise that body rather than maintaining a second copy of the installed script.
+        // Homebrew formatting may remove quotes from the squiggly heredoc delimiter.
+        // Exercise the cask body rather than maintaining a second copy of the installed script.
         var match = Regex.Match(template,
-            """(?s)generated_script "aspire-completion.ps1", content: <<~'POWERSHELL'\r?\n(?<script>.*?)\r?\n  POWERSHELL""");
+            """(?s)generated_script "aspire-completion.ps1", content: <<~(?:'POWERSHELL'|POWERSHELL)\r?\n(?<script>.*?)\r?\n  POWERSHELL""");
         Assert.True(match.Success, "PowerShell loader heredoc was not found in the cask template.");
         var loaderPath = Path.Combine(environment.TempDirectory, "loader.ps1");
         await File.WriteAllTextAsync(loaderPath, match.Groups["script"].Value);

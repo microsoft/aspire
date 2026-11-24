@@ -45,7 +45,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             var pane = page.Locator(".resource-pane");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "resource-a", Exact = true })).ToBeVisibleAsync();
             // Telemetry sources are listed by default.
-            var telemetrySection = pane.Locator("button.resource-pane-section-header", new() { HasTextRegex = new Regex("^Telemetry sources") });
+            var telemetrySection = pane.GetByRole(AriaRole.Button, new() { Name = "Expand or collapse Telemetry sources", Exact = true });
             await Assertions.Expect(telemetrySection.First).ToBeVisibleAsync();
             if (await telemetrySection.First.GetAttributeAsync("aria-expanded") == "false")
             {
@@ -287,7 +287,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             var title = page.Locator("h1.resource-title");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "multi-a", Exact = true }).First).ToBeVisibleAsync();
             // Telemetry sources are listed by default.
-            var telemetrySection = pane.Locator("button.resource-pane-section-header", new() { HasTextRegex = new Regex("^Telemetry sources") });
+            var telemetrySection = pane.GetByRole(AriaRole.Button, new() { Name = "Expand or collapse Telemetry sources", Exact = true });
             if (await telemetrySection.CountAsync() > 0 &&
                 await telemetrySection.GetAttributeAsync("aria-expanded") == "false")
             {
@@ -298,7 +298,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
             await Assertions.Expect(title).ToHaveTextAsync(string.Format(CultureInfo.CurrentCulture, Resources.Layout.ResourceHeaderSelectedResources, 2));
-            await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(2);
+            await Assertions.Expect(pane.Locator(".resource-row-link[aria-current='true']")).ToHaveCountAsync(2);
 
             // Shift+click selects the rows between the last clicked row (multi-c) and the clicked row.
             Assert.NotEmpty(await page.EvaluateAsync<string>("""
@@ -336,9 +336,9 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await GetRowLink("multi-a").ClickAsync();
             await Assertions.Expect(GetRowLink("multi-a")).ToHaveAttributeAsync("aria-current", "page");
             await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
-            await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(2);
+            await Assertions.Expect(pane.Locator(".resource-row-link[aria-current='true']")).ToHaveCountAsync(2);
             await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
-            await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(3);
+            await Assertions.Expect(pane.Locator(".resource-row-link[aria-current='true']")).ToHaveCountAsync(3);
             await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
 

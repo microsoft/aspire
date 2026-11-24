@@ -2253,28 +2253,40 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 Assert.Equal(0d, rest[5]);
 
                 await row.Locator(".resource-row-name").HoverAsync();
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls, checkTopmost: true);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls);
 
                 await page.Mouse.MoveAsync(1, 1);
                 await page.Keyboard.PressAsync("Tab");
                 await row.Locator(".resource-row-link").FocusAsync();
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "focus", shownControls, checkTopmost: true);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "keyboard focus", shownControls);
 
-                // The open menu's popup may lie over the toggle, so whether it's topmost isn't checked.
                 await row.HoverAsync();
                 await row.Locator(".resource-row-actions .aspire-menu-button").Last.ClickAsync();
                 await page.Mouse.MoveAsync(1, 1);
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "menu open", shownControls, checkTopmost: false);
+                AssertActions(await row.EvaluateAsync<double[]>(measure), $"{name}, menu open", shownControls);
                 await page.Keyboard.PressAsync("Escape");
             }
 
-            static void AssertToggle(double[] current, string row, string state, double shownControls, bool checkTopmost)
+            var selectedRow = pane.Locator("[data-resource-name='cache']").First;
+            var selectedLink = selectedRow.Locator(".resource-row-link");
+            await selectedRow.Locator(".resource-row-name").ClickAsync();
+            await page.Mouse.MoveAsync(1, 1);
+            await Assertions.Expect(selectedLink).ToBeFocusedAsync();
+            await Assertions.Expect(selectedRow.Locator(".resource-row-glyph")).ToBeVisibleAsync();
+            await Assertions.Expect(selectedRow.Locator(".resource-row-toggle-leading")).ToBeHiddenAsync();
+
+            static void AssertToggle(double[] current, string row, string state, double shownControls)
             {
                 var context = $"{row}, {state}";
                 Assert.True(current[0] == 1, $"{context}: the toggle doesn't show.");
                 Assert.True(current[1] == 1, $"{context}: the toggle doesn't cover the icon tile.");
-                Assert.True(!checkTopmost || current[2] == 1, $"{context}: something covers the toggle.");
+                Assert.True(current[2] == 1, $"{context}: something covers the toggle.");
                 Assert.True(current[3] == 1, $"{context}: the icon's glyph shows under the toggle.");
+                AssertActions(current, context, shownControls);
+            }
+
+            static void AssertActions(double[] current, string context, double shownControls)
+            {
                 Assert.True(current[4] == 1, $"{context}: the shown actions overlap or don't run left to right in tab order.");
                 Assert.Equal(shownControls, current[5]);
                 Assert.True(current[6] == 1, $"{context}: the name runs into the actions.");
@@ -2501,6 +2513,45 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(row.Locator(".resource-row-link")).ToBeVisibleAsync();
             }
             await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"resource-pane-label-canvas-{width}.png") });
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FullCanvasUrls_AdaptsToAvailableWidth()
+    {
+        await RunTestAsync(async page =>
+        {
+            fixture.StartDynamicSession();
+            await page.SetViewportSizeAsync(2000, 900);
+            await page.GotoAsync("/resources?pane=tags");
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api",
+                state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project, urls:
+                [
+                    new("https", new Uri("https://example.test/first"), false, false, new("First endpoint", 0)),
+                    new("http", new Uri("https://example.test/second"), false, false, new("Second endpoint", 1))
+                ]))]);
+
+            var api = page.Locator(".resource-pane [data-resource-name='api']").First;
+            var first = api.Locator(".resource-row-endpoints a").Filter(new() { HasText = "First endpoint" });
+            var second = api.Locator(".resource-row-endpoints a").Filter(new() { HasText = "Second endpoint" });
+            var more = api.Locator(".resource-row-endpoints .url-button");
+            await Assertions.Expect(first).ToBeVisibleAsync();
+            await Assertions.Expect(second).ToBeVisibleAsync();
+            await Assertions.Expect(more).Not.ToBeVisibleAsync();
+
+            await page.SetViewportSizeAsync(769, 900);
+            await Assertions.Expect(first).ToBeVisibleAsync();
+            await Assertions.Expect(more).ToHaveTextAsync("+1");
+            await more.ClickAsync();
+            await Assertions.Expect(api.Locator(".url-overflow-popover a")).ToHaveTextAsync("Second endpoint");
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+
+            await page.SetViewportSizeAsync(2000, 900);
+            await Assertions.Expect(second).ToBeVisibleAsync();
+            await Assertions.Expect(more).Not.ToBeVisibleAsync();
         });
     }
 

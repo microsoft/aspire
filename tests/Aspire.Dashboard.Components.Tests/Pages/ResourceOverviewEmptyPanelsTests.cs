@@ -10,6 +10,8 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
@@ -342,6 +344,199 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(KnownResourceTypes.Parameter)]
+    [InlineData(KnownResourceTypes.Project)]
+    public void Status_ShowsOnlyBasicMetadataAndNoInlineCommandsForParameters(string resourceType)
+    {
+        var command = new CommandViewModel("refresh", CommandViewModelState.Enabled, "Refresh status", "",
+            confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular);
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Resource.Source] = new(KnownProperties.Resource.Source, Value.ForString("test-source"), false, null, 0, null, false)
+        };
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("test", displayName: "test-item", resourceType: resourceType, state: KnownResourceState.Running,
+                properties: properties, commands: [command])],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test");
+        var cut = RenderOverview(s_viewport);
+        var status = cut.FindComponent<OverviewStatusCard>();
+        var isParameter = resourceType == KnownResourceTypes.Parameter;
+
+        status.WaitForAssertion(() =>
+        {
+            var names = status.FindAll("td.nameColumn");
+            Assert.Equal(isParameter ? ["Display name", "State", "Type"] : ["Display name", "State", "Health state", "Type", "Start time", "Stop time", "Source"],
+                names.Select(cell => cell.TextContent.Trim()));
+            Assert.Equal(isParameter ? ["test-item", "Running", resourceType] : ["test-item", "Running", "Healthy", resourceType],
+                names.Take(4).Select(cell => cell.NextElementSibling!.TextContent.Trim()));
+            Assert.Single(status.FindAll("td.valueColumn svg.resource-icon"));
+        });
+
+        var actions = status.FindAll(".overview-status-actions fluent-button");
+        Assert.Equal(isParameter ? 1 : 2, actions.Count);
+        if (!isParameter)
+        {
+            Assert.Equal("Refresh status", actions[0].TextContent.Trim());
+        }
+        Assert.Equal("Actions for test-item", actions[^1].GetAttribute("aria-label"));
+        var menu = status.FindComponent<AspireMenuButton>();
+        Assert.Contains(menu.Instance.ItemsProvider(), item => item.Text == "View JSON");
+        Assert.Contains(menu.Instance.ItemsProvider(), item => item.Text == "Refresh status");
+
+        if (isParameter)
+        {
+            Assert.Equal(["overview-status-title", "parameter-value-title"],
+                cut.FindComponent<ParameterOverview>().FindAll("section").Select(section => section.GetAttribute("aria-labelledby")));
+        }
+    }
+
+    [Theory]
+    [InlineData("2026-06-15T09:04:05.1234567+02:00", "2026-06-15T09:04:05.1234567+02:00")]
+    [InlineData(null, "2026-06-15T07:04:05.0000000Z")]
+    public void Status_SourceAndStartTimeVisualizersUseRawValues(string? startProperty, string expectedStart)
+    {
+        var projectPath = Path.Combine("projects", "test", "Test.csproj");
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Project.Path] = new(KnownProperties.Project.Path, Value.ForString(projectPath), false, null, 0, null, false)
+        };
+        if (startProperty is not null)
+        {
+            properties[KnownProperties.Resource.StartTime] = new(KnownProperties.Resource.StartTime, Value.ForString(startProperty), false, null, 0, null, false);
+        }
+
+        var resource = ModelTestHelpers.CreateResource("test", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project,
+            properties: properties, startTimeStamp: new DateTime(2026, 6, 15, 7, 4, 5, DateTimeKind.Utc));
+        SetupOverview(new TestDashboardClient(isEnabled: true, initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+
+        var cut = RenderOverview(s_viewport);
+        var status = cut.FindComponent<OverviewStatusCard>();
+        var values = status.FindComponents<GridValue>()
+            .Where(cell => cell.Instance.TextVisualizerTitle is not null)
+            .ToDictionary(cell => cell.Instance.TextVisualizerTitle!, cell => cell.Instance);
+
+        Assert.Equal("Test.csproj", status.Find(".overview-status-source").TextContent);
+        Assert.Equal(projectPath, values["Source"].ValueToVisualize);
+        Assert.Equal(expectedStart, values["Start time"].ValueToVisualize);
+        Assert.NotEqual(expectedStart, values["Start time"].Value);
+    }
+
+    [Fact]
+    [UseCulture("cs-CZ")]
+    public void Status_RendersStateAndHealthStateWithIdenticalLocalizedLabels()
+    {
+        SetupOverview(new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("test", state: KnownResourceState.Running)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+
+        var cut = RenderOverview(s_viewport);
+
+        var rows = cut.FindComponent<OverviewStatusCard>().FindAll("td.nameColumn")
+            .Where(cell => cell.TextContent.Trim() == "Stav");
+        Assert.Collection(rows,
+            state => Assert.Contains(KnownResourceState.Running.ToString(), state.NextElementSibling!.TextContent),
+            health => Assert.Contains("Healthy", health.NextElementSibling!.TextContent));
+    }
+
+    [Fact]
+    public async Task Status_MasksSensitiveSourceAndWarnsInVisualizer()
+    {
+        const string rawSource = "sample-sensitive-source";
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Resource.Source] = new(KnownProperties.Resource.Source, Value.ForString(rawSource), true, null, 0, null, false)
+        };
+        var resource = ModelTestHelpers.CreateResource("test", properties: properties);
+        var dialogService = new TestDialogService();
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport,
+            new TestDashboardClient(isEnabled: true, initialResources: [resource],
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<IDialogService>(dialogService));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test");
+        var status = RenderOverview(s_viewport).FindComponent<OverviewStatusCard>();
+        var source = Assert.Single(status.FindComponents<GridValue>(), cell => cell.Instance.TextVisualizerTitle == "Source");
+        var mask = DashboardUIHelpers.GetMaskingText(8).Text;
+        var maskedValue = source.Find(".grid-value.masked");
+
+        Assert.Equal(mask, maskedValue.TextContent.Trim());
+        Assert.Equal(mask, maskedValue.GetAttribute("data-tooltip"));
+
+        await AssertVisualizerWarnsAsync();
+
+        await source.Find(".grid-value-mask-button").ClickAsync(new());
+        Assert.Equal(rawSource, source.Find(".overview-status-source").TextContent);
+        Assert.Equal(rawSource, source.Find(".grid-value").GetAttribute("data-tooltip"));
+        await AssertVisualizerWarnsAsync();
+
+        await source.Find(".grid-value-mask-button").ClickAsync(new());
+        maskedValue = source.Find(".grid-value.masked");
+        Assert.Equal(mask, maskedValue.TextContent.Trim());
+        Assert.Equal(mask, maskedValue.GetAttribute("data-tooltip"));
+
+        async Task AssertVisualizerWarnsAsync()
+        {
+            var previousDialog = dialogService.LastInstance;
+            await source.Find("fluent-button[aria-label='Open in text visualizer']").ClickAsync(new());
+            var instance = Assert.IsAssignableFrom<IDialogInstance>(dialogService.LastInstance);
+            Assert.NotSame(previousDialog, instance);
+            var dialog = Assert.IsType<TextVisualizerDialogViewModel>(instance.Options.Parameters["Content"]);
+            Assert.True(dialog.ContainsSecret);
+            Assert.Equal(rawSource, dialog.Text);
+            await instance.CloseAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Status_PreservesSourceRevealOnUpdateAndResetsOnSelectionChange()
+    {
+        var changes = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        SetupOverview(new TestDashboardClient(isEnabled: true,
+            initialResources: [CreateResource("test", "initial-source"), CreateResource("other", "other-source")],
+            resourceChannelProvider: () => changes));
+        var cut = RenderOverview(s_viewport);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var mask = DashboardUIHelpers.GetMaskingText(8).Text;
+
+        await cut.Find(".overview-status-card .grid-value-mask-button").ClickAsync(new());
+        AssertRevealedSource("initial-source");
+
+        await changes.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, CreateResource("test", "updated-source"))]);
+        cut.WaitForAssertion(() => AssertRevealedSource("updated-source"));
+
+        navigation.NavigateTo("/resources/other?pane=resources#details");
+        cut.Render();
+        cut.WaitForAssertion(() => AssertMaskedSource("other"));
+
+        navigation.NavigateTo("/resources/test?pane=resources#details");
+        cut.Render();
+        cut.WaitForAssertion(() => AssertMaskedSource("test"));
+
+        void AssertRevealedSource(string expected)
+        {
+            var value = cut.Find(".overview-status-card .overview-status-source");
+            Assert.Equal(expected, value.TextContent);
+            Assert.Equal(expected, value.ParentElement!.GetAttribute("data-tooltip"));
+        }
+
+        void AssertMaskedSource(string resourceName)
+        {
+            var status = cut.FindComponent<OverviewStatusCard>();
+            Assert.Equal(resourceName, status.Instance.Resource.Name);
+            var value = status.Find(".grid-value.masked");
+            Assert.Equal(mask, value.TextContent.Trim());
+            Assert.Equal(mask, value.GetAttribute("data-tooltip"));
+        }
+
+        static ResourceViewModel CreateResource(string name, string source) =>
+            ModelTestHelpers.CreateResource(name, properties: new()
+            {
+                [KnownProperties.Resource.Source] = new(KnownProperties.Resource.Source, Value.ForString(source), true, null, 0, null, false)
+            });
+    }
+
+    [Theory]
     [InlineData(AspireDataType.StructuredLogs, "overview-logs-title")]
     [InlineData(AspireDataType.Traces, "overview-traces-title")]
     [InlineData(AspireDataType.Metrics, "overview-metrics-title")]
@@ -358,11 +553,11 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
                 var inner = provider.GetRequiredService<SqliteTelemetryRepository>();
                 return new TestTelemetryRepository(inner)
                 {
-                    GetLogSummariesAsyncHandler = async (context, cancellationToken) =>
+                    GetOverviewLogsAsyncHandler = async (resourceKeys, recentCount, errorsOnly, cancellationToken) =>
                     {
                         queryStarted.TrySetResult();
                         await continueQuery.Task.WaitAsync(cancellationToken);
-                        return await inner.GetLogSummariesAsync(context, cancellationToken);
+                        return await inner.GetOverviewLogsAsync(resourceKeys, recentCount, errorsOnly, cancellationToken);
                     }
                 };
             }));
@@ -404,6 +599,77 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         });
         Assert.Equal("true", cut.Find(".overview-panel-selector [aria-label='Hide empty panels']").GetAttribute("aria-pressed"));
         Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
+    public async Task TelemetryRefresh_CoalescesNotificationsWhileFirstReadIsRunning()
+    {
+        var firstReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liveDelayStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseLiveDelay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reads = 0;
+        Func<Task>? notifyLogs = null;
+        ComponentFactories.Add(() =>
+        {
+            var overview = Activator.CreateInstance<ResourceOverview>();
+            overview.TelemetryRefreshDelayAsync = (_, token) =>
+            {
+                liveDelayStarted.TrySetResult();
+                return releaseLiveDelay.Task.WaitAsync(token);
+            };
+            return overview;
+        });
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport,
+            new TestDashboardClient(isEnabled: true,
+                initialResources: [ModelTestHelpers.CreateResource("test-TestId")],
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<ITelemetryRepository>(provider =>
+                new TestTelemetryRepository(provider.GetRequiredService<SqliteTelemetryRepository>())
+                {
+                    OnOverviewLogsRegistered = callback => notifyLogs = callback,
+                    OnNewResourcesSubscribed = subscription => subscription.Dispose(),
+                    GetOverviewLogsAsyncHandler = async (_, _, _, token) =>
+                    {
+                        var count = Interlocked.Increment(ref reads);
+                        if (count == 1)
+                        {
+                            firstReadStarted.TrySetResult();
+                            await releaseFirstRead.Task.WaitAsync(token);
+                        }
+                        return new OverviewLogs(count, 0, 0, []);
+                    }
+                }));
+        await TelemetryHelpSetupHelpers.AddSignalAsync(Services.GetRequiredService<SqliteTelemetryRepository>(), AspireDataType.StructuredLogs);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test-TestId");
+        var cut = RenderOverview(s_viewport, "test-TestId");
+
+        try
+        {
+            await firstReadStarted.Task.WaitAsync(DefaultWaitTimeout);
+            Assert.NotNull(notifyLogs);
+            await notifyLogs();
+            await notifyLogs();
+            await notifyLogs();
+
+            // A live refresh must not even start its delay while the first read is held.
+            await Assert.ThrowsAsync<TimeoutException>(() => liveDelayStarted.Task.WaitAsync(TimeSpan.FromMilliseconds(500)));
+            releaseFirstRead.TrySetResult();
+            await liveDelayStarted.Task.WaitAsync(DefaultWaitTimeout);
+            await cut.WaitForAssertionAsync(() => Assert.Equal("1", GetLogCount()));
+
+            await notifyLogs();
+            releaseLiveDelay.TrySetResult();
+            await cut.WaitForAssertionAsync(() => Assert.Equal("2", GetLogCount()));
+            Assert.Equal(2, Volatile.Read(ref reads));
+        }
+        finally
+        {
+            releaseFirstRead.TrySetResult();
+            releaseLiveDelay.TrySetResult();
+        }
+
+        string GetLogCount() => cut.Find("[aria-labelledby='overview-logs-title'] .overview-stat-value").TextContent;
     }
 
     private void SetupOverview(TestDashboardClient client)

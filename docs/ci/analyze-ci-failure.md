@@ -271,20 +271,11 @@ stderr. A progress-file write failure emits a warning and diagnostic record
 without replacing the original acquisition error. Existing diagnostic-directory
 uploads include the progress file alongside the final summary.
 
-Operational failure issues and follow-up comments include the source CI run as
-well as the analyzer run. A trusted conclusion pre-step prepares private copies
-of gh-aw's agent-failure, failed-job, missing-data and missing-tool templates
-and selects them through the supported `GH_AW_PROMPTS_DIR` override. The pinned
-upstream templates and their analyzer-run links remain unchanged.
-
-Automatic reports use the triggering workflow run ID. Dispatch reports label
-the input as a **requested** CI run because collection may fail before verifying
-it. IDs must be canonical positive 64-bit decimal text; invalid dispatch input
-produces an explicit unavailable-context note, never an input-derived URL.
-No source URL comes from the model. Report preparation runs from the workflow's
-own commit, even if collection or the agent failed, and adds no GitHub write
-operations beyond the existing reporters. Missing pinned templates fail
-preparation explicitly rather than selecting partial overrides.
+Operational failure issues and follow-up comments use gh-aw's built-in
+templates, which link to the analyzer run. The analyzer run identifies its
+triggering CI run. gh-aw does not support custom steps in the generated
+`conclusion` job, so these reports cannot include a separately validated
+source CI run link.
 
 CI uploads diagnostic summaries for successful, no-work and failed invocations
 and retains them for seven days. They are redacted and bounded, with omission

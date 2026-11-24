@@ -241,7 +241,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
         <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
-        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <target state="translated">Kopyalanan Aspire beceri klasörlerini, içlerindeki tüm dosyalar ve yaptığınız değişiklikler de dahil olmak üzere, onay istemeden silin. Bu seçenek yalnızca Aspire becerileri eklentisi seçilen kapsamda bu klasörlerin yerini aldığında geçerlidir. Varsayılan olarak false değerini alır</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">
@@ -251,12 +251,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopies">
         <source>Deleted {0} copied skill folders</source>
-        <target state="new">Deleted {0} copied skill folders</target>
+        <target state="translated">{0} kopyalanmış beceri klasörü silindi</target>
         <note>{0} is the number of deleted skill folders, always greater than one.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopy">
         <source>Deleted 1 copied skill folder</source>
-        <target state="new">Deleted 1 copied skill folder</target>
+        <target state="translated">1 kopyalanmış beceri klasörü silindi</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -286,7 +286,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesFound">
         <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
-        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
+        <target state="translated">Aspire becerileri eklentisi artık şu becerileri sunuyor. Kopyalanan klasörleri silmek, yaptığınız değişiklikler de dahil olmak üzere içlerindeki her şeyi de siler:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesRequirePlugin">

@@ -9,19 +9,14 @@
 @using Microsoft.AspNetCore.Components.Sections
 
 @{
-    var isGrouped = DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.None;
-    var paneRows = isGrouped ? new List<ResourceGridViewModel>() : GetPaneRows().ToList();
-    var treeGuides = GetTreeGuides(paneRows);
-    var parameterRows = GetParameterPaneRows();
-    var groups = isGrouped ? GetResourceGroups() : new List<ResourceGroup>();
-    var telemetryRows = GetVisibleTelemetryResources().ToList();
-    // Grouping by tags puts parameters in the groups (see GetTagGroups). Other groupings list them in their own section.
-    var parametersInGroups = isGrouped && _grouping == ResourcePaneGrouping.Tags;
-    var groupedItems = groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).ToList();
-    var paneResourceCount = isGrouped ? groupedItems.Count(r => !r.IsParameter) : paneRows.Count;
-    var paneParameterCount = parametersInGroups ? groupedItems.Count(r => r.IsParameter) : parameterRows.Count;
-    var paneTelemetrySourceCount = telemetryRows.Count;
+    var paneSections = GetPaneSections().ToList();
+    var paneItems = paneSections.SelectMany(section => section.Resources).DistinctBy(r => r.Name).ToList();
+    var paneParameterCount = paneItems.Count(r => r.IsParameter);
+    var paneResourceCount = paneItems.Count - paneParameterCount;
+    var paneTelemetrySourceCount = paneSections.OfType<TelemetryPaneSection>().Sum(section => section.Rows.Count);
     var paneItemCount = paneResourceCount + paneParameterCount + paneTelemetrySourceCount;
+    var showNoTags = _isLoaded && IsResourcePaneGrouped && _grouping == ResourcePaneGrouping.Tags &&
+        TagStore.GetAllTags(_resourceByName.Values).Count == 0;
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed && !_isPaneFullCanvas;
 
@@ -122,7 +117,7 @@
                     </div>
                 }
 
-                @if (_isLoaded && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
+                @if (_isLoaded && paneItemCount == 0 && !showNoTags)
                 {
                     <div class="resource-pane-message">
                         @(DashboardClient.IsEnabled
@@ -131,208 +126,18 @@
                     </div>
                 }
 
-                @if (isGrouped)
+                @if (showNoTags)
                 {
-                    @if (_isLoaded && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0)
-                    {
-                        <div class="resource-tags-empty">
-                            <FluentIcon Value="@(new Icons.Regular.Size24.TagMultiple())" Width="24px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
-                            <span class="resource-tags-empty-title">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoTagsTitle)]</span>
-                            <span class="resource-tags-empty-description">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoTagsDescription)]</span>
-                        </div>
-                    }
-
-                    @foreach (var group in groups)
-                    {
-                        var groupName = GetGroupName(group.Value);
-                        var isGroupCollapsed = IsGroupCollapsed(group);
-                        var actionTag = _grouping == ResourcePaneGrouping.Tags ? group.Value : null;
-                        var countText = string.Format(CultureInfo.CurrentCulture, group.Resources.Count == 1 ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], group.Resources.Count);
-
-                        <div class="resource-tag-group @(_grouping == ResourcePaneGrouping.Tags && group.Value is null ? "untagged" : string.Empty)"
-                             role="group"
-                             aria-label="@groupName"
-                             data-resource-group-key="@GetGroupKey(group)"
-                             data-resource-grouping="@_grouping"
-                             @key="@GetGroupKey(group)">
-                            @{
-                                var groupResourceNames = group.Resources.Select(GetResourceName).ToList();
-                                var isGroupSelected = IsResourceGroupSelected(groupResourceNames);
-
-                                <div class="resource-tag-header @(isGroupSelected ? "selected" : string.Empty)">
-                                    @* Selecting a group selects all of its resources, like a multi-selection of their rows. *@
-                                    <a class="resource-tag-link"
-                                       href="@GetSelectionUrl(groupResourceNames)"
-                                       aria-current="@(isGroupSelected ? "true" : null)"
-                                       aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupLabel)], groupName, countText)"
-                                       draggable="@(CanReorderGroups ? "true" : null)"
-                                       data-resource-group-drag-handle="@CanReorderGroups"
-                                       aria-keyshortcuts="@(CanReorderGroups ? "Alt+ArrowUp Alt+ArrowDown" : null)"
-                                       @onclick="@(e => OnResourceGroupClick(e, groupResourceNames))"
-                                       @onclick:preventDefault="true">
-                                        @if (_grouping == ResourcePaneGrouping.State)
-                                        {
-                                            <span class="state-dot @GetStateClass(group.Resources[0])"></span>
-                                        }
-                                        else if (_grouping == ResourcePaneGrouping.ResourceType)
-                                        {
-                                            <FluentIcon Value="@ResourceIconHelpers.GetIconForResource(IconResolver, group.Resources[0], IconSize.Size16)" Width="16px" Color="Color.Primary" />
-                                        }
-                                        else if (group.Value is { } tag)
-                                        {
-                                            <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="@ColorGenerator.TagInstance.GetColorVariableByKey(tag)" />
-                                        }
-                                        else
-                                        {
-                                            <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
-                                        }
-                                        <span class="resource-tag-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@groupName" /></span>
-                                        @if (actionTag is null)
-                                        {
-                                            <span class="resource-tag-count" aria-hidden="true">@group.Resources.Count</span>
-                                        }
-                                    </a>
-                                    @if (actionTag is not null)
-                                    {
-                                        <div class="resource-tag-actions">
-                                            <span class="resource-tag-count" aria-hidden="true">@group.Resources.Count</span>
-                                            <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
-                                                              ButtonClass="resource-tag-action"
-                                                              Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                                                              ItemsProvider="@(() => GetTagGroupMenuItems(actionTag))"
-                                                              RefreshItemsWhileOpen="false"
-                                                              Title="@ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]" />
-                                        </div>
-                                    }
-                                    <button type="button"
-                                            class="resource-row-toggle @(isGroupCollapsed ? "collapsed" : string.Empty)"
-                                            aria-expanded="@((!isGroupCollapsed).ToString().ToLowerInvariant())"
-                                            aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupToggle)], groupName)"
-                                            @onclick="@(() => ToggleGroup(group))">
-                                        <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
-                                    </button>
-                                </div>
-                            }
-
-                            @if (!isGroupCollapsed)
-                            {
-                                foreach (var resource in group.Resources)
-                                {
-                                    RenderResourceRow(__builder, resource, row: null);
-                                }
-                            }
-                        </div>
-                    }
-                }
-                else
-                {
-                    @if (DashboardClient.IsEnabled && paneRows.Count > 0)
-                    {
-                        var resourcesCollapsed = IsSectionCollapsed(ResourcesSectionKey);
-                        <button type="button"
-                                class="resource-pane-section-header"
-                                aria-expanded="@((!resourcesCollapsed).ToString().ToLowerInvariant())"
-                                @onclick="@(() => ToggleSection(ResourcesSectionKey))">
-                            <span>@ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]</span>
-                            <span class="resource-pane-section-count">@paneRows.Count</span>
-                            <span class="resource-pane-section-rule" aria-hidden="true"></span>
-                            <span class="resource-pane-section-chevron @(resourcesCollapsed ? "collapsed" : null)">
-                                <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
-                            </span>
-                        </button>
-                    }
-                    @if (!IsSectionCollapsed(ResourcesSectionKey))
-                    {
-                        foreach (var row in paneRows)
-                        {
-                            RenderResourceRow(__builder, row.Resource, row, treeGuides[row.Resource.Name]);
-                        }
-                    }
+                    <div class="resource-tags-empty">
+                        <FluentIcon Value="@(new Icons.Regular.Size24.TagMultiple())" Width="24px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                        <span class="resource-tags-empty-title">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoTagsTitle)]</span>
+                        <span class="resource-tags-empty-description">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoTagsDescription)]</span>
+                    </div>
                 }
 
-                @if (DashboardClient.IsEnabled && !parametersInGroups && parameterRows.Count > 0)
+                @foreach (var section in paneSections)
                 {
-                    var parametersCollapsed = IsSectionCollapsed(ParametersSectionKey);
-                    <button type="button"
-                            class="resource-pane-section-header"
-                            aria-expanded="@((!parametersCollapsed).ToString().ToLowerInvariant())"
-                            @onclick="@(() => ToggleSection(ParametersSectionKey))">
-                        <span>@Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)]</span>
-                        <span class="resource-pane-section-count">@parameterRows.Count</span>
-                        <span class="resource-pane-section-rule" aria-hidden="true"></span>
-                        <span class="resource-pane-section-chevron @(parametersCollapsed ? "collapsed" : null)">
-                            <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
-                        </span>
-                    </button>
-                    @if (!parametersCollapsed)
-                    {
-                        foreach (var parameter in parameterRows)
-                        {
-                            RenderResourceRow(__builder, parameter, row: null);
-                        }
-                    }
-                }
-
-                @if (telemetryRows.Count > 0)
-                {
-                    var telemetryCollapsed = IsSectionCollapsed(TelemetrySectionKey);
-                    <button type="button"
-                            class="resource-pane-section-header"
-                            aria-expanded="@((!telemetryCollapsed).ToString().ToLowerInvariant())"
-                            @onclick="@(() => ToggleSection(TelemetrySectionKey))">
-                        <span>@Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]</span>
-                        <span class="resource-pane-section-count">@telemetryRows.Count</span>
-                        <span class="resource-pane-section-rule" aria-hidden="true"></span>
-                        <span class="resource-pane-section-chevron @(telemetryCollapsed ? "collapsed" : null)">
-                            <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
-                        </span>
-                    </button>
-                    @if (!telemetryCollapsed)
-                    {
-                        @foreach (var telemetryResource in telemetryRows)
-                        {
-                            var telemetryResourceName = telemetryResource.Name;
-                            var isSelected = IsSelected(telemetryResourceName);
-                            var unavailableReason = GetTelemetryRowUnavailableReason(telemetryResource.Resource);
-                            <div class="resource-row resource-row-kind-telemetry @(isSelected ? "selected" : string.Empty) @(unavailableReason is not null ? "resource-row-unavailable" : null)" @key="@($"otlp:{telemetryResourceName}")">
-                                <a class="resource-row-link"
-                                   href="@GetRowUrl(telemetryResourceName)"
-                                   aria-current="@GetRowAriaCurrent(isSelected)"
-                                   aria-label="@telemetryResourceName"
-                                   aria-description="@GetTelemetryRowAccessibilityDescription(telemetryResource.Resource, unavailableReason)"
-                                   data-tooltip="@unavailableReason"
-                                   data-resource-unavailable-reason="@unavailableReason"
-                                   @onclick="@GetTelemetryRowClick(telemetryResourceName)"
-                                   @onclick:preventDefault="true">
-                                    <span class="resource-row-icon">
-                                        <FluentIcon Width="16px"
-                                                    Color="Color.Custom"
-                                                    CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
-                                                    Value="@(new Icons.Regular.Size16.DataUsage())" />
-                                    </span>
-                                    <span class="resource-row-text">
-                                        <span class="resource-row-title">
-                                            <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@telemetryResourceName" /></span>
-                                        </span>
-                                        @if (!IsCompact)
-                                        {
-                                            var signals = GetTelemetrySignals(telemetryResource.Resource);
-                                            <span class="resource-row-sub">
-                                                @for (var i = 0; i < signals.Count; i++)
-                                                {
-                                                    if (i > 0)
-                                                    {
-                                                        <span class="resource-row-sep" aria-hidden="true">·</span>
-                                                    }
-                                                    <span>@signals[i]</span>
-                                                }
-                                            </span>
-                                        }
-                                    </span>
-                                </a>
-                            </div>
-                        }
-                    }
+                    RenderPaneSection(__builder, section);
                 }
             </nav>
 
@@ -499,6 +304,154 @@
 }
 
 @code {
+    // Write the keyed wrappers directly so they stay siblings when groups are reordered.
+    private void RenderPaneGroup(RenderTreeBuilder __builder, string groupKey, string groupName, List<string> resourceNames,
+        string countText, RenderFragment? icon, RenderFragment rows, bool isSection, string? actionTag)
+    {
+        var isCollapsed = IsGroupCollapsed(groupKey);
+        var isUntagged = !isSection && _grouping == ResourcePaneGrouping.Tags && actionTag is null;
+        <div class="resource-pane-group @(isSection ? null : "resource-tag-group") @(isUntagged ? "untagged" : null)"
+             role="group"
+             aria-label="@groupName"
+             data-resource-group-key="@(isSection ? null : groupKey)"
+             data-resource-grouping="@(isSection ? null : _grouping.ToString())"
+             @key="@groupKey">
+            @RenderGroupHeader(groupKey, groupName, resourceNames, countText, icon, isSection, isCollapsed, actionTag)
+            @if (!isCollapsed)
+            {
+                @rows
+            }
+        </div>
+    }
+
+    private RenderFragment RenderGroupHeader(string groupKey, string groupName, List<string> resourceNames, string countText,
+        RenderFragment? icon, bool isSection, bool isCollapsed, string? actionTag) => __builder =>
+    {
+        var isSelected = IsResourceGroupSelected(resourceNames);
+        var canReorder = !isSection && CanReorderGroups;
+
+        <div class="resource-tag-header @(isSelected ? "selected" : null) @(isSection ? "resource-pane-section-header" : null)">
+            <a class="resource-tag-link"
+               href="@GetSelectionUrl(resourceNames)"
+               aria-current="@(isSelected ? "true" : null)"
+               aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupLabel)], groupName, countText)"
+               draggable="@(canReorder ? "true" : null)"
+               data-resource-group-drag-handle="@canReorder"
+               aria-keyshortcuts="@(canReorder ? "Alt+ArrowUp Alt+ArrowDown" : null)"
+               @onclick="@(e => OnResourceGroupClick(e, resourceNames))"
+               @onclick:preventDefault="true">
+                @icon
+                <span class="resource-tag-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@groupName" /></span>
+                <span class="resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
+            </a>
+            <div class="resource-tag-actions">
+                <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
+                                  ButtonClass="resource-tag-action"
+                                  Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                                  ItemsProvider="@(() => GetPaneGroupMenuItems(groupKey, groupName, isTag: actionTag is not null))"
+                                  RefreshItemsWhileOpen="false"
+                                  Title="@(actionTag is not null
+                                      ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]
+                                      : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions), groupName])" />
+            </div>
+            <button type="button"
+                    class="resource-row-toggle @(isCollapsed ? "collapsed" : null)"
+                    aria-expanded="@((!isCollapsed).ToString().ToLowerInvariant())"
+                    aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupToggle)], groupName)"
+                    @onclick="@(() => ToggleCollapsedGroup(groupKey))">
+                <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
+            </button>
+        </div>
+    };
+
+    private RenderFragment RenderGroupIcon(ResourceGroup group) => __builder =>
+    {
+        @if (_grouping == ResourcePaneGrouping.State)
+        {
+            <span class="state-dot @GetStateClass(group.Resources[0])"></span>
+        }
+        else if (_grouping == ResourcePaneGrouping.ResourceType)
+        {
+            <FluentIcon Value="@ResourceIconHelpers.GetIconForResource(IconResolver, group.Resources[0], IconSize.Size16)" Width="16px" Color="Color.Primary" />
+        }
+        else if (group.Value is { } tag)
+        {
+            <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="@ColorGenerator.TagInstance.GetColorVariableByKey(tag)" />
+        }
+        else
+        {
+            <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+        }
+    };
+
+    private static RenderFragment RenderSectionIcon(Icon icon, string color) => __builder =>
+    {
+        <FluentIcon Value="@icon" Width="16px" Color="Color.Custom" CustomColor="@color" />
+    };
+
+    private RenderFragment RenderFlatResourceRows(IEnumerable<ResourceViewModel> resources) => __builder =>
+    {
+        foreach (var resource in resources)
+        {
+            RenderResourceRow(__builder, resource, row: null);
+        }
+    };
+
+    private RenderFragment RenderTreeResourceRows(IReadOnlyList<ResourceGridViewModel> rows, Dictionary<string, IReadOnlyList<bool>> treeGuides) => __builder =>
+    {
+        foreach (var row in rows)
+        {
+            RenderResourceRow(__builder, row.Resource, row, treeGuides[row.Resource.Name]);
+        }
+    };
+
+    private RenderFragment RenderTelemetryRows(IReadOnlyList<TelemetryOnlyResource> rows) => __builder =>
+    {
+        @foreach (var telemetryResource in rows)
+        {
+            var name = telemetryResource.Name;
+            var isSelected = IsSelected(name);
+            var unavailableReason = GetTelemetryRowUnavailableReason(telemetryResource.Resource);
+            <div class="resource-row resource-row-kind-telemetry @(isSelected ? "selected" : null) @(unavailableReason is not null ? "resource-row-unavailable" : null)" @key="@($"otlp:{name}")">
+                <a class="resource-row-link"
+                   href="@GetRowUrl(name)"
+                   aria-current="@GetRowAriaCurrent(isSelected)"
+                   aria-label="@name"
+                   aria-description="@GetTelemetryRowAccessibilityDescription(telemetryResource.Resource, unavailableReason)"
+                   data-tooltip="@unavailableReason"
+                   data-resource-unavailable-reason="@unavailableReason"
+                   @onclick="@GetTelemetryRowClick(name)"
+                   @onclick:preventDefault="true">
+                    <span class="resource-row-icon">
+                        <FluentIcon Width="16px"
+                                    Color="Color.Custom"
+                                    CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
+                                    Value="@(new Icons.Regular.Size16.DataUsage())" />
+                    </span>
+                    <span class="resource-row-text">
+                        <span class="resource-row-title">
+                            <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@name" /></span>
+                        </span>
+                        @if (!IsCompact)
+                        {
+                            var signals = GetTelemetrySignals(telemetryResource.Resource);
+                            <span class="resource-row-sub">
+                                @for (var i = 0; i < signals.Count; i++)
+                                {
+                                    if (i > 0)
+                                    {
+                                        <span class="resource-row-sep" aria-hidden="true">·</span>
+                                    }
+                                    <span>@signals[i]</span>
+                                }
+                            </span>
+                        }
+                    </span>
+                </a>
+            </div>
+        }
+    };
+
     // The resource overview shows highlighted commands with labels; the resource list shows icons and a menu.
     // Parameters in the full-page list show only their Set parameter command as a button, and the rest in their menu.
     // Menus are built when opened.
@@ -564,17 +517,22 @@
             }
             @* Every row has its menu, parameters included: it holds what the row's buttons don't, such as Delete
                parameter, and a row without it looks broken beside the others. *@
-            <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
-                              ButtonClass="@(showLabels ? null : "resource-row-action")"
-                              Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                              ItemsProvider="@handlers.MenuItems"
-                              data-tooltip-positioning="@(!showLabels ? "above" : null)"
-                              Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
+            @RenderResourceMenuButton(resource, isRow: !showLabels)
             @if (!showLabels && toggleLast)
             {
                 RenderRowToggleSlot(__builder);
             }
         </div>
+    };
+
+    internal RenderFragment RenderResourceMenuButton(ResourceViewModel resource, bool isRow) => __builder =>
+    {
+        <AspireMenuButton ButtonAppearance="@(isRow ? ButtonAppearance.Transparent : ButtonAppearance.Default)"
+                          ButtonClass="@(isRow ? "resource-row-action" : null)"
+                          Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                          ItemsProvider="@GetRowHandlers(resource).MenuItems"
+                          data-tooltip-positioning="@(isRow ? "above" : null)"
+                          Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], GetResourceName(resource))" />
     };
 
     private static void RenderRowToggleSlot(RenderTreeBuilder __builder)
@@ -1088,10 +1046,9 @@
                     <div class="resource-row-endpoints">
                         @if (item.Urls.Count > 0)
                         {
-                            @* The resources grid's URLs column, showing the first URL and a +N button listing the rest, so a
-                               resource with many URLs doesn't widen the column. Links and buttons don't select the row
-                               (see ResourcesLayout.razor.js). *@
-                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" ShowFirstUrlOnly="true" />
+                            @* Render all candidates so even a wide column with many short URLs shows everything that fits.
+                               Links and buttons don't select the row (see ResourcesLayout.razor.js). *@
+                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" UseNeutralOverflowButton="true" MaxRenderedItems="@item.Urls.Count" />
                         }
                     </div>
                     @* What ran the resource ("alpine:latest", "Api.csproj"). The type is in the name column, next to the
@@ -1203,11 +1160,15 @@
 
     private void RenderRowIcon(RenderTreeBuilder __builder, ResourceRowContext item)
     {
+        var iconColor = item.UnavailableReason is not null
+            ? "var(--colorNeutralForeground3)"
+            : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(item.Name)})";
+
         <span class="resource-row-icon">
             <span class="resource-row-glyph">
                 <FluentIcon Width="16px"
                             Color="Color.Custom"
-                            CustomColor="@(item.UnavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
+                            CustomColor="@iconColor"
                             Value="@ResourceIconHelpers.GetIconForResource(IconResolver, item.Resource, IconSize.Size16)" />
             </span>
             <PersistentContainerBadge Resource="@item.Resource" />

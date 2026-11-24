@@ -293,10 +293,20 @@ public sealed class ResourceMenuBuilder
         string headerId,
         Func<IReadOnlyList<ResourceViewModel>> getMembers,
         Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting,
-        Func<ResourceViewModel, CommandViewModel, Task> executeCommand)
+        Func<ResourceViewModel, CommandViewModel, Task> executeCommand) =>
+        CreateGroupMenuItems(tagName, headerId, s_tagIcon, getMembers, isCommandExecuting, executeCommand, showEmptyGroup: false);
+
+    internal List<MenuButtonItem> CreateGroupMenuItems(
+        string groupName,
+        string headerId,
+        Icon? headerIcon,
+        Func<IReadOnlyList<ResourceViewModel>> getMembers,
+        Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting,
+        Func<ResourceViewModel, CommandViewModel, Task> executeCommand,
+        bool showEmptyGroup)
     {
         var members = getMembers();
-        if (members.Count == 0)
+        if (members.Count == 0 && !showEmptyGroup)
         {
             return [];
         }
@@ -304,7 +314,7 @@ public sealed class ResourceMenuBuilder
         var memberNames = members.Select(r => r.Name).ToHashSet(StringComparers.ResourceName);
         var items = new List<MenuButtonItem>
         {
-            new() { Id = headerId, IsHeader = true, Text = tagName, Icon = s_tagIcon }
+            new() { Id = headerId, IsHeader = true, Text = groupName, Icon = headerIcon }
         };
         var commands = members
             // Parameter actions operate on individual rows. Count parameters in the group total, but don't offer their commands for bulk execution.

@@ -929,12 +929,12 @@
       </trans-unit>
       <trans-unit id="ResourcesGraphTagActionsButton">
         <source>Tag actions for {0}</source>
-        <target state="new">Tag actions for {0}</target>
+        <target state="translated">{0} 的标记操作</target>
         <note>Accessible label and tooltip for the cog on a graph tag label. {0} is the tag name.</note>
       </trans-unit>
       <trans-unit id="ResourcesGraphTagNoCommands">
         <source>No commands for this group</source>
-        <target state="new">No commands for this group</target>
+        <target state="translated">此组没有命令</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesGraphZoomInButton">
