@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
+import { ChildProcessWithoutNullStreams } from 'child_process';
 import { AppHostCliRunner, isDescribeUnsupportedOutput, parseCliJsonOutput } from '../data/appHostCliRunner';
 import { AspireCliFailedError } from '../data/appHostCliContracts';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
@@ -147,6 +148,43 @@ suite('data/appHostCliRunner tests', () => {
                 await rejected;
             } finally {
                 runner.dispose();
+            }
+        });
+
+        test('drains inherited pipes from a real subprocess after its launcher exits', async () => {
+            const events: string[] = [];
+            getCliPathStub.resolves(process.execPath);
+            const environmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({
+                ...process.env,
+                ELECTRON_RUN_AS_NODE: '1',
+            });
+            spawnStub.callThrough();
+
+            // The launcher exits while its child still owns the pipes. The delayed child output
+            // exercises real OS pipe delivery, not just the ordering of stubbed callbacks.
+            const writer = 'setTimeout(() => { process.stdout.write(\'{"name":"api"}]}\'); process.stderr.write("late diagnostic"); }, 100);';
+            const launcher = `const { spawn } = require("child_process");
+                spawn(process.execPath, ["-e", ${JSON.stringify(writer)}], { stdio: ["ignore", 1, 2], windowsHide: true }).unref();
+                process.stdout.write('{"resources":[');
+                process.exit(0);`;
+            const runner = new AppHostCliRunner(terminalProvider);
+            try {
+                const pending = runner.runCliCommand('describe', ['-e', launcher]);
+                await waitForCondition(() => spawnStub.calledOnce, 'expected the launcher to spawn');
+                const child: ChildProcessWithoutNullStreams = spawnStub.firstCall.returnValue;
+                child.stdout.on('data', () => events.push('stdout'));
+                child.on('exit', () => events.push('exit'));
+                child.on('close', () => events.push('close'));
+
+                const result = await pending;
+                assert.strictEqual(result.stdout, '{"resources":[{"name":"api"}]}');
+                // Electron can emit platform diagnostics before running the stand-in script.
+                assert.ok(result.stderr.endsWith('late diagnostic'), `missing final stderr: ${result.stderr}`);
+                assert.ok(events.lastIndexOf('stdout') > events.indexOf('exit'), 'the final JSON chunk must arrive after launcher exit');
+                assert.strictEqual(events.at(-1), 'close');
+            } finally {
+                runner.dispose();
+                environmentStub.restore();
             }
         });
 
