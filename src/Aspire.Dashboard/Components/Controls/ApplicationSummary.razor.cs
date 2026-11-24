@@ -59,7 +59,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private TelemetryRefreshGeneration? _telemetryRefresh;
     private bool _isLoaded;
     private IReadOnlyList<string>? _scopedResourceNames;
-    private IReadOnlyList<ResourceKey>? _scopedTelemetryKeys;
+    private List<ResourceKey>? _scopedTelemetryKeys;
     private DotNetObjectReference<ApplicationSummaryInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
     private bool _graphInitializing;
@@ -283,7 +283,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             (_scopedTelemetryKeys is not null && TelemetryResourceKeys is not null && !_scopedTelemetryKeys.SequenceEqual(TelemetryResourceKeys));
         if (telemetryKeysChanged)
         {
-            _scopedTelemetryKeys = TelemetryResourceKeys;
+            _scopedTelemetryKeys = TelemetryResourceKeys?.ToList();
         }
 
         UpdateTelemetryRefresh(resourceNamesChanged || telemetryKeysChanged);
@@ -390,7 +390,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }, CancellationToken.None);
     }
 
-    private async Task<HomeTelemetry> LoadTelemetryAsync(IReadOnlyList<ResourceKey>? resourceKeys, CancellationToken cancellationToken)
+    private async Task<HomeTelemetry> LoadTelemetryAsync(List<ResourceKey>? resourceKeys, CancellationToken cancellationToken)
     {
         var repository = TelemetryRepository;
 
@@ -438,7 +438,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     /// Aggregates recent incoming requests (server and consumer spans) into fixed time buckets, plus per-resource
     /// and per-endpoint breakdowns used by the activity chart and insight cards.
     /// </summary>
-    private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, IReadOnlyList<ResourceKey> resourceKeys, Task<OverviewLogs> logsTask, CancellationToken cancellationToken)
+    private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, List<ResourceKey> resourceKeys, Task<OverviewLogs> logsTask, CancellationToken cancellationToken)
     {
         // Align the window to bucket boundaries so bars don't shift between refreshes.
         var now = await GetActivityTimeAsync(repository, resourceKeys, logsTask, cancellationToken).ConfigureAwait(false);
@@ -592,7 +592,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // A recording ended some time ago, so a window ending at the current time would show it as empty. Its activity window
     // ends at its last request instead, or at its last error log when it has no requests, so error hotspots still show.
     // Only that one item needs to be read, and a recording doesn't get new ones.
-    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, IReadOnlyList<ResourceKey> resourceKeys, Task<OverviewLogs> logsTask, CancellationToken cancellationToken)
+    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, List<ResourceKey> resourceKeys, Task<OverviewLogs> logsTask, CancellationToken cancellationToken)
     {
         var now = TimeProvider.GetUtcNow().UtcDateTime;
         if (!repository.IsReadOnly)
@@ -956,13 +956,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     {
         private readonly CancellationTokenSource _cts = new();
 
-        public TelemetryRefreshGeneration(IReadOnlyList<ResourceKey>? resourceKeys)
+        public TelemetryRefreshGeneration(List<ResourceKey>? resourceKeys)
         {
             ResourceKeys = resourceKeys;
             CancellationToken = _cts.Token;
         }
 
-        public IReadOnlyList<ResourceKey>? ResourceKeys { get; }
+        public List<ResourceKey>? ResourceKeys { get; }
         public CancellationToken CancellationToken { get; }
         // The generation starts with its immediate refresh already reserved.
         public int Pending = 1;

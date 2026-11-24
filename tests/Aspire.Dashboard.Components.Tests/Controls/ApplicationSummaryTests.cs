@@ -644,14 +644,16 @@ public class ApplicationSummaryTests : DashboardTestContext
         });
 
         // A scoped initial render must not show the request belonging to the unselected resource.
-        var context = await RenderLiveSummaryAsync(GroupOverview.Summary, resourceNames: ["missing"]);
+        var context = await RenderLiveSummaryAsync(GroupOverview.Summary, resourceNames: ["missing"], resourceKeys: []);
         var cut = context.Summary;
         cut.WaitForAssertion(() => Assert.Equal("0", cut.Find(".home-activity-totals a:nth-child(2) strong").TextContent));
 
         context.Timers.Advance(ApplicationSummary.s_activityBucketSize);
         await holding.Task.WaitAsync(DefaultWaitTimeout);
 
-        await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["TestService-TestId"])));
+        await cut.InvokeAsync(() => cut.Render(builder => builder
+            .Add(p => p.ResourceNames, ["TestService-TestId"])
+            .Add(p => p.TelemetryResourceKeys, [new("TestService", "TestId")])));
         cut.WaitForAssertion(() => Assert.Equal("1", cut.Find(".home-activity-totals a:nth-child(2) strong").TextContent));
     }
 
@@ -714,7 +716,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Equal(queries, Volatile.Read(ref context.RequestQueries.Count));
     }
 
-    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(GroupOverview overview, IReadOnlyList<string>? resourceNames = null)
+    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(GroupOverview overview, IReadOnlyList<string>? resourceNames = null, IReadOnlyList<ResourceKey>? resourceKeys = null)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var timers = new FakeTimeProvider();
@@ -763,7 +765,10 @@ public class ApplicationSummaryTests : DashboardTestContext
         var preferences = Services.GetRequiredService<DashboardViewPreferences>();
         await preferences.EnsureLoadedAsync();
         await preferences.SetGroupOverviewAsync(overview);
-        var cut = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport).Add(p => p.ResourceNames, resourceNames));
+        var cut = Render<ApplicationSummary>(builder => builder
+            .AddCascadingValue(viewport)
+            .Add(p => p.ResourceNames, resourceNames)
+            .Add(p => p.TelemetryResourceKeys, resourceKeys));
         return new LiveSummaryContext(cut, clock, timers, requestQueries);
     }
 
