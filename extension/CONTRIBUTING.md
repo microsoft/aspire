@@ -58,8 +58,9 @@ Status and resource watchers run while the Aspire panel or an AppHost editor is 
 
 One-shot CLI commands complete after their stdout and stderr pipes close, not when the direct
 process exits. Windows can deliver final output chunks after exit; resolving earlier can truncate
-JSON snapshots or omit diagnostics needed for compatibility retries. The existing command timeout
-and cancellation still bound the wait if a descendant keeps a pipe open.
+JSON snapshots or omit diagnostics needed for compatibility retries. Configured command timeouts
+and caller cancellation still bound the wait if a descendant keeps a pipe open. Disabling the
+timeout removes that deadline; it does not change cancellation support.
 
 ## Building the full repository (extension + CLI)
 
