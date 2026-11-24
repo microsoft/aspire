@@ -4,7 +4,7 @@
     "name": "agent-telemetry-hook-copilot",
     "status": "warning",
     "message": "The GitHub Copilot telemetry hook is out of date and still runs a legacy script.",
-    "fix": "Run 'aspire agent init --agents copilot' to update the hook to use the Aspire CLI directly.",
+    "fix": "Run 'aspire agent init --agents copilot --skills none --mcp=false' to update the hook to use the Aspire CLI directly.",
     "details": ".copilot/hooks/aspire-telemetry.json"
   },
   {
@@ -12,7 +12,7 @@
     "name": "agent-telemetry-hook-claude",
     "status": "warning",
     "message": "The Claude Code telemetry hook is out of date and still runs a legacy script.",
-    "fix": "Run 'aspire agent init --agents claude' to update the hook to use the Aspire CLI directly.",
+    "fix": "Run 'aspire agent init --agents claude --skills none --mcp=false' to update the hook to use the Aspire CLI directly.",
     "details": ".claude/settings.json"
   }
 ]

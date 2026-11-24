@@ -1078,7 +1078,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Run 'aspire agent init --agents {0}' to update the hook to use the Aspire CLI directly..
+        ///   Looks up a localized string similar to Run &apos;aspire agent init --agents {0} --skills none --mcp=false&apos; to update the hook to use the Aspire CLI directly..
         /// </summary>
         internal static string LegacyTelemetryHookFixFormat {
             get {
