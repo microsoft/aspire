@@ -287,6 +287,43 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Equal(requestCount, result.PagedResult.TotalItemCount);
     }
 
+    [Fact]
+    public async Task Render_ActivityLinks_PreserveSingleQueryStringSelection()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourceOverview(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api-1", displayName: "api", state: KnownResourceState.Finished, resourceType: "Project"),
+                ModelTestHelpers.CreateResource("worker-1", displayName: "worker", state: KnownResourceState.Finished, resourceType: "Project")
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            isReadOnly: true),
+            configureServices: services => FluentUISetupHelpers.AddTelemetryRepositoryConfiguration(services, readOnly: true));
+
+        var apiTime = new DateTime(2020, 1, 15, 12, 0, 0, DateTimeKind.Utc);
+        await FluentUISetupHelpers.SeedTelemetryRepositoryAsync(this, writer => writer.AddTracesAsync(new AddContext(),
+            [CreateServerRequest("api", apiTime), CreateServerRequest("worker", apiTime + ApplicationSummary.s_activityBucketSize)]));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?resource=api");
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport).Add(p => p.Body, body =>
+        {
+            body.OpenComponent<ResourceOverview>(0);
+            body.CloseComponent();
+        }));
+
+        var summary = cut.WaitForComponent<ApplicationSummary>();
+        summary.WaitForAssertion(() =>
+        {
+            var link = Assert.Single(summary.FindAll(".home-chart-bar"));
+            var uri = new Uri(new Uri("http://localhost"), link.GetAttribute("href"));
+            Assert.Equal("/traces", uri.AbsolutePath);
+            var query = HttpUtility.ParseQueryString(uri.Query);
+            Assert.Equal("2020-01-15T12:00:00Z", TelemetryFilterFormatter.DeserializeFiltersFromString(query["filters"]!)[0].Value);
+            Assert.Equal("api", query[DashboardUrls.ResourceSelectionQueryName]);
+        });
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -302,7 +339,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         var apiTime = new DateTime(2020, 1, 15, 12, 0, 0, DateTimeKind.Utc);
         var browserTime = apiTime + ApplicationSummary.s_activityBucketSize;
         await FluentUISetupHelpers.SeedTelemetryRepositoryAsync(this, writer => writer.AddTracesAsync(new AddContext(),
-            appHasRequests ? [Request("api", apiTime), Request("browser", browserTime)] : [Request("browser", browserTime)]));
+            appHasRequests ? [CreateServerRequest("api", apiTime), CreateServerRequest("browser", browserTime)] : [CreateServerRequest("browser", browserTime)]));
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneKinds ? (true, string.Empty) : (false, null);
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
@@ -355,20 +392,20 @@ public class ApplicationSummaryTests : DashboardTestContext
             var query = HttpUtility.ParseQueryString(new Uri(new Uri("http://localhost"), href).Query);
             return TelemetryFilterFormatter.DeserializeFiltersFromString(query["filters"]!)[0].Value;
         }
-
-        static ResourceSpans Request(string resource, DateTime time) => new()
-        {
-            Resource = CreateResource(resource, "1"),
-            ScopeSpans =
-            {
-                new ScopeSpans
-                {
-                    Scope = CreateScope(),
-                    Spans = { CreateSpan($"trace-{resource}", $"span-{resource}", time, time.AddMilliseconds(5), kind: Span.Types.SpanKind.Server) }
-                }
-            }
-        };
     }
+
+    private static ResourceSpans CreateServerRequest(string resource, DateTime time) => new()
+    {
+        Resource = CreateResource(resource, "1"),
+        ScopeSpans =
+        {
+            new ScopeSpans
+            {
+                Scope = CreateScope(),
+                Spans = { CreateSpan($"trace-{resource}", $"span-{resource}", time, time.AddMilliseconds(5), kind: Span.Types.SpanKind.Server) }
+            }
+        }
+    };
 
     [Fact]
     public async Task Render_GraphSetting_ShowsTheResourceGraph()
