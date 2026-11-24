@@ -108,6 +108,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // The name telemetry sources are stored under in BrowserStorageKeys.ResourcePaneKinds.
     private const string TelemetrySourcesKind = "TelemetrySources";
     private bool _pendingLandingRedirect;
+    private Task<StorageResult<List<string>>>? _prefetchedLastSelectedResourcesTask;
     private bool _hasLocation;
     private string? _lastLocation;
     private bool _isDisposed;
@@ -320,9 +321,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             collapsedResultTask = LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
         }
 
-        // Prefetching LastSelectedResources here is safe because writers either require _isLoaded
-        // or navigate away (which clears _pendingLandingRedirect).
-        var lastSelectedResourcesTask = _pendingLandingRedirect
+        // Prefetch LastSelectedResources for an initial landing redirect. Any navigation during initialization
+        // clears this field in UpdateFromLocation so a subsequent redirect always re-reads fresh storage.
+        _prefetchedLastSelectedResourcesTask = _pendingLandingRedirect
             ? SessionStorage.GetAsync<List<string>>(BrowserStorageKeys.LastSelectedResources)
             : null;
 
@@ -475,7 +476,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         CarrySelectionAcrossRuns();
         UpdateSelection();
         UpdatePaneMenuItems();
-        await TryRedirectLandingAsync(lastSelectedResourcesTask);
+        await TryRedirectLandingAsync();
 
         _resourceSubscriptionTask = Task.Run(async () =>
         {
@@ -909,6 +910,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The home page lists every resource and has no selection of its own, so it never restores one. That holds on
         // narrow layouts too, where "/" gives way to the overview of all resources (see Home): restoring a selection
         // there would race that redirect and could open a resource instead.
+        _prefetchedLastSelectedResourcesTask = null;
         _pendingLandingRedirect = DashboardClient.IsEnabled
             && ParsePaneMode(baseRelativePath) != ResourcePaneMode.Telemetry
             && parsedLocation.Tab == ResourceTab.Overview
@@ -1280,7 +1282,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
-    private async Task TryRedirectLandingAsync(Task<StorageResult<List<string>>>? prefetchedLastSelectedTask = null)
+    private async Task TryRedirectLandingAsync()
     {
         if (!_pendingLandingRedirect || !_isLoaded)
         {
@@ -1288,6 +1290,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _pendingLandingRedirect = false;
+        var prefetchedLastSelectedTask = _prefetchedLastSelectedResourcesTask;
+        _prefetchedLastSelectedResourcesTask = null;
+
         // Entering the overview without a selection restores the selection made earlier in this browser session.
         // Without one, all resources stay selected and the overview summarizes the app.
         var lastSelected = await (prefetchedLastSelectedTask ?? SessionStorage.GetAsync<List<string>>(BrowserStorageKeys.LastSelectedResources));

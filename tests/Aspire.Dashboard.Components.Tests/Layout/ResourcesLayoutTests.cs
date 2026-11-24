@@ -3786,6 +3786,52 @@ public class ResourcesLayoutTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public async Task OnInitialize_WhenConnectedCompletesLater_LoadsCollapsedResourceNames()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var whenConnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var parent = ModelTestHelpers.CreateResource("parent");
+        var child = ModelTestHelpers.CreateResource("child", properties: new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Resource.ParentName] = new(KnownProperties.Resource.ParentName, Value.ForString("parent"), false, null, 0, null, false)
+        });
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [parent, child],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            whenConnected: whenConnected.Task);
+        var collapsedKey = BrowserStorageKeys.CollapsedResourceNamesKey(client.ApplicationName);
+
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client);
+        var localStorage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        var collapsedRequested = false;
+        localStorage.OnGetAsync = key =>
+        {
+            if (key == collapsedKey)
+            {
+                collapsedRequested = true;
+                return (true, new List<string> { parent.PersistentKey });
+            }
+
+            return (false, null);
+        };
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl("parent"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        Assert.False(collapsedRequested);
+        whenConnected.SetResult();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.True(collapsedRequested);
+            Assert.Single(cut.FindAll("[data-resource-name='parent']"));
+            Assert.Empty(cut.FindAll("[data-resource-name='child']"));
+        });
+    }
+
     private Task AddTelemetryAsync(string name)
     {
         var resource = CreateResource(name);

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
@@ -140,27 +139,13 @@ public class DashboardViewPreferencesTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Load_ReadsDensityAndGroupOverviewConcurrently()
+    public async Task Load_ReadsDensityAndGroupOverviewInSingleSnapshot()
     {
-        var requestedKeys = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
-        var allRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var storage = new TestLocalStorage
         {
-            OnBeforeGetUnprotectedAsync = key =>
-            {
-                requestedKeys.TryAdd(key, 0);
-                if (requestedKeys.ContainsKey(BrowserStorageKeys.ResourceListDensity) &&
-                    requestedKeys.ContainsKey(BrowserStorageKeys.GroupOverview))
-                {
-                    allRequested.TrySetResult();
-                }
-
-                // Hold every read until both keys have been requested; sequential reads would deadlock here.
-                return allRequested.Task;
-            },
             OnGetUnprotectedAsync = key => key switch
             {
-                BrowserStorageKeys.ResourceListDensity => (true, nameof(ResourceListDensity.Comfortable)),
+                BrowserStorageKeys.ResourceListDensity => (true, nameof(ResourceListDensity.Compact)),
                 BrowserStorageKeys.GroupOverview => (true, nameof(GroupOverview.Graph)),
                 _ => (false, null)
             }
@@ -171,7 +156,7 @@ public class DashboardViewPreferencesTests : DashboardTestContext
         await preferences.EnsureLoadedAsync().DefaultTimeout();
 
         Assert.Equal(1, storage.SnapshotReadCount);
-        Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
+        Assert.Equal(ResourceListDensity.Compact, preferences.Density);
         Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
     }
 }
