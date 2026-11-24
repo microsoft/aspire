@@ -297,6 +297,7 @@ public static class BlazorHostedExtensions
         // ResolveWebAssemblyProjectReferences is provided by the .NET 11 Static Web Assets SDK:
         // https://github.com/dotnet/sdk/blob/c0fb107a5474a2993546bc574fd7a6daac9fd7aa/src/StaticWebAssetsSdk/Sdk/Sdk.targets
         //
+        // Discovery runs before the server project's build and needs its NuGet assets on a clean checkout.
         // The target returns each evaluated WASM ProjectReference. An empty collection is valid
         // and keeps the browser debugging command hidden.
         var result = await BlazorDotNetCliRunner.RunAsync(
@@ -304,6 +305,7 @@ public static class BlazorHostedExtensions
             serverProjectPath,
             "msbuild",
             [
+                "-restore",
                 "-t:ResolveWebAssemblyProjectReferences",
                 "-getItem:WebAssemblyProjectReference",
                 "-nologo"
