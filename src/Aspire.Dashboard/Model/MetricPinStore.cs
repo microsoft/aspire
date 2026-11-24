@@ -92,6 +92,8 @@ public sealed class MetricPinStore
                     : pins.RemoveAll(pin => pin.Matches(name, key)) > 0;
                 if (pinned && pins.Count > MaxSavedPins)
                 {
+                    // TODO: If users hit this limit, let them remove saved pins without matching telemetry.
+                    // Those pins count toward the limit but can't be removed in the dashboard.
                     // The candidate value is discarded, so none of the pins in this selection are saved.
                     _logger.LogWarning("Cannot pin the instrument for the selection because it would exceed the limit of {Limit} saved metric pins.", MaxSavedPins);
                     return SettingUpdateResult.LimitReached;

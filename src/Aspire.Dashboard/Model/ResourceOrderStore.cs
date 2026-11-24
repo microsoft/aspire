@@ -71,7 +71,8 @@ public sealed class ResourceOrderStore
 
         var saved = await _resourceOrder.UpdateAsync(moves =>
         {
-            ReplaceMove(moves, move);
+            moves.Add(move);
+            CompactMoves(moves);
             TrimResourceMoves(moves);
             return SettingUpdateResult.Changed;
         }).ConfigureAwait(false);
@@ -93,7 +94,8 @@ public sealed class ResourceOrderStore
                 order.Add(grouping, moves = []);
             }
 
-            ReplaceMove(moves, move);
+            moves.Add(move);
+            CompactMoves(moves);
             TrimGroupMoves(order);
             return SettingUpdateResult.Changed;
         }).ConfigureAwait(false);
@@ -118,14 +120,15 @@ public sealed class ResourceOrderStore
         move = null;
         var keys = orderedKeys.ToList();
         var sourceIndex = keys.FindIndex(item => StringComparers.ResourceName.Equals(item, key));
-        if (sourceIndex < 0)
+        // Replica churn can leave two resources with the same key. Don't save a move for an ambiguous row.
+        if (sourceIndex < 0 || keys.FindIndex(sourceIndex + 1, item => StringComparers.ResourceName.Equals(item, key)) >= 0)
         {
             return ResourceOrderMoveResult.Invalid;
         }
 
         keys.RemoveAt(sourceIndex);
         var anchorIndex = keys.FindIndex(item => StringComparers.ResourceName.Equals(item, anchor));
-        if (anchorIndex < 0)
+        if (anchorIndex < 0 || keys.FindIndex(anchorIndex + 1, item => StringComparers.ResourceName.Equals(item, anchor)) >= 0)
         {
             return ResourceOrderMoveResult.Invalid;
         }
@@ -137,7 +140,7 @@ public sealed class ResourceOrderStore
             return ResourceOrderMoveResult.Unchanged;
         }
 
-        move = new RelativeOrderMove(Guid.NewGuid(), key,
+        move = new RelativeOrderMove(key,
             PreviousKey: insertionIndex > 0 ? keys[insertionIndex - 1] : null,
             NextKey: insertionIndex < keys.Count ? keys[insertionIndex] : null,
             PreferNext: !after);
@@ -170,25 +173,45 @@ public sealed class ResourceOrderStore
             items.RemoveAt(source);
             items.Insert(anchor - (source < anchor ? 1 : 0) + (after ? 1 : 0), item);
 
-            int FindAnchor(string? key) => key is null ? -1 : items.FindIndex(candidate =>
+            int FindAnchor(string? key) => key is null || StringComparers.ResourceName.Equals(key, move.Key) ? -1 : items.FindIndex(candidate =>
                 StringComparers.ResourceName.Equals(getKey(candidate), key) && (canMove is null || canMove(items[source], candidate)));
         }
     }
 
-    private static void ReplaceMove(List<RelativeOrderMove> moves, RelativeOrderMove move)
+    private static void CompactMoves(List<RelativeOrderMove> moves)
     {
-        moves.RemoveAll(existing => StringComparers.ResourceName.Equals(existing.Key, move.Key));
-        moves.Add(move);
+        var movedKeys = new HashSet<string>(StringComparers.ResourceName);
+        var neededAnchors = new HashSet<string>(StringComparers.ResourceName);
+        for (var i = moves.Count - 1; i >= 0; i--)
+        {
+            var move = moves[i];
+            // A later move replaces this one only if no intervening move needs this position as an anchor.
+            var needed = neededAnchors.Remove(move.Key);
+            if (!movedKeys.Add(move.Key) && !needed)
+            {
+                moves.RemoveAt(i);
+                continue;
+            }
+
+            if (move.PreviousKey is not null)
+            {
+                neededAnchors.Add(move.PreviousKey);
+            }
+            if (move.NextKey is not null)
+            {
+                neededAnchors.Add(move.NextKey);
+            }
+        }
     }
 
     private static List<RelativeOrderMove> NormalizeMoves(List<RelativeOrderMove>? moves)
     {
-        var ids = new HashSet<Guid>();
-        return moves?.Where(move => move is { Key: not null } && move.Id != Guid.Empty &&
+        var normalized = moves?.Where(move => move is { Key: not null } &&
             (move.PreviousKey is not null || move.NextKey is not null) &&
             !StringComparers.ResourceName.Equals(move.Key, move.PreviousKey) &&
-            !StringComparers.ResourceName.Equals(move.Key, move.NextKey) && ids.Add(move.Id))
-            .Reverse().DistinctBy(move => move.Key, StringComparers.ResourceName).Reverse().ToList() ?? [];
+            !StringComparers.ResourceName.Equals(move.Key, move.NextKey)).ToList() ?? [];
+        CompactMoves(normalized);
+        return normalized;
     }
 
     private static List<RelativeOrderMove> NormalizeResourceOrder(List<RelativeOrderMove>? stored)
@@ -234,7 +257,6 @@ public sealed class ResourceOrderStore
 /// <summary>
 /// A user move replayed over the default order of the current resources or groups.
 /// </summary>
-/// <param name="Id">Identifies the move, not the item, so the same move is applied only once.</param>
 /// <param name="Key">
 /// The item to move: a resource's <see cref="ResourceViewModel.PersistentKey"/> or a key within the grouping mode.
 /// An empty group key represents the untagged group.
@@ -242,7 +264,7 @@ public sealed class ResourceOrderStore
 /// <param name="PreviousKey">The neighbor to place the item after. <see langword="null"/> for a drop at the start.</param>
 /// <param name="NextKey">The neighbor to place the item before. <see langword="null"/> for a drop at the end.</param>
 /// <param name="PreferNext">Whether the next neighbor was the drop target and should be tried first.</param>
-internal sealed record RelativeOrderMove(Guid Id, string Key, string? PreviousKey, string? NextKey, bool PreferNext);
+internal sealed record RelativeOrderMove(string Key, string? PreviousKey, string? NextKey, bool PreferNext);
 
 internal enum ResourceOrderMoveResult
 {

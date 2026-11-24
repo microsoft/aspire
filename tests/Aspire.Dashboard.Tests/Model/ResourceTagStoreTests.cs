@@ -192,6 +192,7 @@ public sealed class ResourceTagStoreTests
         Assert.Equal(SettingUpdateResult.LimitReached, await firstTab.AddTagAsync(names[0], "extra"));
         Assert.Equal(SettingUpdateResult.LimitReached, await firstTab.AddTagAsync("worker", "backend"));
         Assert.Equal(SettingUpdateResult.LimitReached, await staleTab.AddTagAsync("worker", "backend"));
+        Assert.Equal(["backend"], staleTab.GetTags(names[0]));
         Assert.Equal([], staleTab.GetTags("worker"));
 
         var reloaded = await CreateLoadedStoreAsync();

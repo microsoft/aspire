@@ -7,6 +7,7 @@ using Aspire.Tests.Shared;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
@@ -24,14 +25,20 @@ internal sealed class InMemoryBrowserLocalStorage
         var jsRuntime = new TestJSRuntime { OnInvoke = HandleLocalStorageCall };
         var circuitOptions = new CircuitOptions();
 #pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
-        // Matches the resolvers the dashboard registers, so a stored type missing from the context fails here too.
         circuitOptions.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
 #pragma warning restore ASPNETCORE9004
+        var services = new ServiceCollection();
+        services.AddServerSideBlazor();
+        services.AddSingleton(Options.Create(circuitOptions));
+        services.AddSingleton<IJSRuntime>(jsRuntime);
+        services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
         Storage = new InterceptedLocalStorage(new LocalBrowserStorage(
             jsRuntime,
-            new ProtectedLocalStorage(jsRuntime, new EphemeralDataProtectionProvider()),
+            scope.ServiceProvider.GetRequiredService<ProtectedLocalStorage>(),
             NullLogger<LocalBrowserStorage>.Instance,
-            Options.Create(circuitOptions)), this);
+            scope.ServiceProvider.GetRequiredService<IOptions<CircuitOptions>>()), this);
     }
 
     /// <summary>
@@ -56,6 +63,15 @@ internal sealed class InMemoryBrowserLocalStorage
     public Func<Task>? OnAfterReadAsync { get; set; }
 
     public Func<Task>? OnAfterWriteAsync { get; set; }
+
+    private static void RequireGeneratedMetadata(Type type)
+    {
+        // The framework still falls back to reflection under JIT, which would mask missing AOT metadata.
+        if (DashboardJsonSerializerContext.Default.GetTypeInfo(type) is null)
+        {
+            throw new InvalidOperationException($"Missing generated dashboard JSON metadata for '{type}'.");
+        }
+    }
 
     private object? HandleLocalStorageCall((string Identifier, object?[]? Args) call)
     {
@@ -104,6 +120,7 @@ internal sealed class InMemoryBrowserLocalStorage
 
         public async Task<StorageResult<TValue>> GetAsync<TValue>(string key)
         {
+            RequireGeneratedMetadata(typeof(TValue));
             var result = await inner.GetAsync<TValue>(key);
             if (owner.OnAfterReadAsync is { } afterRead)
             {
@@ -116,6 +133,7 @@ internal sealed class InMemoryBrowserLocalStorage
 
         public async Task SetAsync<TValue>(string key, TValue value)
         {
+            RequireGeneratedMetadata(value?.GetType() ?? typeof(TValue));
             await inner.SetAsync(key, value);
             if (owner.OnAfterWriteAsync is { } afterWrite)
             {

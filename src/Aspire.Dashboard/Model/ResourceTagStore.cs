@@ -114,6 +114,8 @@ public sealed class ResourceTagStore
         {
             if (tagsByResource.Values.Sum(tags => tags.Count) >= MaxSavedTagAssignments)
             {
+                // TODO: If users hit this limit, let them remove saved assignments they can't edit in the dashboard:
+                // assignments for removed resources and personal tags that are now declared by the AppHost.
                 if (!tagsByResource.TryGetValue(resourceName, out var tags) || !tags.Contains(normalizedTag, StringComparer.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning("Cannot add a resource tag because the dashboard has reached the limit of {Limit} saved tag assignments.", MaxSavedTagAssignments);

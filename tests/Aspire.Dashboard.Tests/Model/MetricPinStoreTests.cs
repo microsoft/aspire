@@ -114,9 +114,14 @@ public sealed class MetricPinStoreTests
         Assert.Equal(SettingUpdateResult.LimitReached, await firstTab.SetPinnedAsync(s_cpu, ["api", "worker"], pinned: true));
         Assert.Equal(initialPins, firstTab.GetPins());
 
-        // The stale tab has local capacity but cannot save a selection that exceeds the combined limit.
+        // A rejected edit refreshes the stale view but doesn't publish the partially updated selection.
+        var storedPins = _browser.Items[s_storageKey];
+        var changes = 0;
+        staleTab.Changed += () => changes++;
         Assert.Equal(SettingUpdateResult.LimitReached, await staleTab.SetPinnedAsync(s_cpu, ["api", "worker"], pinned: true));
-        Assert.Empty(staleTab.GetPins());
+        Assert.Equal(initialPins, staleTab.GetPins());
+        Assert.Equal(1, changes);
+        Assert.Equal(storedPins, _browser.Items[s_storageKey]);
         Assert.Equal(initialPins, (await CreateLoadedStoreAsync()).GetPins());
 
         await staleTab.SetPinnedAsync(s_cpu, ["api"], pinned: true);

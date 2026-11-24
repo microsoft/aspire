@@ -106,7 +106,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
 
         var groupKeys = Enumerable.Range(0, 50).Select(i => new string((char)('\u4e00' + i), 50)).ToArray();
         var moves = Enumerable.Range(1, 48)
-            .Select(i => new RelativeOrderMove(Guid.NewGuid(), groupKeys[i], groupKeys[i - 1], groupKeys[i + 1], PreferNext: true)).ToList();
+            .Select(i => new RelativeOrderMove(groupKeys[i], groupKeys[i - 1], groupKeys[i + 1], PreferNext: true)).ToList();
         await browser.Storage.SetAsync("groups", new Dictionary<string, List<RelativeOrderMove>> { ["Tags"] = moves });
 
         var protocol = Assert.Single(app.Services.GetServices<IHubProtocol>(), p => p.Name == "blazorpack");

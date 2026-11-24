@@ -386,7 +386,7 @@ public partial class MetricsTests : DashboardTestContext
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
         var toasts = Render<FluentToastProvider>();
-        var resources = Enumerable.Range(1, filledByAnotherTab ? 2 : 51).Select(i => $"resource-{i}").ToArray();
+        var resources = Enumerable.Range(1, filledByAnotherTab ? 3 : 51).Select(i => $"resource-{i}").ToArray();
         var savedPins = new List<MetricPin>();
         var storage = Services.GetRequiredService<ILocalStorage>();
         var applicationName = Services.GetRequiredService<IOptions<DashboardOptions>>().Value.GetApplicationNameOrDefault();
@@ -397,6 +397,7 @@ public partial class MetricsTests : DashboardTestContext
         if (filledByAnotherTab)
         {
             savedPins.AddRange(Enumerable.Range(1, 49).Select(i => new MetricPin($"other-{i}", "test-meter", "requests")));
+            savedPins.Add(new MetricPin(resources[0], "test-meter", "requests"));
             await storage.SetAsync(storageKey, savedPins);
         }
 
@@ -405,11 +406,18 @@ public partial class MetricsTests : DashboardTestContext
         var toast = Assert.Single(toasts.FindComponents<FluentToast>()).Instance;
         Assert.Equal(ToastIntent.Warning, toast.Intent);
         Assert.Equal("Can't pin this metric. The limit is 50 pins per application. Select fewer resources or unpin existing metrics.", toast.Title);
-        Assert.Equal("false", cut.Find("fluent-button").GetAttribute("aria-pressed"));
-        Assert.Empty(Services.GetRequiredService<MetricPinStore>().GetPins());
+        cut.WaitForAssertion(() => Assert.Equal(filledByAnotherTab ? "true" : "false", cut.Find("fluent-button").GetAttribute("aria-pressed")));
+        Assert.Equal(savedPins, Services.GetRequiredService<MetricPinStore>().GetPins());
         var stored = await storage.GetAsync<List<MetricPin>>(storageKey);
         Assert.Equal(filledByAnotherTab, stored.Success);
         Assert.Equal(savedPins, stored.Value ?? []);
+
+        if (filledByAnotherTab)
+        {
+            await cut.Find("fluent-button").ClickAsync(new MouseEventArgs());
+            cut.WaitForAssertion(() => Assert.Equal("false", cut.Find("fluent-button").GetAttribute("aria-pressed")));
+            Assert.Equal(savedPins.Take(49), (await storage.GetAsync<List<MetricPin>>(storageKey)).Value);
+        }
     }
 
     [Fact]

@@ -104,6 +104,23 @@ public sealed class ResourceOrderStoreTests
     }
 
     [Fact]
+    public async Task ResourceOrder_RejectsAmbiguousReplicaMoves()
+    {
+        var store = await CreateLoadedStoreAsync();
+        var api = ModelTestHelpers.CreateResource("api-old", displayName: "api", resourceType: "Project");
+        var replacement = ModelTestHelpers.CreateResource("api-new", displayName: "api", resourceType: "Project");
+        var worker = CreateResource("worker");
+
+        Assert.Equal(ResourceOrderMoveResult.Invalid, await store.MoveResourceAsync(api, worker, after: false, [api, replacement, worker]));
+        Assert.Equal(ResourceOrderMoveResult.Invalid, await store.MoveResourceAsync(worker, replacement, after: false, [api, replacement, worker]));
+        Assert.Empty(_browser.Items);
+        Assert.Equal(["api-old"], GetNames(store, api));
+
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, replacement, after: false, [replacement, worker]));
+        Assert.Equal(["worker", "api-new"], GetNames(await CreateLoadedStoreAsync(), replacement, worker));
+    }
+
+    [Fact]
     public async Task ResourceOrder_MergesLatestMovesFromDifferentTabs()
     {
         var tabA = await CreateLoadedStoreAsync();
@@ -150,7 +167,7 @@ public sealed class ResourceOrderStoreTests
     }
 
     [Fact]
-    public async Task Order_ReplacingAMovePreservesTheRequestedSideOfTheTarget()
+    public async Task Order_MovingAnAnchorAgainDoesNotReshuffleOtherItems()
     {
         var store = await CreateLoadedStoreAsync();
         var a = CreateResource("a");
@@ -169,12 +186,11 @@ public sealed class ResourceOrderStoreTests
         Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(b, a, after: false, resources));
         Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync("Tags", "b", "a", after: false, OrderGroups(store, "Tags", groups)));
 
-        // Replacing B's first move lets C shift, but B must still land before A.
-        Assert.Equal(["b", "a", "c"], GetNames(store, resources));
-        Assert.Equal(["b", "a", "c"], OrderGroups(store, "Tags", groups));
+        Assert.Equal(["c", "b", "a"], GetNames(store, resources));
+        Assert.Equal(["c", "b", "a"], OrderGroups(store, "Tags", groups));
         var reloaded = await CreateLoadedStoreAsync();
-        Assert.Equal(["b", "a", "c"], GetNames(reloaded, resources));
-        Assert.Equal(["b", "a", "c"], OrderGroups(reloaded, "Tags", groups));
+        Assert.Equal(["c", "b", "a"], GetNames(reloaded, resources));
+        Assert.Equal(["c", "b", "a"], OrderGroups(reloaded, "Tags", groups));
     }
 
     [Fact]
@@ -271,7 +287,7 @@ public sealed class ResourceOrderStoreTests
     public async Task Order_UnprotectedMovesAreIgnoredAndReplacedWithoutBackup()
     {
         await _browser.Storage.SetUnprotectedAsync<List<RelativeOrderMove>>(s_resourceKey,
-            [new(Guid.NewGuid(), "worker_0", PreviousKey: null, NextKey: "api_0", PreferNext: false)]);
+            [new("worker_0", PreviousKey: null, NextKey: "api_0", PreferNext: false)]);
         var api = CreateResource("api");
         var worker = CreateResource("worker");
         var store = await CreateLoadedStoreAsync();
@@ -284,13 +300,13 @@ public sealed class ResourceOrderStoreTests
     }
 
     [Fact]
-    public async Task Order_DuplicateMoveIdsDoNotReplayTwice()
+    public async Task Order_LoadKeepsTheLastMoveWhenReturningAnItemToAnEarlierPosition()
     {
-        var first = new RelativeOrderMove(Guid.NewGuid(), "api_0", PreviousKey: "worker_0", NextKey: null, PreferNext: false);
-        var second = new RelativeOrderMove(Guid.NewGuid(), "api_0", PreviousKey: null, NextKey: "worker_0", PreferNext: false);
+        var first = new RelativeOrderMove("api_0", PreviousKey: "worker_0", NextKey: null, PreferNext: false);
+        var second = new RelativeOrderMove("api_0", PreviousKey: null, NextKey: "worker_0", PreferNext: true);
         await _browser.Storage.SetAsync<List<RelativeOrderMove>>(s_resourceKey, [first, second, first]);
 
-        Assert.Equal(["api", "worker"], GetNames(await CreateLoadedStoreAsync(), CreateResource("api"), CreateResource("worker")));
+        Assert.Equal(["worker", "api"], GetNames(await CreateLoadedStoreAsync(), CreateResource("api"), CreateResource("worker")));
     }
 
     private static ResourceViewModel CreateResource(string name, string resourceType = "Project", int? order = null, string? parent = null)

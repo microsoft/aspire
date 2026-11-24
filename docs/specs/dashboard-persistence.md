@@ -82,7 +82,9 @@ application in protected browser local storage, not in the run database. Old
 plaintext preferences aren't migrated, and saved preferences are unavailable if
 the Dashboard loses access to the keys used to protect them. Each application can
 save up to 50 tag assignments (one per resource and tag) and 50 metric pins (one
-per resource and instrument).
+per resource and instrument). Pins without matching telemetry and assignments for
+removed resources or tags now declared by the AppHost still count toward these
+limits. The dashboard has no way to clear those entries.
 
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous
@@ -93,8 +95,9 @@ rules.
 
 The Dashboard saves only explicit moves and replays them over the default order.
 A move uses its drop target when possible and falls back to the other neighbor.
-The Dashboard keeps only the latest move per item, up to 50 resource moves and 50
-group moves across grouping modes.
+The Dashboard keeps the latest move per item and any earlier moves needed as
+anchors for other moves. It saves up to 50 resource moves and 50 group moves
+across grouping modes.
 
 Traits are transported as list-valued resource properties named `resource.trait.<name>`,
 including in recorded snapshots. Trait names are case-sensitive; dashboard tags are

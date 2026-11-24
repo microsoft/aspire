@@ -166,7 +166,8 @@ public class ResourceTagEditorTests : DashboardTestContext
     public async Task Enter_AtTagLimitShowsWarningAndKeepsInput(bool filledByAnotherTab)
     {
         var storageKey = BrowserStorageKeys.ResourceTagsKey(new DashboardOptions().GetApplicationNameOrDefault());
-        var savedTags = Enumerable.Range(1, 50).ToDictionary(i => $"resource-{i}", _ => new List<string> { "backend" });
+        var savedTags = Enumerable.Range(1, 49).ToDictionary(i => $"resource-{i}", _ => new List<string> { "backend" });
+        savedTags.Add("api", ["backend"]);
         if (!filledByAnotherTab)
         {
             await _localStorage.SetAsync(storageKey, savedTags);
@@ -187,8 +188,8 @@ public class ResourceTagEditorTests : DashboardTestContext
         Assert.Equal(ToastIntent.Warning, toast.Intent);
         Assert.Equal("Can't add this tag. The limit is 50 tag assignments per application. Remove an existing tag assignment first.", toast.Title);
         Assert.Equal("new tag", cut.Find(".tag-input").GetAttribute("value"));
-        Assert.Empty(cut.FindAll(".tag-chip-name"));
-        Assert.Empty(_tagStore.GetTags("api"));
+        cut.WaitForAssertion(() => Assert.Equal(["backend"], cut.FindAll(".tag-chip-name").Select(e => e.TextContent)));
+        Assert.Equal(["backend"], _tagStore.GetTags("api"));
     }
 
     [Fact]
