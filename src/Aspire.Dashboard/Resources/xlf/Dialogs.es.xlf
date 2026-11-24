@@ -1285,9 +1285,9 @@ Configure la aplicación para exportar registros, seguimientos y métricas media
         <target state="translated">Seleccionar formato</target>
         <note />
       </trans-unit>
-      <trans-unit id="TextVisualizerWordWrap">
-        <source>Word wrap</source>
-        <target state="translated">Ajuste automático de línea</target>
+      <trans-unit id="TextVisualizerWordWrapOff">
+        <source>Disable word wrap</source>
+        <target state="new">Disable word wrap</target>
         <note />
       </trans-unit>
     </body>
