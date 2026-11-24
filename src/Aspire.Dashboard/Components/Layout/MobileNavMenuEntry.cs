@@ -8,6 +8,7 @@ namespace Aspire.Dashboard.Components.Layout;
 /// <summary>
 /// An entry in the narrow layout's navigation menu.
 /// </summary>
+/// <param name="Id">The entry's stable identity.</param>
 /// <param name="Text">The entry's label.</param>
 /// <param name="OnClick">Runs after the menu closes when the entry is chosen.</param>
 /// <param name="Icon">The entry's icon.</param>
@@ -15,6 +16,7 @@ namespace Aspire.Dashboard.Components.Layout;
 /// <param name="IsActive">Whether the entry is current.</param>
 /// <param name="ErrorCount">A count of unviewed errors shown as a badge on the entry.</param>
 public record MobileNavMenuEntry(
+    string Id,
     string Text,
     Func<Task> OnClick,
     Icon? Icon = null,

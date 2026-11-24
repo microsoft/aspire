@@ -11,6 +11,7 @@ using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
@@ -18,6 +19,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -28,6 +30,80 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class ResourcesLayoutActivityTests : DashboardTestContext
 {
+    [Fact]
+    public async Task MobileMenu_RefreshesWhileOpenForLatePageAndLogUpdates()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var connected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Func<Task>? notifyLogs = null;
+        var client = new TestDashboardClient(isEnabled: true, whenConnected: connected.Task,
+            initialResources: [ModelTestHelpers.CreateResource("api-TestId")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client, configureServices: services =>
+        {
+            services.AddSingleton<IThemeResolver, TestThemeResolver>();
+            services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, client);
+            services.AddSingleton<ITooltipService, TooltipService>();
+            services.AddSingleton<ITelemetryRepository>(provider => new TestTelemetryRepository(provider.GetRequiredService<SqliteTelemetryRepository>())
+            {
+                OnNewLogsRegistered = callback => notifyLogs = callback
+            });
+        });
+        FluentUISetupHelpers.SetupFluentDialogProvider(this);
+        FluentUISetupHelpers.SetupFluentAnchor(this);
+        FluentUISetupHelpers.SetupFluentList(this);
+        FluentUISetupHelpers.SetupFluentCombobox(this);
+        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
+        var themeModule = JSInterop.SetupModule("/js/app-theme.js");
+        themeModule.Setup<string>("updateTheme", _ => true).SetResult(ThemeManager.ThemeSettingSystem);
+        JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true).SetVoidResult();
+        JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
+        JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
+        JSInterop.SetupVoid("registerResourceServiceConnectionProvider", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("updateResourceServiceConnectionState", _ => true).SetVoidResult();
+        JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
+        Render<FluentMessageBarProvider>(p => p.Add(p => p.Section, DashboardUIHelpers.MessageBarSection));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api-TestId");
+        var cut = Render<MainLayout>(p => p.AddCascadingValue(viewport)
+            .Add(p => p.Body, body =>
+            {
+                body.OpenComponent<ResourcesLayout>(0);
+                body.CloseComponent();
+            }));
+
+        await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        Assert.Equal([Resources.Layout.MainLayoutHelp, Resources.Layout.MainLayoutLaunchNotifications, Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip")));
+
+        connected.SetResult();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.FindComponent<ResourcesLayout>().Instance.IsLoaded);
+            Assert.Contains(cut.FindAll("fluent-menu-item"), item => item.GetAttribute("data-tooltip") == "Home");
+        });
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource("api"),
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(severity: SeverityNumber.Error) } } }
+            }
+        });
+        cut.WaitForAssertion(() => Assert.Equal("1", Assert.Single(cut.FindAll(".mobile-nav-menu-error-count")).TextContent.Trim()));
+
+        repository.MarkViewedErrorLogs(new ResourceKey("api", "TestId"));
+        Assert.NotNull(notifyLogs);
+        await notifyLogs();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".mobile-nav-menu-error-count")));
+
+        cut.Render(p => p.Add(p => p.Body, (RenderFragment?)null));
+        cut.WaitForAssertion(() => Assert.Equal(
+            [Resources.Layout.MainLayoutHelp, Resources.Layout.MainLayoutLaunchNotifications, Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip"))));
+    }
+
     [Fact]
     public async Task Canvas_MobileViewportCancelsPendingQueryAndDoesNotResumeOnDesktop()
     {

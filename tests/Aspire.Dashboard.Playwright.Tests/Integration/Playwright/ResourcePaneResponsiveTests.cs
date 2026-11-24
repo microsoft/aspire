@@ -47,6 +47,47 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         """;
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourceNavigation_KeepsFocusWhenTerminalAvailabilityChanges(bool desktop)
+    {
+        await RunTestAsync(async page =>
+        {
+            fixture.StartDynamicSession();
+            await page.SetViewportSizeAsync(desktop ? 2000 : 390, 900);
+            await page.GotoAsync("/resources/api");
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
+            var menu = desktop ? null : await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            var structuredLogs = desktop
+                ? page.Locator("#tab-StructuredLogs")
+                : ResourcePaneNavigation.NavMenuItem(menu!, Resources.StructuredLogs.StructuredLogsHeader);
+            var terminal = desktop
+                ? page.Locator("#tab-Terminal")
+                : ResourcePaneNavigation.NavMenuItem(menu!, Resources.TerminalStrings.TerminalTitle);
+            await Assertions.Expect(structuredLogs).ToBeVisibleAsync();
+            await Assertions.Expect(terminal).ToHaveCountAsync(0);
+            await structuredLogs.FocusAsync();
+            await Assertions.Expect(structuredLogs).ToBeFocusedAsync();
+
+            await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api",
+                state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project, properties: new()
+                {
+                    [KnownProperties.Terminal.Enabled] = new(KnownProperties.Terminal.Enabled, Value.ForString("true"), false, null, 0, null, false)
+                }))]);
+            await Assertions.Expect(terminal).ToBeVisibleAsync();
+            await Assertions.Expect(structuredLogs).ToBeFocusedAsync();
+
+            await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api",
+                state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project))]);
+            await Assertions.Expect(terminal).ToHaveCountAsync(0);
+            await Assertions.Expect(structuredLogs).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/structuredlogs/resource/api$"));
+        });
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]

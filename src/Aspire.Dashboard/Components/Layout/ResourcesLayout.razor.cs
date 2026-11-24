@@ -640,6 +640,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // The menu is a sibling, not a child of this layout, so its entries need a separate refresh.
+        _subscribedMainLayout?.RefreshPageNavMenuEntries(_mobileNavMenuEntries);
+
         var focusResourcePicker = _focusResourcePicker && _isResourcePickerOpen;
         _focusResourcePicker = false;
         var pickerChanged = _isResourcePickerOpen != _wasResourcePickerOpen;
@@ -3031,6 +3034,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             var homeIsActive = IsResourceListShownAsHome;
             yield return new MobileNavMenuEntry(
+                nameof(Resources.Layout.ResourceTabHome),
                 Loc[nameof(Resources.Layout.ResourceTabHome)],
                 () => homeIsActive || _homeNavigation is not null ? Task.CompletedTask : GoHomeAsync(),
                 new Icons.Regular.Size24.Home(),
@@ -3048,6 +3052,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // Like the tab strip, no view is current while home's resource list covers the content.
             var isActive = tab.Tab == CurrentTab && !IsResourceListShownAsHome;
             yield return new MobileNavMenuEntry(
+                GetTabId(tab.Tab),
                 tab.Text,
                 () => isActive && _homeNavigation is null ? Task.CompletedTask : OpenTabAsync(tab.Tab),
                 tab.Icon,

@@ -84,6 +84,24 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task MobileMenu_RefreshesWhenPageEntriesAreRegisteredAndCleared()
+    {
+        SetupMainLayoutServices();
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        Func<IEnumerable<MobileNavMenuEntry>> entries = () => [new("page", "Page view", () => Task.CompletedTask)];
+        Func<IEnumerable<MobileNavMenuEntry>> previousEntries = () => [];
+
+        await cut.InvokeAsync(() => cut.Instance.SetPageNavMenuEntries(entries));
+        cut.WaitForAssertion(() => Assert.Equal("Page view", cut.Find("fluent-menu-item").GetAttribute("data-tooltip")));
+        await cut.InvokeAsync(() => cut.Instance.ClearPageNavMenuEntries(previousEntries));
+        Assert.Equal("Page view", cut.Find("fluent-menu-item").GetAttribute("data-tooltip"));
+        await cut.InvokeAsync(() => cut.Instance.ClearPageNavMenuEntries(entries));
+        cut.WaitForAssertion(() => Assert.Equal(Resources.Layout.MainLayoutHelp, cut.Find("fluent-menu-item").GetAttribute("data-tooltip")));
+    }
+
+    [Fact]
     public async Task HeaderHome_OpensHomeWithoutRestoringSelection()
     {
         var stored = new Dictionary<string, object?>();

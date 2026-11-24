@@ -45,6 +45,15 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
+    internal void RefreshPageEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (!_disposed)
+        {
+            PageEntries = entries;
+            StateHasChanged();
+        }
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!_disposed && IsNavMenuOpen && _keyboardNavigation is null && !_keyboardNavigationInitializing)
@@ -130,18 +139,21 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
         }
 
         yield return new MobileNavMenuEntry(
+            nameof(Resources.Layout.MainLayoutHelp),
             Loc[nameof(Resources.Layout.MainLayoutHelp)],
             LaunchHelpAsync,
             new Icons.Regular.Size24.QuestionCircle()
         );
 
         yield return new MobileNavMenuEntry(
+            nameof(Resources.Layout.MainLayoutLaunchNotifications),
             Loc[nameof(Resources.Layout.MainLayoutLaunchNotifications)],
             LaunchNotificationsAsync,
             new Icons.Regular.Size24.Alert()
         );
 
         yield return new MobileNavMenuEntry(
+            nameof(Resources.Layout.MainLayoutLaunchSettings),
             Loc[nameof(Resources.Layout.MainLayoutLaunchSettings)],
             LaunchSettingsAsync,
             new Icons.Regular.Size24.Settings()

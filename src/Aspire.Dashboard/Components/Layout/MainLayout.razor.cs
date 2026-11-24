@@ -36,6 +36,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private DashboardDialogReference? _openPageDialog;
     private TerminalDock? _terminalDock;
+    private MobileNavMenu? _mobileNavMenu;
     private string? _pendingReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
@@ -543,11 +544,22 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     internal event Action? HomeNavigationStarting;
 
     // The entries the current page lists at the top of the narrow layout's navigation menu, such as the resource views
-    // that the desktop header shows as tabs. The menu evaluates them each time it renders, so they reflect the page's
-    // current state without the page re-rendering this layout.
+    // that the desktop header shows as tabs.
     private Func<IEnumerable<MobileNavMenuEntry>>? _pageNavMenuEntries;
 
-    internal void SetPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>> entries) => _pageNavMenuEntries = entries;
+    internal void SetPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>> entries)
+    {
+        _pageNavMenuEntries = entries;
+        RefreshPageNavMenu();
+    }
+
+    internal void RefreshPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
+        {
+            RefreshPageNavMenu();
+        }
+    }
 
     // Only clears the entries if they're still the caller's, so a page being disposed doesn't remove the entries of the
     // page that replaced it.
@@ -556,6 +568,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
         {
             _pageNavMenuEntries = null;
+            RefreshPageNavMenu();
+        }
+    }
+
+    private void RefreshPageNavMenu()
+    {
+        if (!_isDisposing && !ViewportInformation.IsDesktop && _isNavMenuOpen)
+        {
+            _mobileNavMenu?.RefreshPageEntries(_pageNavMenuEntries);
         }
     }
 

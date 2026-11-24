@@ -96,9 +96,9 @@ public class MobileNavMenuTests : DashboardTestContext
         var overviewClicked = false;
         IEnumerable<MobileNavMenuEntry> pageEntries =
         [
-            new("Home", () => Task.CompletedTask, new Icons.Regular.Size24.Home(), ActiveIcon: new Icons.Filled.Size24.Home()),
-            new("Overview", () => { overviewClicked = true; return Task.CompletedTask; }, new Icons.Regular.Size24.Board()),
-            new("Structured logs", () => Task.CompletedTask, new Icons.Regular.Size24.SlideTextSparkle(), ActiveIcon: new Icons.Filled.Size24.SlideTextSparkle(),
+            new("home", "Home", () => Task.CompletedTask, new Icons.Regular.Size24.Home(), ActiveIcon: new Icons.Filled.Size24.Home()),
+            new("overview", "Overview", () => { overviewClicked = true; return Task.CompletedTask; }, new Icons.Regular.Size24.Board()),
+            new("logs", "Structured logs", () => Task.CompletedTask, new Icons.Regular.Size24.SlideTextSparkle(), ActiveIcon: new Icons.Filled.Size24.SlideTextSparkle(),
                 IsActive: true, ErrorCount: 3)
         ];
         var cut = RenderMobileNavMenu(() => menuClosed = true, pageEntries: () => pageEntries);

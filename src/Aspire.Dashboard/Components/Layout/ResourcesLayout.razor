@@ -803,7 +803,7 @@
                 }
 
                 var isActive = tab.Tab == activeTab;
-                <a id="@GetTabId(tab.Tab)"
+                <a @key="tab.Tab" id="@GetTabId(tab.Tab)"
                    href="@tab.Href"
                    class="resource-tab aspire-tab @(isActive ? "active" : null)"
                    aria-current="@(isActive ? "page" : null)"

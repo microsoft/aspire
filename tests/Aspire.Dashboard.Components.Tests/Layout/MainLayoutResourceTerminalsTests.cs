@@ -59,7 +59,7 @@ public partial class MainLayoutTests
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var terminalTitle = Resources.TerminalStrings.TerminalTitle;
-        cut.Instance.SetPageNavMenuEntries(() => [new(terminalTitle, () => Task.CompletedTask, IsActive: true)]);
+        cut.Instance.SetPageNavMenuEntries(() => [new("terminal", terminalTitle, () => Task.CompletedTask, IsActive: true)]);
         cut.WaitForAssertion(() => Assert.True(Services.GetRequiredService<ShortcutManager>().IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals)));
 
         await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
