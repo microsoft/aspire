@@ -40,11 +40,13 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var cut = getCut();
         var formattedText = cut.FindComponent<TextVisualizer>().Instance.ViewModel.FormattedText;
         Assert.False(cut.FindComponent<TextVisualizer>().Instance.NoWrap);
-        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        var wrapButton = cut.Find(".text-visualizer-word-wrap");
+        Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerWordWrapOff, wrapButton.GetAttribute("aria-label"));
+        Assert.Equal("false", wrapButton.GetAttribute("aria-pressed"));
 
         cut.Find(".text-visualizer-word-wrap").Click();
         Assert.True(cut.FindComponent<TextVisualizer>().Instance.NoWrap);
-        Assert.Equal("false", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
         Assert.Single(cut.FindAll(".log-container.text-visualizer-no-wrap"));
         Assert.Equal(formattedText.ReplaceLineEndings("\n"), cut.Find("[data-copybutton='true']").GetAttribute("data-text"));
 
@@ -54,7 +56,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         cut.Find(".text-visualizer-word-wrap").Click();
         Assert.False(cut.FindComponent<TextVisualizer>().Instance.NoWrap);
-        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Equal("false", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
         Assert.Equal(formattedText, cut.FindComponent<TextVisualizer>().Instance.ViewModel.FormattedText);
     }
 
@@ -78,16 +80,16 @@ public class TextVisualizerDialogTests : DashboardTestContext
             new TextVisualizerDialogViewModel(markdown, "Text", false, FixedFormat: DashboardUIHelpers.MarkdownFormat), new DialogParameters());
         var cut = getCut();
 
-        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Equal("false", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
         Assert.Equal(["markdown-content"], cut.Find(".markdown-content").ClassList);
         cut.Find(".text-visualizer-word-wrap").Click();
-        Assert.Equal("false", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
         Assert.Single(cut.FindAll(".markdown-content.markdown-content-no-wrap"));
         Assert.Equal("Markdown", cut.Find(".markdown-content strong").TextContent);
         Assert.Equal(markdown, cut.Find(".text-visualizer-copy").GetAttribute("data-text"));
 
         cut.Find(".text-visualizer-word-wrap").Click();
-        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Equal("false", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
         Assert.Equal(["markdown-content"], cut.Find(".markdown-content").ClassList);
     }
 
@@ -166,15 +168,13 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.Single(cut.FindAll("fluent-dialog-body [slot='title'] .dialog-title-grid > svg"));
         Assert.Single(cut.FindAll("fluent-dialog-body [slot='title'] .dialog-format"));
         var toolbar = cut.Find("fluent-dialog-body [slot='title'] .dialog-format");
-        Assert.Equal(["text-visualizer-format", "text-visualizer-word-wrap", "text-visualizer-copy"],
+        Assert.Equal(["text-visualizer-format", "text-visualizer-word-wrap"],
             toolbar.Children.Select(element => element.ClassList.Single(name => name.StartsWith("text-visualizer-", StringComparison.Ordinal))));
-        var copyButton = cut.Find(".text-visualizer-copy");
-        Assert.Equal(string.Empty, copyButton.TextContent.Trim());
+        var copyButton = cut.Find("fluent-dialog-body [slot='action'] .button-container-right > .text-visualizer-copy");
+        Assert.Equal(Aspire.Dashboard.Resources.ControlsStrings.GridValueCopyToClipboard, copyButton.TextContent.Trim());
         Assert.Equal("2000", copyButton.GetAttribute("data-copy-duration"));
-        Assert.Equal(Aspire.Dashboard.Resources.ControlsStrings.GridValueCopyToClipboard, copyButton.GetAttribute("aria-label"));
         Assert.Single(copyButton.QuerySelectorAll(".copy-icon"));
         Assert.Single(copyButton.QuerySelectorAll(".checkmark-icon"));
-        Assert.Empty(cut.FindAll("fluent-dialog-body [slot='action'] .button-container"));
         Assert.Empty(cut.FindAll(".text-visualizer-container .button-container"));
         Assert.Empty(cut.FindAll("header"));
     }
@@ -476,7 +476,10 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(mermaid, cut.FindComponent<TextVisualizer>().Instance.ViewModel.FormattedText);
         Assert.Empty(cut.FindComponents<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>());
-        Assert.Equal(mermaid, cut.Find("[data-copybutton='true']").GetAttribute("data-text"));
+        var footer = cut.Find("fluent-dialog-body [slot='action'] .button-container-right");
+        Assert.Collection(footer.Children,
+            button => Assert.Equal(Aspire.Dashboard.Resources.ControlsStrings.Download, button.TextContent.Trim()),
+            button => Assert.Equal(mermaid, button.GetAttribute("data-text")));
 
         string? downloadedText = null;
         var download = JSInterop.SetupVoid("downloadStreamAsFile", invocation =>

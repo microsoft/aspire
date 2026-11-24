@@ -371,6 +371,13 @@
     <value>Resource actions for {0}</value>
     <comment>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</comment>
   </data>
+  <data name="ResourcesGraphTagActionsButton" xml:space="preserve">
+    <value>Tag actions for {0}</value>
+    <comment>Accessible label and tooltip for the cog on a graph tag label. {0} is the tag name.</comment>
+  </data>
+  <data name="ResourcesGraphTagNoCommands" xml:space="preserve">
+    <value>No commands for this group</value>
+  </data>
   <data name="ResourcesHideTypes" xml:space="preserve">
     <value>Hide resource types</value>
   </data>

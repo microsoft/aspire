@@ -46,6 +46,7 @@ internal sealed class InMemoryBrowserLocalStorage
     public bool FailReads { get; set; }
 
     public ILocalStorage Storage { get; }
+    public int SnapshotReadCount { get; private set; }
 
     /// <summary>
     /// Gets or sets a function awaited after a read of local storage and before its result is returned, to simulate
@@ -74,7 +75,6 @@ internal sealed class InMemoryBrowserLocalStorage
 
     private object? HandleLocalStorageCall((string Identifier, object?[]? Args) call)
     {
-        var key = (string)call.Args![0]!;
         lock (Items)
         {
             switch (call.Identifier)
@@ -84,9 +84,16 @@ internal sealed class InMemoryBrowserLocalStorage
                     {
                         throw new JSException("Local storage is unavailable.");
                     }
-                    return Items.GetValueOrDefault(key);
+                    return Items.GetValueOrDefault((string)call.Args![0]!);
+                case "getLocalStorageItems":
+                    SnapshotReadCount++;
+                    if (FailReads)
+                    {
+                        throw new JSException("Local storage is unavailable.");
+                    }
+                    return ((string[])call.Args![0]!).Select(key => Items.GetValueOrDefault(key)).ToArray();
                 case "localStorage.setItem":
-                    Items[key] = (string)call.Args[1]!;
+                    Items[(string)call.Args![0]!] = (string)call.Args[1]!;
                     return null;
                 default:
                     throw new NotSupportedException($"Unexpected JavaScript call '{call.Identifier}'.");
@@ -107,6 +114,8 @@ internal sealed class InMemoryBrowserLocalStorage
         }
 
         public Task SetUnprotectedAsync<TValue>(string key, TValue value) => inner.SetUnprotectedAsync(key, value);
+
+        public Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys) => inner.ReadUnprotectedSnapshotAsync(keys);
 
         public Task<StorageResult<string>> GetRawUnprotectedAsync(string key) => inner.GetRawUnprotectedAsync(key);
 

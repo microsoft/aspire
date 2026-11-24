@@ -252,12 +252,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
-    private string? PauseText => PauseManager.AreMetricsPaused(out var startTime)
-        ? string.Format(
-            CultureInfo.CurrentCulture,
-            Loc[nameof(Dashboard.Resources.Metrics.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
-        : null;
+    private DateTime? PausedAt => PauseManager.AreMetricsPaused(out var startTime) ? startTime : null;
 
     public sealed class MetricsViewModel
     {

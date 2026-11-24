@@ -19,6 +19,17 @@ public sealed class TestLocalStorage : ILocalStorage
     /// </summary>
     public Func<string, bool>? IsUnprotectedReadFailed { get; set; }
 
+    public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
+    {
+        var values = new Dictionary<string, StorageResult<object>>(StringComparer.Ordinal);
+        foreach (var key in keys)
+        {
+            values[key] = await GetUnprotectedAsync<object>(key);
+        }
+
+        return new UnprotectedSnapshot(values);
+    }
+
     public Task<StorageResult<T>> GetAsync<T>(string key)
     {
         if (OnGetAsync is { } callback)
@@ -106,5 +117,22 @@ public sealed class TestLocalStorage : ILocalStorage
             callback(key, value);
         }
         return Task.CompletedTask;
+    }
+
+    private sealed class UnprotectedSnapshot(Dictionary<string, StorageResult<object>> values) : IUnprotectedLocalStorageSnapshot
+    {
+        public StorageResult<T> Get<T>(string key)
+        {
+            if (!values.TryGetValue(key, out var result))
+            {
+                throw new ArgumentException($"Key '{key}' was not requested when loading the snapshot.", nameof(key));
+            }
+
+            return new StorageResult<T>(result.Success, (T)(result.Value ?? default(T))!)
+            {
+                ReadFailed = result.ReadFailed,
+                InvalidValue = result.InvalidValue
+            };
+        }
     }
 }

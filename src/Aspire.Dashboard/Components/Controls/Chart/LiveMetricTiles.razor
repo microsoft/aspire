@@ -38,6 +38,8 @@
 </ul>
 
 @code {
+    protected override int MaxConcurrentInstrumentReads => 4;
+
     [Parameter, EditorRequired]
     public required Func<OtlpInstrumentSummary, string> GetInstrumentUrl { get; set; }
 

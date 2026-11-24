@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
         <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
-        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <target state="translated">채널 원본 '{1}'가 비활성화되어 있거나 원본 또는 해당 패키지 매핑이 상속되었거나 사용자가 소유하므로 '{0}' 수정할 수 없습니다. 대신 NuGet 구성을 수동으로 업데이트하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
         <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
-        <target state="needs-review-translation">MSBuild가 NuGet 구성을 재정의하므로 '{1}'에 대해 채널 '{0}'을(를) 적용할 수 없습니다. {2}. 명시적 채널 업데이트를 사용하도록 설정하려면 이러한 재정의를 제거합니다. 명시적 채널이 없는 업데이트는 계속 지원됩니다.</target>
+        <target state="translated">MSBuild가 NuGet 구성을 재정의하므로 '{1}'에 대해 채널 '{0}'을(를) 적용할 수 없습니다. {2}. 채널 업데이트를 사용하도록 설정하려면 이러한 재정의를 제거합니다. 명령줄이나 구성된 채널 없이 수행되는 업데이트는 계속 지원됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -84,7 +84,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredChannelNotFoundFormat">
         <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
-        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <target state="translated">Aspire 구성에서 채널 '{0}' 사용할 수 없습니다. {1}</target>
         <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -114,49 +114,49 @@
       </trans-unit>
       <trans-unit id="DryRunBackupRecoveryFormat">
         <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
-        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <target state="translated">'{0}' 복원할 수 없습니다. 복구 백업이 '{1}'에 보존되었습니다. 백업을 수동으로 복원한 후 다시 시도하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
         <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
-        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <target state="translated">기존 백업을 대체하지 않고 시험 실행이 취소되었습니다. 나열된 백업 파일에서 원본을 복구하거나, 다시 시도하기 전에 해당 파일을 다른 위치로 옮겨 두세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunExistingBackupsFormat">
         <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
 {0}</source>
-        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+        <target state="translated">이전 시험 실행에서 생성된 백업이 이미 있습니다. 대체하기 전에 필요한 경우 복구할 수 있도록 백업을 보존하세요. 
 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunOptionDescription">
         <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
-        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <target state="translated">임시 NuGet 캐시를 사용해 명시적인 .NET AppHost 채널 업데이트의 유효성을 검사합니다. 변경 내용을 제안하거나 적용하지는 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
         <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
-        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <target state="translated">기존 백업을 현재 파일 콘텐츠로 바꾸시겠습니까? 이렇게 하면 이전 복구 복사본이 삭제됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
         <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
-        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <target state="translated">--dry-run을 사용하려면 기본값이 아닌 --channel 또는 --quality를 명시적으로 지정해야 하며, --self 또는 --migrate와 함께 사용할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresDotNet">
         <source>--dry-run is supported only for .NET AppHosts.</source>
-        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <target state="translated">--dry-run은 .NET AppHost에서만 지원됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunSuccessful">
         <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
-        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <target state="translated">채널 업데이트 유효성 검사에 성공했습니다. 원본 파일이 복원되었습니다. 업데이트가 적용되지 않았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunValidating">
         <source>Validating the channel update...</source>
-        <target state="new">Validating the channel update...</target>
+        <target state="translated">채널 업데이트 유효성을 검사하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -201,7 +201,7 @@
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
         <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
-        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <target state="translated">프로젝트 {1}에 대한 채널 업데이트에 대한 유효성 검사 복원{0} 실패했습니다. 업데이트가 적용되지 않았습니다. 자세한 내용은 복원 출력을 검토하세요.</target>
         <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
@@ -491,7 +491,7 @@
       </trans-unit>
       <trans-unit id="UsingConfiguredChannelFormat">
         <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
-        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <target state="translated">Aspire 구성에서 채널 '{0}' 사용합니다. 재정의하려면 --channel을 전달합니다.</target>
         <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">

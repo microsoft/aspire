@@ -19,30 +19,6 @@ on:
         type: string
 
 jobs:
-  conclusion:
-    permissions:
-      contents: read
-    # gh-aw inserts these after runtime setup and before its operational reporters.
-    pre-steps:
-      - name: Checkout trusted report preparation
-        uses: actions/checkout@v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-          sparse-checkout: .github/workflows/analyze-ci-failure/
-          sparse-checkout-cone-mode: false
-      - name: Include source CI run in operational reports
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          SOURCE_EVENT: ${{ github.event_name }}
-          SOURCE_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.run_id }}
-        with:
-          script: |
-            const path = require('node:path');
-            const { prepareReportTemplates } = require(path.join(
-              process.env.GITHUB_WORKSPACE,
-              '.github/workflows/analyze-ci-failure/prepare-report-templates.js'));
-            prepareReportTemplates(process.env);
   require-publication:
     runs-on: ubuntu-latest
     # An explicit agent dependency makes this a downstream custom job in gh-aw.

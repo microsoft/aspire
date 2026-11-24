@@ -26,8 +26,8 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 {
     private static readonly IEqualityComparer<TraceSummary> s_traceSummaryComparer = EqualityComparer<TraceSummary>.Create(
         static (left, right) => ReferenceEquals(left, right) || (left is not null && right is not null &&
-            left.TraceId == right.TraceId && left.LastUpdatedTimestampTicks == right.LastUpdatedTimestampTicks),
-        static item => HashCode.Combine(item.TraceId.GetHashCode(StringComparison.Ordinal), item.LastUpdatedTimestampTicks));
+            string.Equals(left.TraceId, right.TraceId, StringComparisons.OtlpTraceId) && left.LastUpdatedTimestampTicks == right.LastUpdatedTimestampTicks),
+        static item => HashCode.Combine(item.TraceId.GetHashCode(StringComparisons.OtlpTraceId), item.LastUpdatedTimestampTicks));
 
     private const string ScrollContainerId = "tracesScrollContainer";
     private const string TimestampColumn = nameof(TimestampColumn);
@@ -183,11 +183,36 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         {
             layout.ResourcesChanged += OnLayoutResourcesChanged;
         }
-        _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: () =>
+        _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: async () =>
         {
             UpdateResources();
+            await ResolveRouteResourceAsync();
             StateHasChanged();
         }));
+    }
+
+    /// <summary>
+    /// Resolves the route's resource once its telemetry is known.
+    /// </summary>
+    /// <remarks>
+    /// A resource's page can be opened before the resource sends telemetry. The route then resolves to "All", and,
+    /// without resolving it again, the page would keep listing every resource's traces under the selected resource.
+    /// </remarks>
+    private async Task ResolveRouteResourceAsync()
+    {
+        if (ResourceName is null ||
+            PageViewModel.SelectedResource != _allResource ||
+            _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource) is not { } resource ||
+            resource == _allResource)
+        {
+            return;
+        }
+
+        PageViewModel.SelectedResource = resource;
+        TracesViewModel.ResourceKey = resource.Id?.GetResourceKey();
+        TracesViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+        UpdateSubscription();
+        await _dataGrid.SafeRefreshDataAsync();
     }
 
     protected override async Task OnParametersSetAsync()
@@ -267,12 +292,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     }
 
-    private string? PauseText => PauseManager.AreTracesPaused(out var startTime)
-        ? string.Format(
-            CultureInfo.CurrentCulture,
-            Loc[nameof(Dashboard.Resources.Traces.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
-        : null;
+    private DateTime? PausedAt => PauseManager.AreTracesPaused(out var startTime) ? startTime : null;
 
     private void OnLayoutResourcesChanged()
     {

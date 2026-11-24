@@ -3,15 +3,15 @@
 @typeparam TItem where TItem : IPropertyGridItem
 @inject IStringLocalizer<ControlsStrings> Loc
 
-<div class="property-grid">
-    <DisposalSafeFluentDataGrid HeaderCellAsButtonWithMenu="true"
+<div class="property-grid @(FitNameColumn ? "fit-name-column" : null)">
+    <FluentDataGrid HeaderCellAsButtonWithMenu="true"
                     ResizeType="DataGridResizeType.Discrete"
                     ItemsProvider="@EnumerableGridItemsProvider.Create(() => Items)"
                     ItemKey="@ItemKey"
                     ResizableColumns="true"
                     Style="width:100%"
                     GenerateHeader="@GenerateHeader"
-                    GridTemplateColumns="@GridTemplateColumns"
+                    GridTemplateColumns="@(FitNameColumn ? "fit-content(min(35%, 12rem)) minmax(0, 1fr)" : GridTemplateColumns)"
                     RowSize="@RowSize"
                     ShowHover="true"
                     Class="@Class"
@@ -25,6 +25,7 @@
         <AspireTemplateColumn Title="@(ValueColumnTitle ?? Loc[nameof(ControlsStrings.PropertyGridValueColumnHeader)])" Class="valueColumn" SortBy="@ValueSort" Sortable="@IsValueSortable">
             <GridValue ValueDescription="@(context.Name ?? ValueColumnTitle ?? Loc[nameof(ControlsStrings.PropertyGridValueColumnHeader)])"
                        Value="@context.Value"
+                       ToolTip="@context.ValueTooltip"
                        ContentAfterValue="@GetContentAfterValue(context)"
                        EnableHighlighting="@(!string.IsNullOrEmpty(HighlightText))"
                        HighlightText="@HighlightText"
@@ -33,9 +34,10 @@
                        IsMaskedChanged="(isMasked) => OnIsValueMaskedChanged(context, isMasked)"
                        TextVisualizerTitle="@context.Name"
                        ValueToVisualize="@(context.ValueToVisualize ?? context.Value)"
+                       ContainsSecret="@context.TextVisualizerContainsSecret"
                        TextVisualizerFormat="@context.TextVisualizerFormat"
                        ComponentMetadata="@GetComponentMetadata(context)"/>
             @ExtraValueContent(context)
         </AspireTemplateColumn>
-    </DisposalSafeFluentDataGrid>
+    </FluentDataGrid>
 </div>

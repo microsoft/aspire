@@ -296,7 +296,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task Dashboard_OpensOnTheCompactFullPageListWithNoViewSelected()
+    public async Task Dashboard_OpensOnTheComfortableFullPageListWithNoViewSelected()
     {
         await RunTestAsync(async page =>
         {
@@ -304,7 +304,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.GotoAsync("/");
             await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator(".resource-pane-list.density-compact")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".resource-pane-list:not(.density-compact)")).ToBeVisibleAsync();
             var allResources = page.Locator(".resource-row-all .resource-row-link");
             await Assertions.Expect(allResources).ToContainTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(page.Locator(".resource-row-all.selected")).ToHaveCountAsync(1);
@@ -316,7 +316,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
             await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
-        }, useDefaultDensity: true);
+        });
     }
 
     [Fact]

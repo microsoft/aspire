@@ -165,7 +165,9 @@ export class AppHostCliRunner implements vscode.Disposable {
                 env: options.env,
                 stdoutCallback: (data) => { stdout.append(data); },
                 stderrCallback: (data) => { stderr.append(data); },
-                processExitCallback: completionCallback,
+                // Process exit can precede the final stdout/stderr chunks, especially on Windows.
+                // Only close guarantees complete output for JSON parsing and compatibility retries.
+                // https://nodejs.org/api/child_process.html#event-close
                 exitCallback: completionCallback,
                 errorCallback: (error) => {
                     settle(() => reject(new AspireCliNotInstalledError(error.message)));

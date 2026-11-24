@@ -1021,13 +1021,15 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("{myredis.bindings.tcp.scheme}", uriExpression.ValueExpression);
     }
 
-    [Fact]
-    public async Task RedisWithCertificateUsesTargetPortsForCommandLineArgs()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(12345)]
+    public async Task RedisWithCertificateUsesTargetPortsForCommandLineArgs(int? port)
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         using var cert = CreateTestCertificate();
 
-        var redis = builder.AddRedis("myredis", port: 12345)
+        var redis = builder.AddRedis("myredis", port: port)
             .WithLifetime(ContainerLifetime.Persistent)
             .WithHttpsCertificate(cert);
 
@@ -1036,10 +1038,22 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel));
 
+        var endpoints = redis.Resource.Annotations.OfType<EndpointAnnotation>().ToArray();
+        Assert.Equal(2, endpoints.Length);
+        var primaryEndpoint = Assert.Single(endpoints, e => e.Name == "tcp");
+        Assert.Equal(6380, primaryEndpoint.TargetPort);
+        Assert.Equal(port, primaryEndpoint.Port);
+        Assert.Equal("rediss", primaryEndpoint.UriScheme);
+        Assert.True(primaryEndpoint.TlsEnabled);
+        var secondaryEndpoint = Assert.Single(endpoints, e => e.Name == "secondary");
+        Assert.Equal(6379, secondaryEndpoint.TargetPort);
+        Assert.Null(secondaryEndpoint.Port);
+        Assert.False(secondaryEndpoint.TlsEnabled);
+
         var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource, app.Services).AsTask().WaitAsync(TimeSpan.FromSeconds(60));
 
-        Assert.Equal("6379", args[args.IndexOf("--tls-port") + 1]);
-        Assert.Equal("6380", args[args.IndexOf("--port") + 1]);
+        Assert.Equal("6380", args[args.IndexOf("--tls-port") + 1]);
+        Assert.Equal("6379", args[args.IndexOf("--port") + 1]);
     }
 
     [Fact]

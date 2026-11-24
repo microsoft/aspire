@@ -170,7 +170,16 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                                 return doubleFirst
                                     ? new GetRequestSpansResponse
                                     {
-                                        Items = [.. result.Items, .. result.Items.Where(span => span.Resource.ResourceKey == new ResourceKey(names[0], "TestId"))],
+                                        Items = [.. result.Items, .. result.Items.Where(span => span.Resource.ResourceKey == new ResourceKey(names[0], "TestId"))
+                                            .Select(span => new RequestSpanSummary
+                                            {
+                                                Resource = span.Resource,
+                                                TraceId = $"extra-{span.TraceId}",
+                                                Name = span.Name,
+                                                StartTime = span.StartTime,
+                                                Duration = span.Duration,
+                                                Status = span.Status
+                                            })],
                                         TotalItemCount = result.TotalItemCount + 20
                                     }
                                     : result;
@@ -235,9 +244,9 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
         foreach (var component in changed)
         {
-            component.WaitForAssertion(() => Assert.Equal("40 incoming", component.Find(".resource-row-insight-requests span").TextContent));
+            component.WaitForAssertion(() => Assert.Equal("40", component.Find(".resource-row-insight-requests span").TextContent));
         }
-        Assert.Equal(["40 incoming", "40 incoming"],
+        Assert.Equal(["40", "40"],
             cut.FindAll($"[data-resource-name='{names[0]}-TestId'] .resource-row-insight-requests span").Select(span => span.TextContent));
         await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(2, Volatile.Read(ref calls));
@@ -298,6 +307,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
 
     [Theory]
     [InlineData(false, 2)]
+    [InlineData(false, 20)]
     [InlineData(true, 20)]
     public async Task Canvas_SharedBoundedQueryFeedsDuplicateTagRowsAndExactScopedLinks(bool sampled, int sampleCount)
     {
@@ -343,9 +353,9 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                         Spans =
                         {
                             Enumerable.Range(1, sampleCount).Select(i =>
-                                CreateSpan(i.ToString(), i.ToString(), now, now.AddMilliseconds(i),
+                                CreateSpan(i <= 2 ? "1" : i.ToString(), i.ToString(), now, now.AddMilliseconds(i),
                                     kind: i == 1 ? Span.Types.SpanKind.Consumer : Span.Types.SpanKind.Server,
-                                    status: new Status { Code = i == 1 ? Status.Types.StatusCode.Error : Status.Types.StatusCode.Ok })),
+                                    status: new Status { Code = i <= 2 ? Status.Types.StatusCode.Error : Status.Types.StatusCode.Ok })),
                             CreateSpan("100", "100", now.AddMinutes(-6), now.AddMinutes(-6).AddMilliseconds(100), kind: Span.Types.SpanKind.Server),
                             CreateSpan("101", "101", now, now.AddMilliseconds(50), kind: Span.Types.SpanKind.Client)
                         }
@@ -364,15 +374,15 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         ResourceSetupHelpers.ToggleResourceList(cut);
 
         cut.WaitForAssertion(() => Assert.Equal(sampleCount >= 20 ? 6 : 4, cut.FindAll(".resource-row-insight").Count));
-        var expected = sampled ? new[] { "20+ incoming", "p95 19ms", "" } : ["2 incoming", ""];
+        var expected = sampled ? new[] { "1+", "19+", "19ms" } : sampleCount >= 20 ? ["1", "19", "19ms"] : ["1", "1"];
         Assert.Equal(expected.Concat(expected), cut.FindAll(".resource-row-insight").Select(link => link.TextContent.Trim()));
+        Assert.All(cut.FindAll(".resource-row-insight-requests"),
+            link => Assert.Equal(sampled ? "19+ incoming traces in the last 5 minutes"
+                : sampleCount >= 20 ? "19 incoming traces in the last 5 minutes" : "1 incoming trace in the last 5 minutes", link.GetAttribute("data-tooltip")));
         Assert.All(cut.FindAll(".resource-row-insight-latency"),
-            link => Assert.StartsWith(sampled ? "Sample p95 19ms." : "p95 19ms.", link.GetAttribute("aria-label")));
-        Assert.All(cut.FindAll(".resource-row-insight-failed"), link =>
-        {
-            Assert.StartsWith(sampled ? "1+ failed." : "1 failed.", link.GetAttribute("aria-label"));
-            Assert.Single(link.QuerySelectorAll("svg"));
-        });
+            link => Assert.Equal(sampled ? "Sample p95 latency: 19ms in the last 5 minutes" : "P95 latency: 19ms in the last 5 minutes", link.GetAttribute("data-tooltip")));
+        Assert.All(cut.FindAll(".resource-row-insight-failed"),
+            link => Assert.Equal(sampled ? "1+ failed traces in the last 5 minutes" : "1 failed trace in the last 5 minutes", link.GetAttribute("data-tooltip")));
         Assert.All(cut.FindAll(".resource-row-insight"), link =>
         {
             var url = new Uri(new Uri("http://localhost"), link.GetAttribute("href"));
@@ -382,10 +392,15 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
             Assert.Equal(KnownTraceFields.TimestampField, filters[0].Field);
             Assert.Equal(FilterCondition.GreaterThanOrEqual, filters[0].Condition);
             Assert.Equal(FilterCondition.LessThan, filters[1].Condition);
+            if (link.ClassList.Contains("resource-row-insight-failed"))
+            {
+                Assert.Equal(KnownTraceFields.StatusField, filters[2].Field);
+                Assert.Equal(FilterCondition.Equals, filters[2].Condition);
+                Assert.Equal(nameof(OtlpSpanStatusCode.Error), filters[2].Value);
+            }
             Assert.Equal(TimeSpan.FromMinutes(5), DateTime.Parse(filters[1].Value) - DateTime.Parse(filters[0].Value));
-            Assert.Contains("last 5 minutes", link.GetAttribute("aria-label"));
-            Assert.Contains("Refreshed", link.GetAttribute("data-tooltip"));
-            Assert.Equal(sampled, link.GetAttribute("data-tooltip")!.Contains("Counts are minimums", StringComparison.Ordinal));
+            Assert.Equal($"api-TestId: {link.GetAttribute("data-tooltip")}", link.GetAttribute("aria-label"));
+            Assert.Equal("true", Assert.Single(link.QuerySelectorAll("svg")).GetAttribute("aria-hidden"));
         });
         Assert.Equal(1, Volatile.Read(ref calls));
         Assert.All(cut.FindAll(".resource-row[data-resource-name='quiet'], .resource-row[data-resource-name='key']"),

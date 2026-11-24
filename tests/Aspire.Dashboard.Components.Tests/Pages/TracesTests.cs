@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Layout;
@@ -12,6 +13,8 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
@@ -157,7 +160,7 @@ public class TracesTests : DashboardTestContext
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         cut.WaitForAssertion(() => Assert.All(cut.FindAll(".trace-service-tag"), element => Assert.Contains("(1)", element.TextContent, StringComparison.Ordinal)));
 
@@ -183,7 +186,7 @@ public class TracesTests : DashboardTestContext
                 }
             }
         });
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         var refreshedResult = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
         {
@@ -236,7 +239,7 @@ public class TracesTests : DashboardTestContext
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
         var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
         {
             StartIndex = 0,
@@ -312,8 +315,74 @@ public class TracesTests : DashboardTestContext
         var cut = FluentUISetupHelpers.RenderMessageBarProviderWithPage<Traces>(this, viewport);
 
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
         cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
+    }
+
+    [Fact]
+    public async Task ResourcesLayout_SelectedResourceSendsTelemetryAfterPageOpened_ShowsOnlyThatResource()
+    {
+        SetupTracesServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker")],
+            resourceChannelProvider: () => channel));
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.TracesUrl("api"));
+
+        // The page opens before either resource has sent telemetry.
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Traces>(0);
+            builder.AddAttribute(1, nameof(Traces.ResourceName), "api");
+            builder.CloseComponent();
+        }));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var page = cut.FindComponent<Traces>();
+        var grid = page.FindComponent<AspireFluentDataGrid<TraceSummary>>();
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddTraceAsync(repository, "api", "trace-api");
+        // The page and the layout are notified by separate callbacks that can run in either order, so also wait for
+        // the layout's telemetry key that the grid queries.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal(["api"], page.Instance.TracesViewModel.ResourceKeys?.Select(key => key.Name) ?? []);
+        });
+        await AddTraceAsync(repository, "worker", "trace-worker");
+
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
+        {
+            StartIndex = 0,
+            Count = 100
+        }).AsTask());
+
+        Assert.Equal(["api"], result.Items.Select(item => item.RootResource.ResourceName));
+
+        static Task AddTraceAsync(SqliteTelemetryRepository repository, string name, string traceId)
+        {
+            // Without an instance ID, the telemetry resource's name matches the app model resource's name.
+            var resource = CreateResource(name);
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            var timestamp = DateTime.UnixEpoch;
+            return repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = resource,
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = CreateScope(),
+                            Spans = { CreateSpan(traceId: traceId, spanId: $"{traceId}-span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
+                        }
+                    }
+                }
+            });
+        }
     }
 
     private void SetupTracesServices()
