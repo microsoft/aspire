@@ -88,6 +88,13 @@ internal static class SharedAIHelpers
             .ToList();
         var promptContext = new PromptContext();
 
+        // GetLimitFromEndWithSummary stops at the first entry that doesn't fit, so a single newest log with many
+        // large attributes would otherwise hide every log. Bound each entry's attributes to a quarter of the budget:
+        // the budget is in tokens and EstimateTokenCount counts four characters per token, so maximumTokenLength
+        // characters is a quarter of it. Message and exception are each capped at MaximumStringLength, so a bounded
+        // entry always fits.
+        var maximumAttributesLength = maximumTokenLength;
+
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
             logRecords,
             logRecords.Count,
@@ -95,7 +102,7 @@ internal static class SharedAIHelpers
             maximumTokenLength,
             "log entry",
             "log entries",
-            i => GetLogEntryDto(i, promptContext, getResourceName, dashboardBaseUrl),
+            i => GetLogEntryDto(i, promptContext, getResourceName, dashboardBaseUrl, maximumAttributesLength),
             EstimateSerializedJsonTokenSize);
 
         var jsonArray = new JsonArray(trimmedItems.ToArray());
@@ -984,6 +991,16 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
+        return GetLogEntryDto(logEntry, context, getResourceName, dashboardBaseUrl, maximumAttributesLength: null);
+    }
+
+    private static JsonObject GetLogEntryDto(
+        OtlpLogEntryDto logEntry,
+        PromptContext context,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl,
+        int? maximumAttributesLength)
+    {
         // `aspire otel logs --format json` uses this shape;
         // keep docs/specs/cli-output-formats.md in sync when changing it.
         var exceptionText = GetExceptionText(logEntry);
@@ -991,11 +1008,35 @@ internal static class SharedAIHelpers
         var logId = long.TryParse(logIdString, CultureInfo.InvariantCulture, out var parsedLogId) ? parsedLogId : (long?)null;
         var resourceName = getResourceName?.Invoke(logEntry.Resource) ?? logEntry.Resource.ResourceName;
 
+        var attributes = GetFilteredAttributes(logEntry.LogRecord.Attributes)
+            .Select(a => (Key: a.Key!, Value: GetAttributeValue(a)))
+            .ToList();
+
+        // Decide whether to bound attributes before any value is registered with the prompt context.
+        // Registered values become "Duplicate of ..." references in later entries, so registering a value
+        // that is then shortened or dropped here would point those references at data that isn't in the output.
+        var attributesTruncated = maximumAttributesLength is { } maxLength
+            && attributes.Sum(a => EstimateAttributeLength(a.Key, LimitLength(a.Value, MaximumStringLength))) > maxLength;
+
         var attributesObject = new JsonObject();
-        foreach (var attr in GetFilteredAttributes(logEntry.LogRecord.Attributes))
+        var attributesLength = 0;
+        foreach (var (key, value) in attributes)
         {
-            var attrValue = GetAttributeValue(attr);
-            attributesObject[attr.Key!] = context.AddValue(attrValue, id => $@"Duplicate of attribute ""{id.Key}"" for log entry {id.LogId}", (LogId: logId, attr.Key));
+            if (attributesTruncated)
+            {
+                var boundedValue = LimitLength(value, MaximumSummaryStringLength);
+                attributesLength += EstimateAttributeLength(key, boundedValue);
+                if (attributesLength > maximumAttributesLength)
+                {
+                    break;
+                }
+
+                attributesObject[key] = boundedValue;
+            }
+            else
+            {
+                attributesObject[key] = context.AddValue(value, id => $@"Duplicate of attribute ""{id.Key}"" for log entry {id.LogId}", (LogId: logId, Key: key));
+            }
         }
 
         var message = GetLogMessage(logEntry.LogRecord) ?? string.Empty;
@@ -1008,6 +1049,9 @@ internal static class SharedAIHelpers
             ["severity"] = logEntry.LogRecord.SeverityText ?? "Unknown",
             ["resourceName"] = resourceName,
             ["attributes"] = attributesObject,
+            // Tells the agent that attribute values were shortened or omitted; the full entry is available
+            // from the dashboard (dashboardUrl).
+            ["attributesTruncated"] = attributesTruncated ? true : null,
             ["exception"] = context.AddValue(exceptionText, id => $@"Duplicate of ""exception"" for log entry {id}", logId),
             ["source"] = logEntry.ScopeName
         };
@@ -1018,6 +1062,12 @@ internal static class SharedAIHelpers
         }
 
         return StripNullProperties(log);
+    }
+
+    // Approximates the serialized size of "key":"value", including quotes, colon and separator.
+    private static int EstimateAttributeLength(string key, string value)
+    {
+        return key.Length + value.Length + 6;
     }
 
     /// <summary>

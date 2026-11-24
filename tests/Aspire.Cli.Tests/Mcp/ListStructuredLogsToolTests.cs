@@ -702,6 +702,43 @@ public class ListStructuredLogsToolTests
         Assert.StartsWith("Returned latest ", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ListStructuredLogsTool_BoundsAttributes_WhenNewestLogHasLargeAttributes()
+    {
+        // Nine distinct attribute values at the 2,048-character cap exceed the whole list budget, so without
+        // bounding the newest log would not fit and the response would contain no logs at all.
+        var resourceLogs = CreateResourceLogs("api", (0, "older small"), (1, "newest large"));
+        var newestLog = resourceLogs.ScopeLogs![0].LogRecords![1];
+        newestLog.Attributes =
+        [
+            .. newestLog.Attributes!,
+            .. Enumerable.Range(0, 9).Select(index => new OtlpKeyValueJson
+            {
+                Key = $"large.{index}",
+                Value = new OtlpAnyValueJson { StringValue = new string((char)('a' + index), 2048) }
+            })
+        ];
+        using var handler = CreateHandler(CreateResourceLogsResponse(resourceLogs));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(text.Length, 1, 20_000);
+        Assert.StartsWith("Returned 2 log entries.", text, StringComparison.Ordinal);
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal(["older small", "newest large"], logs.Select(log => log!["message"]!.GetValue<string>()));
+        Assert.Null(logs[0]!["attributesTruncated"]);
+
+        var newest = logs[1]!;
+        Assert.Equal(1, newest["logId"]!.GetValue<long>());
+        Assert.Equal("Information", newest["severity"]!.GetValue<string>());
+        Assert.True(newest["attributesTruncated"]!.GetValue<bool>());
+        var attributes = newest["attributes"]!.AsObject();
+        Assert.Equal(["large.0", "large.1", "large.2", "large.3", "large.4", "large.5", "large.6"], attributes.Select(a => a.Key));
+        Assert.Equal($"{new string('a', 512)}...[TRUNCATED]", attributes["large.0"]!.GetValue<string>());
+    }
+
     [Theory]
     [InlineData("""{"severity":"Fatal"}""", "Argument 'severity' must be one of: Trace, Debug, Information, Warning, Error, Critical.")]
     [InlineData("""{"limit":801}""", "Argument 'limit' must be an integer from 1 through 800.")]
