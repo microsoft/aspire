@@ -575,6 +575,34 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task InitialStatesPublishedCompletesAfterEveryResourcePublishesInitialState()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        builder.AddResource(new CustomResource("first"));
+        builder.AddResource(new CustomResource("second"));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        var initialStatesPublished = resourceNotificationService.WaitForInitialStatesPublishedAsync(CancellationToken.None);
+        Assert.False(initialStatesPublished.IsCompleted);
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+        await initialStatesPublished.DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("first", out _));
+        Assert.True(resourceNotificationService.TryGetCurrentState("second", out _));
+    }
+
+    [Fact]
     public async Task ParentPropertySetOnChildResource()
     {
         var builder = DistributedApplication.CreateBuilder();

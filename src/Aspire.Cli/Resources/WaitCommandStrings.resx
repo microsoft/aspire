@@ -118,10 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Wait for a resource to reach a target status</value>
+    <value>Wait for one or more resources to reach a target status</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
-    <value>The name of the resource to wait for</value>
+    <value>The names of the resources to wait for</value>
   </data>
   <data name="StatusOptionDescription" xml:space="preserve">
     <value>The target status to wait for (healthy, up, down). Defaults to healthy.</value>
@@ -152,5 +152,87 @@
   </data>
   <data name="SelectAppHostAction" xml:space="preserve">
     <value>connect to</value>
+  </data>
+  <data name="AllOptionDescription" xml:space="preserve">
+    <value>Wait for every resource the AppHost starts. Resources that wait for an explicit start are skipped.</value>
+  </data>
+  <data name="FormatOptionDescription" xml:space="preserve">
+    <value>Output format (Table or Json)</value>
+  </data>
+  <data name="ResourceOrAllRequired" xml:space="preserve">
+    <value>Specify one or more resource names, or use --all.</value>
+  </data>
+  <data name="ResourceAndAllConflict" xml:space="preserve">
+    <value>Resource names cannot be combined with --all.</value>
+  </data>
+  <data name="WaitingForResources" xml:space="preserve">
+    <value>Waiting for {0} resources to be {1}...</value>
+    <comment>{0} is the number of resources; {1} is the target status.</comment>
+  </data>
+  <data name="WaitingForAllResources" xml:space="preserve">
+    <value>Waiting for all resources to be {0}...</value>
+    <comment>{0} is the target status.</comment>
+  </data>
+  <data name="ResourceCompleted" xml:space="preserve">
+    <value>Resource '{0}' completed successfully (exit code 0). ({1:F1}s)</value>
+    <comment>{0} is the resource name; {1} is the elapsed time in seconds.</comment>
+  </data>
+  <data name="StateWithExitCode" xml:space="preserve">
+    <value>{0} (exit code: {1})</value>
+    <comment>{0} is the resource state; {1} is the process exit code.</comment>
+  </data>
+  <data name="UnknownState" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="ResourceLineReady" xml:space="preserve">
+    <value>{0}: {1}</value>
+    <comment>{0} is the resource name; {1} is the target status.</comment>
+  </data>
+  <data name="ResourceLineCompleted" xml:space="preserve">
+    <value>{0}: completed (exit code 0)</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="ResourceLineFailed" xml:space="preserve">
+    <value>{0}: failed, {1}</value>
+    <comment>{0} is the resource name; {1} is the resource state or error.</comment>
+  </data>
+  <data name="ResourceLineNotFound" xml:space="preserve">
+    <value>{0}: not found</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="ResourceLineTimedOut" xml:space="preserve">
+    <value>{0}: not {1} before the timeout, {2}</value>
+    <comment>{0} is the resource name; {1} is the target status; {2} is the current resource state.</comment>
+  </data>
+  <data name="ResourceLineCancelled" xml:space="preserve">
+    <value>{0}: not {1}, stopped waiting after another resource failed, {2}</value>
+    <comment>{0} is the resource name; {1} is the target status; {2} is the current resource state.</comment>
+  </data>
+  <data name="ResourceLineSkipped" xml:space="preserve">
+    <value>{0}: skipped, waiting for an explicit start</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="ResourceLineWithEndpoints" xml:space="preserve">
+    <value>{0} - {1}</value>
+    <comment>{0} is the resource line; {1} is a comma-separated list of endpoint URLs.</comment>
+  </data>
+  <data name="AllResourcesDone" xml:space="preserve">
+    <value>Done waiting for {0} resources. ({1:F1}s)</value>
+    <comment>{0} is the number of resources waited for; {1} is the elapsed time in seconds.</comment>
+  </data>
+  <data name="ResourcesFailed" xml:space="preserve">
+    <value>{0} of {1} resources failed.</value>
+    <comment>{0} is the number of failed resources; {1} is the number of resources waited for.</comment>
+  </data>
+  <data name="ResourcesTimedOut" xml:space="preserve">
+    <value>{0} of {1} resources were not {2} after {3}s.</value>
+    <comment>{0} is the number of resources that timed out; {1} is the number of resources waited for; {2} is the target status; {3} is the timeout in seconds.</comment>
+  </data>
+  <data name="NoResourcesToWaitFor" xml:space="preserve">
+    <value>No resources to wait for.</value>
+  </data>
+  <data name="ResourceInventoryTimedOut" xml:space="preserve">
+    <value>Timed out after {0} seconds waiting for the AppHost to report its resources.</value>
+    <comment>{0} is the timeout in seconds.</comment>
   </data>
 </root>

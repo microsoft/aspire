@@ -26,6 +26,20 @@ public class EFMigrationConfigurationTests
     }
 
     [Fact]
+    public void MigrationResourceIsExplicitStartUnlessUpdatedOnStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var manual = builder.AddProject<Projects.ServiceA>("manualproject")
+            .AddEFMigrations("manualmigrations", typeof(TestDbContext).FullName!);
+        var onStart = builder.AddProject<Projects.ServiceA>("startupproject")
+            .AddEFMigrations("startupmigrations", typeof(TestDbContext).FullName!)
+            .RunDatabaseUpdateOnStart();
+
+        Assert.True(manual.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.False(onStart.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
+    [Fact]
     public void PublishAsMigrationScriptSetsOption()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

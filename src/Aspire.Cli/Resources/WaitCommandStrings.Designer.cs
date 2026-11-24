@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Wait for a resource to reach a target status.
+        ///   Looks up a localized string similar to Wait for one or more resources to reach a target status.
         /// </summary>
         internal static string Description {
             get {
@@ -79,7 +79,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The name of the resource to wait for.
+        ///   Looks up a localized string similar to The names of the resources to wait for.
         /// </summary>
         internal static string ResourceArgumentDescription {
             get {
@@ -165,6 +165,204 @@ namespace Aspire.Cli.Resources {
         internal static string WaitTimedOut {
             get {
                 return ResourceManager.GetString("WaitTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Wait for every resource the AppHost starts. Resources that wait for an explicit start are skipped..
+        /// </summary>
+        internal static string AllOptionDescription {
+            get {
+                return ResourceManager.GetString("AllOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Output format (Table or Json).
+        /// </summary>
+        internal static string FormatOptionDescription {
+            get {
+                return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Specify one or more resource names, or use --all..
+        /// </summary>
+        internal static string ResourceOrAllRequired {
+            get {
+                return ResourceManager.GetString("ResourceOrAllRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource names cannot be combined with --all..
+        /// </summary>
+        internal static string ResourceAndAllConflict {
+            get {
+                return ResourceManager.GetString("ResourceAndAllConflict", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for {0} resources to be {1}....
+        /// </summary>
+        internal static string WaitingForResources {
+            get {
+                return ResourceManager.GetString("WaitingForResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for all resources to be {0}....
+        /// </summary>
+        internal static string WaitingForAllResources {
+            get {
+                return ResourceManager.GetString("WaitingForAllResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource &apos;{0}&apos; completed successfully (exit code 0). ({1:F1}s).
+        /// </summary>
+        internal static string ResourceCompleted {
+            get {
+                return ResourceManager.GetString("ResourceCompleted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} (exit code: {1}).
+        /// </summary>
+        internal static string StateWithExitCode {
+            get {
+                return ResourceManager.GetString("StateWithExitCode", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unknown.
+        /// </summary>
+        internal static string UnknownState {
+            get {
+                return ResourceManager.GetString("UnknownState", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: {1}.
+        /// </summary>
+        internal static string ResourceLineReady {
+            get {
+                return ResourceManager.GetString("ResourceLineReady", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: completed (exit code 0).
+        /// </summary>
+        internal static string ResourceLineCompleted {
+            get {
+                return ResourceManager.GetString("ResourceLineCompleted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: failed, {1}.
+        /// </summary>
+        internal static string ResourceLineFailed {
+            get {
+                return ResourceManager.GetString("ResourceLineFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: not found.
+        /// </summary>
+        internal static string ResourceLineNotFound {
+            get {
+                return ResourceManager.GetString("ResourceLineNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: not {1} before the timeout, {2}.
+        /// </summary>
+        internal static string ResourceLineTimedOut {
+            get {
+                return ResourceManager.GetString("ResourceLineTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: not {1}, stopped waiting after another resource failed, {2}.
+        /// </summary>
+        internal static string ResourceLineCancelled {
+            get {
+                return ResourceManager.GetString("ResourceLineCancelled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: skipped, waiting for an explicit start.
+        /// </summary>
+        internal static string ResourceLineSkipped {
+            get {
+                return ResourceManager.GetString("ResourceLineSkipped", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} - {1}.
+        /// </summary>
+        internal static string ResourceLineWithEndpoints {
+            get {
+                return ResourceManager.GetString("ResourceLineWithEndpoints", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Done waiting for {0} resources. ({1:F1}s).
+        /// </summary>
+        internal static string AllResourcesDone {
+            get {
+                return ResourceManager.GetString("AllResourcesDone", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} of {1} resources failed..
+        /// </summary>
+        internal static string ResourcesFailed {
+            get {
+                return ResourceManager.GetString("ResourcesFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} of {1} resources were not {2} after {3}s..
+        /// </summary>
+        internal static string ResourcesTimedOut {
+            get {
+                return ResourceManager.GetString("ResourcesTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No resources to wait for..
+        /// </summary>
+        internal static string NoResourcesToWaitFor {
+            get {
+                return ResourceManager.GetString("NoResourcesToWaitFor", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Timed out after {0} seconds waiting for the AppHost to report its resources..
+        /// </summary>
+        internal static string ResourceInventoryTimedOut {
+            get {
+                return ResourceManager.GetString("ResourceInventoryTimedOut", resourceCulture);
             }
         }
     }

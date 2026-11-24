@@ -394,6 +394,27 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
+    public async Task<bool> WaitForResourcesInitializedAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_capabilities.Contains(AuxiliaryBackchannelCapabilities.ResourceInventory_V1))
+        {
+            return false;
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Waiting for AppHost resources to publish their initial state");
+
+        var response = await rpc.InvokeWithProfilingAsync<WaitForResourcesInitializedResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "WaitForResourcesInitializedAsync",
+            [new WaitForResourcesInitializedRequest()],
+            cancellationToken).ConfigureAwait(false);
+        return response?.IsInitialized ?? false;
+    }
+
+    /// <inheritdoc />
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
         if (SupportsV2)

@@ -140,6 +140,9 @@ public static class BrowserLogsBuilderExtensions
         builder.ApplicationBuilder.AddResource(browserLogsResource)
             .WithParentRelationship(parentResource)
             .ExcludeFromManifest()
+            // Browser sessions start only from the open-tracked-browser command. Marking the resource as
+            // explicit-start lets clients such as `aspire wait --all` skip it instead of waiting for it to run.
+            .WithExplicitStart()
             .WithIconName("GlobeDesktop")
             .WithInitialState(new CustomResourceSnapshot
             {

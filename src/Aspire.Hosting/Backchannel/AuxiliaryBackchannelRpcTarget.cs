@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
@@ -58,7 +59,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 AuxiliaryBackchannelCapabilities.V2,
                 AuxiliaryBackchannelCapabilities.V3,
                 AuxiliaryBackchannelCapabilities.Terminals_V1,
-                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1,
+                AuxiliaryBackchannelCapabilities.ResourceInventory_V1
             ]
         });
     }
@@ -706,7 +708,20 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         if (resourceEvent.Snapshot.HealthStatus != HealthStatus.Healthy)
         {
-            throw new DistributedApplicationException($"Stopped waiting for resource '{target.DisplayName}' to become healthy because it failed to start.");
+            // Return the snapshot that stopped the wait instead of only an error. Callers read the snapshots on a
+            // separate stream, so the state and exit code here are the only reliable way for them to tell a
+            // resource that ran to completion (for example, a migration that exited with 0) from one that crashed.
+            return new WaitForResourceResponse
+            {
+                Success = false,
+                State = resourceEvent.Snapshot.State?.Text,
+                HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString(),
+                ExitCode = resourceEvent.Snapshot.ExitCode,
+                // A resource that ran and then exited did start, so name the state and exit code instead.
+                ErrorMessage = resourceEvent.Snapshot.ExitCode is int exitCode
+                    ? $"Stopped waiting for resource '{target.DisplayName}' to become healthy because it stopped in state '{resourceEvent.Snapshot.State?.Text}' with exit code {exitCode}."
+                    : $"Stopped waiting for resource '{target.DisplayName}' to become healthy because it failed to start."
+            };
         }
 
         resourceEvent = await WaitForResourceEventAsync(
@@ -746,6 +761,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Success = isRunning,
             State = state,
             HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString(),
+            ExitCode = resourceEvent.Snapshot.ExitCode,
             ErrorMessage = isRunning ? null : $"Resource '{target.DisplayName}' failed to reach 'Running' state. Current state: {state ?? "Unknown"}."
         };
     }
@@ -763,7 +779,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             Success = true,
             State = resourceEvent.Snapshot.State?.Text,
-            HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString()
+            HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString(),
+            ExitCode = resourceEvent.Snapshot.ExitCode
         };
     }
 
@@ -972,6 +989,22 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var startupState = serviceProvider.GetRequiredService<AppHostStartupState>();
         await startupState.WaitForReadyAsync(cancellationToken).ConfigureAwait(false);
         return new WaitForAppHostReadyResponse { IsReady = true };
+    }
+
+    /// <summary>
+    /// Waits until every resource in the application model has published its initial snapshot, so a following
+    /// resource listing contains the complete inventory.
+    /// </summary>
+    /// <param name="request">The request (currently unused, for future expansion).</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The resource initialization state.</returns>
+    public async Task<WaitForResourcesInitializedResponse> WaitForResourcesInitializedAsync(WaitForResourcesInitializedRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WaitForResourcesInitializedAsync), streaming: false, request?.TraceContext);
+
+        var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
+        await notificationService.WaitForInitialStatesPublishedAsync(cancellationToken).ConfigureAwait(false);
+        return new WaitForResourcesInitializedResponse { IsInitialized = true };
     }
 
     /// <summary>
@@ -1215,6 +1248,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             WaitingFor = waitingFor,
             StateStyle = snapshot.State?.Style,
             IsHidden = snapshot.IsHidden,
+            IsExplicitStart = IsExplicitStartResource(resource),
             HealthStatus = snapshot.HealthStatus?.ToString(),
             ExitCode = snapshot.ExitCode,
             CreatedAt = snapshot.CreationTimeStamp,
@@ -1229,6 +1263,35 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             McpServer = mcpServer,
             Commands = commands
         };
+    }
+
+    /// <summary>
+    /// Determines whether a resource stays idle until something explicitly starts it.
+    /// </summary>
+    /// <remarks>
+    /// A child without its own lifetime, such as a database on a server container, follows its parent's state
+    /// (see <see cref="ApplicationOrchestrator.ResourceHasOwnLifetime(IResource)"/>). When an ancestor
+    /// that owns that lifetime uses <c>WithExplicitStart</c>, the child cannot start either, so it is reported as
+    /// explicit-start too. Children that run on their own, such as a container parented to another resource, only
+    /// report their own annotation.
+    /// </remarks>
+    internal static bool IsExplicitStartResource(IResource resource)
+    {
+        var current = resource;
+        while (true)
+        {
+            if (current.HasAnnotationOfType<ExplicitStartupAnnotation>())
+            {
+                return true;
+            }
+
+            if (ApplicationOrchestrator.ResourceHasOwnLifetime(current) || current is not IResourceWithParent { Parent: var parent })
+            {
+                return false;
+            }
+
+            current = parent;
+        }
     }
 
     /// <summary>

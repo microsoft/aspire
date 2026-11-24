@@ -404,6 +404,81 @@ authoritative MSBuild `TargetPath` produced with the coordinated build inputs, a
 Debugger clients must verify that the reported process matches this authoritative project output
 before attaching.
 
+### `aspire wait`
+
+`aspire wait <resource>...` waits for one or more named resources, and `aspire wait --all` waits for every
+resource the AppHost starts. All resources share the `--timeout` budget and are waited for concurrently.
+
+A resource is done when it reaches the `--status` target (`healthy` by default). For `healthy` and `up`,
+a resource that exits with code 0, such as a database migration, also counts as done and is reported
+as `completed`. The first resource that fails, for example by exiting with a nonzero code, stops the
+remaining waits, which are reported as `cancelled`. A resource without health checks is healthy as soon
+as it runs, so exits are also watched until the whole wait ends: a resource that exits after its own
+wait succeeded is still reported as `completed` or `failure`. A resource can stop before its exit code is
+reported; such a stop is neither `completed` nor `failure`, so the wait continues until the exit code arrives
+and reports `timeout` if it is still unknown when `--timeout` expires. `--all` first waits until the AppHost reports
+every resource, so it does not miss resources that are still being registered while the AppHost starts.
+This wait counts toward `--timeout`. `--all` then excludes hidden resources and skips explicit-start
+resources, such as those using `WithExplicitStart`, that have not been started yet. This includes
+child resources that follow such a parent's lifetime, such as a database on an explicit-start server. An
+explicit-start resource that is already running is waited on. AppHosts that predate the `resource-inventory.v1`
+backchannel capability do not report explicit-start resources, so `--all` skips resources whose state is
+`NotStarted` instead.
+
+Without `--format json`, a single resource name keeps the original one-line success or error message.
+Multiple names and `--all` print one line per resource with its final state and non-internal endpoint
+URLs, followed by a summary:
+
+```text
+✅ api: healthy - https://localhost:7001, http://localhost:5001
+✅ migrations: completed (exit code 0)
+ℹ️ admin: skipped, waiting for an explicit start
+✅ Done waiting for 2 resources. (12.4s)
+```
+
+`aspire wait --format json` emits one document after every wait ends:
+
+```json
+{
+  "outcome": "failure",
+  "status": "healthy",
+  "resources": [
+    {
+      "name": "api-x7k2q",
+      "displayName": "api",
+      "outcome": "cancelled",
+      "state": "Starting",
+      "urls": []
+    },
+    {
+      "name": "worker",
+      "displayName": "worker",
+      "outcome": "failure",
+      "state": "Exited",
+      "exitCode": 1,
+      "urls": [],
+      "error": "Stopped waiting for resource 'worker' to become healthy because it failed to start."
+    }
+  ]
+}
+```
+
+| Field | Description |
+| ----- | ----------- |
+| `outcome` | `success`, `failure`, or `timeout` for the whole wait. Matches the exit code. |
+| `status` | Target status: `healthy`, `up`, or `down`. |
+| `resources[].name` | Runtime resource name, or the requested name when the resource was not found. |
+| `resources[].displayName` | User-facing resource name, when available. |
+| `resources[].outcome` | `success`, `completed`, `skipped`, `timeout`, `cancelled`, or `failure`. |
+| `resources[].state` | Resource state when the wait ended. |
+| `resources[].healthStatus` | Health status, when available. |
+| `resources[].exitCode` | Process exit code, when the resource has exited. |
+| `resources[].urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`, as in `aspire describe`. |
+| `resources[].error` | Failure detail, when available. |
+
+The exit code is `0` when every waited resource is done, `18` when any resource fails, and `17` when
+none failed but at least one timed out.
+
 ## Logs
 
 ### `aspire logs`

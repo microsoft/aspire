@@ -29,6 +29,7 @@ public class ResourceNotificationService : IDisposable
     private readonly IServiceProvider _serviceProvider;
     private readonly CancellationTokenSource _disposing = new();
     private readonly ResourceLoggerService _resourceLoggerService;
+    private readonly TaskCompletionSource _initialStatesPublished = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private Action<ResourceEvent>? OnResourceUpdated { get; set; }
     private IConfiguration? Configuration => _serviceProvider.GetService<IConfiguration>();
@@ -84,6 +85,21 @@ public class ResourceNotificationService : IDisposable
     {
         public object? GetService(Type serviceType) => null;
     }
+
+    /// <summary>
+    /// Records that every resource in the application model has published its initial snapshot.
+    /// </summary>
+    internal void MarkInitialStatesPublished() => _initialStatesPublished.TrySetResult();
+
+    /// <summary>
+    /// Waits until every resource in the application model has published its initial snapshot.
+    /// </summary>
+    /// <remarks>
+    /// Before this completes, <see cref="TryGetCurrentState"/> can miss resources that have not published yet,
+    /// so a client that lists resources early would see a partial inventory.
+    /// </remarks>
+    internal Task WaitForInitialStatesPublishedAsync(CancellationToken cancellationToken) =>
+        _initialStatesPublished.Task.WaitAsync(cancellationToken);
 
     /// <summary>
     /// Waits for a resource to reach the specified state. See <see cref="KnownResourceStates"/> for common states.

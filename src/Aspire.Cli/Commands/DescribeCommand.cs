@@ -476,7 +476,7 @@ internal sealed class DescribeCommand : BaseCommand
         };
     }
 
-    private static IOrderedEnumerable<ResourceSnapshotUrl> OrderUrls(IEnumerable<ResourceSnapshotUrl> urls) =>
+    internal static IOrderedEnumerable<ResourceSnapshotUrl> OrderUrls(IEnumerable<ResourceSnapshotUrl> urls) =>
         urls.OrderByDescending(e => e.DisplayProperties?.SortOrder ?? 0)
             .ThenByDescending(e => e.Url.StartsWith("https", StringComparison.OrdinalIgnoreCase))
             .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase);

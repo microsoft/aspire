@@ -166,6 +166,60 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_ReportsExplicitStartAfterResourcesInitialize()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddResource(new CustomResource("auto"));
+        var manual = builder.AddResource(new CustomResource("manual")).WithExplicitStart();
+        var manualChild = builder.AddResource(new CustomChildResource("manual-child", manual.Resource));
+        builder.AddResource(new CustomChildResource("manual-grandchild", manualChild.Resource));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var initialized = await target.WaitForResourcesInitializedAsync().DefaultTimeout();
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        Assert.True(initialized.IsInitialized);
+        Assert.False(Assert.Single(result, r => r.Name == "auto").IsExplicitStart);
+        Assert.True(Assert.Single(result, r => r.Name == "manual").IsExplicitStart);
+        Assert.True(Assert.Single(result, r => r.Name == "manual-child").IsExplicitStart);
+        Assert.True(Assert.Single(result, r => r.Name == "manual-grandchild").IsExplicitStart);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public void IsExplicitStartResource_InheritsOnlyFromParentThatOwnsChildLifetime()
+    {
+        // Mirrors AddPostgres(...).WithExplicitStart().AddDatabase(...): the database has no lifetime of its own,
+        // so it cannot start until the server does. A container parented to the server runs on its own.
+        var server = new ContainerResource("server");
+        server.Annotations.Add(new ContainerImageAnnotation { Image = "server" });
+        server.Annotations.Add(new ExplicitStartupAnnotation());
+        var database = new CustomChildResource("database", server);
+        var sidecar = new CustomChildContainerResource("sidecar", server);
+        sidecar.Annotations.Add(new ContainerImageAnnotation { Image = "sidecar" });
+        var sidecarDatabase = new CustomChildResource("sidecar-database", sidecar);
+        var manualSidecar = new CustomChildContainerResource("manual-sidecar", server);
+        manualSidecar.Annotations.Add(new ContainerImageAnnotation { Image = "manual-sidecar" });
+        manualSidecar.Annotations.Add(new ExplicitStartupAnnotation());
+
+        Assert.True(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(server));
+        Assert.True(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(database));
+        Assert.False(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(sidecar));
+        Assert.False(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(sidecarDatabase));
+        Assert.True(AuxiliaryBackchannelRpcTarget.IsExplicitStartResource(manualSidecar));
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_MapsSnapshotData()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -1290,6 +1344,51 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await app.StopAsync().DefaultTimeout();
     }
 
+    [Theory]
+    [InlineData("healthy")]
+    [InlineData("up")]
+    public async Task WaitForResourceAsync_ReturnsStateAndExitCodeWhenResourceFinishes(string status)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("migrations"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Finished, KnownResourceStateStyles.Success),
+            ExitCode = 0
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.WaitForResourceAsync(new WaitForResourceRequest
+        {
+            ResourceName = custom.Resource.Name,
+            Status = status,
+            TimeoutSeconds = 30
+        }).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(result.TimedOut);
+        Assert.Equal(KnownResourceStates.Finished, result.State);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            status == "healthy"
+                ? "Stopped waiting for resource 'migrations' to become healthy because it stopped in state 'Finished' with exit code 0."
+                : "Resource 'migrations' failed to reach 'Running' state. Current state: Finished.",
+            result.ErrorMessage);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
     [Fact]
     public async Task GetResourceSnapshotsAsync_MapsNonStringPropertiesAsStringsForLegacyCallers()
     {
@@ -1642,6 +1741,16 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
     private sealed class CustomResourceWithEnvironment(string name) : Resource(name), IResourceWithEnvironment
     {
+    }
+
+    private sealed class CustomChildResource(string name, IResource parent) : Resource(name), IResourceWithParent
+    {
+        public IResource Parent { get; } = parent;
+    }
+
+    private sealed class CustomChildContainerResource(string name, IResource parent) : ContainerResource(name), IResourceWithParent
+    {
+        public IResource Parent { get; } = parent;
     }
 
     private sealed class CustomResourceWithEndpoints(string name) : Resource(name), IResourceWithEndpoints

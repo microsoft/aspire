@@ -62,6 +62,13 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public Func<CancellationToken, Task<WaitForAppHostReadyResponse?>>? WaitForAppHostReadyHandler { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the fake AppHost advertises the resource inventory capability. When it does,
+    /// WaitForResourcesInitializedAsync awaits <see cref="WaitForResourcesInitializedHandler"/> if set.
+    /// </summary>
+    public bool SupportsResourceInventoryV1 { get; set; }
+    public Func<CancellationToken, Task>? WaitForResourcesInitializedHandler { get; set; }
+
+    /// <summary>
     /// Gets or sets the log lines to return from GetResourceLogsAsync.
     /// </summary>
     public List<ResourceLogLine> LogLines { get; set; } = [];
@@ -172,6 +179,21 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         }
 
         return Task.FromResult(WaitForAppHostReadyResponse);
+    }
+
+    public async Task<bool> WaitForResourcesInitializedAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsResourceInventoryV1)
+        {
+            return false;
+        }
+
+        if (WaitForResourcesInitializedHandler is not null)
+        {
+            await WaitForResourcesInitializedHandler(cancellationToken).ConfigureAwait(false);
+        }
+
+        return true;
     }
 
     public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
