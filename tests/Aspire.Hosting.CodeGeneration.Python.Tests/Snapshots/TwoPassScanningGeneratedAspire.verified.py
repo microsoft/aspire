@@ -7801,6 +7801,10 @@ class AbstractResource(abc.ABC):
         """Specifies the icon to use when displaying the resource in the dashboard."""
 
     @abc.abstractmethod
+    def with_resource_icon(self, icon_path: str) -> typing.Self:
+        """Specifies a custom image to display for the resource in the dashboard."""
+
+    @abc.abstractmethod
     def exclude_from_mcp(self) -> typing.Self:
         """Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry."""
 
@@ -8239,6 +8243,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     child_relationship: AbstractResource
     resource_type_display_name: str
     icon_name: str | tuple[str, IconVariant]
+    resource_icon: str
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
     hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
@@ -8586,6 +8591,17 @@ class _BaseResource(AbstractResource):
             rpc_args['iconVariant'] = icon_variant
         result = self._client.invoke_capability(
             'Aspire.Hosting/withIconName',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_resource_icon(self, icon_path: str) -> typing.Self:
+        """Specifies a custom image to display for the resource in the dashboard."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['iconPath'] = icon_path
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withResourceIcon',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9226,6 +9242,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withIconName', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'icon_name'. Expected: str or (str, IconVariant)")
+        if (_resource_icon := kwargs.pop("resource_icon", None)) is not None:
+            if _validate_type(_resource_icon, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["iconPath"] = typing.cast(str, _resource_icon)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withResourceIcon', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'resource_icon'. Expected: str")
         if _exclude_from_mcp := kwargs.pop("exclude_from_mcp", None):
             if _exclude_from_mcp is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

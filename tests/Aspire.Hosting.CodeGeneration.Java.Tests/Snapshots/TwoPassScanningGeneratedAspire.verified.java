@@ -3369,6 +3369,15 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public CSharpAppResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
+        return this;
+    }
+
     /** Configures the compute environment for the compute resource. */
     public CSharpAppResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -5941,6 +5950,15 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public ContainerRegistryResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
+        return this;
+    }
+
     /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public ContainerRegistryResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -7885,6 +7903,15 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("iconVariant", AspireClient.serializeValue(iconVariant));
         }
         getClient().invokeCapability("Aspire.Hosting/withIconName", reqArgs);
+        return this;
+    }
+
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public ContainerResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
         return this;
     }
 
@@ -10732,6 +10759,15 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public DotnetToolResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
+        return this;
+    }
+
     /** Configures the compute environment for the compute resource. */
     public DotnetToolResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -13304,6 +13340,15 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public ExecutableResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
+        return this;
+    }
+
     /** Configures the compute environment for the compute resource. */
     public ExecutableResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14640,6 +14685,15 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("iconVariant", AspireClient.serializeValue(iconVariant));
         }
         getClient().invokeCapability("Aspire.Hosting/withIconName", reqArgs);
+        return this;
+    }
+
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public ExternalServiceResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
         return this;
     }
 
@@ -19606,6 +19660,15 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public ParameterResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
+        return this;
+    }
+
     /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public ParameterResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -21985,6 +22048,15 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("iconVariant", AspireClient.serializeValue(iconVariant));
         }
         getClient().invokeCapability("Aspire.Hosting/withIconName", reqArgs);
+        return this;
+    }
+
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public ProjectResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
         return this;
     }
 
@@ -25706,6 +25778,15 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public TestDatabaseResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
+        return this;
+    }
+
     /** Configures the compute environment for the compute resource. */
     public TestDatabaseResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -28112,6 +28193,15 @@ public class TestRedisResource extends ContainerResource {
             reqArgs.put("iconVariant", AspireClient.serializeValue(iconVariant));
         }
         getClient().invokeCapability("Aspire.Hosting/withIconName", reqArgs);
+        return this;
+    }
+
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public TestRedisResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
         return this;
     }
 
@@ -30722,6 +30812,15 @@ public class TestVaultResource extends ContainerResource {
             reqArgs.put("iconVariant", AspireClient.serializeValue(iconVariant));
         }
         getClient().invokeCapability("Aspire.Hosting/withIconName", reqArgs);
+        return this;
+    }
+
+    /** Specifies a custom image to display for the resource in the dashboard. */
+    public TestVaultResource withResourceIcon(String iconPath) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("iconPath", AspireClient.serializeValue(iconPath));
+        getClient().invokeCapability("Aspire.Hosting/withResourceIcon", reqArgs);
         return this;
     }
 

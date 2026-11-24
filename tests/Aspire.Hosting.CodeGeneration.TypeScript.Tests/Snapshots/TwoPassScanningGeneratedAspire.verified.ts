@@ -13652,6 +13652,16 @@ export interface ContainerRegistryResource {
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerRegistryResourcePromise;
     /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ContainerRegistryResourcePromise;
+    /**
      * Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
      * @returns The resource builder.
      */
@@ -14053,6 +14063,16 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerRegistryResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ContainerRegistryResourcePromise;
     /**
      * Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
      * @returns The resource builder.
@@ -14924,6 +14944,29 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _excludeFromMcpInternal(): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
@@ -15750,6 +15793,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withChildRelationship"]: () => ContainerRegistryResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => ContainerRegistryResourcePromiseImpl,
     ["withIconName"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withResourceIcon"]: () => ContainerRegistryResourcePromiseImpl,
     ["excludeFromMcp"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHidden"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ContainerRegistryResourcePromiseImpl,
@@ -16435,6 +16479,16 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ContainerResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -17336,6 +17390,16 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ContainerResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -19554,6 +19618,29 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _withComputeEnvironmentInternal(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): Promise<ContainerResource> {
         computeEnvironmentResource = isPromiseLike(computeEnvironmentResource) ? await computeEnvironmentResource : computeEnvironmentResource;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResource };
@@ -20650,6 +20737,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withChildRelationship"]: () => ContainerResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => ContainerResourcePromiseImpl,
     ["withIconName"]: () => ContainerResourcePromiseImpl,
+    ["withResourceIcon"]: () => ContainerResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ContainerResourcePromiseImpl,
     ["withHttpProbe"]: () => ContainerResourcePromiseImpl,
     ["excludeFromMcp"]: () => ContainerResourcePromiseImpl,
@@ -21182,6 +21270,16 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): CSharpAppResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): CSharpAppResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -21923,6 +22021,16 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): CSharpAppResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): CSharpAppResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -23729,6 +23837,29 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _withComputeEnvironmentInternal(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): Promise<CSharpAppResource> {
         computeEnvironmentResource = isPromiseLike(computeEnvironmentResource) ? await computeEnvironmentResource : computeEnvironmentResource;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResource };
@@ -24820,6 +24951,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withChildRelationship"]: () => CSharpAppResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => CSharpAppResourcePromiseImpl,
     ["withIconName"]: () => CSharpAppResourcePromiseImpl,
+    ["withResourceIcon"]: () => CSharpAppResourcePromiseImpl,
     ["withComputeEnvironment"]: () => CSharpAppResourcePromiseImpl,
     ["withHttpProbe"]: () => CSharpAppResourcePromiseImpl,
     ["excludeFromMcp"]: () => CSharpAppResourcePromiseImpl,
@@ -25387,6 +25519,16 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): DotnetToolResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): DotnetToolResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -26164,6 +26306,16 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): DotnetToolResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): DotnetToolResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -28068,6 +28220,29 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _withComputeEnvironmentInternal(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): Promise<DotnetToolResource> {
         computeEnvironmentResource = isPromiseLike(computeEnvironmentResource) ? await computeEnvironmentResource : computeEnvironmentResource;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResource };
@@ -29170,6 +29345,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withChildRelationship"]: () => DotnetToolResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => DotnetToolResourcePromiseImpl,
     ["withIconName"]: () => DotnetToolResourcePromiseImpl,
+    ["withResourceIcon"]: () => DotnetToolResourcePromiseImpl,
     ["withComputeEnvironment"]: () => DotnetToolResourcePromiseImpl,
     ["withExecutableDebugSupport"]: () => DotnetToolResourcePromiseImpl,
     ["withHttpProbe"]: () => DotnetToolResourcePromiseImpl,
@@ -29705,6 +29881,16 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ExecutableResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ExecutableResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -30443,6 +30629,16 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ExecutableResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ExecutableResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -32237,6 +32433,29 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _withComputeEnvironmentInternal(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): Promise<ExecutableResource> {
         computeEnvironmentResource = isPromiseLike(computeEnvironmentResource) ? await computeEnvironmentResource : computeEnvironmentResource;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResource };
@@ -33333,6 +33552,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withChildRelationship"]: () => ExecutableResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => ExecutableResourcePromiseImpl,
     ["withIconName"]: () => ExecutableResourcePromiseImpl,
+    ["withResourceIcon"]: () => ExecutableResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ExecutableResourcePromiseImpl,
     ["withExecutableDebugSupport"]: () => ExecutableResourcePromiseImpl,
     ["withHttpProbe"]: () => ExecutableResourcePromiseImpl,
@@ -33601,6 +33821,16 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ExternalServiceResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ExternalServiceResourcePromise;
     /**
      * Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
      * @returns The resource builder.
@@ -34008,6 +34238,16 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ExternalServiceResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ExternalServiceResourcePromise;
     /**
      * Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
      * @returns The resource builder.
@@ -34903,6 +35143,29 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _excludeFromMcpInternal(): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
@@ -35730,6 +35993,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withChildRelationship"]: () => ExternalServiceResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => ExternalServiceResourcePromiseImpl,
     ["withIconName"]: () => ExternalServiceResourcePromiseImpl,
+    ["withResourceIcon"]: () => ExternalServiceResourcePromiseImpl,
     ["excludeFromMcp"]: () => ExternalServiceResourcePromiseImpl,
     ["withHidden"]: () => ExternalServiceResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ExternalServiceResourcePromiseImpl,
@@ -36013,6 +36277,16 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ParameterResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ParameterResourcePromise;
     /**
      * Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
      * @returns The resource builder.
@@ -36463,6 +36737,16 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ParameterResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ParameterResourcePromise;
     /**
      * Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
      * @returns The resource builder.
@@ -37437,6 +37721,29 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _excludeFromMcpInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
@@ -38304,6 +38611,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withChildRelationship"]: () => ParameterResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => ParameterResourcePromiseImpl,
     ["withIconName"]: () => ParameterResourcePromiseImpl,
+    ["withResourceIcon"]: () => ParameterResourcePromiseImpl,
     ["excludeFromMcp"]: () => ParameterResourcePromiseImpl,
     ["withHidden"]: () => ParameterResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ParameterResourcePromiseImpl,
@@ -38830,6 +39138,16 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ProjectResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ProjectResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -39571,6 +39889,16 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ProjectResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ProjectResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -41378,6 +41706,29 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _withComputeEnvironmentInternal(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): Promise<ProjectResource> {
         computeEnvironmentResource = isPromiseLike(computeEnvironmentResource) ? await computeEnvironmentResource : computeEnvironmentResource;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResource };
@@ -42469,6 +42820,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withChildRelationship"]: () => ProjectResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => ProjectResourcePromiseImpl,
     ["withIconName"]: () => ProjectResourcePromiseImpl,
+    ["withResourceIcon"]: () => ProjectResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ProjectResourcePromiseImpl,
     ["withHttpProbe"]: () => ProjectResourcePromiseImpl,
     ["excludeFromMcp"]: () => ProjectResourcePromiseImpl,
@@ -43163,6 +43515,16 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): TestDatabaseResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestDatabaseResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -44064,6 +44426,16 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): TestDatabaseResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestDatabaseResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -46281,6 +46653,29 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _withComputeEnvironmentInternal(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): Promise<TestDatabaseResource> {
         computeEnvironmentResource = isPromiseLike(computeEnvironmentResource) ? await computeEnvironmentResource : computeEnvironmentResource;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResource };
@@ -47377,6 +47772,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withChildRelationship"]: () => TestDatabaseResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => TestDatabaseResourcePromiseImpl,
     ["withIconName"]: () => TestDatabaseResourcePromiseImpl,
+    ["withResourceIcon"]: () => TestDatabaseResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestDatabaseResourcePromiseImpl,
     ["withHttpProbe"]: () => TestDatabaseResourcePromiseImpl,
     ["excludeFromMcp"]: () => TestDatabaseResourcePromiseImpl,
@@ -48086,6 +48482,16 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): TestRedisResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestRedisResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -49071,6 +49477,16 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): TestRedisResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestRedisResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -51392,6 +51808,29 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _withComputeEnvironmentInternal(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): Promise<TestRedisResource> {
         computeEnvironmentResource = isPromiseLike(computeEnvironmentResource) ? await computeEnvironmentResource : computeEnvironmentResource;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResource };
@@ -52765,6 +53204,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withChildRelationship"]: () => TestRedisResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => TestRedisResourcePromiseImpl,
     ["withIconName"]: () => TestRedisResourcePromiseImpl,
+    ["withResourceIcon"]: () => TestRedisResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestRedisResourcePromiseImpl,
     ["withHttpProbe"]: () => TestRedisResourcePromiseImpl,
     ["excludeFromMcp"]: () => TestRedisResourcePromiseImpl,
@@ -53474,6 +53914,16 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): TestVaultResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestVaultResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -54377,6 +54827,16 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): TestVaultResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestVaultResourcePromise;
     /**
      * Configures the compute environment for the compute resource.
      *
@@ -56596,6 +57056,29 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _withComputeEnvironmentInternal(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): Promise<TestVaultResource> {
         computeEnvironmentResource = isPromiseLike(computeEnvironmentResource) ? await computeEnvironmentResource : computeEnvironmentResource;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResource };
@@ -57707,6 +58190,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withChildRelationship"]: () => TestVaultResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => TestVaultResourcePromiseImpl,
     ["withIconName"]: () => TestVaultResourcePromiseImpl,
+    ["withResourceIcon"]: () => TestVaultResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestVaultResourcePromiseImpl,
     ["withHttpProbe"]: () => TestVaultResourcePromiseImpl,
     ["excludeFromMcp"]: () => TestVaultResourcePromiseImpl,
@@ -58255,6 +58739,16 @@ export interface Resource {
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ResourcePromise;
     /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ResourcePromise;
+    /**
      * Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
      * @returns The resource builder.
      */
@@ -58656,6 +59150,16 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withIconName(iconName: string, options?: WithIconNameOptions): ResourcePromise;
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ResourcePromise;
     /**
      * Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
      * @returns The resource builder.
@@ -59528,6 +60032,29 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
+    private async _withResourceIconInternal(iconPath: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, iconPath };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withResourceIcon',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Specifies a custom image to display for the resource in the dashboard.
+     *
+     * The image is read during AppHost configuration and embedded in resource updates. Images retain their
+     * original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+     * Calling this method or `WithIconName``1` replaces the previous icon configuration.
+     * @param iconPath A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.
+     * @returns The resource builder.
+     */
+    withResourceIcon(iconPath: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._withResourceIconInternal(iconPath), this._client);
+    }
+
+    /** @internal */
     private async _excludeFromMcpInternal(): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<IResourceHandle>(
@@ -60354,6 +60881,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withChildRelationship"]: () => ResourcePromiseImpl,
     ["withResourceTypeDisplayName"]: () => ResourcePromiseImpl,
     ["withIconName"]: () => ResourcePromiseImpl,
+    ["withResourceIcon"]: () => ResourcePromiseImpl,
     ["excludeFromMcp"]: () => ResourcePromiseImpl,
     ["withHidden"]: () => ResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ResourcePromiseImpl,
