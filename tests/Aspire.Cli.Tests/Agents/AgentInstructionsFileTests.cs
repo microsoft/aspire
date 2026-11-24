@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -56,6 +57,25 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WriteAsync_AppendsThroughSymbolicLinkWithoutLeavingStagingFile()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var target = Path.Combine(workspace.WorkspaceRoot.FullName, "CLAUDE.md");
+        await File.WriteAllTextAsync(target, "# Team rules\n");
+        TestSymlinkHelper.TryCreateSymlink(GetFilePath(workspace), target, isDirectory: false);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Appended, change);
+        Assert.Equal(target, new FileInfo(GetFilePath(workspace)).LinkTarget);
+        Assert.Equal($"# Team rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", [], "\n")}\n", await File.ReadAllTextAsync(target));
+        Assert.Equal(
+            ["AGENTS.md", "CLAUDE.md"],
+            workspace.WorkspaceRoot.EnumerateFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task WriteAsync_LeavesFileWithUnterminatedSectionUnchanged()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -91,6 +111,20 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
         var existing = $"# Rules\n\n{AgentInstructionsFile.SectionStartMarkerPrefix} -->\nOld section.\n{AgentInstructionsFile.SectionEndMarkerPrefix}\nMy own notes.\n";
+        await File.WriteAllTextAsync(GetFilePath(workspace), existing);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
+        Assert.Equal(existing, await ReadFileAsync(workspace));
+    }
+
+    [Fact]
+    public async Task WriteAsync_LeavesFileWithUnclosedEndMarkerBeforeAnotherCommentUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var existing = $"# Rules\n\n{AgentInstructionsFile.SectionStartMarkerPrefix} -->\nOld section.\n{AgentInstructionsFile.SectionEndMarkerPrefix}\nKeep this team rule.\n<!-- unrelated note -->\n";
         await File.WriteAllTextAsync(GetFilePath(workspace), existing);
 
         var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
