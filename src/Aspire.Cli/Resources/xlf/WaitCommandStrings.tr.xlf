@@ -52,6 +52,11 @@
         <target state="translated">‘{0}’ kaynağı başarısız bir duruma girdi: {1}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceInventoryTimedOut">
+        <source>Timed out after {0} seconds waiting for the AppHost to report its resources.</source>
+        <target state="new">Timed out after {0} seconds waiting for the AppHost to report its resources.</target>
+        <note>{0} is the timeout in seconds.</note>
+      </trans-unit>
       <trans-unit id="ResourceLineCancelled">
         <source>{0}: not {1}, stopped waiting after another resource failed, {2}</source>
         <target state="new">{0}: not {1}, stopped waiting after another resource failed, {2}</target>

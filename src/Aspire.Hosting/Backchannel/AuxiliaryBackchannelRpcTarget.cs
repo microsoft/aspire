@@ -58,7 +58,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 AuxiliaryBackchannelCapabilities.V2,
                 AuxiliaryBackchannelCapabilities.V3,
                 AuxiliaryBackchannelCapabilities.Terminals_V1,
-                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1,
+                AuxiliaryBackchannelCapabilities.ResourceInventory_V1
             ]
         });
     }
@@ -975,6 +976,22 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
+    /// Waits until every resource in the application model has published its initial snapshot, so a following
+    /// resource listing contains the complete inventory.
+    /// </summary>
+    /// <param name="request">The request (currently unused, for future expansion).</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The resource initialization state.</returns>
+    public async Task<WaitForResourcesInitializedResponse> WaitForResourcesInitializedAsync(WaitForResourcesInitializedRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WaitForResourcesInitializedAsync), streaming: false, request?.TraceContext);
+
+        var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
+        await notificationService.WaitForInitialStatesPublishedAsync(cancellationToken).ConfigureAwait(false);
+        return new WaitForResourcesInitializedResponse { IsInitialized = true };
+    }
+
+    /// <summary>
     /// Preserved for backwards compatibility with older CLI versions that call this RPC method.
     /// Always returns <see langword="null"/> because the dashboard MCP server has been removed.
     /// </summary>
@@ -1215,6 +1232,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             WaitingFor = waitingFor,
             StateStyle = snapshot.State?.Style,
             IsHidden = snapshot.IsHidden,
+            IsExplicitStart = resource.HasAnnotationOfType<ExplicitStartupAnnotation>(),
             HealthStatus = snapshot.HealthStatus?.ToString(),
             ExitCode = snapshot.ExitCode,
             CreatedAt = snapshot.CreationTimeStamp,

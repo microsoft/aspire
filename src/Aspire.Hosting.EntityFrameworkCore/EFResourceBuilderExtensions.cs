@@ -269,6 +269,9 @@ public static class EFResourceBuilderExtensions
         var innerBuilder = builder.ApplicationBuilder
             .AddResource(migrationResource)
             .WithParentRelationship(builder)
+            // Migrations run only from the resource commands. Marking the resource as explicit-start lets
+            // clients such as `aspire wait --all` skip it instead of waiting for it to run.
+            .WithExplicitStart()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = "EFMigration",

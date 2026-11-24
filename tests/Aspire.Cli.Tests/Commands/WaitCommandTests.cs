@@ -3,6 +3,8 @@
 
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -545,33 +547,55 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interactionService.DisplayedSuccess);
     }
 
-    [Fact]
-    public async Task WaitCommand_MultipleResources_FailsWhenHealthyResourceLaterExitsWithNonZeroCode()
+    [Theory]
+    [InlineData("Exited", 3)]
+    [InlineData("Terminated", null)]
+    public async Task WaitCommand_MultipleResources_FailsWhenHealthyResourceLaterStops(string stoppedState, int? exitCode)
     {
+        var workerHealthy = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var apiCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new ResourceSnapshot { Name = "api", State = "Starting" };
+            yield return new ResourceSnapshot { Name = "worker", State = "Running", HealthStatus = "Healthy" };
+
+            // Stop the worker only once its own healthy wait has succeeded, so only the watch can fail it.
+            await workerHealthy.Task.WaitAsync(cancellationToken);
+            yield return new ResourceSnapshot { Name = "worker", State = stoppedState, ExitCode = exitCode };
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
-            // Without health checks, "worker" is healthy while it runs, so its own wait succeeds.
-            // The snapshot stream then reports its exit before "api" is ready.
-            ResourceSnapshots =
-            [
-                new ResourceSnapshot { Name = "api", State = "Starting" },
-                new ResourceSnapshot { Name = "worker", State = "Exited", ExitCode = 3 }
-            ],
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
             WaitForResourceHandler = async (resourceName, _, _, cancellationToken) =>
             {
                 if (resourceName == "api")
                 {
-                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        apiCancelled.TrySetResult();
+                        throw;
+                    }
                 }
 
+                // Without health checks, "worker" is healthy while it runs, so its own wait succeeds.
+                workerHealthy.TrySetResult();
                 return new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" };
             }
         };
         var interactionService = new TestInteractionService();
 
-        var exitCode = await RunWaitAsync("wait api worker", backchannel, interactionService);
+        var exitCodeResult = await RunWaitAsync("wait api worker", backchannel, interactionService);
 
-        Assert.Equal(CliExitCodes.WaitResourceFailed, exitCode);
+        Assert.Equal(CliExitCodes.WaitResourceFailed, exitCodeResult);
+        Assert.True(apiCancelled.Task.IsCompleted);
         Assert.Equal(
             [
                 (KnownEmojis.StopSign, string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceLineCancelled, "api", "healthy", "Starting")),
@@ -579,9 +603,17 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
                     CultureInfo.CurrentCulture,
                     WaitCommandStrings.ResourceLineFailed,
                     "worker",
-                    string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.StateWithExitCode, "Exited", 3)))
+                    exitCode is int code
+                        ? string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.StateWithExitCode, stoppedState, code)
+                        : stoppedState))
             ],
             interactionService.DisplayedMessages.Take(2).Select(static m => (m.Emoji, m.Message)));
+        Assert.Equal(
+            [string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourcesFailed, 1, 2)],
+            interactionService.DisplayedErrors);
+
+        // The watched snapshots already describe both resources, so no extra read is needed to report them.
+        Assert.Equal(0, backchannel.GetResourceSnapshotsCallCount);
     }
 
     [Fact]
@@ -703,7 +735,100 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interactionService.DisplayedMessages);
     }
 
-    private async Task<int> RunWaitAsync(string commandLine, TestAppHostAuxiliaryBackchannel backchannel, TestInteractionService interactionService)
+    [Fact]
+    public async Task WaitCommand_All_WaitsForResourceInventoryBeforeSelectingResources()
+    {
+        var requests = new ConcurrentQueue<string>();
+        TestAppHostAuxiliaryBackchannel? backchannel = null;
+        backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsResourceInventoryV1 = true,
+            // Only "api" has published a state when the command connects; "cache" publishes before the
+            // AppHost confirms its inventory.
+            ResourceSnapshots = [new ResourceSnapshot { Name = "api", State = "Running", HealthStatus = "Healthy" }],
+            WaitForResourcesInitializedHandler = _ =>
+            {
+                backchannel!.ResourceSnapshots =
+                [
+                    new ResourceSnapshot { Name = "api", State = "Running", HealthStatus = "Healthy" },
+                    new ResourceSnapshot { Name = "cache", State = "Starting" }
+                ];
+                return Task.CompletedTask;
+            },
+            WaitForResourceHandler = (resourceName, _, _, _) =>
+            {
+                requests.Enqueue(resourceName);
+                return Task.FromResult(new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" });
+            }
+        };
+        var interactionService = new TestInteractionService();
+
+        var exitCode = await RunWaitAsync("wait --all --format json --timeout 5", backchannel, interactionService);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(["api", "cache"], requests.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task WaitCommand_All_SkipsOnlyExplicitStartResourcesThatHaveNotStarted()
+    {
+        var requests = new ConcurrentQueue<string>();
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsResourceInventoryV1 = true,
+            ResourceSnapshots =
+            [
+                // Connection strings start NotStarted and initialize on their own, so they are waited on.
+                new ResourceSnapshot { Name = "db-connection", State = "NotStarted" },
+                new ResourceSnapshot { Name = "admin", State = "NotStarted", IsExplicitStart = true },
+                new ResourceSnapshot { Name = "tool", IsExplicitStart = true },
+                new ResourceSnapshot { Name = "worker", State = "Running", IsExplicitStart = true }
+            ],
+            WaitForResourceHandler = (resourceName, _, _, _) =>
+            {
+                requests.Enqueue(resourceName);
+                return Task.FromResult(new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" });
+            }
+        };
+        var interactionService = new TestInteractionService();
+
+        var exitCode = await RunWaitAsync("wait --all --format json --timeout 5", backchannel, interactionService);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(["db-connection", "worker"], requests.Order(StringComparer.Ordinal));
+        var (json, _) = Assert.Single(interactionService.DisplayedRawText);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal(
+            [("admin", "skipped"), ("db-connection", "success"), ("tool", "skipped"), ("worker", "success")],
+            document.RootElement.GetProperty("resources").EnumerateArray()
+                .Select(static r => (r.GetProperty("name").GetString(), r.GetProperty("outcome").GetString()))
+                .OrderBy(static r => r.Item1, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task WaitCommand_All_ResourceInventoryTimeout_ReturnsTimeoutExitCode()
+    {
+        var timeProvider = new FakeTimeProvider();
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsResourceInventoryV1 = true,
+            WaitForResourcesInitializedHandler = async cancellationToken =>
+            {
+                timeProvider.Advance(TimeSpan.FromSeconds(6));
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+        };
+        var interactionService = new TestInteractionService();
+
+        var exitCode = await RunWaitAsync("wait --all --timeout 5", backchannel, interactionService, timeProvider);
+
+        Assert.Equal(CliExitCodes.WaitTimeout, exitCode);
+        Assert.Equal(
+            [string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceInventoryTimedOut, 5)],
+            interactionService.DisplayedErrors);
+    }
+
+    private async Task<int> RunWaitAsync(string commandLine, TestAppHostAuxiliaryBackchannel backchannel, TestInteractionService interactionService, FakeTimeProvider? timeProvider = null)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -713,7 +838,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             options.InteractionServiceFactory = _ => interactionService;
-            options.TimeProvider = new FakeTimeProvider();
+            options.TimeProvider = timeProvider ?? new FakeTimeProvider();
         });
         using var provider = services.BuildServiceProvider();
 

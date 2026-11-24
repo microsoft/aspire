@@ -36,6 +36,15 @@ public static class EFMigrationResourceBuilderExtensions
     public static IResourceBuilder<EFMigrationResource> RunDatabaseUpdateOnStart(this IResourceBuilder<EFMigrationResource> builder)
     {
         var migrationResource = builder.Resource;
+
+        // AddEFMigrations marks migration resources as explicit-start because they otherwise only run from
+        // their commands. Migrations that run on startup do start automatically, so clients such as
+        // `aspire wait --all` must wait for them.
+        foreach (var annotation in migrationResource.Annotations.OfType<ExplicitStartupAnnotation>().ToArray())
+        {
+            migrationResource.Annotations.Remove(annotation);
+        }
+
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, ct) =>
         {
             // Schedule the migration command to run asynchronously after startup completes to avoid deadlocks.

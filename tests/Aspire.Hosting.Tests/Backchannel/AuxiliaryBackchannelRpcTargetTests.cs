@@ -166,6 +166,33 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_ReportsExplicitStartAfterResourcesInitialize()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddResource(new CustomResource("auto"));
+        builder.AddResource(new CustomResource("manual")).WithExplicitStart();
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var initialized = await target.WaitForResourcesInitializedAsync().DefaultTimeout();
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        Assert.True(initialized.IsInitialized);
+        Assert.False(Assert.Single(result, r => r.Name == "auto").IsExplicitStart);
+        Assert.True(Assert.Single(result, r => r.Name == "manual").IsExplicitStart);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_MapsSnapshotData()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

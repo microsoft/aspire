@@ -796,6 +796,11 @@ internal sealed class ApplicationOrchestrator
             var initializeEvent = new InitializeResourceEvent(resource, _eventing, _loggerService, _notificationService, _serviceProvider);
             await _eventing.PublishAsync(initializeEvent, EventDispatchBehavior.NonBlockingConcurrent, cancellationToken).ConfigureAwait(false);
         }
+
+        // Every model resource, including each DCP replica name allocated during preparation, now has a
+        // current state. Backchannel clients such as `aspire wait --all` wait for this before treating a
+        // resource listing as the complete inventory.
+        _notificationService.MarkInitialStatesPublished();
     }
 
     private static ImmutableArray<HealthReportSnapshot> GetInitialHealthReports(IResource resource)

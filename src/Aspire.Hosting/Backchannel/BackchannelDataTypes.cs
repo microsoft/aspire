@@ -66,6 +66,13 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Resource snapshot version capability: snapshots include monotonic versions that can be used for ordering.
     /// </summary>
     public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
+
+    /// <summary>
+    /// Resource inventory capability: the AppHost exposes <c>WaitForResourcesInitializedAsync</c>, which completes once
+    /// every resource has published its initial snapshot, and resource snapshots report
+    /// <see cref="ResourceSnapshot.IsExplicitStart"/>.
+    /// </summary>
+    public const string ResourceInventory_V1 = "resource-inventory.v1";
 }
 
 /// <summary>
@@ -245,6 +252,26 @@ internal sealed class WaitForAppHostReadyResponse
     /// Gets whether the AppHost has reached its startup readiness point.
     /// </summary>
     public bool IsReady { get; init; }
+}
+
+/// <summary>
+/// Request for waiting until every resource has published its initial snapshot.
+/// </summary>
+internal sealed class WaitForResourcesInitializedRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override WaitForResourcesInitializedRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
+
+/// <summary>
+/// Response returned once every resource has published its initial snapshot.
+/// </summary>
+internal sealed class WaitForResourcesInitializedResponse
+{
+    /// <summary>
+    /// Gets whether every resource has published its initial snapshot.
+    /// </summary>
+    public bool IsInitialized { get; init; }
 }
 
 /// <summary>
@@ -1194,6 +1221,13 @@ internal sealed class ResourceSnapshot
     /// Gets a value indicating whether this resource is hidden.
     /// </summary>
     public bool IsHidden { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the resource only starts when it is started explicitly, for example with
+    /// <c>WithExplicitStart</c>. Older AppHosts omit this value, so clients only rely on it when the AppHost
+    /// advertises <see cref="AuxiliaryBackchannelCapabilities.ResourceInventory_V1"/>.
+    /// </summary>
+    public bool IsExplicitStart { get; init; }
 
     /// <summary>
     /// Gets the MCP server information if the resource exposes an MCP endpoint.

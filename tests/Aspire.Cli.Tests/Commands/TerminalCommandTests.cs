@@ -888,6 +888,9 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         public Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default)
             => _inner.WaitForAppHostReadyAsync(cancellationToken);
 
+        public Task<bool> WaitForResourcesInitializedAsync(CancellationToken cancellationToken = default)
+            => _inner.WaitForResourcesInitializedAsync(cancellationToken);
+
         public IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(GetConsoleLogsRequest request, CancellationToken cancellationToken = default)
             => _inner.GetConsoleLogsAsync(request, cancellationToken);
 

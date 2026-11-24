@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Microsoft.Extensions.Logging.Abstractions;
 using Aspire.Cli.Tests.TestServices;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -196,5 +199,131 @@ public class ResourceWaitServiceTests
                 Assert.Equal(expectedRemainingSeconds == 0 ? ResourceWaitOutcome.Timeout : ResourceWaitOutcome.Success, result.Outcome);
                 Assert.Equal(TimeSpan.Zero, result.Elapsed);
             });
+    }
+
+    [Fact]
+    public async Task WaitUntilDoneAsync_ResolvesCompletionsFromWatchedSnapshotsWithoutReading()
+    {
+        var migrationWaitsFailed = 0;
+        var bothMigrationWaitsFailed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new ResourceSnapshot { Name = "api", State = "Running", HealthStatus = "Healthy" };
+            yield return new ResourceSnapshot { Name = "migrations1", State = "Running" };
+            yield return new ResourceSnapshot { Name = "migrations2", State = "Running" };
+
+            // Deliver the exits only after both failed waits returned, so completion has to wait for the watch.
+            await bothMigrationWaitsFailed.Task.WaitAsync(cancellationToken);
+            yield return new ResourceSnapshot { Name = "migrations1", State = "Finished", ExitCode = 0 };
+            yield return new ResourceSnapshot { Name = "migrations2", State = "Finished", ExitCode = 0 };
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
+            WaitForResourceHandler = (resourceName, _, _, _) =>
+            {
+                if (resourceName == "api")
+                {
+                    return Task.FromResult(new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" });
+                }
+
+                if (Interlocked.Increment(ref migrationWaitsFailed) == 2)
+                {
+                    bothMigrationWaitsFailed.TrySetResult();
+                }
+
+                return Task.FromResult(new WaitForResourceResponse
+                {
+                    Success = false,
+                    ErrorMessage = $"Stopped waiting for resource '{resourceName}' to become healthy because it failed to start."
+                });
+            }
+        };
+        var service = new ResourceWaitService(new FakeTimeProvider(), NullLogger<ResourceWaitService>.Instance);
+
+        var batch = await service.WaitUntilDoneAsync(
+            backchannel, ["migrations1", "api", "migrations2"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(
+            [
+                ("migrations1", ResourceWaitOutcome.Completed, "Finished", (int?)0),
+                ("api", ResourceWaitOutcome.Success, "Running", null),
+                ("migrations2", ResourceWaitOutcome.Completed, "Finished", 0)
+            ],
+            batch.Results.Select(static r => (r.ResourceName, r.Outcome, r.State, r.ExitCode)));
+        Assert.Equal(0, backchannel.GetResourceSnapshotsCallCount);
+        Assert.Equal(
+            [("api", "Running"), ("migrations1", "Finished"), ("migrations2", "Finished")],
+            batch.Snapshots.Select(static s => (s.Name, s.State)));
+    }
+
+    [Fact]
+    public async Task WaitUntilDoneAsync_SharesSnapshotReadWhenWatchIsUnavailable()
+    {
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            // An empty watch behaves like an AppHost that ended the stream.
+            WatchResourceSnapshotsHandler = (_, _) => AsyncEnumerable.Empty<ResourceSnapshot>(),
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot { Name = "migrations1", State = "Finished", ExitCode = 0 },
+                new ResourceSnapshot { Name = "migrations2", State = "Finished", ExitCode = 0 },
+                new ResourceSnapshot { Name = "seed", State = "Exited", ExitCode = 2 }
+            ],
+            WaitForResourceHandler = (resourceName, _, _, _) => Task.FromResult(new WaitForResourceResponse
+            {
+                Success = false,
+                ErrorMessage = $"Stopped waiting for resource '{resourceName}' to become healthy because it failed to start."
+            })
+        };
+        var service = new ResourceWaitService(new FakeTimeProvider(), NullLogger<ResourceWaitService>.Instance);
+
+        var batch = await service.WaitUntilDoneAsync(
+            backchannel, ["migrations1", "migrations2", "seed"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(
+            [
+                ("migrations1", ResourceWaitOutcome.Completed, (int?)0),
+                ("migrations2", ResourceWaitOutcome.Completed, 0),
+                ("seed", ResourceWaitOutcome.Failure, 2)
+            ],
+            batch.Results.Select(static r => (r.ResourceName, r.Outcome, r.ExitCode)));
+        Assert.Equal(1, backchannel.GetResourceSnapshotsCallCount);
+    }
+
+    [Fact]
+    public async Task WaitUntilDoneAsync_PropagatesCallerCancellationWhileResolvingCompletion()
+    {
+        using var callerCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var waitFailed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            // The live watch never shows the resource stopping, so resolution keeps waiting for it.
+            yield return new ResourceSnapshot { Name = "migrations", State = "Running" };
+
+            await waitFailed.Task.WaitAsync(cancellationToken);
+            await callerCts.CancelAsync();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
+            WaitForResourceHandler = (_, _, _, _) =>
+            {
+                waitFailed.TrySetResult();
+                return Task.FromResult(new WaitForResourceResponse { Success = false, ErrorMessage = "Wait failed." });
+            }
+        };
+        var service = new ResourceWaitService(new FakeTimeProvider(), NullLogger<ResourceWaitService>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.WaitUntilDoneAsync(
+            backchannel, ["migrations"], ResourceWaitTarget.Healthy, 30, callerCts.Token)).DefaultTimeout();
+        Assert.Equal(0, backchannel.GetResourceSnapshotsCallCount);
     }
 }

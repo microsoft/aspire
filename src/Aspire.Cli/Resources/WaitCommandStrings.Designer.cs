@@ -356,5 +356,14 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoResourcesToWaitFor", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Timed out after {0} seconds waiting for the AppHost to report its resources..
+        /// </summary>
+        internal static string ResourceInventoryTimedOut {
+            get {
+                return ResourceManager.GetString("ResourceInventoryTimedOut", resourceCulture);
+            }
+        }
     }
 }

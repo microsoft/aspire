@@ -231,4 +231,8 @@
   <data name="NoResourcesToWaitFor" xml:space="preserve">
     <value>No resources to wait for.</value>
   </data>
+  <data name="ResourceInventoryTimedOut" xml:space="preserve">
+    <value>Timed out after {0} seconds waiting for the AppHost to report its resources.</value>
+    <comment>{0} is the timeout in seconds.</comment>
+  </data>
 </root>

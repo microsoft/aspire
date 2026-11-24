@@ -84,6 +84,17 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Waits until every resource in the AppHost has published its initial snapshot, so a following
+    /// <see cref="GetResourceSnapshotsAsync"/> call returns the complete resource inventory.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// <see langword="true"/> when the AppHost confirmed initialization, which also means snapshots report
+    /// <see cref="ResourceSnapshot.IsExplicitStart"/>; <see langword="false"/> when the AppHost predates this capability.
+    /// </returns>
+    Task<bool> WaitForResourcesInitializedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the current resource snapshots from the AppHost.
     /// </summary>
     /// <param name="includeHidden">When <see langword="true"/>, includes resources with hidden state.</param>

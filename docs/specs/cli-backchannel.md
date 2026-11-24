@@ -144,6 +144,7 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V2 = "aux.v2";  // 13.2+ with request objects
     public const string V3 = "aux.v3";  // 13.4+ with batched console log streaming
     public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
+    public const string ResourceInventory_V1 = "resource-inventory.v1";
 }
 ```
 
@@ -164,6 +165,12 @@ internal static class AuxiliaryBackchannelCapabilities
 When both sides advertise `resource-snapshot-versions.v1`, `ResourceSnapshot.Version` is monotonic and can order the initial GET against watch updates. The CLI starts the watch before the GET and retains the newest snapshot when the calls overlap.
 
 Older AppHosts omit `ResourceSnapshot.Version`, which deserializes as `0`. Without the capability, the CLI treats snapshot ordering as unknown and preserves the legacy GET-first behavior. A version of `0` must not participate in stale-snapshot comparisons.
+
+### Resource Inventory Compatibility
+
+Resource listings include only resources that have published a state, so a listing taken while the AppHost is starting can be partial. When the AppHost advertises `resource-inventory.v1`, `WaitForResourcesInitializedAsync(WaitForResourcesInitializedRequest)` completes once every resource in the application model has published its initial snapshot. `aspire wait --all` calls it before listing resources.
+
+The same capability means `ResourceSnapshot.IsExplicitStart` reports whether the resource has `ExplicitStartupAnnotation`. Older AppHosts omit the field, which deserializes as `false`, so the CLI only relies on it when the capability is advertised. Without the capability, `aspire wait --all` falls back to `WaitForAppHostReadyAsync` and treats `NotStarted` resources as waiting for an explicit start.
 
 ### Compatibility Matrix
 

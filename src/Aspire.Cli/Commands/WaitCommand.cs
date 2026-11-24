@@ -64,6 +64,9 @@ internal sealed class WaitCommand : BaseCommand
     private readonly ResourceWaitService _resourceWaitService;
     private readonly TimeProvider _timeProvider;
 
+    // Bounds the snapshot read that only adds state and endpoint details to an already known outcome.
+    private static readonly TimeSpan s_finalSnapshotsTimeout = TimeSpan.FromSeconds(5);
+
     private static readonly Argument<string[]> s_resourceArgument = new("resource")
     {
         Description = WaitCommandStrings.ResourceArgumentDescription,
@@ -194,13 +197,13 @@ internal sealed class WaitCommand : BaseCommand
             string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitingForResource, resourceName, statusLabel),
             async () =>
             {
-                var results = await _resourceWaitService.WaitUntilDoneAsync(
+                var batch = await _resourceWaitService.WaitUntilDoneAsync(
                     connection,
                     [resourceName],
                     GetWaitTarget(status),
                     timeoutSeconds,
                     cancellationToken).ConfigureAwait(false);
-                return results[0];
+                return batch.Results[0];
             });
 
         // Reset cursor position after spinner
@@ -245,16 +248,23 @@ internal sealed class WaitCommand : BaseCommand
 
         IReadOnlyList<string> namesToWait;
         IReadOnlyList<string> skippedNames = [];
+        var remainingTimeoutSeconds = timeoutSeconds;
         if (waitForAll)
         {
-            var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-            var visible = snapshots.Where(static snapshot => !ResourceSnapshotMapper.IsHiddenResource(snapshot)).ToArray();
+            var selection = await InteractionService.ShowStatusAsync(
+                string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitingForAllResources, statusLabel),
+                () => SelectAllResourcesAsync(connection, timeoutSeconds, cancellationToken));
 
-            // Resources stay NotStarted only when they wait for an explicit start: WithExplicitStart,
-            // delayed-start DCP resources, or browser log sessions. Auto-started resources move to
-            // Starting or Waiting instead, so waiting on a NotStarted resource would only time out.
-            skippedNames = visible.Where(IsWaitingForExplicitStart).Select(static snapshot => snapshot.Name).ToArray();
-            namesToWait = visible.Where(static snapshot => !IsWaitingForExplicitStart(snapshot)).Select(static snapshot => snapshot.Name).ToArray();
+            if (selection is null)
+            {
+                return DisplayInventoryTimeout(status, timeoutSeconds, format);
+            }
+
+            (namesToWait, skippedNames) = selection.Value;
+
+            // The inventory wait spends part of the shared --timeout budget.
+            var inventoryElapsed = _timeProvider.GetElapsedTime(startTimestamp);
+            remainingTimeoutSeconds = Math.Max(1, (int)Math.Ceiling(timeoutSeconds - inventoryElapsed.TotalSeconds));
         }
         else
         {
@@ -263,8 +273,8 @@ internal sealed class WaitCommand : BaseCommand
 
         _logger.LogDebug("Waiting for {Count} resources to reach status '{Status}' with timeout {Timeout}s", namesToWait.Count, status, timeoutSeconds);
 
-        IReadOnlyList<ResourceWaitResult> results = namesToWait.Count == 0
-            ? []
+        var batch = namesToWait.Count == 0
+            ? new ResourceWaitBatchResult([], [])
             : await InteractionService.ShowStatusAsync(
                 waitForAll
                     ? string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitingForAllResources, statusLabel)
@@ -273,14 +283,18 @@ internal sealed class WaitCommand : BaseCommand
                     connection,
                     namesToWait,
                     GetWaitTarget(status),
-                    timeoutSeconds,
+                    remainingTimeoutSeconds,
                     cancellationToken));
+        var results = batch.Results;
 
         var elapsed = _timeProvider.GetElapsedTime(startTimestamp);
 
-        // Read the final snapshots once so every line can show the resource's current state and
-        // endpoints without a follow-up `aspire describe`.
-        var finalSnapshots = await GetFinalSnapshotsAsync(connection, cancellationToken).ConfigureAwait(false);
+        // Show each resource's current state and endpoints without a follow-up `aspire describe`.
+        var finalSnapshots = await GetFinalSnapshotsAsync(
+            connection,
+            batch.Snapshots,
+            results.Select(static r => r.ResourceName).Concat(skippedNames),
+            cancellationToken).ConfigureAwait(false);
         var reports = results
             .Select(r => CreateReport(r, finalSnapshots, waitForAll))
             .Concat(skippedNames.Select(name => CreateSkippedReport(name, finalSnapshots)))
@@ -352,17 +366,32 @@ internal sealed class WaitCommand : BaseCommand
         return exitCode;
     }
 
-    private async Task<IReadOnlyList<ResourceSnapshot>> GetFinalSnapshotsAsync(IAppHostAuxiliaryBackchannel connection, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<ResourceSnapshot>> GetFinalSnapshotsAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        IReadOnlyList<ResourceSnapshot> watchedSnapshots,
+        IEnumerable<string> resourceNames,
+        CancellationToken cancellationToken)
     {
+        // The batch watched the snapshots while waiting. A batch that ends quickly can stop watching
+        // before the AppHost replayed every resource, so read them only when a resource is missing.
+        if (resourceNames.All(name => ResourceWaitService.FindResourceSnapshots(watchedSnapshots, name).Count > 0))
+        {
+            return watchedSnapshots;
+        }
+
+        // The outcome is already known and the snapshots only add details, so do not let a slow
+        // AppHost delay reporting it.
+        using var timeoutCts = new CancellationTokenSource(s_finalSnapshotsTimeout, _timeProvider);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         try
         {
-            return await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+            return await connection.GetResourceSnapshotsAsync(includeHidden: true, linkedCts.Token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             // The wait results are still meaningful without the extra state and endpoint details.
             _logger.LogDebug(ex, "Unable to read resource snapshots after waiting.");
-            return [];
+            return watchedSnapshots;
         }
     }
 
@@ -476,8 +505,97 @@ internal sealed class WaitCommand : BaseCommand
         };
     }
 
-    private static bool IsWaitingForExplicitStart(ResourceSnapshot snapshot)
+    private async Task<(IReadOnlyList<string> NamesToWait, IReadOnlyList<string> SkippedNames)?> SelectAllResourcesAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        int timeoutSeconds,
+        CancellationToken cancellationToken)
     {
+        bool reportsExplicitStart;
+        using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds), _timeProvider))
+        using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
+        {
+            try
+            {
+                reportsExplicitStart = await WaitForResourceInventoryAsync(connection, linkedCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+
+        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+        var visible = snapshots.Where(static snapshot => !ResourceSnapshotMapper.IsHiddenResource(snapshot)).ToArray();
+
+        var skippedNames = visible
+            .Where(snapshot => IsWaitingForExplicitStart(snapshot, reportsExplicitStart))
+            .Select(static snapshot => snapshot.Name)
+            .ToArray();
+        var namesToWait = visible
+            .Where(snapshot => !IsWaitingForExplicitStart(snapshot, reportsExplicitStart))
+            .Select(static snapshot => snapshot.Name)
+            .ToArray();
+        return (namesToWait, skippedNames);
+    }
+
+    /// <summary>
+    /// Waits until a resource listing contains every resource, as far as the AppHost can tell.
+    /// </summary>
+    /// <returns><see langword="true"/> when the AppHost confirmed its inventory and reports explicit-start metadata.</returns>
+    private static async Task<bool> WaitForResourceInventoryAsync(IAppHostAuxiliaryBackchannel connection, CancellationToken cancellationToken)
+    {
+        // The AppHost lists only resources that already published a state, so a listing taken while it is
+        // still starting can be partial, and --all would succeed without waiting for the missing resources.
+        if (await connection.WaitForResourcesInitializedAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        // Older AppHosts cannot confirm their inventory. Their startup readiness point is the closest signal:
+        // for an AppHost launched by the CLI it follows the dashboard becoming healthy, which happens after every
+        // resource published its initial state. Other AppHosts report ready immediately, so their listing can
+        // still be partial while they start.
+        await connection.WaitForAppHostReadyAsync(cancellationToken).ConfigureAwait(false);
+        return false;
+    }
+
+    private int DisplayInventoryTimeout(string status, int timeoutSeconds, OutputFormat format)
+    {
+        if (format == OutputFormat.Json)
+        {
+            var output = new WaitOutput
+            {
+                Outcome = "timeout",
+                Status = status,
+                Resources = []
+            };
+            InteractionService.DisplayRawText(
+                JsonSerializer.Serialize(output, WaitCommandJsonContext.RelaxedEscaping.WaitOutput),
+                ConsoleOutput.Standard);
+            return CliExitCodes.WaitTimeout;
+        }
+
+        // Reset cursor position after spinner
+        InteractionService.DisplayPlainText("");
+        InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceInventoryTimedOut, timeoutSeconds));
+        return CliExitCodes.WaitTimeout;
+    }
+
+    private static bool IsWaitingForExplicitStart(ResourceSnapshot snapshot, bool reportsExplicitStart)
+    {
+        if (reportsExplicitStart)
+        {
+            // An explicit-start resource stays idle until someone starts it, so waiting on it would only time
+            // out. Before DCP creates it, its state can still be empty. Once it has been started, it is waited
+            // on like any other resource.
+            return snapshot.IsExplicitStart
+                && (string.IsNullOrEmpty(snapshot.State) || string.Equals(snapshot.State, KnownResourceStates.NotStarted, StringComparisons.ResourceState));
+        }
+
+        // Older AppHosts do not report explicit-start metadata. NotStarted is the closest signal they offer:
+        // explicit-start resources stay in it, while auto-started resources normally move on. A resource
+        // sampled before its first transition, such as a connection string that is still initializing, is
+        // skipped too; skipping is safer than waiting until the timeout for every explicit-start resource.
         return string.Equals(snapshot.State, KnownResourceStates.NotStarted, StringComparisons.ResourceState);
     }
 
