@@ -5,6 +5,8 @@ using System.Runtime.ExceptionServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Lifecycle;
 
@@ -14,6 +16,7 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
     // Aspire.Hosting.Dotnet intentionally consumes only the public Aspire.Hosting surface. Its coordinated build
     // resources therefore use reserved internal names that core hosting can recognize without internals visibility.
     private const string CoordinatedBuildResourceName = "__dotnet-project-build";
+    private const string DisableMultithreadedBuildConfigurationKey = "Aspire:Dotnet:DisableMultithreadedBuild";
 
     public Task SubscribeAsync(
         IDistributedApplicationEventing eventing,
@@ -52,6 +55,10 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
                 {
                     return;
                 }
+
+                var disableMultithreadedBuild = context.ExecutionContext.Services
+                    .GetRequiredService<IConfiguration>()
+                    .GetValue<bool>(DisableMultithreadedBuildConfigurationKey);
 
                 // DCP gathers arguments before environment variables. Resolve only the environment callbacks here so
                 // the SDK probe sees the same PATH and host overrides as the build process. The later environment
@@ -95,7 +102,8 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
 
                 // On Windows, coordinated builds can invoke WebAssembly tasks whose task factory
                 // cannot run out of process in multithreaded mode (https://github.com/microsoft/aspire/issues/22430).
-                var buildMode = OperatingSystem.IsWindows() && buildTarget.EndsWith(".proj", StringComparison.OrdinalIgnoreCase)
+                var buildMode = disableMultithreadedBuild ||
+                    (OperatingSystem.IsWindows() && buildTarget.EndsWith(".proj", StringComparison.OrdinalIgnoreCase))
                     ? "-mt:false"
                     : "-mt";
                 args.Insert(2, buildMode);

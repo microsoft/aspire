@@ -101,6 +101,33 @@ F#/VB support covers SDK-style project files, not scripts or old project systems
 service/AppHost watcher is not implemented. Rebuild and non-watch debugging do not imply
 `aspire run --watch` support.
 
+### Disabling multithreaded builds
+
+Set `Aspire:Dotnet:DisableMultithreadedBuild` to `true` in the AppHost's configuration to disable
+MSBuild's multithreaded mode for Aspire-managed coordinated builds and Rebuild commands. For one
+run, set the environment variable before starting the AppHost:
+
+```bash
+Aspire__Dotnet__DisableMultithreadedBuild=true aspire run
+```
+
+Alternatively, add it to the AppHost's `appsettings.json`:
+
+```json
+{
+  "Aspire": {
+    "Dotnet": {
+      "DisableMultithreadedBuild": true
+    }
+  }
+}
+```
+
+The setting defaults to `false` and is read when build arguments are evaluated. When enabled,
+Aspire passes `-mt:false` for SDKs that support the switch; older or unsupported SDKs do not receive
+the switch. This selects MSBuild's non-multithreaded mode, but does not disable all build
+parallelism. It does not affect the initial AppHost compilation, publishing, or IDE-owned builds.
+
 ### Restoring projects individually
 
 Coordinated project builds restore all projects in a compatible group together, without introducing
