@@ -69,8 +69,10 @@ public sealed class StopWaitTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
         // Check once, without polling: stop --wait must not return until the container is gone.
+        // The listing is captured first so a failing `docker ps` fails the command instead of
+        // looking like an empty listing.
         await auto.RunCommandAsync(
-            $"if docker ps -a --format '{{{{.Names}}}}' | grep -qx '{resourceName}'; then docker ps -a --filter name={resourceName}; false; fi",
+            GetContainerAbsentCommand(resourceName),
             counter);
 
         await auto.AspireStartAsync(counter, TimeSpan.FromMinutes(5), skipDashboardCheck: true);
@@ -90,7 +92,10 @@ public sealed class StopWaitTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
         await auto.RunCommandAsync(
-            $"if docker ps -a --format '{{{{.Names}}}}' | grep -qx '{resourceName}'; then docker ps -a --filter name={resourceName}; false; fi",
+            GetContainerAbsentCommand(resourceName),
             counter);
     }
+
+    private static string GetContainerAbsentCommand(string containerName) =>
+        $"names=\"$(docker ps -a --format '{{{{.Names}}}}')\" && if printf '%s\\n' \"$names\" | grep -qx '{containerName}'; then docker ps -a --filter name={containerName}; false; fi";
 }
