@@ -26,19 +26,25 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task Session_WhenParentExits_StopsApiServerAndControllers(bool delayHandoff)
     {
-        await TestLifetimeAsync(abruptParentExit: true, delayHandoff, useSymlink: false);
+        await TestLifetimeAsync(abruptParentExit: true, delayHandoff, useSymlink: false, preventGracefulStop: false);
     }
 
     [Fact]
     public async Task Session_WhenDisposed_StopsDcpBeforeParentExits()
     {
-        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false);
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false, preventGracefulStop: false);
+    }
+
+    [Fact]
+    public async Task Session_WhenGracefulStopCannotBeRequested_KillsApiServerAndControllersBeforeParentExits()
+    {
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false, preventGracefulStop: true);
     }
 
     [Fact]
     public async Task Session_WhenBundleDirectoryIsSymlinked_RecognizesControllers()
     {
-        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: true);
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: true, preventGracefulStop: false);
     }
 
     [Fact]
@@ -108,7 +114,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
         return directory;
     }
 
-    private async Task TestLifetimeAsync(bool abruptParentExit, bool delayHandoff, bool useSymlink)
+    private async Task TestLifetimeAsync(bool abruptParentExit, bool delayHandoff, bool useSymlink, bool preventGracefulStop)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var readiness = new ProcessTestReadiness();
@@ -133,6 +139,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             workspace.Path,
             readiness.Name,
             Environment.GetEnvironmentVariable(KnownConfigNames.ContainerRuntime) ?? string.Empty,
+            preventGracefulStop.ToString(),
             options);
         var output = helper.Process.StandardOutput.ReadToEndAsync();
         var error = helper.Process.StandardError.ReadToEndAsync();

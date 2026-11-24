@@ -48,7 +48,7 @@ internal sealed class DcpConnectionTestProcess(
     public void Kill(bool entireProcessTree) => inner.Kill(entireProcessTree);
     public ValueTask DisposeAsync() => inner.DisposeAsync();
 
-    internal static async Task RunAsync(string dcpDirectory, string workingDirectory, string readinessName, string containerRuntime)
+    internal static async Task RunAsync(string dcpDirectory, string workingDirectory, string readinessName, string containerRuntime, string preventGracefulStop)
     {
         using var control = new NamedPipeServerStream(
             $"{readinessName}-control", PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
@@ -129,6 +129,13 @@ internal sealed class DcpConnectionTestProcess(
             using var handoff = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             await control.WaitForConnectionAsync(handoff.Token);
             Assert.Equal("continue", await reader.ReadLineAsync(handoff.Token));
+
+            if (bool.Parse(preventGracefulStop))
+            {
+                // The session has not cached the kubeconfig, so an unreadable file makes the graceful
+                // stop request undeliverable, as when the probe finds the API server unhealthy.
+                await File.WriteAllTextAsync(Path.Combine(sessionDirectory, "kubeconfig"), "clusters:", handoff.Token);
+            }
         }
 
         using var completion = new CancellationTokenSource(TimeSpan.FromSeconds(30));

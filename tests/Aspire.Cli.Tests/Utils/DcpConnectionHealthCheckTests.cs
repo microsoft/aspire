@@ -252,10 +252,10 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TestConnectionAsync_WhenCanceledAfterStart_LeavesDcpToMonitorAndPropagatesCancellation()
+    public async Task TestConnectionAsync_WhenCanceledAfterStart_KillsDcpTreeAndPropagatesCancellation()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var factory = new TestProcessExecutionFactory();
+        var factory = CreateDcpFactory(exitsWhenKilled: true);
         var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 
@@ -266,7 +266,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection);
 
-        AssertLeftToMonitor(execution);
+        AssertKilledAndCleanedUp(execution);
     }
 
     [Theory]
@@ -302,17 +302,10 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TestConnectionAsync_WhenKubeconfigIsInvalid_LeavesDcpToMonitorAndReturnsFailure()
+    public async Task TestConnectionAsync_WhenKubeconfigIsInvalid_KillsDcpTreeAndReturnsFailure()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var factory = new TestProcessExecutionFactory
-        {
-            AssertionCallback = (_, environment, _, _) =>
-            {
-                Assert.NotNull(environment);
-                File.WriteAllText(Path.Combine(environment["DCP_SESSION_FOLDER"], "kubeconfig"), "clusters:");
-            }
-        };
+        var factory = CreateDcpFactory(exitsWhenKilled: true, writeInvalidKubeconfig: true);
         var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
 
         var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
@@ -321,18 +314,27 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
         Assert.Equal(DoctorCommandStrings.DcpKubeconfigMissingServerDetails, result.Details);
         Assert.True(execution.Started);
-        AssertLeftToMonitor(execution);
+        AssertKilledAndCleanedUp(execution);
     }
 
-    // When no stop request can be delivered, the running execution is neither killed nor disposed
-    // (disposing a running ChildProcess kills its tree); DCP exits through --monitor instead and
-    // owns its session folder until then.
-    private static void AssertLeftToMonitor(TestProcessExecution execution)
+    [Fact]
+    public async Task TestConnectionAsync_WhenDcpSurvivesKill_LeavesDcpToMonitorAndReturnsFailure()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var factory = CreateDcpFactory(exitsWhenKilled: false, writeInvalidKubeconfig: true);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
         var sessionDirectory = Assert.IsType<string>(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]);
         try
         {
-            Assert.Equal(0, execution.KillCount);
+            // Disposing a still-running ChildProcess would block on another kill attempt, and DCP
+            // owns its session folder until it exits through --monitor.
+            Assert.Equal(1, execution.KillCount);
+            Assert.True(execution.KilledEntireProcessTree);
             Assert.Equal(0, execution.DisposeCount);
             Assert.True(Directory.Exists(sessionDirectory));
         }
@@ -340,6 +342,38 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         {
             Directory.Delete(sessionDirectory, recursive: true);
         }
+    }
+
+    // A doctor-only DCP instance owns no API objects, so when no graceful stop request can be
+    // delivered its whole process tree is killed and the doctor-owned session folder is removed.
+    private static void AssertKilledAndCleanedUp(TestProcessExecution execution)
+    {
+        var sessionDirectory = Assert.IsType<string>(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]);
+        Assert.Equal(1, execution.KillCount);
+        Assert.True(execution.KilledEntireProcessTree);
+        Assert.Equal(1, execution.DisposeCount);
+        Assert.False(Directory.Exists(sessionDirectory));
+    }
+
+    private static TestProcessExecutionFactory CreateDcpFactory(bool exitsWhenKilled, bool writeInvalidKubeconfig = false)
+    {
+        return new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, options) =>
+            {
+                Assert.NotNull(environment);
+                if (writeInvalidKubeconfig)
+                {
+                    File.WriteAllText(Path.Combine(environment["DCP_SESSION_FOLDER"], "kubeconfig"), "clusters:");
+                }
+
+                return new TestProcessExecution(fileName, arguments, environment, options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)), () => 1)
+                {
+                    ExitsWhenKilled = exitsWhenKilled
+                };
+            }
+        };
     }
 
     [Fact]

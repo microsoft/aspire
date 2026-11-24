@@ -334,6 +334,11 @@ internal sealed class DcpConnectionChecker(
                     exited = await WaitForExitAsync().ConfigureAwait(false);
                 }
 
+                if (!exited)
+                {
+                    exited = await ForceStopAsync().ConfigureAwait(false);
+                }
+
                 if (exited)
                 {
                     await _process.DisposeAsync().ConfigureAwait(false);
@@ -341,11 +346,11 @@ internal sealed class DcpConnectionChecker(
                 }
                 else
                 {
-                    // Disposing a running process would kill it.
-                    // Abandon the handle instead; the use of --monitor flag will cause DCP process initiate shutdown sequence when this process exits.
-                    // DCP removes its own session folder when it shuts down, so the session directory is left in place while it runs.
+                    // Even a tree kill did not end DCP. Disposing a running process would block on
+                    // another kill attempt, so abandon the handle; --monitor makes DCP shut down
+                    // when this CLI process exits, and DCP owns its session folder until then.
                     _logger.LogDebug(
-                        "DCP doctor process {ProcessId} did not stop gracefully; leaving it to exit with its monitored parent.",
+                        "DCP doctor process {ProcessId} could not be stopped; leaving it to exit with its monitored parent.",
                         _process.ProcessId);
                 }
             }
@@ -413,10 +418,47 @@ internal sealed class DcpConnectionChecker(
             }
         }
 
+        /// <summary>
+        /// Kills the doctor-only DCP process tree when it could not be stopped gracefully.
+        /// </summary>
+        /// <returns><see langword="true"/> if DCP exited after being killed.</returns>
+        private async Task<bool> ForceStopAsync()
+        {
+            // IMPORTANT: Killing DCP is acceptable ONLY because this DCP instance exists solely for the
+            // `aspire doctor` connectivity health check. It runs a bare API server (plus its controller
+            // process) in a private session folder, Aspire never creates any API objects in it (the probe
+            // only calls GET /version), so it manages no containers, executables, networks, or other
+            // resources that a forced kill could orphan. A DCP instance that runs an AppHost must NOT be
+            // stopped this way: it has to be shut down gracefully so it can clean up the resources it owns.
+            //
+            // The graceful stop request fails exactly when the probe found DCP unhealthy (no kubeconfig,
+            // TLS or authentication failures, or an unresponsive API server). Leaving DCP for --monitor would
+            // keep it alive until the CLI exits, which in a long-lived `aspire agent mcp` server could be
+            // indefinitely and would accumulate one orphan pair of processes per failed doctor run.
+            _logger.LogDebug("DCP doctor process {ProcessId} did not stop gracefully; killing its process tree.", _process.ProcessId);
+
+            try
+            {
+                // Kill the whole tree so the controller process started by `dcp start-apiserver` does not outlive it.
+                _process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException) when (_process.HasExited)
+            {
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to kill DCP doctor process {ProcessId}.", _process.ProcessId);
+            }
+
+            return await WaitForExitAsync().ConfigureAwait(false);
+        }
+
         private async Task<bool> WaitForExitAsync()
         {
-            // Poll instead of calling IProcessExecution.WaitForExitAsync with a timeout token:
-            // a cancelled wait terminates the child, which is exactly what this teardown needs to avoid.
+            // Poll instead of calling IProcessExecution.WaitForExitAsync with a timeout token: a cancelled
+            // wait terminates the child itself, whereas this teardown must first give DCP a chance to stop
+            // gracefully and only then decide explicitly (in ForceStopAsync) whether to kill it.
             var stopwatch = Stopwatch.StartNew();
             while (!_process.HasExited)
             {
