@@ -296,7 +296,20 @@ internal static class SharedAIHelpers
 
     private static OtlpSpanDto? GetRootSpan(OtlpTraceDto trace)
     {
-        return trace.Spans.FirstOrDefault(s => string.IsNullOrEmpty(s.Span.ParentSpanId)) ?? trace.Spans.FirstOrDefault();
+        // Prefer a span without a parent. A trace often has none: the caller is outside the app (a browser or load
+        // generator sends a traceparent header), or the root span is still running because spans are exported when
+        // they end. Then use the top-most received span, one whose parent isn't in the trace, rather than whichever
+        // span the API listed first, which can be a deep child such as a database call. Ties use the earliest start,
+        // matching the dashboard, which falls back to the earliest span when a trace has no root.
+        var spanIds = trace.Spans
+            .Select(s => s.Span.SpanId)
+            .Where(id => !string.IsNullOrEmpty(id))
+            .ToHashSet(StringComparer.Ordinal);
+
+        return trace.Spans
+            .OrderBy(s => string.IsNullOrEmpty(s.Span.ParentSpanId) ? 0 : spanIds.Contains(s.Span.ParentSpanId) ? 2 : 1)
+            .ThenBy(s => s.Span.StartTimeUnixNano ?? ulong.MaxValue)
+            .FirstOrDefault();
     }
 
     private static JsonObject GetSpanSummaryDto(OtlpSpanDto spanDto, Func<IOtlpResource, string> getResourceName)

@@ -928,6 +928,46 @@ public class ListTracesToolTests
         Assert.Equal(expectedMessage, exception.Message);
     }
 
+    [Fact]
+    public async Task ListTracesTool_SummaryUsesTopMostSpanAsRoot_WhenTraceHasNoParentlessSpan()
+    {
+        // The server span's parent belongs to a caller outside the app, so no span in the trace lacks a parent.
+        // The database span is listed first to make sure the root isn't chosen by response order.
+        var apiResponse = CreateTracesResponse(CreateResourceSpans("api",
+            new OtlpSpanJson
+            {
+                TraceId = "trace1",
+                SpanId = "db",
+                ParentSpanId = "server",
+                Name = "postgres",
+                Kind = 3,
+                StartTimeUnixNano = 1706540400050000000,
+                EndTimeUnixNano = 1706540400950000000,
+                Attributes = [new OtlpKeyValueJson { Key = "db.query.text", Value = new OtlpAnyValueJson { StringValue = "SELECT * FROM orders" } }]
+            },
+            new OtlpSpanJson
+            {
+                TraceId = "trace1",
+                SpanId = "server",
+                ParentSpanId = "external-client",
+                Name = "GET /orders",
+                Kind = 2,
+                StartTimeUnixNano = 1706540400000000000,
+                EndTimeUnixNano = 1706540401000000000
+            }));
+        using var handler = CreateHandler(apiResponse, ["api"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var trace = Assert.Single(JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray())!;
+        Assert.Equal("GET /orders", trace["title"]!.GetValue<string>());
+        Assert.Equal("server", trace["rootSpan"]!["spanId"]!.GetValue<string>());
+        Assert.Equal("db", trace["slowestSpan"]!["spanId"]!.GetValue<string>());
+        Assert.Equal("SELECT * FROM orders", trace["slowestSpan"]!["statement"]!.GetValue<string>());
+    }
+
     private static OtlpResourceSpansJson CreateResourceSpans(string serviceName, params OtlpSpanJson[] spans)
     {
         return new OtlpResourceSpansJson
