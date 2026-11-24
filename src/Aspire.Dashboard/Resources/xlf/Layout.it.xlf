@@ -332,49 +332,34 @@
         <target state="translated">Arrestata</target>
         <note>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneActivityContext">
-        <source>{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</source>
-        <target state="translated">{0}: server e consumer in ingresso negli ultimi 5 minuti (da {1} a {2}). Ultimo intervallo avviato {3}. Aggiornato {4}. Apre le tracce di questa risorsa con lo stesso intervallo di tempo. I conteggi delle tracce e i tipi di intervallo possono essere diversi.</target>
-        <note>{0} is the resource name, {1}-{2} the measured window, {3} the latest span start and {4} the refresh time.</note>
-      </trans-unit>
-      <trans-unit id="ResourcePaneActivityCount">
-        <source>{0} incoming</source>
-        <target state="translated">{0} in ingresso</target>
+      <trans-unit id="ResourcePaneActivityFailedSingleTooltip">
+        <source>{0} failed trace in the last {1} minutes</source>
+        <target state="new">{0} failed trace in the last {1} minutes</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneActivityFailures">
-        <source>{0} failed</source>
-        <target state="translated">{0} non riuscito</target>
+      <trans-unit id="ResourcePaneActivityFailedTooltip">
+        <source>{0} failed traces in the last {1} minutes</source>
+        <target state="new">{0} failed traces in the last {1} minutes</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneActivityP95">
-        <source>p95 {0}</source>
-        <target state="translated">p95 {0}</target>
+      <trans-unit id="ResourcePaneActivityIncomingSingleTooltip">
+        <source>{0} incoming trace in the last {1} minutes</source>
+        <target state="new">{0} incoming trace in the last {1} minutes</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneActivitySampled">
-        <source>Only the newest 5,000 incoming spans across resources were sampled. Counts are minimums and p95 describes this sample.</source>
-        <target state="translated">Sono stati campionati solo i 5.000 span in ingresso più recenti complessivamente per tutte le risorse. I conteggi rappresentano valori minimi e il p95 si riferisce a tale campione.</target>
+      <trans-unit id="ResourcePaneActivityIncomingTooltip">
+        <source>{0} incoming traces in the last {1} minutes</source>
+        <target state="new">{0} incoming traces in the last {1} minutes</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneActivitySampledCount">
-        <source>{0}+ incoming</source>
-        <target state="translated">{0}+ in ingresso</target>
+      <trans-unit id="ResourcePaneActivityP95Tooltip">
+        <source>P95 latency: {0} in the last {1} minutes</source>
+        <target state="new">P95 latency: {0} in the last {1} minutes</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneActivitySampledFailures">
-        <source>{0}+ failed</source>
-        <target state="translated">{0}+ non riuscito</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneActivitySampledP95">
-        <source>Sample p95 {0}</source>
-        <target state="translated">Campione p95 {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneActivitySamples">
-        <source>{0} valid duration samples. P95 appears after at least 20 samples.</source>
-        <target state="translated">{0} campioni di durata validi. Il p95 viene visualizzato dopo almeno 20 campioni.</target>
+      <trans-unit id="ResourcePaneActivitySampledP95Tooltip">
+        <source>Sample p95 latency: {0} in the last {1} minutes</source>
+        <target state="new">Sample p95 latency: {0} in the last {1} minutes</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneChildOf">

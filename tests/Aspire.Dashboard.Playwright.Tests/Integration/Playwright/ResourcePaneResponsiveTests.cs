@@ -102,7 +102,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             }
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name='api'] .resource-row-insight-requests").First)
-                .ToHaveTextAsync("20 incoming");
+                .ToHaveTextAsync("20");
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resource-row-insight")).ToHaveCountAsync(0);
         });
@@ -191,7 +191,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     [InlineData(false)]
     [InlineData(true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task EndpointTypography_UsesSecondaryDensityAndKeepsRowRhythm(bool dark)
+    public async Task MetadataTypography_UsesBodySizeAndKeepsRowRhythm(bool dark)
     {
         await RunTestAsync(async page =>
         {
@@ -199,8 +199,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             await page.GotoAsync("/resources/cache?pane=tags");
             // These are expanded-list rows: a compact row is a single 32px line, and a comfortable one has two lines.
-            foreach (var (density, fontSize, lineHeight, rowHeight) in new[]
-                { ("Compact", 12d, 16d, 32d), ("Comfortable", 12d, 18d, 52d) })
+            foreach (var (density, lineHeight, rowHeight) in new[]
+                { ("Compact", 16d, 32d), ("Comfortable", 18d, 52d) })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
@@ -225,7 +225,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             a.textOverflow==='ellipsis'?1:0];
                     }
                     """);
-                Assert.Equal([fontSize, lineHeight, 400d, fontSize, fontSize], metrics[..5]);
+                Assert.Equal([13d, lineHeight, 400d, 13d, 13d], metrics[..5]);
                 Assert.All(metrics[5..7], value => Assert.InRange(Math.Abs(value), 0, .5));
                 Assert.Equal(rowHeight, metrics[7]);
                 Assert.Equal(1d, metrics[8]);
@@ -392,7 +392,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var idle = await MeasureAsync();
             await page.EvaluateAsync("() => window.resetActivityMeasure()");
             await fixture.SeedActivityAsync(resources.Select(resource => (resource.Name, 21)).ToArray());
-            await Assertions.Expect(page.Locator(".resource-row-insight-requests > span")).ToHaveTextAsync(Enumerable.Repeat("21 incoming", 56));
+            await Assertions.Expect(page.Locator(".resource-row-insight-requests > span")).ToHaveTextAsync(Enumerable.Repeat("21", 56));
             await page.EvaluateAsync("() => new Promise(resolve=>setTimeout(resolve,500))");
             var refresh = await MeasureAsync();
             await File.WriteAllTextAsync(Path.Combine(AppContext.BaseDirectory, "activity-performance.json"),
@@ -1202,24 +1202,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             if (icon.width !== iconBox || icon.height !== iconBox) errors.push(`${row.dataset.resourceName}: icon box`);
                             const mainGlyph = row.querySelector('.resource-row-glyph svg').getBoundingClientRect();
                             if (mainGlyph.width !== glyphSize || mainGlyph.height !== glyphSize) errors.push(`${row.dataset.resourceName}: glyph`);
-                            // Both densities use the shared body size for names and secondary size for chips.
+                            // Both densities use the shared body size for names.
                             const expectedFont = 13;
                             if (parseFloat(getComputedStyle(row.querySelector('.resource-row-name')).fontSize) !== expectedFont)
                                 errors.push(`${row.dataset.resourceName}: density font`);
-                            for (const chip of row.querySelectorAll('.resource-row-insight')) {
-                                const chipBox = chip.getBoundingClientRect();
-                                if (!chipBox.width) continue;
-                                const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
-                                const font = 12;
-                                const line = compact ? 16 : 18;
-                                const target = compact ? 24 : 28;
-                                const iconSize = compact ? 12 : 14;
-                                if (parseFloat(style.fontSize) !== font || parseFloat(style.lineHeight) !== line ||
-                                    chipBox.height !== target || chipBox.width < target ||
-                                    glyph.width !== iconSize || glyph.height !== iconSize ||
-                                    style.fontVariantNumeric !== 'tabular-nums')
-                                    errors.push(`${row.dataset.resourceName}: chip density geometry; font=${style.fontSize}; line=${style.lineHeight}; target=${chipBox.width}x${chipBox.height}; icon=${glyph.width}x${glyph.height}`);
-                            }
                             if (i && b.y < rows[i-1].getBoundingClientRect().bottom + 1) errors.push(`${i}: overlap/gap`);
                             if (i && rows[i-1].nextElementSibling === row &&
                                 b.y - rows[i-1].getBoundingClientRect().bottom !== 1)
@@ -1269,9 +1255,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             const templates = new Set(rows.map(row => getComputedStyle(row).gridTemplateColumns));
                             if (templates.size !== 1) errors.push('content-dependent grid tracks');
                             for (const selector of ['.resource-row-health','.resource-row-endpoints .url-container',
-                                '.resource-row-source','.resource-row-insights',
-                                '.resource-row-insight-requests','.resource-row-insight-latency','.resource-row-insight-failed',
-                                '.resource-row-actions']) {
+                                '.resource-row-source','.resource-row-insights','.resource-row-actions']) {
                                 const values = rows.map(row => row.querySelector(selector)?.getBoundingClientRect())
                                     .filter(box => box?.width).map(box => box.x);
                                 columns[selector] = values;
@@ -1290,11 +1274,12 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                     errors.push(`${row.dataset.resourceName}: intersecting tracks`);
                                 if (insights?.width) {
                                     const gap = parseFloat(getComputedStyle(row).columnGap);
-                                    const latency = box('.resource-row-insight-latency');
+                                    const links = [...row.querySelectorAll('.resource-row-insight')].map(link => link.getBoundingClientRect());
                                     if (Math.abs(actions.x - insights.right - gap) > .5)
                                         errors.push(`${row.dataset.resourceName}: activity/action gap; activityRight=${insights.right}; actionX=${actions.x}; expected=${gap}`);
-                                    if (latency?.width && Math.abs(latency.right - insights.right) > .5)
-                                        errors.push(`${row.dataset.resourceName}: latency not trailing; latencyRight=${latency.right}; trackRight=${insights.right}`);
+                                    if (links[0].left < insights.left - .5 || Math.abs(links.at(-1).right - insights.right) > .5 ||
+                                        links.some((link, index) => index > 0 && link.left < links[index - 1].right - .5))
+                                        errors.push(`${row.dataset.resourceName}: activity links overlap or do not fit their shared track`);
                                 }
                                 for (const label of row.querySelectorAll('.resource-relationship-label')) {
                                     if (label.getBoundingClientRect().width && label.scrollWidth > label.clientWidth)
@@ -1383,6 +1368,44 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(menu.GetByText("api", new() { Exact = true })).ToBeVisibleAsync();
                 await page.Keyboard.PressAsync("Escape");
                 await Assertions.Expect(row.Locator(".resource-row-link")).ToBeFocusedAsync();
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData("Compact")]
+    [InlineData("Comfortable")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ActivityLinks_AreClickableAtTheirEdges(string density)
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.SeedActivityAsync();
+            await page.SetViewportSizeAsync(1550, 750);
+            await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
+            await page.GotoAsync("/resources/api");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+
+            var insights = page.Locator(".resource-row[data-resource-name='api'] .resource-row-insights").First;
+            foreach (var (selector, traceCount) in new[]
+            {
+                (".resource-row-insight-failed", 1),
+                (".resource-row-insight-requests", 20),
+                (".resource-row-insight-latency", 20)
+            })
+            {
+                var link = insights.Locator(selector);
+                await Assertions.Expect(link).ToBeVisibleAsync();
+                var bounds = await link.BoundingBoxAsync();
+                Assert.NotNull(bounds);
+                await page.Mouse.ClickAsync(bounds.X + bounds.Width - 2, bounds.Y + bounds.Height / 2);
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/traces/resource/api\?"));
+                await Assertions.Expect(page.Locator(".trace-name-content")).ToHaveCountAsync(traceCount);
+                await page.GoBackAsync();
+                await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             }
         });
     }
@@ -2253,28 +2276,40 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 Assert.Equal(0d, rest[5]);
 
                 await row.Locator(".resource-row-name").HoverAsync();
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls, checkTopmost: true);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls);
 
                 await page.Mouse.MoveAsync(1, 1);
                 await page.Keyboard.PressAsync("Tab");
                 await row.Locator(".resource-row-link").FocusAsync();
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "focus", shownControls, checkTopmost: true);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "keyboard focus", shownControls);
 
-                // The open menu's popup may lie over the toggle, so whether it's topmost isn't checked.
                 await row.HoverAsync();
                 await row.Locator(".resource-row-actions .aspire-menu-button").Last.ClickAsync();
                 await page.Mouse.MoveAsync(1, 1);
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "menu open", shownControls, checkTopmost: false);
+                AssertActions(await row.EvaluateAsync<double[]>(measure), $"{name}, menu open", shownControls);
                 await page.Keyboard.PressAsync("Escape");
             }
 
-            static void AssertToggle(double[] current, string row, string state, double shownControls, bool checkTopmost)
+            var selectedRow = pane.Locator("[data-resource-name='cache']").First;
+            var selectedLink = selectedRow.Locator(".resource-row-link");
+            await selectedRow.Locator(".resource-row-name").ClickAsync();
+            await page.Mouse.MoveAsync(1, 1);
+            await Assertions.Expect(selectedLink).ToBeFocusedAsync();
+            await Assertions.Expect(selectedRow.Locator(".resource-row-glyph")).ToBeVisibleAsync();
+            await Assertions.Expect(selectedRow.Locator(".resource-row-toggle-leading")).ToBeHiddenAsync();
+
+            static void AssertToggle(double[] current, string row, string state, double shownControls)
             {
                 var context = $"{row}, {state}";
                 Assert.True(current[0] == 1, $"{context}: the toggle doesn't show.");
                 Assert.True(current[1] == 1, $"{context}: the toggle doesn't cover the icon tile.");
-                Assert.True(!checkTopmost || current[2] == 1, $"{context}: something covers the toggle.");
+                Assert.True(current[2] == 1, $"{context}: something covers the toggle.");
                 Assert.True(current[3] == 1, $"{context}: the icon's glyph shows under the toggle.");
+                AssertActions(current, context, shownControls);
+            }
+
+            static void AssertActions(double[] current, string context, double shownControls)
+            {
                 Assert.True(current[4] == 1, $"{context}: the shown actions overlap or don't run left to right in tab order.");
                 Assert.Equal(shownControls, current[5]);
                 Assert.True(current[6] == 1, $"{context}: the name runs into the actions.");
@@ -2566,7 +2601,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var api = pane.Locator("[data-resource-name='api']").First;
 
             // Like the resources grid, the URLs that don't fit are behind a +N button, which lists them.
-            var more = api.Locator(".resource-row-endpoints .url-button");
+            var more = api.Locator(".resource-row-endpoints .url-button-neutral");
             await Assertions.Expect(more).ToHaveTextAsync("+1");
             await more.ClickAsync();
             var list = api.Locator(".url-overflow-popover");
@@ -2584,6 +2619,12 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(listed).Not.ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+
+            // When the column gets wider, URLs that now fit are shown inline rather than behind a count.
+            await page.SetViewportSizeAsync(2800, 900);
+            var inlineLinks = api.Locator(".resource-row-endpoints fluent-overflow > div > a:visible");
+            await Assertions.Expect(inlineLinks).ToHaveCountAsync(2);
+            await Assertions.Expect(more).Not.ToBeVisibleAsync();
         });
     }
 

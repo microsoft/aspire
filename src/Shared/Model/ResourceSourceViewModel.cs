@@ -5,7 +5,7 @@ using Aspire.Dashboard.Model;
 
 namespace Aspire.Shared.Model;
 
-internal record ResourceSource(string Value, string OriginalValue)
+internal record ResourceSource(string Value, string OriginalValue, string PropertyName)
 {
     public static ResourceSource? GetSourceModel(string? resourceType, IReadOnlyDictionary<string, string?> properties)
     {
@@ -21,32 +21,32 @@ internal record ResourceSource(string Value, string OriginalValue)
             properties.TryGetValue(KnownProperties.Project.Path, out var projectPath) &&
             !string.IsNullOrEmpty(projectPath))
         {
-            return new ResourceSource(Path.GetFileName(projectPath), projectPath);
+            return new ResourceSource(Path.GetFileName(projectPath), projectPath, KnownProperties.Project.Path);
         }
 
         if (string.Equals(resourceType, KnownResourceTypes.Tool, StringComparisons.ResourceType) &&
             properties.TryGetValue(KnownProperties.Tool.Package, out var toolPackage) &&
             !string.IsNullOrEmpty(toolPackage))
         {
-            return new ResourceSource(toolPackage, toolPackage);
+            return new ResourceSource(toolPackage, toolPackage, KnownProperties.Tool.Package);
         }
 
         if (properties.TryGetValue(KnownProperties.Executable.Path, out var executablePath) &&
             !string.IsNullOrEmpty(executablePath))
         {
-            return new ResourceSource(Path.GetFileName(executablePath), executablePath);
+            return new ResourceSource(Path.GetFileName(executablePath), executablePath, KnownProperties.Executable.Path);
         }
 
         if (properties.TryGetValue(KnownProperties.Container.Image, out var containerImage) &&
             !string.IsNullOrEmpty(containerImage))
         {
-            return new ResourceSource(containerImage, containerImage);
+            return new ResourceSource(containerImage, containerImage, KnownProperties.Container.Image);
         }
 
         if (properties.TryGetValue(KnownProperties.Resource.Source, out var source) &&
             !string.IsNullOrEmpty(source))
         {
-            return new ResourceSource(source, source);
+            return new ResourceSource(source, source, KnownProperties.Resource.Source);
         }
 
         return null;
