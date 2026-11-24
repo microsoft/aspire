@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
@@ -449,20 +450,66 @@ internal sealed class TelemetryTracesCommand : BaseCommand
     }
 
     /// <summary>
-    /// Collapses a database query onto one line and truncates it, so the span tree stays one row per span.
+    /// Renders a database query on one line by escaping line breaks and tabs, and truncates it,
+    /// so the span tree stays one row per span without changing the query's spaces.
     /// </summary>
     private static string FormatDbQueryText(string queryText)
     {
-        // Queries are commonly multi-line and indented, e.g.
+        // Queries are commonly multi-line and indented, and literals can contain significant spaces, e.g.
         //   SELECT o."Id", o."Total"
-        //   FROM "Orders" AS o
-        //   WHERE o."CustomerId" = @p0
-        // Collapse every whitespace run (including newlines) to a single space.
-        var collapsed = string.Join(' ', queryText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        //       FROM "Orders" AS o
+        //       WHERE o."Name" = 'a  b'
+        // is rendered as
+        //   SELECT o."Id", o."Total"\n    FROM "Orders" AS o\n    WHERE o."Name" = 'a  b'
+        // Spaces are kept exactly so quoted values are not altered; '\r', '\n' and '\t' become
+        // visible two-character escapes. Leading and trailing whitespace of the whole query is trimmed
+        // because it carries no meaning and would otherwise show up as escape noise.
+        var trimmed = queryText.AsSpan().Trim();
 
-        return collapsed.Length > MaxDbQueryTextLength
-            ? collapsed[..(MaxDbQueryTextLength - 3)] + "..."
-            : collapsed;
+        var escapedLength = 0;
+        foreach (var c in trimmed)
+        {
+            escapedLength += GetEscape(c) is null ? 1 : 2;
+        }
+
+        var maxLength = escapedLength > MaxDbQueryTextLength ? MaxDbQueryTextLength - 3 : escapedLength;
+        var builder = new StringBuilder(MaxDbQueryTextLength);
+        foreach (var c in trimmed)
+        {
+            var escape = GetEscape(c);
+            var length = escape is null ? 1 : escape.Length;
+
+            // Stop before a whole character or escape that does not fit, so truncation never
+            // leaves a dangling backslash from a split escape sequence.
+            if (builder.Length + length > maxLength)
+            {
+                break;
+            }
+
+            if (escape is null)
+            {
+                builder.Append(c);
+            }
+            else
+            {
+                builder.Append(escape);
+            }
+        }
+
+        if (escapedLength > MaxDbQueryTextLength)
+        {
+            builder.Append("...");
+        }
+
+        return builder.ToString();
+
+        static string? GetEscape(char c) => c switch
+        {
+            '\r' => "\\r",
+            '\n' => "\\n",
+            '\t' => "\\t",
+            _ => null
+        };
     }
 
     private sealed record SpanInfo(

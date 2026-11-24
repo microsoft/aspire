@@ -394,6 +394,8 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         var outputWriter = new TestOutputTextWriter(outputHelper);
 
         var longStatement = "SELECT " + string.Join(", ", Enumerable.Range(1, 40).Select(i => $"c{i}")) + " FROM wide_table";
+        // The '\n' escape would occupy output positions 196-197, straddling the 197-character truncation point.
+        var escapeAtTruncationStatement = "SELECT " + new string('x', 189) + "\nFROM t";
         var resourceSpans = new OtlpResourceSpansJson[]
         {
             new()
@@ -449,6 +451,42 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
                                         Value = new OtlpAnyValueJson { StringValue = longStatement }
                                     }
                                 ]
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "db00003",
+                                ParentSpanId = "root001",
+                                Name = "quoted",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(40)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(45)),
+                                Status = new OtlpSpanStatusJson { Code = 1 },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson
+                                    {
+                                        Key = "db.query.text",
+                                        Value = new OtlpAnyValueJson { StringValue = "SELECT * FROM t WHERE name = 'a  b'\t" }
+                                    }
+                                ]
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "db00004",
+                                ParentSpanId = "root001",
+                                Name = "split",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(45)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(48)),
+                                Status = new OtlpSpanStatusJson { Code = 1 },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson
+                                    {
+                                        Key = "db.query.text",
+                                        Value = new OtlpAnyValueJson { StringValue = escapeAtTruncationStatement }
+                                    }
+                                ]
                             }
                         ]
                     }
@@ -488,12 +526,14 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [
                 "Trace: abc1234 (http://localhost:18888/traces/detail/abc1234567890def)",
-                "Duration: 50ms  Spans: 3",
+                "Duration: 50ms  Spans: 5",
                 "",
                 "api",
                 $"└─ {SpanId("root001")} GET /orders OK     50ms",
-                $"   ├─ {SpanId("db00001")} postgres OK     20ms SELECT o.id, o.total FROM orders AS o WHERE o.customer_id = @p0",
-                $"   └─ {SpanId("db00002")} legacy OK     10ms {longStatement[..197]}...",
+                $"   ├─ {SpanId("db00001")} postgres OK     20ms SELECT o.id, o.total\\n    FROM orders AS o\\n    WHERE o.customer_id = @p0",
+                $"   ├─ {SpanId("db00002")} legacy OK     10ms {longStatement[..197]}...",
+                $"   ├─ {SpanId("db00003")} quoted OK      5ms SELECT * FROM t WHERE name = 'a  b'",
+                $"   └─ {SpanId("db00004")} split OK      3ms SELECT {new string('x', 189)}...",
             ],
             outputWriter.Logs.SkipWhile(l => !l.StartsWith("Trace:", StringComparison.Ordinal)));
     }
