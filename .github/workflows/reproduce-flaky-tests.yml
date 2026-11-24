@@ -1,12 +1,20 @@
 name: Temporary VS Code CLI lifecycle and Go attach stress
 'on':
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      scope:
+        type: choice
+        default: all
+        options:
+          - all
+          - windows-lifecycle
+        description: Run the full comparison or only Windows lifecycle cells
 permissions:
   contents: read
   actions: read
 jobs:
   verify_prerequisites:
-    if: ${{ github.repository == 'microsoft/aspire' }}
+    if: github.repository == 'microsoft/aspire' && inputs.scope != 'windows-lifecycle'
     name: Verify extension E2E prerequisites
     runs-on: ubuntu-latest
     env:
@@ -195,8 +203,9 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $false
           node scripts/ci-output-stress.cjs baseline
           if ($LASTEXITCODE -ne 0) { throw 'Failed to prepare baseline stress tests.' }
-          $env:ASPIRE_CLI_STRESS_REPORT = '.stress/baseline.json'
-          $arguments = @('yarn', 'unit-test', '--run', 'out/test/repeated-cli-output.js', '--grep', 'drains one-shot JSON|retains failure diagnostics|drains inherited pipes', '--reporter', './out/test/cli-output-reporter.cjs')
+          $env:ASPIRE_CLI_STRESS_REPORT = Join-Path (Get-Location).Path '.stress/baseline.json'
+          $reporter = Join-Path (Get-Location).Path 'out/test/cli-output-reporter.cjs'
+          $arguments = @('yarn', 'unit-test', '--run', 'out/test/repeated-cli-output.js', '--grep', 'drains one-shot JSON|retains failure diagnostics|drains inherited pipes', '--reporter', $reporter)
           if ($IsLinux) { xvfb-run -a corepack @arguments *>&1 | Tee-Object -FilePath '.stress/baseline.log' }
           else { corepack @arguments *>&1 | Tee-Object -FilePath '.stress/baseline.log' }
           if ($LASTEXITCODE -ne 1) { throw "Expected baseline test failure exit 1, got $LASTEXITCODE." }
@@ -204,7 +213,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Baseline did not reproduce the intended assertion failures.' }
           node scripts/ci-output-stress.cjs fixed
           if ($LASTEXITCODE -ne 0) { throw 'Failed to restore fixed implementation.' }
-          $env:ASPIRE_CLI_STRESS_REPORT = '.stress/fixed.json'
+          $env:ASPIRE_CLI_STRESS_REPORT = Join-Path (Get-Location).Path '.stress/fixed.json'
           if ($IsLinux) { xvfb-run -a corepack @arguments *>&1 | Tee-Object -FilePath '.stress/fixed.log' }
           else { corepack @arguments *>&1 | Tee-Object -FilePath '.stress/fixed.log' }
           if ($LASTEXITCODE -ne 0) { throw "Fixed stress tests failed: exit $LASTEXITCODE." }
@@ -229,10 +238,7 @@ jobs:
       fail-fast: false
       max-parallel: 10
       matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-          - macos-latest
+        os: ${{ inputs.scope == 'windows-lifecycle' && fromJSON('["windows-latest"]') || fromJSON('["windows-latest","ubuntu-latest","macos-latest"]') }}
         index:
           - 1
           - 2
@@ -240,7 +246,7 @@ jobs:
           - 4
           - 5
   extension_e2e:
-    if: ${{ github.repository == 'microsoft/aspire' }}
+    if: github.repository == 'microsoft/aspire' && inputs.scope != 'windows-lifecycle'
     name: Go attach (${{ matrix.name }}, ${{ matrix.variant }}, runner ${{ matrix.index }})
     needs: verify_prerequisites
     runs-on: ${{ matrix.runner }}
