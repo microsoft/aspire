@@ -95,9 +95,10 @@ rules.
 
 The Dashboard saves only explicit moves and replays them over the default order.
 A move uses its drop target when possible and falls back to the other neighbor.
-The Dashboard keeps the latest move per item and any earlier moves needed as
-anchors for other moves. It saves up to 50 resource moves and 50 group moves
-across grouping modes.
+The Dashboard rejects a resource move if the moved resource or its drop target
+shares a saved key with another resource, even under a different parent. It
+keeps the latest move per item and any earlier moves needed as anchors for other
+moves. It saves up to 50 resource moves and 50 group moves across grouping modes.
 
 Traits are transported as list-valued resource properties named `resource.trait.<name>`,
 including in recorded snapshots. Trait names are case-sensitive; dashboard tags are

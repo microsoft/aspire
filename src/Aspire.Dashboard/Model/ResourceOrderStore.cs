@@ -60,10 +60,19 @@ public sealed class ResourceOrderStore
     internal async Task<ResourceOrderMoveResult> MoveResourceAsync(ResourceViewModel resource, ResourceViewModel anchor, bool after, IEnumerable<ResourceViewModel> resources)
     {
         var ordered = OrderResources(resources);
+        var resourceKey = resource.PersistentKey;
+        var anchorKey = anchor.PersistentKey;
+        // Saved moves don't include a parent key, so a key that's unique among siblings may still be ambiguous during replay.
+        if (ordered.Count(r => StringComparers.ResourceName.Equals(r.PersistentKey, resourceKey)) != 1 ||
+            ordered.Count(r => StringComparers.ResourceName.Equals(r.PersistentKey, anchorKey)) != 1)
+        {
+            return ResourceOrderMoveResult.Invalid;
+        }
+
         var names = GetResourceNames(ordered);
         var parent = GetVisibleParent(resource, names);
         var siblingKeys = ordered.Where(r => StringComparer.Ordinal.Equals(GetVisibleParent(r, names), parent)).Select(r => r.PersistentKey);
-        var result = CreateMove(resource.PersistentKey, anchor.PersistentKey, after, siblingKeys, out var move);
+        var result = CreateMove(resourceKey, anchorKey, after, siblingKeys, out var move);
         if (move is null)
         {
             return result;

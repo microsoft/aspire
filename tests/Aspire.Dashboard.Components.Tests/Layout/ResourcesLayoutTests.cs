@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Storage;
@@ -20,6 +21,7 @@ using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Logs.V1;
@@ -1187,6 +1189,58 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         string[] GetKeys() => cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("data-resource-group-key")!).ToArray();
         AngleSharp.Dom.IElement GetGroup(string key) => cut.FindAll(".resource-tag-group").Single(group => group.GetAttribute("data-resource-group-key") == key);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AppHost_ReorderReadFailureWarnsAndPreservesOrderAndAnnouncement(bool groupReorder)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+                ModelTestHelpers.CreateResource("cache", state: KnownResourceState.Exited)
+            ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        var grouping = groupReorder ? "State" : "None";
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, grouping) : (false, null);
+        var appName = Services.GetRequiredService<IOptions<DashboardOptions>>().Value.GetApplicationNameOrDefault();
+        var storageKey = groupReorder ? BrowserStorageKeys.GroupOrderKey(appName) : BrowserStorageKeys.ResourceOrderKey(appName);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var toasts = Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var originalOrder = GetOrder();
+        Assert.Equal(2, originalOrder.Length);
+        var target = originalOrder[0];
+        var source = originalOrder[1];
+
+        Assert.True(await ReorderAsync(after: false));
+        Assert.Equal([source, target], GetOrder());
+        var announcement = GetAnnouncement();
+        Assert.False(string.IsNullOrWhiteSpace(announcement));
+
+        storage.IsReadFailed = key => key == storageKey;
+        Assert.False(await ReorderAsync(after: true));
+        toasts.WaitForAssertion(() =>
+            Assert.Equal(Resources.Layout.BrowserStorageSaveFailed, Assert.Single(toasts.FindComponents<FluentToast>()).Instance.Title));
+        cut.Render();
+        Assert.Equal([source, target], GetOrder());
+        Assert.Equal(announcement, GetAnnouncement());
+
+        Task<bool> ReorderAsync(bool after) => cut.InvokeAsync(() => groupReorder
+            ? cut.Instance.ReorderGroupAsync(grouping, source, target, after)
+            : cut.Instance.ReorderResourceAsync(source, target, after));
+
+        string[] GetOrder()
+        {
+            var attribute = groupReorder ? "data-resource-group-key" : "data-resource-name";
+            return cut.FindAll($".resource-pane-list [{attribute}]").Select(element => element.GetAttribute(attribute)!).ToArray();
+        }
+
+        string GetAnnouncement() => cut.Find(".resource-pane-list [role='status'][aria-live='polite']").TextContent;
     }
 
     [Theory]

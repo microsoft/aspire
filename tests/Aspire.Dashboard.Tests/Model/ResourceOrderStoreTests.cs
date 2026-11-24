@@ -103,21 +103,27 @@ public sealed class ResourceOrderStoreTests
         Assert.Equal(["worker", "api", "other", "root"], GetNames(store, root, other, api, worker));
     }
 
-    [Fact]
-    public async Task ResourceOrder_RejectsAmbiguousReplicaMoves()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResourceOrder_RejectsAmbiguousReplicaMoves(bool differentParents)
     {
         var store = await CreateLoadedStoreAsync();
-        var api = ModelTestHelpers.CreateResource("api-old", displayName: "api", resourceType: "Project");
-        var replacement = ModelTestHelpers.CreateResource("api-new", displayName: "api", resourceType: "Project");
-        var worker = CreateResource("worker");
+        var root = CreateResource("root");
+        var other = CreateResource("other");
+        var api = CreateResource("api-old", parent: differentParents ? other.Name : root.Name, displayName: "api");
+        var replacement = CreateResource("api-new", parent: root.Name, displayName: "api");
+        var worker = CreateResource("worker", parent: root.Name);
+        ResourceViewModel[] resources = [root, other, api, replacement, worker];
+        var originalOrder = GetNames(store, resources);
 
-        Assert.Equal(ResourceOrderMoveResult.Invalid, await store.MoveResourceAsync(api, worker, after: false, [api, replacement, worker]));
-        Assert.Equal(ResourceOrderMoveResult.Invalid, await store.MoveResourceAsync(worker, replacement, after: false, [api, replacement, worker]));
+        Assert.Equal(ResourceOrderMoveResult.Invalid, await store.MoveResourceAsync(replacement, worker, after: true, resources));
+        Assert.Equal(ResourceOrderMoveResult.Invalid, await store.MoveResourceAsync(worker, replacement, after: false, resources));
         Assert.Empty(_browser.Items);
-        Assert.Equal(["api-old"], GetNames(store, api));
+        Assert.Equal(originalOrder, GetNames(store, resources));
 
-        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, replacement, after: false, [replacement, worker]));
-        Assert.Equal(["worker", "api-new"], GetNames(await CreateLoadedStoreAsync(), replacement, worker));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, replacement, after: false, [root, other, replacement, worker]));
+        Assert.Equal(["worker", "api-new", "other", "root"], GetNames(await CreateLoadedStoreAsync(), root, other, replacement, worker));
     }
 
     [Fact]
@@ -309,7 +315,7 @@ public sealed class ResourceOrderStoreTests
         Assert.Equal(["worker", "api"], GetNames(await CreateLoadedStoreAsync(), CreateResource("api"), CreateResource("worker")));
     }
 
-    private static ResourceViewModel CreateResource(string name, string resourceType = "Project", int? order = null, string? parent = null)
+    private static ResourceViewModel CreateResource(string name, string resourceType = "Project", int? order = null, string? parent = null, string? displayName = null)
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>();
         if (order is { } displayOrder)
@@ -323,7 +329,7 @@ public sealed class ResourceOrderStoreTests
                 Value.ForString(parent), false, null, 0, null, false));
         }
 
-        return ModelTestHelpers.CreateResource(name, resourceType: resourceType, properties: properties);
+        return ModelTestHelpers.CreateResource(name, displayName: displayName, resourceType: resourceType, properties: properties);
     }
 
     private static string[] GetNames(ResourceOrderStore store, params ResourceViewModel[] resources) =>
