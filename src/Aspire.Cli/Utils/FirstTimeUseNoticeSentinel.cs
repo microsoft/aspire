@@ -35,13 +35,23 @@ internal sealed class FirstTimeUseNoticeSentinel : IFirstTimeUseNoticeSentinel
             return;
         }
 
-        var directory = Path.GetDirectoryName(_sentinelFilePath);
-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+        try
         {
-            Directory.CreateDirectory(directory);
-        }
+            var directory = Path.GetDirectoryName(_sentinelFilePath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
 
-        // Create an empty sentinel file
-        File.WriteAllText(_sentinelFilePath, string.Empty);
+            // Several CLI processes can run for the first time at once, for example parallel AppHost builds that each
+            // run `aspire setup` on a fresh CI agent (https://github.com/microsoft/aspire/issues/22490). Only the file's
+            // existence matters, so open it in a way that lets a racing process open it too instead of failing with a
+            // sharing violation.
+            using var _ = new FileStream(_sentinelFilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Failing to record the notice only means it may be shown again; it must never stop the command.
+        }
     }
 }
