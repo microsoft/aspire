@@ -46,6 +46,12 @@ public abstract class DashboardTestContext : BunitContext
         JSInterop.Setup<bool>($"{VirtualizeJsFunctionsPrefix}isFollowingTop", _ => true).SetResult(false);
     }
 
+    protected Task DisposeOnRendererDispatcherAsync(Func<Task> disposeAsync)
+    {
+        // Off the dispatcher, bUnit can clear its list of root components before the queued removal runs.
+        return Renderer.Dispatcher.InvokeAsync(disposeAsync);
+    }
+
     private void RemoveBunitVirtualizeHandler()
     {
         var handlersField = typeof(BunitJSInterop).GetField("handlers", BindingFlags.NonPublic | BindingFlags.Instance)!;
