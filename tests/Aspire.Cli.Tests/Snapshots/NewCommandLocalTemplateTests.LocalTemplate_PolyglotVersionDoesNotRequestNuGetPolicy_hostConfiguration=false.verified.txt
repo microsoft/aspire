@@ -9,16 +9,16 @@ This is an Aspire application. Its AppHost is `apphost.mts`.
 
 ### Run it
 1. Start it: `aspire start --apphost apphost.mts --non-interactive --isolated`.
-2. `aspire describe` lists every resource of the running app with its state, health and endpoint
-   URLs. That list names the resources to wait on.
-3. `aspire wait <resource-name>` for each resource the task needs, with `<resource-name>` taken from
-   that list. It returns when the resource is healthy.
+2. `aspire describe --apphost apphost.mts` lists every resource of the running app
+   with its state, health and endpoint URLs. That list names the resources to wait on.
+3. `aspire wait <resource-name> --apphost apphost.mts` for each resource the task needs,
+   with `<resource-name>` taken from that list. It returns when the resource is healthy.
 
-`aspire logs <resource-name>` prints that resource's console output.
+`aspire logs <resource-name> --apphost apphost.mts` prints that resource's console output.
 
 ### When it is slow
-Start with `aspire otel traces -n 15 --search "duration:>500"` (milliseconds; lower the
-threshold if nothing comes back), before reading code or timing requests by hand.
+Start with `aspire otel traces -n 15 --search "duration:>500" --apphost apphost.mts`
+(milliseconds; lower the threshold if nothing comes back), before reading code or timing requests by hand.
 <!-- aspire:end -->
 ,
   apphost.mts: import { createBuilder } from "./.aspire/sdk/aspire.js";,

@@ -69,6 +69,61 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         Assert.Equal(existing, await ReadFileAsync(workspace));
     }
 
+    [Fact]
+    public async Task WriteAsync_PreservesTextAfterEndMarkerOnSameLine()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var oldSection = AgentInstructionsFile.CreateSection("old.cs", [], "\n");
+        await File.WriteAllTextAsync(GetFilePath(workspace), $"# Rules\n\n{oldSection} Keep this team rule.\nMore rules.\n");
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Updated, change);
+        Assert.Equal(
+            $"# Rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", [], "\n")} Keep this team rule.\nMore rules.\n",
+            await ReadFileAsync(workspace));
+    }
+
+    [Fact]
+    public async Task WriteAsync_LeavesFileWithUnclosedEndMarkerUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var existing = $"# Rules\n\n{AgentInstructionsFile.SectionStartMarkerPrefix} -->\nOld section.\n{AgentInstructionsFile.SectionEndMarkerPrefix}\nMy own notes.\n";
+        await File.WriteAllTextAsync(GetFilePath(workspace), existing);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, [], CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
+        Assert.Equal(existing, await ReadFileAsync(workspace));
+    }
+
+    [Theory]
+    [InlineData("src/App.AppHost/apphost.cs", "`aspire start --apphost src/App.AppHost/apphost.cs --non-interactive --isolated`")]
+    [InlineData("src/My App/apphost.cs", "`aspire start --apphost 'src/My App/apphost.cs' --non-interactive --isolated`")]
+    [InlineData("src/My $App/apphost.cs", "`aspire start --apphost 'src/My $App/apphost.cs' --non-interactive --isolated`")]
+    [InlineData("src/Bob's App/apphost.cs", "`aspire start --apphost \"src/Bob's App/apphost.cs\" --non-interactive --isolated`")]
+    [InlineData("src/Bob's $App/apphost.cs", "`aspire start --apphost 'src/Bob'\\''s $App/apphost.cs' --non-interactive --isolated`")]
+    [InlineData("src/My`App/apphost.cs", "`` aspire start --apphost 'src/My`App/apphost.cs' --non-interactive --isolated ``")]
+    public void CreateSection_QuotesAppHostPathAsOneLiteralShellArgument(string appHostPath, string expectedStartCommand)
+    {
+        var section = AgentInstructionsFile.CreateSection(appHostPath, [], "\n");
+
+        Assert.Equal($"1. Start it: {expectedStartCommand}.", section.Split('\n').Single(line => line.StartsWith("1. ", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task GetConfiguredAppHostPath_ReturnsNullForPathWithNulCharacter()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
+            """{ "appHost": { "path": "bad\u0000.cs" } }""");
+
+        Assert.Null(AgentInstructionsFile.GetConfiguredAppHostPath(workspace.WorkspaceRoot));
+    }
+
     private static string GetFilePath(TemporaryWorkspace workspace) =>
         Path.Combine(workspace.WorkspaceRoot.FullName, AgentInstructionsFile.FileName);
 

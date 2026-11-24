@@ -6,17 +6,17 @@
 This is an Aspire application. Its AppHost is `src/My App.AppHost/My App.AppHost.csproj`.
 
 ### Run it
-1. Start it: `aspire start --apphost "src/My App.AppHost/My App.AppHost.csproj" --non-interactive --isolated`.
-2. `aspire describe` lists every resource of the running app with its state, health and endpoint
-   URLs. That list names the resources to wait on.
-3. `aspire wait <resource-name>` for each resource the task needs, with `<resource-name>` taken from
-   that list. It returns when the resource is healthy.
+1. Start it: `aspire start --apphost 'src/My App.AppHost/My App.AppHost.csproj' --non-interactive --isolated`.
+2. `aspire describe --apphost 'src/My App.AppHost/My App.AppHost.csproj'` lists every resource of the running app
+   with its state, health and endpoint URLs. That list names the resources to wait on.
+3. `aspire wait <resource-name> --apphost 'src/My App.AppHost/My App.AppHost.csproj'` for each resource the task needs,
+   with `<resource-name>` taken from that list. It returns when the resource is healthy.
 
-`aspire logs <resource-name>` prints that resource's console output.
+`aspire logs <resource-name> --apphost 'src/My App.AppHost/My App.AppHost.csproj'` prints that resource's console output.
 
 ### When it is slow
-Start with `aspire otel traces -n 15 --search "duration:>500"` (milliseconds; lower the
-threshold if nothing comes back), before reading code or timing requests by hand.
+Start with `aspire otel traces -n 15 --search "duration:>500" --apphost 'src/My App.AppHost/My App.AppHost.csproj'`
+(milliseconds; lower the threshold if nothing comes back), before reading code or timing requests by hand.
 
 ### Skills
 - `aspire`: route an Aspire task to the right Aspire skill.
