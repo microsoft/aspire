@@ -1,0 +1,29 @@
+{
+  "id": "dashboard-applicationsummary-live-disposal-refresh-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh query count mismatch after disposal",
+  "error_pattern": "Assert.Equal() Failure: Values differ\nExpected: 1\nActual:   2",
+  "occurrences": [
+    {
+      "run_id": 45487444726,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45487444726",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "observed_at": "2026-11-24T21:41:00Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh",
+          "job_id": 138777722635,
+          "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+          "error": "Assert.Equal() Failure: Values differ\nExpected: 1\nActual:   2",
+          "stack_trace": "   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 551\n--- End of stack trace from previous location ---",
+          "standard_output": "Temporary workspace created at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/2msql1b2.e3e\nDisposing temporary workspace at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/2msql1b2.e3e\n",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "e37a568f-32d4-480a-8111-2b2c3dacf675"
+        }
+      ]
+    }
+  ]
+}
