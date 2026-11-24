@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="ConfigurationWriteRefused">
         <source>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</source>
-        <target state="new">Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</target>
+        <target state="translated">無法安全地更新 '{0}'。請檢查並行變更、連結或限制權限，然後重試或手動設定。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
@@ -89,7 +89,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
         <source>Agent assets from configured skill sources</source>
-        <target state="new">Agent assets from configured skill sources</target>
+        <target state="translated">來自已設定技能來源的代理程式資產</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
@@ -109,17 +109,17 @@
       </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
         <source>Configured sources in {0}</source>
-        <target state="new">Configured sources in {0}</target>
+        <target state="translated">{0} 中的已設定來源</target>
         <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_DeleteSkillCopiesPrompt">
         <source>Delete {0} copied skill folders?</source>
-        <target state="new">Delete {0} copied skill folders?</target>
+        <target state="translated">刪除 {0} 個複製的技能資料夾?</target>
         <note>{0} is the number of skill folders, always greater than one.</note>
       </trans-unit>
       <trans-unit id="InitCommand_DeleteSkillCopyPrompt">
         <source>Delete this copied skill folder?</source>
-        <target state="new">Delete this copied skill folder?</target>
+        <target state="translated">刪除這個複製的技能資料夾?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
@@ -139,13 +139,13 @@
       </trans-unit>
       <trans-unit id="InitCommand_ExistingConfigurationConflict">
         <source>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</source>
-        <target state="new">Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</target>
+        <target state="translated">無法註冊Aspire，因為 '{0}' 與現有設定或覆寫衝突。現有設定保持不變。</target>
         <note>{0} identifies the conflicting JSON setting or environment override.</note>
       </trans-unit>
       <trans-unit id="InitCommand_FailedTarget">
         <source>Failed to configure Aspire plugin:
   {0}</source>
-        <target state="new">Failed to configure Aspire plugin:
+        <target state="translated">無法設定 Aspire 外掛程式:
   {0}</target>
         <note>{0} lists each agent's configuration path and failure details, one target per line.</note>
       </trans-unit>
@@ -156,7 +156,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
         <source>Global (In your home directory, available across all projects)</source>
-        <target state="needs-review-translation">全域 (安裝在您的主目錄中；適用於所有專案)</target>
+        <target state="translated">全域 (在您的主目錄中，適用於所有專案)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
@@ -171,7 +171,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
         <source>Installed skills:</source>
-        <target state="needs-review-translation">已安裝的 Aspire 代理程式技能:</target>
+        <target state="translated">已安裝的技能:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
@@ -196,12 +196,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_InvalidSkills">
         <source>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <target state="translated">技能/工具選取 '{0}' 無效。使用 {1}、'{2}' 或 '{3}'。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_KeptSkillCopies">
         <source>Kept copied Aspire skills in {0}</source>
-        <target state="new">Kept copied Aspire skills in {0}</target>
+        <target state="translated">於 {0} 中保留複製的 Aspire 技能</target>
         <note>{0} lists the copied skill folder paths, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
@@ -236,27 +236,27 @@
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>This project (In your workspace, ready to commit with your project)</source>
-        <target state="needs-review-translation">專案 (安裝在您的工作區根目錄中；會隨專案一起提交)</target>
+        <target state="translated">此專案 (位於您的工作區中，可與您的專案一同提交)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
         <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
-        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <target state="translated">刪除複製的 Aspire 技能資料夾時不要求確認，包括其中的所有檔案和您所做的任何變更。只有當 Aspire 技能外掛程式在選取的範圍內取代這些資料夾時才適用。預設為 false</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">
         <source>Could not remove copied Aspire skill '{0}': {1}</source>
-        <target state="new">Could not remove copied Aspire skill '{0}': {1}</target>
+        <target state="translated">無法移除複製的Aspire技能 '{0}'： {1}</target>
         <note>{0} is the skill directory path, and {1} is the failure reason.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopies">
         <source>Deleted {0} copied skill folders</source>
-        <target state="new">Deleted {0} copied skill folders</target>
+        <target state="translated">已刪除 {0} 個複製的技能資料夾</target>
         <note>{0} is the number of deleted skill folders, always greater than one.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopy">
         <source>Deleted 1 copied skill folder</source>
-        <target state="new">Deleted 1 copied skill folder</target>
+        <target state="translated">已刪除 1 個複製的技能資料夾</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -271,7 +271,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
         <source>Where should skills and tools be installed?</source>
-        <target state="needs-review-translation">安裝範圍</target>
+        <target state="translated">技能和工具應該安裝在哪裡?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
@@ -286,29 +286,29 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesFound">
         <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
-        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
+        <target state="translated">Aspire 技能外掛程式現在提供以下技能。刪除複製的資料夾也會刪除其中的所有內容，包括您所做的任何變更:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesRequirePlugin">
         <source>Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</source>
-        <target state="new">Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</target>
+        <target state="translated">只有在每個選取的代理程式都已在選取的範圍內設定並啟用 Aspire 技能外掛程式時，才會移除複製的技能。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopyBehindLink">
         <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
-        <target state="new">It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</target>
+        <target state="translated">您可以透過可能共用的連結資料夾存取此項目。如果不再需要，請手動移除。</target>
         <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillSources">
         <source>Skill sources:
 {0}</source>
-        <target state="new">Skill sources:
+        <target state="translated">技能來源:&#x20;
 {0}</target>
         <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillSourcesExplanation">
         <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
-        <target state="new">One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</target>
+        <target state="translated">已設定一或多個技能來源。技能來源可讓組織分享技能，為您的開發體驗提供自訂內容。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
@@ -318,7 +318,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
         <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</source>
-        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</target>
+        <target state="translated">以逗號分隔的技能/工具識別碼 ({0})、'{1}' 或 '{2}' (預設值: aspire)。'dotnet-inspect' 技能需要工作區中有 C# AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
@@ -338,7 +338,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
         <source>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="needs-review-translation">已安裝的 Aspire 代理程式遙測勾點: {0}。只會記錄 Aspire 技能、MCP 工具和參考檔案使用方式。設定 ASPIRE_CLI_TELEMETRY_OPTOUT=true，隨時退出。</target>
+        <target state="translated">已在使用者層級設定中安裝 Aspire 代理程式遙測勾點: {0}。只會記錄 Aspire 技能、MCP 工具和參考檔案使用方式。設定 ASPIRE_CLI_TELEMETRY_OPTOUT=true，隨時退出。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
@@ -413,7 +413,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
         <source>Which skills and tools do you want to configure?</source>
-        <target state="new">Which skills and tools do you want to configure?</target>
+        <target state="translated">您想要設定哪些技能和工具？</target>
         <note />
       </trans-unit>
       <trans-unit id="MalformedConfigFileError">
@@ -443,7 +443,7 @@
       </trans-unit>
       <trans-unit id="TelemetryHookScriptUpdateFailed">
         <source>Could not update the telemetry hook script '{0}': {1}</source>
-        <target state="new">Could not update the telemetry hook script '{0}': {1}</target>
+        <target state="translated">無法更新遙測勾點指令碼 '{0}': {1}</target>
         <note>{0} is the hook script path. {1} is the underlying error message.</note>
       </trans-unit>
     </body>

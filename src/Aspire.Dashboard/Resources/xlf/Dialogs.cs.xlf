@@ -95,217 +95,217 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="DashboardFeedbackBack">
         <source>Back</source>
-        <target state="new">Back</target>
+        <target state="translated">Zpět</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackContinue">
         <source>Continue</source>
-        <target state="new">Continue</target>
+        <target state="translated">Pokračovat</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopied">
         <source>Feedback copied to the clipboard.</source>
-        <target state="new">Feedback copied to the clipboard.</target>
+        <target state="translated">Zpětná vazba byla zkopírována do schránky.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopiedAndOpened">
         <source>Feedback copied. Paste it into the GitHub discussion to share it.</source>
-        <target state="new">Feedback copied. Paste it into the GitHub discussion to share it.</target>
+        <target state="translated">Zpětná vazba byla zkopírována. Vložte ji do diskuze na GitHubu, abyste ji sdíleli.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopy">
         <source>Copy feedback</source>
-        <target state="new">Copy feedback</target>
+        <target state="translated">Zkopírovat zpětnou vazbu</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyAndOpen">
         <source>Copy and open discussion</source>
-        <target state="new">Copy and open discussion</target>
+        <target state="translated">Zkopírovat a otevřít diskuzi</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyFailed">
         <source>The clipboard could not be accessed. Copy the preview manually.</source>
-        <target state="new">The clipboard could not be accessed. Copy the preview manually.</target>
+        <target state="translated">Ke schránce nelze získat přístup. Zkopírujte náhled ručně.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyOpenAndSwitch">
         <source>Open new discussion and switch</source>
-        <target state="new">Open new discussion and switch</target>
+        <target state="translated">Otevřít novou diskuzi a přepnout</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDescription">
         <source>Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</source>
-        <target state="new">Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</target>
+        <target state="translated">Vaše odpovědi zůstanou v tomto prohlížeči, dokud je nezkopírujete. GitHub se otevře na nové kartě, abyste mohli zpětnou vazbu sami zkontrolovat a odeslat.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDialogTitle">
         <source>Share dashboard feedback</source>
-        <target state="new">Share dashboard feedback</target>
+        <target state="translated">Sdílet zpětnou vazbu k řídicímu panelu</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDifficultiesLabel">
         <source>What was harder or less clear than in the previous dashboard?</source>
-        <target state="new">What was harder or less clear than in the previous dashboard?</target>
+        <target state="translated">Co bylo obtížnější nebo méně srozumitelné než v předchozím řídicím panelu?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationLabel">
         <source>How long have you used the new dashboard?</source>
-        <target state="new">How long have you used the new dashboard?</target>
+        <target state="translated">Jak dlouho používáte nový řídicí panel?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationLessThanOneHour">
         <source>Less than an hour</source>
-        <target state="new">Less than an hour</target>
+        <target state="translated">Méně než hodinu</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationMoreThanOneWeek">
         <source>More than a week</source>
-        <target state="new">More than a week</target>
+        <target state="translated">Více než týden</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationNotSpecified">
         <source>I'd rather not say</source>
-        <target state="new">I'd rather not say</target>
+        <target state="translated">Raději nechci odpovídat.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationOneDay">
         <source>About a day</source>
-        <target state="new">About a day</target>
+        <target state="translated">Přibližně den</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationTwoToSevenDays">
         <source>2 to 7 days</source>
-        <target state="new">2 to 7 days</target>
+        <target state="translated">2 až 7 dní</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackMarkdownTitle">
         <source>Dashboard experience feedback</source>
-        <target state="new">Dashboard experience feedback</target>
+        <target state="translated">Zpětná vazba k prostředí řídicího panelu</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackMissingLabel">
         <source>What is missing from the new dashboard?</source>
-        <target state="new">What is missing from the new dashboard?</target>
+        <target state="translated">Co v novém řídicím panelu chybí?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeAppHost">
         <source>With an AppHost</source>
-        <target state="new">With an AppHost</target>
+        <target state="translated">S AppHostem</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeLabel">
         <source>How do you run the dashboard?</source>
-        <target state="new">How do you run the dashboard?</target>
+        <target state="translated">Jak řídicí panel spouštíte?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeStandalone">
         <source>Standalone, for telemetry only</source>
-        <target state="new">Standalone, for telemetry only</target>
+        <target state="translated">Samostatně, jen pro telemetrii</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackOtherPlaceholder">
         <source>Tell us what happened</source>
-        <target state="new">Tell us what happened</target>
+        <target state="translated">Řekněte nám, co se stalo</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPreviewDisclosure">
         <source>Preview copied feedback</source>
-        <target state="new">Preview copied feedback</target>
+        <target state="translated">Zobrazit náhled zkopírované zpětné vazby</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPreviewLabel">
         <source>Your feedback</source>
-        <target state="new">Your feedback</target>
+        <target state="translated">Vaší zpětné vazby</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptIgnore">
         <source>Don't ask again</source>
-        <target state="new">Don't ask again</target>
+        <target state="translated">Příště se už neptat</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptMessage">
         <source>We'd love your feedback on the new experience.</source>
-        <target state="new">We'd love your feedback on the new experience.</target>
+        <target state="translated">Uvítáme vaši zpětnou vazbu k novému prostředí.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptShare">
         <source>Share feedback</source>
-        <target state="new">Share feedback</target>
+        <target state="translated">Sdílet zpětnou vazbu</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptTitle">
         <source>Welcome to the new Aspire dashboard!</source>
-        <target state="new">Welcome to the new Aspire dashboard!</target>
+        <target state="translated">Vítejte na novém řídicím panelu Aspire!</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
-        <target state="new">I couldn't find my application URLs</target>
+        <target state="translated">Nepodařilo se mi najít adresy URL mých aplikací.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonMissingFeature">
         <source>A feature I need is missing</source>
-        <target state="new">A feature I need is missing</target>
+        <target state="translated">Chybí funkce, kterou potřebuju.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonNavigation">
         <source>It was hard to find my way around</source>
-        <target state="new">It was hard to find my way around</target>
+        <target state="translated">Bylo těžké se v něm zorientovat.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonOther">
         <source>Another reason</source>
-        <target state="new">Another reason</target>
+        <target state="translated">Mám jiný důvod</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonPerformanceOrAccessibility">
         <source>It was slow or hard to use with assistive technology</source>
-        <target state="new">It was slow or hard to use with assistive technology</target>
+        <target state="translated">Byl pomalý nebo se obtížně používal s technologiemi pro usnadnění.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonTelemetryWorkflow">
         <source>The telemetry workflow didn't work for me</source>
-        <target state="new">The telemetry workflow didn't work for me</target>
+        <target state="translated">Pracovní postup pro telemetrii mi nevyhovoval.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonTerminals">
         <source>The terminals didn't work for me</source>
-        <target state="new">The terminals didn't work for me</target>
+        <target state="translated">Terminály mi nefungovaly.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonsLabel">
         <source>What made you go back? Select all that apply.</source>
-        <target state="new">What made you go back? Select all that apply.</target>
+        <target state="translated">Co vás přimělo k návratu? Vyberte všechny vyhovující možnosti.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackSkipAndSwitch">
         <source>Skip and switch</source>
-        <target state="new">Skip and switch</target>
+        <target state="translated">Přeskočit a přepnout</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepOneTitle">
         <source>Why are you going back to the previous dashboard?</source>
-        <target state="new">Why are you going back to the previous dashboard?</target>
+        <target state="translated">Proč se vracíte k předchozímu řídicímu panelu?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepProgress">
         <source>Step {0} of 2</source>
-        <target state="new">Step {0} of 2</target>
+        <target state="translated">Krok {0} ze 2</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepTwoDescription">
         <source>Both questions are optional, but your answers help us decide what to improve.</source>
-        <target state="new">Both questions are optional, but your answers help us decide what to improve.</target>
+        <target state="translated">Obě otázky jsou nepovinné, ale vaše odpovědi nám pomáhají rozhodnout, co zlepšit.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepTwoTitle">
         <source>Is there anything else you want to tell us?</source>
-        <target state="new">Is there anything else you want to tell us?</target>
+        <target state="translated">Chcete nám ještě něco sdělit?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackSwitchToLegacy">
         <source>Switch to previous dashboard</source>
-        <target state="new">Switch to previous dashboard</target>
+        <target state="translated">Přepnout na předchozí řídicí panel</target>
         <note />
       </trans-unit>
       <trans-unit id="DialogCloseButtonText">
@@ -630,22 +630,22 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="HelpDialogAspireDocumentationDescription">
         <source>Get started with Aspire, its integrations and deployment.</source>
-        <target state="new">Get started with Aspire, its integrations and deployment.</target>
+        <target state="translated">Začněte s Aspire, jeho integracemi a nasazením.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogAspireDocumentationTitle">
         <source>Aspire documentation</source>
-        <target state="new">Aspire documentation</target>
+        <target state="translated">Dokumentace Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryNavigation">
         <source>General</source>
-        <target state="needs-review-translation">Navigace na úrovni webu</target>
+        <target state="translated">Obecné</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPageNavigation">
         <source>Dashboard navigation</source>
-        <target state="needs-review-translation">Navigace po stránkách</target>
+        <target state="translated">Navigace na řídicím panelu</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPanels">
@@ -655,37 +655,37 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="HelpDialogCategoryResourceGraph">
         <source>Resource graph</source>
-        <target state="new">Resource graph</target>
+        <target state="translated">Graf prostředků</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryTelemetry">
         <source>Logs &amp; telemetry</source>
-        <target state="new">Logs &amp; telemetry</target>
+        <target state="translated">Protokoly a telemetrie</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCommunityHeading">
         <source>Community and support</source>
-        <target state="new">Community and support</target>
+        <target state="translated">Komunita a podpora</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardDocumentationDescription">
         <source>Guides and reference for using the Aspire dashboard.</source>
-        <target state="new">Guides and reference for using the Aspire dashboard.</target>
+        <target state="translated">Průvodci a referenční materiály k používání řídicího panelu Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardFeedbackDescription">
         <source>Share feedback about the evolving dashboard experience.</source>
-        <target state="new">Share feedback about the evolving dashboard experience.</target>
+        <target state="translated">Podělte se o zpětnou vazbu k prostředí řídicího panelu, které se dál vyvíjí.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardFeedbackTitle">
         <source>Dashboard feedback</source>
-        <target state="new">Dashboard feedback</target>
+        <target state="translated">Zpětná vazba k řídicímu panelu</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardVersion">
         <source>Aspire dashboard version {0}</source>
-        <target state="new">Aspire dashboard version {0}</target>
+        <target state="translated">Řídicí panel Aspire verze {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDecreasePanelSize">
@@ -695,7 +695,7 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="HelpDialogDiscordDescription">
         <source>Chat with the Aspire team and community.</source>
-        <target state="new">Chat with the Aspire team and community.</target>
+        <target state="translated">Chatujte s týmem a komunitou Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDiscordTitle">
@@ -705,12 +705,12 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="HelpDialogDocumentationTab">
         <source>Documentation</source>
-        <target state="new">Documentation</target>
+        <target state="translated">Dokumentace</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameDescription">
         <source>In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</source>
-        <target state="new">In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</target>
+        <target state="translated">Výběrem možnosti Hrát Aspire Outage v grafu prostředků nebo přesunutím fokusu na graf a stisknutím klávesy O spustíte hru, v níž hlavní roli hrají vaše prostředky. Stisknutím klávesy Esc se vrátíte do grafu.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameTitle">
@@ -725,62 +725,62 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">
         <source>Console logs (all resources)</source>
-        <target state="needs-review-translation">Přejít na Protokoly konzoly</target>
+        <target state="translated">Protokoly konzoly (všechny prostředky)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToExtensions">
         <source>Extensions</source>
-        <target state="new">Extensions</target>
+        <target state="translated">Rozšíření</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToGraph">
         <source>Resource graph</source>
-        <target state="new">Resource graph</target>
+        <target state="translated">Resource Graph</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToHelp">
         <source>Keyboard shortcuts</source>
-        <target state="needs-review-translation">Přejít na Nápověda</target>
+        <target state="translated">Klávesové zkratky</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToMetrics">
         <source>Metrics</source>
-        <target state="needs-review-translation">Přejít na Metriky</target>
+        <target state="translated">Metriky</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToParameters">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">Parametry</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToResources">
         <source>Resources</source>
-        <target state="needs-review-translation">Přejít na Zdroje informací</target>
+        <target state="translated">Prostředky</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToSettings">
         <source>Settings</source>
-        <target state="needs-review-translation">Přejít na Nastavení</target>
+        <target state="translated">Nastavení</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToStructuredLogs">
         <source>Structured logs</source>
-        <target state="needs-review-translation">Přejít na Strukturované protokoly</target>
+        <target state="translated">Strukturované protokoly</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTelemetrySources">
         <source>Telemetry sources</source>
-        <target state="new">Telemetry sources</target>
+        <target state="translated">Zdroje telemetrie</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
-        <target state="needs-review-translation">Přejít na Terminály</target>
+        <target state="translated">Terminály</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
         <source>Traces</source>
-        <target state="needs-review-translation">Přejít na Trasování</target>
+        <target state="translated">Trasování</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogIncreasePanelSize">
@@ -795,32 +795,32 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="HelpDialogLearnHeading">
         <source>Learn</source>
-        <target state="new">Learn</target>
+        <target state="translated">Informace</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogOpensInNewTab">
         <source>Opens in a new tab</source>
-        <target state="new">Opens in a new tab</target>
+        <target state="translated">Otevře se na nové kartě</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogPlayGame">
         <source>Play Aspire Outage, when the graph has focus</source>
-        <target state="new">Play Aspire Outage, when the graph has focus</target>
+        <target state="translated">Hrát Aspire Outage, když má graf fokus</target>
         <note>Aspire Outage is the name of a game.</note>
       </trans-unit>
       <trans-unit id="HelpDialogRepoDescription">
         <source>Source code, releases and issues on GitHub.</source>
-        <target state="new">Source code, releases and issues on GitHub.</target>
+        <target state="translated">Zdrojový kód, vydání a problémy na GitHubu</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogReportIssueDescription">
         <source>Found a bug or have an idea? Open an issue on GitHub.</source>
-        <target state="new">Found a bug or have an idea? Open an issue on GitHub.</target>
+        <target state="translated">Našli jste chybu nebo máte nějaký nápad? Otevřete problém na GitHubu.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogReportIssueTitle">
         <source>Report an issue</source>
-        <target state="new">Report an issue</target>
+        <target state="translated">Nahlásit problém</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogResetPanelSize">
@@ -830,7 +830,7 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="HelpDialogShortcutsHint">
         <source>Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</source>
-        <target state="new">Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</target>
+        <target state="translated">Klávesové zkratky používejte mimo textová pole a vstupní oblast terminálu. Klávesové zkratky panelu platí pro otevřený panel podrobností. Před použitím klávesových zkratek řídicího panelu stisknutím klávesy {0} v terminálu přesuňte fokus na jeho ovládací prvky.</target>
         <note>{0} is the F6 key, rendered as a keyboard key.</note>
       </trans-unit>
       <trans-unit id="HelpDialogTogglePanelOpen">
@@ -845,7 +845,7 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="HelpDialogToggleTerminalDock">
         <source>Toggle terminal dock</source>
-        <target state="needs-review-translation">Přepnout terminál</target>
+        <target state="translated">Přepnout dok terminálu</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionButtonCancel">
@@ -985,7 +985,7 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="SettingsDialogAppearanceGroup">
         <source>Appearance</source>
-        <target state="new">Appearance</target>
+        <target state="translated">Vzhled</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDarkTheme">
@@ -995,27 +995,27 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperience">
         <source>Dashboard experience</source>
-        <target state="new">Dashboard experience</target>
+        <target state="translated">Prostředí řídicího panelu</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceDescription">
         <source>Choose which dashboard experience to use.</source>
-        <target state="new">Choose which dashboard experience to use.</target>
+        <target state="translated">Zvolte, které prostředí řídicího panelu chcete používat.</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceNew">
         <source>New dashboard</source>
-        <target state="new">New dashboard</target>
+        <target state="translated">Nový řídicí panel</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperiencePrevious">
         <source>Previous dashboard</source>
-        <target state="new">Previous dashboard</target>
+        <target state="translated">Předchozí řídicí panel</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceSelectorLabel">
         <source>Experience</source>
-        <target state="new">Experience</target>
+        <target state="translated">Prostředí</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardLogsAndTelemetry">
@@ -1025,7 +1025,7 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="SettingsDialogDataAndTelemetryGroup">
         <source>Data and telemetry</source>
-        <target state="new">Data and telemetry</target>
+        <target state="translated">Data a telemetrie</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDotNetRuntimeVersion">
@@ -1035,17 +1035,17 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="SettingsDialogExperienceGroup">
         <source>Dashboard experience</source>
-        <target state="new">Dashboard experience</target>
+        <target state="translated">Prostředí řídicího panelu</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverview">
         <source>Overview layout</source>
-        <target state="new">Overview layout</target>
+        <target state="translated">Rozložení přehledu</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
         <source>Summary</source>
-        <target state="new">Summary</target>
+        <target state="translated">Souhrn</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguage">
@@ -1055,7 +1055,7 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="SettingsDialogLanguageAndTimeGroup">
         <source>Language and time</source>
-        <target state="new">Language and time</target>
+        <target state="translated">Jazyk a čas</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguagePageReloads">
@@ -1070,17 +1070,17 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensity">
         <source>Resource list density</source>
-        <target state="new">Resource list density</target>
+        <target state="translated">Hustota seznamu prostředků</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensityComfortable">
         <source>Comfortable</source>
-        <target state="new">Comfortable</target>
+        <target state="translated">Pohodlné</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensityCompact">
         <source>Compact</source>
-        <target state="new">Compact</target>
+        <target state="translated">Kompaktní</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
@@ -1287,7 +1287,7 @@ Nastavte aplikaci tak, aby exportovala protokoly, trasování a metriky přes [O
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrap">
         <source>Word wrap</source>
-        <target state="new">Word wrap</target>
+        <target state="translated">Zalamování řádků</target>
         <note />
       </trans-unit>
     </body>

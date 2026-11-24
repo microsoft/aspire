@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
         <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
-        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <target state="translated">無法修改 '{0}'，因為通道來源 '{1}' 已停用，或是來源或其套件對應繼承或由使用者擁有。改為手動更新 NuGet 設定。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
         <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
-        <target state="needs-review-translation">無法為 '{1}' 套用通道 '{0}'，因為 MSBuild 會覆寫 NuGet 設定： {2}。移除這些覆寫以啟用明確通道更新。仍支援沒有明確通道的匯報。</target>
+        <target state="translated">無法為 '{1}' 套用通道 '{0}'，因為 MSBuild 會覆寫 NuGet 設定： {2}。移除這些覆寫以啟用管道更新。仍然支援沒有命令列或已設定通道的匯報。</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -94,7 +94,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredChannelNotFoundFormat">
         <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
-        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <target state="translated">無法使用 Aspire 組態中的通道 '{0}'。{1}</target>
         <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -124,49 +124,49 @@
       </trans-unit>
       <trans-unit id="DryRunBackupRecoveryFormat">
         <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
-        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <target state="translated">無法還原 '{0}'。其復原備份保留於 '{1}'。重試之前，請手動還原備份。</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
         <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
-        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <target state="translated">已取消試執行，但不取代現有備份。從列出的備份檔案復原原始檔案，或在重試之前將它們移到一旁。</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunExistingBackupsFormat">
         <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
 {0}</source>
-        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+        <target state="translated">來自先前試執行的備份已經存在。取代之前，視需要保留它們以供復原:
 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunOptionDescription">
         <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
-        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <target state="translated">使用暫存 NuGet 快取驗證明確的 .NET AppHost 通道更新，而不提議或套用變更。</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
         <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
-        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <target state="translated">以目前檔案內容取代現有備份？這會捨棄先前的復原複本。</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
         <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
-        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <target state="translated">--dry-run 需要預設值以外的明確 --channel 或 --quality，且無法與 --self 或 --migrate 結合。</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresDotNet">
         <source>--dry-run is supported only for .NET AppHosts.</source>
-        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <target state="translated">只有 .NET AppHosts 支援 --dry-run。</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunSuccessful">
         <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
-        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <target state="translated">通道更新驗證成功。原始文件已還原; 未套用任何更新。</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunValidating">
         <source>Validating the channel update...</source>
-        <target state="new">Validating the channel update...</target>
+        <target state="translated">正在驗證通道更新...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -211,7 +211,7 @@
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
         <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
-        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <target state="translated">專案 {1} 的 {0} 頻道更新驗證還原失敗。未套用更新。請檢閱還原輸出以取得詳細資料。</target>
         <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
@@ -501,7 +501,7 @@
       </trans-unit>
       <trans-unit id="UsingConfiguredChannelFormat">
         <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
-        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <target state="translated">正在使用 Aspire 組態中的通道 '{0}'。使用 --channel 覆寫設定。</target>
         <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
