@@ -1,0 +1,124 @@
+{
+  "run_id": 45301685573,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45301685573",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-24T01:33:46Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22561,
+    "title": "Improve telemetry navigation on the dashboard resource overview",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/dashboard-resource-overview-telemetry",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22561",
+    "merged_at": "2026-11-24T01:00:23Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "6fb7b8a7edb8e27ea14de331f2c6272bdd801645",
+    "failed_sha": "8aadc2b05baec78e3dd10062759cbabb39d670f4",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "b22f904393c5bd9406d1c8c095e9e6695893a756",
+        "message": "Share the Status card across resource and parameter Overview (#22517)",
+        "html_url": "https://github.com/microsoft/aspire/commit/b22f904393c5bd9406d1c8c095e9e6695893a756",
+        "pull_request": {
+          "number": 22517,
+          "title": "Share the Status card across resource and parameter Overview",
+          "url": "https://github.com/microsoft/aspire/pull/22517",
+          "merged_at": "2026-11-23T23:13:15Z"
+        }
+      },
+      {
+        "sha": "4f1bb47056e6a1312866dacec2f5a0d2a99df7fd",
+        "message": "Unify dashboard sidebar group headers (#22524)",
+        "html_url": "https://github.com/microsoft/aspire/commit/4f1bb47056e6a1312866dacec2f5a0d2a99df7fd",
+        "pull_request": {
+          "number": 22524,
+          "title": "Unify dashboard sidebar group headers",
+          "url": "https://github.com/microsoft/aspire/pull/22524",
+          "merged_at": "2026-11-23T23:20:39Z"
+        }
+      },
+      {
+        "sha": "3433a49405d74622d9159a8c565597d871441925",
+        "message": "Reduce dashboard Summary and resource Overview load times (#22534)",
+        "html_url": "https://github.com/microsoft/aspire/commit/3433a49405d74622d9159a8c565597d871441925",
+        "pull_request": {
+          "number": 22534,
+          "title": "Reduce dashboard Summary and resource Overview load times",
+          "url": "https://github.com/microsoft/aspire/pull/22534",
+          "merged_at": "2026-11-23T23:34:16Z"
+        }
+      },
+      {
+        "sha": "9f94f126053f5e04a949429d20d88ab245a46e8c",
+        "message": "Validate dashboard telemetry API limits (#22533)",
+        "html_url": "https://github.com/microsoft/aspire/commit/9f94f126053f5e04a949429d20d88ab245a46e8c",
+        "pull_request": {
+          "number": 22533,
+          "title": "Validate dashboard telemetry API limits",
+          "url": "https://github.com/microsoft/aspire/pull/22533",
+          "merged_at": "2026-11-23T23:35:44Z"
+        }
+      },
+      {
+        "sha": "0b92b0aac3e1076ff184c6c37c316b57668e73cb",
+        "message": "Restore dashboard text visualizer controls (#22527)",
+        "html_url": "https://github.com/microsoft/aspire/commit/0b92b0aac3e1076ff184c6c37c316b57668e73cb",
+        "pull_request": {
+          "number": 22527,
+          "title": "Restore dashboard text visualizer controls",
+          "url": "https://github.com/microsoft/aspire/pull/22527",
+          "merged_at": "2026-11-23T23:56:26Z"
+        }
+      },
+      {
+        "sha": "8aadc2b05baec78e3dd10062759cbabb39d670f4",
+        "message": "Improve telemetry navigation on the dashboard resource overview (#22561)",
+        "html_url": "https://github.com/microsoft/aspire/commit/8aadc2b05baec78e3dd10062759cbabb39d670f4",
+        "pull_request": {
+          "number": 22561,
+          "title": "Improve telemetry navigation on the dashboard resource overview",
+          "url": "https://github.com/microsoft/aspire/pull/22561",
+          "merged_at": "2026-11-24T01:00:23Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "id": 138136411284,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45301685573/job/138136411284",
+      "classification": "main-repository-breakage",
+      "reason": "Live_DisposalStopsPeriodicRefresh assertion failed (expected 1 query, actual 2) after disposal; same mechanism as recorded cause.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 1\nActual:   2",
+      "stack_trace": "   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 551\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\5g4odivu.rwj\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\5g4odivu.rwj\n",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic assertion failure with no independent transient evidence; matches recorded disposal refresh-count mismatch.",
+      "job_id": 138136411284,
+      "execution_id": "7dbeca21-af30-4c8b-98b3-dc1740ff4337",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dashboard-live-disposal-refresh-count-mismatch"
+  ]
+}
