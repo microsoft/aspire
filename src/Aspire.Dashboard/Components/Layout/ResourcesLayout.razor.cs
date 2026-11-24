@@ -56,6 +56,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly List<MenuButtonItem> _paneMenuItems = [];
     private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
     private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
+    // Registered with the main layout, which lists these views in the narrow layout's navigation menu. It's created
+    // once so the layout can tell whether the registered entries are still this layout's when it's disposed.
+    private Func<IEnumerable<MobileNavMenuEntry>>? _mobileNavMenuEntries;
     // Blazor compares event handlers and delegates by reference when it diffs a render. A lambda created for each row
     // on each render would make every row's handlers, buttons and menus look changed, so each resource's handlers
     // are created once and reused across renders (see RowHandlers). They're keyed by the resource's unique name, not
@@ -107,8 +110,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _pendingLandingRedirect;
     private bool _hasLocation;
     private string? _lastLocation;
-    // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
-    private ResourceTab? _navigatingToTab;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
     private List<SelectedResourceItem> _selectedItems = [];
@@ -499,8 +500,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (!ReferenceEquals(MainLayout, _subscribedMainLayout))
         {
             _subscribedMainLayout?.HomeNavigationStarting -= OnHomeNavigationStarting;
+            _subscribedMainLayout?.ClearPageNavMenuEntries(_mobileNavMenuEntries);
             _subscribedMainLayout = MainLayout;
             _subscribedMainLayout?.HomeNavigationStarting += OnHomeNavigationStarting;
+            _mobileNavMenuEntries ??= GetMobileNavMenuEntries;
+            _subscribedMainLayout?.SetPageNavMenuEntries(_mobileNavMenuEntries);
         }
         if (!ViewportInformation.IsDesktop)
         {
@@ -563,7 +567,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         _isPaneFullCanvas = false;
         ClearPaneActivity();
-        _navigatingToTab = null;
         var previousTab = CurrentTab;
         var previousSelection = _selectedResourceNames;
         // Closing the menu can yield a render. Publish the new selection first so
@@ -621,14 +624,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (!IsResourceListHome(NavigationManager.Uri))
         {
             _homeNavigation = NavigationManager.ToAbsoluteUri(DashboardUrls.HomeUrl()).AbsoluteUri;
-            // Marks the layout, so the script also reports choosing the current tab while home loads (see
-            // OpenTabFromFullCanvasAsync).
+            // Marks the layout as waiting for home (data-home-pending).
             StateHasChanged();
         }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // The menu is a sibling, not a child of this layout, so its entries need a separate refresh.
+        _subscribedMainLayout?.RefreshPageNavMenuEntries(_mobileNavMenuEntries);
+
         var focusResourcePicker = _focusResourcePicker && _isResourcePickerOpen;
         _focusResourcePicker = false;
         var pickerChanged = _isResourcePickerOpen != _wasResourcePickerOpen;
@@ -696,10 +701,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
 
             _isResizerRegistered = showResizer;
-            await _jsModule.InvokeVoidAsync(
-                "setTabListAriaLabel",
-                GetTabId(CurrentTab),
-                Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)].Value);
 
             if (_startPaneSelectionReveal is { } startLocation)
             {
@@ -747,7 +748,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private IList<MenuButtonItem> GetOverflowMenuItems() =>
-        GetTabMenuItems(includeHome: false).Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
+        GetTabMenuItems().Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
 
     /// <summary>
     /// Called by the pane resizer after the user resizes the resource list.
@@ -2858,17 +2859,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private static string GetTabId(ResourceTab tab) => $"tab-{tab}";
 
-    // The id of the hidden tab that's active while no tab is shown selected (see RenderTabNavigation). It doesn't
-    // start with "tab-", so OnTabChanged ignores it.
-    private const string NoActiveTabId = "resource-tab-none";
-
-    // The narrow layout's Home tab. It doesn't start with "tab-", so the resource tab handlers ignore it.
-    private const string HomeTabId = "resource-tab-home";
-
-    // A narrow layout has no room for the brand, so its tab strip goes home instead. Without the resource service there's
-    // no home to go to (see Home).
-    private bool ShowsHomeTab(bool isDesktop) => !isDesktop && DashboardClient.IsEnabled;
-
     // Goes home as the brand does, which clears the stored selection.
     private Task GoHomeAsync()
     {
@@ -2881,201 +2871,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return Task.CompletedTask;
     }
 
-    private async Task OnTabChanged(FluentTab? newTab, bool isDesktop, string? renderedLocation)
+    // A plain click on a tab is handled here rather than by the browser, which the script stops from following the
+    // link (see registerTabOverflow in ResourcesLayout.razor.js): a tab chosen while home loads waits for it, and leaving
+    // home's resource list docks it. A click with Ctrl, Shift, Alt or Cmd opens the link in a new browser tab or window
+    // instead, and a middle click doesn't raise a click at all.
+    private Task OnTabClickAsync(MouseEventArgs e, ResourceTab tab)
     {
-        if (newTab?.Id == HomeTabId)
+        // The current tab is already showing, unless home's resource list covers it: choosing it then opens its content.
+        if (!IsPlainClick(e) || (tab == CurrentTab && !IsResourceListShownAsHome && _homeNavigation is null))
         {
-            await OnHomeTabChosenAsync(isDesktop, renderedLocation);
-            return;
+            return Task.CompletedTask;
         }
 
-        // FluentTabs also raises this when a tab is disposed, for example when leaving the resources view, and
-        // when it syncs with ActiveTabId after a navigation. Only a change made while this layout shows the current
-        // URL is a user selecting a tab.
-        // Switching between the live view and a recording re-creates the page, and the outgoing layout's tabs
-        // raise changes while they're torn down, which would otherwise navigate to another tab.
-        // A delayed event from the previous header must not navigate the newly selected resource, unless the user really
-        // chose that tab: a click that lands just as a navigation finishes reaches the layout from the outgoing header.
-        // The script records real activations, which the header's own change events while it's torn down never are.
-        var isStale = !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal)
-            || !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal);
-        if (isStale && newTab?.Id is { } staleId && staleId.StartsWith("tab-", StringComparison.Ordinal) &&
-            _jsModule is not null && !_isDisposed && isDesktop == ViewportInformation.IsDesktop)
-        {
-            try
-            {
-                if (await _jsModule.InvokeAsync<bool>("consumeRecentTabActivation", staleId) &&
-                    Enum.TryParse<ResourceTab>(staleId["tab-".Length..], out var staleTab) &&
-                    string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal))
-                {
-                    await OpenChosenTabAsync(staleTab);
-                }
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-            return;
-        }
-
-        if (_isDisposed
-            || isDesktop != ViewportInformation.IsDesktop
-            || isStale
-            || newTab?.Id is not { } id
-            || !id.StartsWith("tab-", StringComparison.Ordinal)
-            || !Enum.TryParse<ResourceTab>(id["tab-".Length..], out var tab)
-            // Includes choosing the current tab while the content is closed: FluentTabs raises the same change when it
-            // syncs with ActiveTabId, so it can't tell the user's choice apart. OpenTabFromFullCanvasAsync handles it.
-            || tab == CurrentTab
-            // A navigation started from the tab strip is still in flight. The layout re-renders when this handler
-            // returns, before the router reaches the new location, and that render must not put the previous tab
-            // back: the strip would report it as a change once the new page shows, and navigate back to it, forever.
-            || _navigatingToTab is not null)
-        {
-            return;
-        }
-
-        // A newly mounted FluentTabs can report its initial first tab after ActiveTabId
-        // has been applied. Only focused pointer/keyboard tab changes own navigation.
-        if (_jsModule is null || GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href)
-        {
-            return;
-        }
-        // Keep the user's choice rendered while the browser focus check is in flight.
-        _navigatingToTab = tab;
-        bool isFocused;
-        try
-        {
-            isFocused = await _jsModule.InvokeAsync<bool>("isResourceTabFocused", id);
-        }
-        catch (JSDisconnectedException)
-        {
-            return;
-        }
-        if (isFocused && !_isDisposed && isDesktop == ViewportInformation.IsDesktop &&
-            !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal) && _lastLocation is { } landed && IsResourceListHome(landed))
-        {
-            // Home landed while the check was in flight, and replaced the strip the tab was chosen from. If the user
-            // really chose it, open it for home's selection, as a tab chosen during the navigation is.
-            try
-            {
-                if (await _jsModule.InvokeAsync<bool>("consumeRecentTabActivation", id))
-                {
-                    await OpenChosenTabAsync(tab);
-                }
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-            return;
-        }
-        if (!isFocused || _isDisposed || isDesktop != ViewportInformation.IsDesktop || _navigatingToTab != tab ||
-            !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal) ||
-            !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal))
-        {
-            if (_navigatingToTab == tab && string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal))
-            {
-                _navigatingToTab = null;
-            }
-            return;
-        }
-
-        if (_homeNavigation is not null)
-        {
-            // Home is still loading. Open this tab once it has (see OnParametersSetAsync).
-            _tabAfterHome = tab;
-            return;
-        }
-
-        await NavigateToTabAsync(href);
+        return OpenTabAsync(tab);
     }
 
-    // Like the resource tabs (see OnTabChanged), Home is also reported when FluentTabs syncs with ActiveTabId or the
-    // outgoing strip is torn down. Only a change from the current strip, with Home focused, is the user's choice.
-    private async Task OnHomeTabChosenAsync(bool isDesktop, string? renderedLocation)
-    {
-        if (_isDisposed || _jsModule is null || IsResourceListShownAsHome || _homeNavigation is not null || !IsCurrentStrip())
-        {
-            return;
-        }
-
-        bool isFocused;
-        try
-        {
-            isFocused = await _jsModule.InvokeAsync<bool>("isResourceTabFocused", HomeTabId);
-        }
-        catch (JSDisconnectedException)
-        {
-            return;
-        }
-
-        // A navigation or resize may have finished while the focus check was in flight.
-        if (!isFocused || _isDisposed || !IsCurrentStrip())
-        {
-            return;
-        }
-
-        await GoHomeAsync();
-
-        bool IsCurrentStrip() =>
-            isDesktop == ViewportInformation.IsDesktop &&
-            ShowsHomeTab(isDesktop) &&
-            string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal) &&
-            string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal);
-    }
-
-    // Opens a tab the user chose, for the current selection. While the full-page list is showing, choosing the tab that's
-    // already current opens its content; otherwise it navigates to the tab.
-    private async Task OpenChosenTabAsync(ResourceTab tab)
-    {
-        if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href ||
-            (tab == CurrentTab && !IsResourceListShownAsHome))
-        {
-            return;
-        }
-
-        if (_homeNavigation is not null)
-        {
-            _tabAfterHome = tab;
-            return;
-        }
-
-        await NavigateToTabAsync(href);
-    }
-
-    /// <summary>
-    /// Called by the layout's script when the user clicks a tab, or presses Enter or Space on it, while home shows the
-    /// resource list. No resource tab is selected then, so choosing the current tab must open its content. FluentTabs
-    /// can't report that choice: it raises the same change when it syncs with ActiveTabId, for example right after
-    /// closing the content with a tab still focused, which would reopen it. Other tabs open through OnTabChanged.
-    /// </summary>
-    [JSInvokable]
-    public async Task OpenTabFromFullCanvasAsync(string tabId)
-    {
-        if (_isDisposed
-            || !tabId.StartsWith("tab-", StringComparison.Ordinal)
-            || !Enum.TryParse<ResourceTab>(tabId["tab-".Length..], out var tab))
-        {
-            return;
-        }
-
-        // Home is loading. FluentTabs reports no change for the tab that's already current, such as Overview chosen
-        // right after the brand, so the script reports it here. Like any tab chosen then, it opens once home has, for
-        // home's selection (see OnParametersSetAsync), rather than being lost and leaving the table open.
-        if (_homeNavigation is not null)
-        {
-            _tabAfterHome = tab;
-            return;
-        }
-
-        if (!IsResourceListShownAsHome
-            || tab != CurrentTab
-            || GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href)
-        {
-            return;
-        }
-
-        await NavigateToTabAsync(href);
-    }
+    private static bool IsPlainClick(MouseEventArgs e) => e.Button == 0 && !e.CtrlKey && !e.ShiftKey && !e.AltKey && !e.MetaKey;
 
     private async Task NavigateToTabAsync(string href)
     {
@@ -3086,13 +2897,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // slow to render or the current tab's menu item doesn't change the URL.
             _isPaneCollapsed = false;
             SetResourceListVisible(false);
-        }
-
-        // Opening the current tab from the full-canvas list doesn't change the URL, so no new location will clear the
-        // tab the strip shows while navigating (see OnParametersSetAsync). Clear it here instead.
-        if (string.Equals(NavigationManager.ToAbsoluteUri(href).AbsoluteUri, NavigationManager.Uri, StringComparison.Ordinal))
-        {
-            _navigatingToTab = null;
         }
 
         NavigationManager.NavigateTo(href);
@@ -3112,8 +2916,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         var isTelemetryOnly = SelectedTelemetryOnlyResource is not null;
 
-        // Every tab is always rendered and hidden when it doesn't apply. Removing a FluentTab makes FluentTabs
-        // activate its first tab, which would navigate away from the current page.
+        // Tabs that don't apply are returned hidden rather than left out, so the menus and the strip agree on them.
         var errorCount = _selectedItems.Sum(i => i.Resource is { } r ? GetUnviewedErrorCount(r) : 0);
         // Overview stays for a resource that isn't known, such as a replica that was replaced: its page says the
         // resource wasn't found, and the tab is the way back to it from the resource's other pages.
@@ -3137,15 +2940,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
-    // Mirrors GetTabs() as a dropdown for narrow layouts, where the FluentTabs row no longer fits and would
-    // otherwise need its own horizontal scrollbar (see the "resource-tabs-nav" container query in the stylesheet).
-    // A tab chosen from the overflow or compact menu. Like a tab in the strip, it waits for a home navigation in flight
-    // (see OnTabChanged), and its URL is worked out when it's chosen: the menu can have been built for the selection
-    // before home's.
-    private Task ChooseTabFromMenuAsync(ResourceTab tab)
+    // Opens a tab chosen from the strip, one of its menus or the narrow layout's navigation menu. It waits for a home
+    // navigation in flight, and its URL is worked out when it's chosen: the strip and menus can have been rendered for
+    // the selection before home's.
+    private Task OpenTabAsync(ResourceTab tab)
     {
         if (_homeNavigation is not null)
         {
+            // Home is loading. Open this tab once it has, for home's selection (see OnParametersSetAsync).
             _tabAfterHome = tab;
             return Task.CompletedTask;
         }
@@ -3155,24 +2957,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             : Task.CompletedTask;
     }
 
-    private IList<MenuButtonItem> GetTabMenuItems(bool includeHome)
+    // Mirrors GetTabs() as a dropdown for when the tab row no longer fits and would otherwise need its own horizontal
+    // scrollbar (see the "resource-tabs-nav" container query in the stylesheet).
+    private IList<MenuButtonItem> GetTabMenuItems()
     {
         var items = new List<MenuButtonItem>();
-
-        if (includeHome)
-        {
-            var homeIsActive = IsResourceListShownAsHome;
-            items.Add(new MenuButtonItem
-            {
-                Id = $"{HomeTabId}-menu-item",
-                Class = "resource-tab-menu-item",
-                Text = Loc[nameof(Resources.Layout.ResourceTabHome)],
-                StartIcon = homeIsActive ? new Icons.Filled.Size24.Home() : new Icons.Regular.Size24.Home(),
-                Role = MenuItemRole.Radio,
-                Checked = homeIsActive,
-                OnClick = GoHomeAsync
-            });
-        }
 
         foreach (var tab in GetTabs())
         {
@@ -3191,11 +2980,47 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 // Like the tab strip, the menu shows no current view while the content is closed.
                 Checked = tab.Tab == CurrentTab && !IsResourceListShownAsHome,
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
-                OnClick = () => ChooseTabFromMenuAsync(tab.Tab)
+                OnClick = () => OpenTabAsync(tab.Tab)
             });
         }
 
         return items;
+    }
+
+    // A narrow layout has no room for the tab strip, so home and the views are listed at the top of the main
+    // navigation menu instead (see MainLayout.SetPageNavMenuEntries). The menu evaluates this each time it renders, so it
+    // shows the current selection's views. Without the resource service there's no home to go to (see IsResourceListHome).
+    internal IEnumerable<MobileNavMenuEntry> GetMobileNavMenuEntries()
+    {
+        if (DashboardClient.IsEnabled)
+        {
+            var homeIsActive = IsResourceListShownAsHome;
+            yield return new MobileNavMenuEntry(
+                nameof(Resources.Layout.ResourceTabHome),
+                Loc[nameof(Resources.Layout.ResourceTabHome)],
+                () => homeIsActive || _homeNavigation is not null ? Task.CompletedTask : GoHomeAsync(),
+                new Icons.Regular.Size24.Home(),
+                ActiveIcon: new Icons.Filled.Size24.Home(),
+                IsActive: homeIsActive);
+        }
+
+        foreach (var tab in GetTabs())
+        {
+            if (!tab.IsVisible)
+            {
+                continue;
+            }
+
+            // Like the tab strip, no view is current while home's resource list covers the content.
+            var isActive = tab.Tab == CurrentTab && !IsResourceListShownAsHome;
+            yield return new MobileNavMenuEntry(
+                GetTabId(tab.Tab),
+                tab.Text,
+                () => isActive && _homeNavigation is null ? Task.CompletedTask : OpenTabAsync(tab.Tab),
+                tab.Icon,
+                IsActive: isActive,
+                ErrorCount: tab.ErrorCount);
+        }
     }
 
     internal static string GetStateClass(ResourceViewModel resource) =>
@@ -3216,6 +3041,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _isDisposed = true;
         _cts.Cancel();
         _subscribedMainLayout?.HomeNavigationStarting -= OnHomeNavigationStarting;
+        _subscribedMainLayout?.ClearPageNavMenuEntries(_mobileNavMenuEntries);
         TagStore.Changed -= OnTagsChanged;
         ViewPreferences.Changed -= OnViewPreferencesChanged;
         OrderStore.Changed -= OnOrderChanged;

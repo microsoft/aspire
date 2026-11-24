@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
-using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -23,11 +21,11 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required bool IsNavMenuOpen { get; set; }
 
+    /// <summary>
+    /// Entries the current page lists before the dashboard's own, such as its views.
+    /// </summary>
     [Parameter]
-    public bool HasResourceTerminals { get; set; }
-
-    [Parameter]
-    public NavigationAvailability Availability { get; set; } = NavigationAvailability.Default;
+    public Func<IEnumerable<MobileNavMenuEntry>>? PageEntries { get; set; }
 
     [Parameter, EditorRequired]
     public required Action CloseNavMenu { get; set; }
@@ -36,22 +34,10 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     public required Func<Task> LaunchHelpAsync { get; set; }
 
     [Parameter, EditorRequired]
-    public required Func<Task> LaunchAIAgentsAsync { get; set; }
-
-    [Parameter, EditorRequired]
-    public required bool IsAgentHelpEnabled { get; set; }
-
-    [Parameter, EditorRequired]
     public required Func<Task> LaunchNotificationsAsync { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<Task> LaunchSettingsAsync { get; set; }
-
-    [Inject]
-    public required NavigationManager NavigationManager { get; init; }
-
-    [Inject]
-    public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
@@ -59,10 +45,13 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
-    private Task NavigateToAsync(string url)
+    internal void RefreshPageEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
     {
-        NavigationManager.NavigateTo(url);
-        return Task.CompletedTask;
+        if (!_disposed)
+        {
+            PageEntries = entries;
+            StateHasChanged();
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -141,73 +130,33 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
     private IEnumerable<MobileNavMenuEntry> GetMobileNavMenuEntries()
     {
-        if (DashboardClient.IsEnabled)
+        if (PageEntries is not null)
         {
-            if (HasResourceTerminals)
+            foreach (var entry in PageEntries())
             {
-                yield return new MobileNavMenuEntry(
-                    Loc[nameof(Resources.Layout.NavMenuTerminalsTab)],
-                    () => NavigateToAsync(DashboardUrls.TerminalsUrl()),
-                    DesktopNavMenu.TerminalsIcon(),
-                    ActiveIcon: DesktopNavMenu.TerminalsIcon(active: true),
-                    LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.TerminalsUrl())
-                );
+                yield return entry;
             }
         }
 
         yield return new MobileNavMenuEntry(
-            Loc[nameof(Resources.Layout.MainLayoutAspireRepoLink)],
-            async () =>
-            {
-                await JS.InvokeVoidAsync("open", ["https://aka.ms/aspire/repo", "_blank"]);
-            },
-            new AspireIcons.Size24.GitHub()
-        );
-
-        yield return new MobileNavMenuEntry(
-            Loc[nameof(Resources.Layout.MainLayoutKeyboardShortcuts)],
+            nameof(Resources.Layout.MainLayoutHelp),
+            Loc[nameof(Resources.Layout.MainLayoutHelp)],
             LaunchHelpAsync,
-            new Icons.Regular.Size24.Keyboard()
-        );
-
-        yield return new MobileNavMenuEntry(
-            Loc[nameof(Resources.Layout.MainLayoutAspireDashboardHelpLink)],
-            async () =>
-            {
-                await JS.InvokeVoidAsync("open", [MainLayout.DashboardDocumentationUrl, "_blank", "noopener,noreferrer"]);
-            },
             new Icons.Regular.Size24.QuestionCircle()
         );
 
-        if (IsAgentHelpEnabled)
-        {
-            yield return new MobileNavMenuEntry(
-                Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
-                LaunchAIAgentsAsync,
-                new Icons.Regular.Size24.BotSparkle()
-            );
-        }
-
         yield return new MobileNavMenuEntry(
+            nameof(Resources.Layout.MainLayoutLaunchNotifications),
             Loc[nameof(Resources.Layout.MainLayoutLaunchNotifications)],
             LaunchNotificationsAsync,
             new Icons.Regular.Size24.Alert()
         );
 
         yield return new MobileNavMenuEntry(
+            nameof(Resources.Layout.MainLayoutLaunchSettings),
             Loc[nameof(Resources.Layout.MainLayoutLaunchSettings)],
             LaunchSettingsAsync,
             new Icons.Regular.Size24.Settings()
         );
     }
-
-    private static Regex GetNonIndexPageRegex(params string[] pageRelativeBasePaths)
-    {
-        var alternatives = pageRelativeBasePaths
-            .Select(Regex.Escape)
-            .Select(path => $"{path}(\\?.*)?|{path}/.+");
-        return new Regex($"^({string.Join("|", alternatives)})$", LinkMatchRegexOptions);
-    }
-
-    private const RegexOptions LinkMatchRegexOptions = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
 }
