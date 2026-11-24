@@ -151,7 +151,7 @@ suite('data/appHostCliRunner tests', () => {
             }
         });
 
-        test('drains inherited pipes from a real subprocess after its launcher exits', async () => {
+        test('drains buffered output from a real subprocess after it exits', async () => {
             const events: string[] = [];
             getCliPathStub.resolves(process.execPath);
             const environmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({
@@ -159,28 +159,44 @@ suite('data/appHostCliRunner tests', () => {
                 ELECTRON_RUN_AS_NODE: '1',
             });
             spawnStub.callThrough();
+            terminateStub.callThrough();
 
-            // The launcher exits while its child still owns the pipes. The delayed child output
-            // exercises real OS pipe delivery, not just the ordering of stubbed callbacks.
-            const writer = 'setTimeout(() => { process.stdout.write(\'{"name":"api"}]}\'); process.stderr.write("late diagnostic"); }, 100);';
-            const launcher = `const { spawn } = require("child_process");
-                spawn(process.execPath, ["-e", ${JSON.stringify(writer)}], { stdio: ["ignore", 1, 2], windowsHide: true }).unref();
-                process.stdout.write('{"resources":[');
-                process.exit(0);`;
+            // Pause after the JSON prefix so the remaining pipe data is delivered after exit.
+            // Both writes fit in the pipe buffer, so the child can exit without a reader deadlock.
+            const script = `let started = false;
+            process.stdin.on("data", () => {
+                if (!started) {
+                    started = true;
+                    process.stdout.write('{"resources":[');
+                    return;
+                }
+                process.stdout.write('{"name":"api"}]}', () =>
+                    process.stderr.write("late diagnostic", () => process.exit(0)));
+            });`;
             const runner = new AppHostCliRunner(terminalProvider);
             try {
-                const pending = runner.runCliCommand('describe', ['-e', launcher]);
-                await waitForCondition(() => spawnStub.calledOnce, 'expected the launcher to spawn');
+                const pending = runner.runCliCommand('describe', ['-e', script]);
+                await waitForCondition(() => spawnStub.calledOnce, 'expected the stand-in CLI to spawn');
                 const child: ChildProcessWithoutNullStreams = spawnStub.firstCall.returnValue;
-                child.stdout.on('data', () => events.push('stdout'));
-                child.on('exit', () => events.push('exit'));
+                child.stdout.on('data', (data: string) => {
+                    events.push('stdout');
+                    if (data === '{"resources":[') {
+                        child.stdout.pause();
+                        child.stdin.end('finish');
+                    }
+                });
+                child.on('exit', () => {
+                    events.push('exit');
+                    child.stdout.resume();
+                });
                 child.on('close', () => events.push('close'));
+                child.stdin.write('begin');
 
                 const result = await pending;
                 assert.strictEqual(result.stdout, '{"resources":[{"name":"api"}]}');
                 // Electron can emit platform diagnostics before running the stand-in script.
                 assert.ok(result.stderr.endsWith('late diagnostic'), `missing final stderr: ${result.stderr}`);
-                assert.ok(events.lastIndexOf('stdout') > events.indexOf('exit'), 'the final JSON chunk must arrive after launcher exit');
+                assert.ok(events.lastIndexOf('stdout') > events.indexOf('exit'), 'the final JSON chunk must arrive after process exit');
                 assert.strictEqual(events.at(-1), 'close');
             } finally {
                 runner.dispose();

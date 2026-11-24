@@ -7,14 +7,16 @@ name: Temporary VS Code CLI lifecycle and Go attach stress
         default: all
         options:
           - all
+          - lifecycle
           - windows-lifecycle
-        description: Run the full comparison or only Windows lifecycle cells
+          - windows-e2e
+        description: Run the full comparison or selected completed-cell retries
 permissions:
   contents: read
   actions: read
 jobs:
   verify_prerequisites:
-    if: github.repository == 'microsoft/aspire' && inputs.scope != 'windows-lifecycle'
+    if: github.repository == 'microsoft/aspire' && (inputs.scope == 'all' || inputs.scope == 'windows-e2e')
     name: Verify extension E2E prerequisites
     runs-on: ubuntu-latest
     env:
@@ -113,7 +115,7 @@ jobs:
           - fixed
   lifecycle:
     name: CLI lifecycle (${{ matrix.os }}, runner ${{ matrix.index }})
-    if: ${{ github.repository == 'microsoft/aspire' }}
+    if: github.repository == 'microsoft/aspire' && inputs.scope != 'windows-e2e'
     runs-on: ${{ matrix.os }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -205,7 +207,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Failed to prepare baseline stress tests.' }
           $env:ASPIRE_CLI_STRESS_REPORT = Join-Path (Get-Location).Path '.stress/baseline.json'
           $reporter = Join-Path (Get-Location).Path 'out/test/cli-output-reporter.cjs'
-          $arguments = @('yarn', 'unit-test', '--run', 'out/test/repeated-cli-output.js', '--grep', 'drains one-shot JSON|retains failure diagnostics|drains inherited pipes', '--reporter', $reporter)
+          $arguments = @('yarn', 'unit-test', '--run', 'out/test/repeated-cli-output.js', '--grep', 'drains one-shot JSON|retains failure diagnostics|real subprocess', '--reporter', $reporter)
           if ($IsLinux) { xvfb-run -a corepack @arguments *>&1 | Tee-Object -FilePath '.stress/baseline.log' }
           else { corepack @arguments *>&1 | Tee-Object -FilePath '.stress/baseline.log' }
           if ($LASTEXITCODE -ne 1) { throw "Expected baseline test failure exit 1, got $LASTEXITCODE." }
@@ -246,7 +248,7 @@ jobs:
           - 4
           - 5
   extension_e2e:
-    if: github.repository == 'microsoft/aspire' && inputs.scope != 'windows-lifecycle'
+    if: github.repository == 'microsoft/aspire' && (inputs.scope == 'all' || inputs.scope == 'windows-e2e')
     name: Go attach (${{ matrix.name }}, ${{ matrix.variant }}, runner ${{ matrix.index }})
     needs: verify_prerequisites
     runs-on: ${{ matrix.runner }}
@@ -258,407 +260,7 @@ jobs:
       fail-fast: false
       max-parallel: 10
       matrix:
-        include:
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: baseline
-            index: 1
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: baseline
-            index: 2
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: baseline
-            index: 3
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: baseline
-            index: 4
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: baseline
-            index: 5
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: baseline
-            index: 1
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: baseline
-            index: 2
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: baseline
-            index: 3
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: baseline
-            index: 4
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: baseline
-            index: 5
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: fixed
-            index: 1
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: fixed
-            index: 2
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: fixed
-            index: 3
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: fixed
-            index: 4
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Windows
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: windows-latest
-            rid: win-x64
-            archivePattern: aspire-cli-win-x64*.zip
-            cliBinary: aspire.exe
-            useXvfb: false
-            installResourceDebug: true
-            variant: fixed
-            index: 5
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: fixed
-            index: 1
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: fixed
-            index: 2
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: fixed
-            index: 3
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: fixed
-            index: 4
-          - installDeno: false
-            installDotnetDebugger: false
-            installAzureFunctions: false
-            installAzureFunctionsCoreTools: false
-            installWinUI: false
-            installJava: false
-            browser: ''
-            advisoryIssue: ''
-            unsetCliStartTimeout: false
-            name: Linux
-            shardName: resource-debug-tools
-            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
-            runner: ubuntu-latest
-            rid: linux-x64
-            archivePattern: aspire-cli-linux-x64*.tar.gz
-            cliBinary: aspire
-            useXvfb: true
-            installResourceDebug: true
-            variant: fixed
-            index: 5
+        include: ${{ inputs.scope == 'windows-e2e' && fromJSON('[{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":5},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":5}]') || fromJSON('[{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"baseline","index":5},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"baseline","index":5},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Windows","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"windows-latest","rid":"win-x64","archivepattern":"aspire-cli-win-x64*.zip","clibinary":"aspire.exe","usexvfb":false,"installresourcedebug":true,"variant":"fixed","index":5},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":1},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":2},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":3},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":4},{"installdeno":false,"installdotnetdebugger":false,"installazurefunctions":false,"installazurefunctionscoretools":false,"installwinui":false,"installjava":false,"browser":"","advisoryissue":"","unsetclistarttimeout":false,"name":"Linux","shardname":"resource-debug-tools","spec":"out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js","runner":"ubuntu-latest","rid":"linux-x64","archivepattern":"aspire-cli-linux-x64*.tar.gz","clibinary":"aspire","usexvfb":true,"installresourcedebug":true,"variant":"fixed","index":5}]') }}
     defaults:
       run:
         shell: pwsh
@@ -721,7 +323,7 @@ jobs:
         with:
           global-json-file: global.json
       - name: Setup Deno
-        if: ${{ matrix.installDeno }}
+        if: ${{ matrix.installdeno }}
         uses: ./.github/actions/setup-deno
       - name: Download VSIX
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -772,7 +374,7 @@ jobs:
             Start-Sleep -Seconds $delay
           }
       - name: .NET debugger E2E prerequisites
-        if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions || matrix.installResourceDebug }}
+        if: ${{ matrix.installdotnetdebugger || matrix.installazurefunctions || matrix.installresourcedebug }}
         run: |
           function Get-PinnedArtifact {
             param(
@@ -819,7 +421,7 @@ jobs:
             "ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharpVsix"
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          if ('${{ matrix.installResourceDebug }}' -eq 'true') {
+          if ('${{ matrix.installresourcedebug }}' -eq 'true') {
             $goVsix = Join-Path $env:RUNNER_TEMP 'vscode-go-0.56.0.vsix'
             Get-PinnedArtifact `
               -Uri 'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/golang/vsextensions/Go/0.56.0/vspackage' `
@@ -828,7 +430,7 @@ jobs:
             "ASPIRE_EXTENSION_E2E_GO_VSIX=$goVsix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           }
       - name: Azure Functions E2E prerequisites
-        if: ${{ matrix.installAzureFunctions || matrix.installAzureFunctionsCoreTools }}
+        if: ${{ matrix.installazurefunctions || matrix.installazurefunctionscoretools }}
         shell: bash
         run: |
           set -euo pipefail
@@ -852,7 +454,7 @@ jobs:
             echo 'FUNCTIONS_CORE_TOOLS_TELEMETRY_OPTOUT=1'
           } >> "$GITHUB_ENV"
 
-          if [ '${{ matrix.installAzureFunctions }}' = 'true' ]; then
+          if [ '${{ matrix.installazurefunctions }}' = 'true' ]; then
             azure_resource_groups_vsix="$RUNNER_TEMP/vscode-azureresourcegroups-0.12.7.vsix"
             curl --fail --location --compressed --retry 3 --retry-all-errors \
               --output "$azure_resource_groups_vsix" \
@@ -872,7 +474,7 @@ jobs:
             } >> "$GITHUB_ENV"
           fi
       - name: Install resource debug E2E prerequisites
-        if: ${{ matrix.installResourceDebug }}
+        if: ${{ matrix.installresourcedebug }}
         run: |
           # Ubuntu's Yama default allows ptrace only when the debugger is an ancestor of the target.
           # DCP launches the Go resource independently from Delve, so packaged attach needs this test-only policy.
@@ -908,7 +510,7 @@ jobs:
 
           'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG=true' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Install WinUI E2E debugger prerequisites
-        if: ${{ matrix.installWinUI }}
+        if: ${{ matrix.installwinui }}
         shell: bash
         run: |
           set -euo pipefail
@@ -938,13 +540,13 @@ jobs:
             echo "ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharp_vsix"
           } >> "$GITHUB_ENV"
       - name: Set up the JDK for the Java E2E specs
-        if: ${{ matrix.installJava }}
+        if: ${{ matrix.installjava }}
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
         with:
           distribution: temurin
           java-version: '25'
       - name: Cache Java dependencies for the Java E2E specs
-        if: ${{ matrix.installJava }}
+        if: ${{ matrix.installjava }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -956,7 +558,7 @@ jobs:
           restore-keys: |
             java-e2e-${{ runner.os }}-
       - name: Warm the Java dependency caches
-        if: ${{ matrix.installJava }}
+        if: ${{ matrix.installjava }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1008,7 +610,7 @@ jobs:
           warm "Gradle dependencies for orders" orders \
             ./gradlew --no-daemon --quiet compileJava
       - name: Install Java E2E prerequisites
-        if: ${{ matrix.installJava }}
+        if: ${{ matrix.installjava }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1051,10 +653,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
 
-          $archive = Get-ChildItem -Path '${{ github.workspace }}/artifacts/cli-archive' -Recurse -File -Filter '${{ matrix.archivePattern }}' | Select-Object -First 1
+          $archive = Get-ChildItem -Path '${{ github.workspace }}/artifacts/cli-archive' -Recurse -File -Filter '${{ matrix.archivepattern }}' | Select-Object -First 1
           if ($null -eq $archive) {
             Get-ChildItem -Path '${{ github.workspace }}/artifacts/cli-archive' -Recurse -File | Format-Table -AutoSize
-            throw "Unable to find CLI archive matching ${{ matrix.archivePattern }}."
+            throw "Unable to find CLI archive matching ${{ matrix.archivepattern }}."
           }
 
           $bundleDir = Join-Path '${{ github.workspace }}' 'artifacts/bundle/${{ matrix.rid }}'
@@ -1065,10 +667,10 @@ jobs:
             tar -xzf $archive.FullName -C $bundleDir
           }
 
-          $cli = Get-ChildItem -Path $bundleDir -Recurse -File -Filter '${{ matrix.cliBinary }}' | Select-Object -First 1
+          $cli = Get-ChildItem -Path $bundleDir -Recurse -File -Filter '${{ matrix.clibinary }}' | Select-Object -First 1
           if ($null -eq $cli) {
             Get-ChildItem -Path $bundleDir -Recurse -File | Format-Table -AutoSize
-            throw "Unable to find ${{ matrix.cliBinary }} in extracted CLI archive."
+            throw "Unable to find ${{ matrix.clibinary }} in extracted CLI archive."
           }
 
           if ('${{ runner.os }}' -ne 'Windows') {
@@ -1145,7 +747,7 @@ jobs:
 
           node -e "const fs=require('fs'); const file='.mocharc.e2e.js'; fs.appendFileSync(file, '\nmodule.exports.grep = /attaches to a Go resource launched with Run Without Debugging, hits a breakpoint, and detaches/;\n');"
       - name: Install Deno
-        if: ${{ matrix.installDeno }}
+        if: ${{ matrix.installdeno }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -1165,7 +767,7 @@ jobs:
           $installDirectory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & (Join-Path $installDirectory '${{ runner.os == 'Windows' && 'deno.exe' || 'deno' }}') --version
       - name: Install E2E recorder
-        if: ${{ matrix.useXvfb }}
+        if: ${{ matrix.usexvfb }}
         run: |
           # ffmpeg only powers the diagnostic screen recordings, and run-e2e.js already skips
           # recording with a warning when the binary is missing. So this step must never be able to
@@ -1223,12 +825,12 @@ jobs:
         working-directory: extension
         env:
           ASPIRE_EXTENSION_E2E_VSIX: ${{ github.workspace }}/extension/out/aspire-extension.vsix
-          ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
+          ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardname }}
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
           ASPIRE_EXTENSION_E2E_BROWSER: ${{ matrix.browser }}
-          ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}
-          ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetCliStartTimeout }}
-          ASPIRE_EXTENSION_E2E_RECORDING_MODE: ${{ matrix.useXvfb && 'always' || 'off' }}
+          ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryissue }}
+          ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetclistarttimeout }}
+          ASPIRE_EXTENSION_E2E_RECORDING_MODE: ${{ matrix.usexvfb && 'always' || 'off' }}
         run: |
 
           $ErrorActionPreference = 'Stop'
@@ -1236,21 +838,25 @@ jobs:
           $records = @()
           New-Item -ItemType Directory -Path '.test-results/trials' -Force | Out-Null
           for ($iteration = 1; $iteration -le 5; $iteration++) {
+            # MSBuild can retain task DLLs after an iteration. A unique shard gives each
+            # trial its own package cache, avoiding attempts to delete a loaded Windows DLL.
+            $shard = "resource-debug-tools-trial-$iteration"
+            $env:ASPIRE_EXTENSION_E2E_SHARD = $shard
             $log = ".test-results/trials/iteration-$iteration.log"
-            if ('${{ matrix.useXvfb }}' -eq 'true') {
+            if ('${{ matrix.usexvfb }}' -eq 'true') {
               xvfb-run -a node scripts/run-e2e.js *>&1 | Tee-Object -FilePath $log
             } else {
               node scripts/run-e2e.js *>&1 | Tee-Object -FilePath $log
             }
             $exitCode = $LASTEXITCODE
-            $mochaFile = '.test-results/e2e/resource-debug-tools/mocha.json'
+            $mochaFile = ".test-results/e2e/$shard/mocha.json"
             $executed = 0
             $failures = $null
             if (Test-Path $mochaFile) {
               $mocha = Get-Content -Raw $mochaFile | ConvertFrom-Json
               $executed = $mocha.stats.tests
               $failures = $mocha.stats.failures
-              Move-Item '.test-results/e2e/resource-debug-tools' ".test-results/trials/iteration-$iteration" -Force
+              Move-Item ".test-results/e2e/$shard" ".test-results/trials/iteration-$iteration" -Force
             }
             $records += [pscustomobject]@{ iteration=$iteration; exitCode=$exitCode; executed=$executed; failures=$failures }
             $records | ConvertTo-Json -Depth 10 | Set-Content '.test-results/trials/results.json'

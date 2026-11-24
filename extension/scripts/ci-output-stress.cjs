@@ -12,7 +12,7 @@ const trials = 20;
 const names = [
   'drains one-shot JSON output after process exit before completing on close',
   'retains failure diagnostics written after process exit',
-  'drains inherited pipes from a real subprocess after its launcher exits',
+  'drains buffered output from a real subprocess after it exits',
 ];
 fs.mkdirSync(root, { recursive: true });
 
