@@ -109,6 +109,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private const string TelemetrySourcesKind = "TelemetrySources";
     private bool _pendingLandingRedirect;
     private Task<StorageResult<List<string>>>? _prefetchedLastSelectedResourcesTask;
+    private string? _persistedPaneMode;
     private bool _hasLocation;
     private string? _lastLocation;
     private bool _isDisposed;
@@ -348,6 +349,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The URL selects the mode when navigating from the main navigation. Other resource URLs, such as a row's
         // link, don't include it, so the last mode is remembered.
         var paneModeResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneMode);
+        if (paneModeResult.Success)
+        {
+            _persistedPaneMode = paneModeResult.Value;
+        }
         if (DashboardClient.IsEnabled && paneModeResult.Success && Enum.TryParse<ResourcePaneMode>(paneModeResult.Value, ignoreCase: true, out var storedPaneMode) && storedPaneMode != ResourcePaneMode.Telemetry)
         {
             // Migrate the former Tags navigation view to the resource pane's grouping preference.
@@ -1085,9 +1090,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             return;
         }
+        var modeValue = mode.Value.ToString();
+        if (string.Equals(_persistedPaneMode, modeValue, StringComparison.Ordinal))
+        {
+            return;
+        }
         try
         {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneMode, mode.Value.ToString());
+            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneMode, modeValue);
+            _persistedPaneMode = modeValue;
         }
         catch (JSDisconnectedException)
         {

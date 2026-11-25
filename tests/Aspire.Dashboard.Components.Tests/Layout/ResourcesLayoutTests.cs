@@ -3832,6 +3832,36 @@ public class ResourcesLayoutTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public void OnInitialize_WhenStoredPaneModeMatches_SkipsRedundantWrite()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client);
+
+        var localStorage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        localStorage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneMode
+            ? (true, nameof(ResourcePaneMode.Resources))
+            : (false, null);
+        var paneModeWrites = 0;
+        localStorage.OnSetUnprotectedAsync = (key, _) =>
+        {
+            if (key == BrowserStorageKeys.ResourcePaneMode)
+            {
+                paneModeWrites++;
+            }
+        };
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.Equal(0, paneModeWrites);
+    }
+
     private Task AddTelemetryAsync(string name)
     {
         var resource = CreateResource(name);
