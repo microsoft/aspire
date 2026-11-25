@@ -1287,7 +1287,7 @@ Configurare l'app per esportare log, tracce e metriche usando [OTLP]({0}).</targ
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrapOff">
         <source>Disable word wrap</source>
-        <target state="new">Disable word wrap</target>
+        <target state="translated">Disabilita ritorno a capo automatico</target>
         <note />
       </trans-unit>
     </body>
