@@ -349,6 +349,7 @@ export function registerDenoAppHostInspectorCleanup(
     };
 
     const stopUnattachedRuntime = () => {
+        console.log(`[inspector-diagnostic] stopUnattachedRuntime address=${inspectorAddress} root=${rootSession?.name} cleaned=${cleanedUp} succeeded=${launchSucceeded} finished=${launchFinished}`);
         pendingStartCancellation?.dispose();
         if (!rootSession) {
             trackerFactory?.dispose();
@@ -365,6 +366,7 @@ export function registerDenoAppHostInspectorCleanup(
                 knownProcessIds: unconfirmedProcessIds,
                 isSpawnSettled: () => launchFinished,
             }).then(({ stopped, running, unidentified }) => {
+                console.log(`[inspector-diagnostic] cleanup result address=${inspectorAddress} stopped=${stopped} running=${running} unidentified=${unidentified}`);
                 // A retry matches these again before signalling any of them, so a reused PID is never stopped.
                 unconfirmedProcessIds = [...running, ...unidentified];
                 if (stopped.length > 0) {

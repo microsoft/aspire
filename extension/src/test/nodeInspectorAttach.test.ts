@@ -54,13 +54,54 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
     // Tracked independently of the cleanup under test so teardown can always stop leftover fixtures.
     const controlSockets = new Set<net.Socket>();
     const fixtures: FixtureProcess[] = [];
+    setup(function () {
+        console.log(`[inspector-diagnostic] test=${this.currentTest?.title} hostPid=${process.pid}`);
+        const listProcesses = SystemLaunchedChildProcessQuery.prototype.listProcesses;
+        sinon.stub(SystemLaunchedChildProcessQuery.prototype, 'listProcesses').callsFake(async function (this: SystemLaunchedChildProcessQuery, ...args) {
+            const started = Date.now();
+            console.log('[inspector-diagnostic] process query started');
+            try {
+                const result = await listProcesses.apply(this, args);
+                console.log(`[inspector-diagnostic] process query completed elapsed=${Date.now() - started} count=${result.length} fixtures=${JSON.stringify(result.filter(candidate => fixtures.some(fixture => fixture.pid === candidate.pid)))}`);
+                return result;
+            }
+            catch (error) {
+                console.log(`[inspector-diagnostic] process query failed elapsed=${Date.now() - started} error=${error}`);
+                throw error;
+            }
+        });
+        disposables.push(vscode.debug.registerDebugAdapterTrackerFactory('pwa-node', {
+            createDebugAdapterTracker: session => {
+                console.log(`[inspector-diagnostic] tracker session=${session.name} runId=${session.configuration.runId} pending=${session.configuration.__pendingTargetId}`);
+                return {
+                    onWillReceiveMessage: (message: { type?: string; command?: string }) => {
+                        if (message.type === 'request' && ['launch', 'disconnect', 'terminate'].includes(message.command ?? '')) {
+                            console.log(`[inspector-diagnostic] request session=${session.name} command=${message.command}`);
+                        }
+                    },
+                    onDidSendMessage: (message: { type?: string; command?: string; success?: boolean }) => {
+                        if (message.type === 'response' && ['launch', 'disconnect', 'terminate'].includes(message.command ?? '')) {
+                            console.log(`[inspector-diagnostic] response session=${session.name} command=${message.command} success=${message.success}`);
+                        }
+                    },
+                    onWillStopSession: () => console.log(`[inspector-diagnostic] stop session=${session.name}`),
+                    onExit: () => console.log(`[inspector-diagnostic] exit session=${session.name}`),
+                };
+            }
+        }));
+    });
     const aspireDebugSession = {
         registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable),
         registerPendingStartCancellation: (disposable: vscode.Disposable) => {
             pendingStartCancellations.add(disposable);
             return { dispose: () => pendingStartCancellations.delete(disposable) };
         },
-        trackPendingResourceCleanup: (_name: string, cleanup: () => Promise<void>) => { void cleanup().catch(() => { }); },
+        trackPendingResourceCleanup: (name: string, cleanup: () => Promise<void>) => {
+            console.log(`[inspector-diagnostic] cleanup started name=${name}`);
+            void cleanup().then(
+                () => console.log(`[inspector-diagnostic] cleanup completed name=${name}`),
+                error => console.log(`[inspector-diagnostic] cleanup failed name=${name} error=${error}`));
+        },
     } as unknown as AspireDebugSession;
 
     suiteSetup(async () => {
@@ -75,6 +116,7 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
             const waiters: { line: string; resolve: () => void }[] = [];
             let isClosed = false;
             const closed = new Promise<void>(resolve => socket.once('close', () => {
+                console.log(`[inspector-diagnostic] fixture closed pid=${fixture?.pid}`);
                 isClosed = true;
                 controlSockets.delete(socket);
                 resolve();
@@ -88,6 +130,7 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
                     const line = buffer.slice(0, newline);
                     buffer = buffer.slice(newline + 1);
                     lines.push(line);
+                    console.log(`[inspector-diagnostic] fixture line=${line}`);
                     for (const waiter of waiters.filter(w => w.line === line)) {
                         waiter.resolve();
                     }
@@ -121,6 +164,7 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
     });
 
     teardown(async () => {
+        console.log(`[inspector-diagnostic] teardown fixtures=${JSON.stringify(fixtures.map(fixture => ({ pid: fixture.pid, closed: fixture.isClosed(), lines: fixture.lines })))}`);
         nextFixture = undefined;
         try {
             disposables.splice(0).forEach(d => d.dispose());
