@@ -466,21 +466,25 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         // because it carries no meaning and would otherwise show up as escape noise.
         var trimmed = queryText.AsSpan().Trim();
 
+        // Lengths are measured in UTF-16 code units, but the query is walked one Unicode scalar
+        // value at a time so a non-BMP character (e.g. an emoji) is kept or dropped as a whole
+        // surrogate pair.
         var escapedLength = 0;
-        foreach (var c in trimmed)
+        foreach (var rune in trimmed.EnumerateRunes())
         {
-            escapedLength += GetEscape(c) is null ? 1 : 2;
+            escapedLength += GetEscape(rune)?.Length ?? rune.Utf16SequenceLength;
         }
 
         var maxLength = escapedLength > MaxDbQueryTextLength ? MaxDbQueryTextLength - 3 : escapedLength;
         var builder = new StringBuilder(MaxDbQueryTextLength);
-        foreach (var c in trimmed)
+        var position = 0;
+        foreach (var rune in trimmed.EnumerateRunes())
         {
-            var escape = GetEscape(c);
-            var length = escape is null ? 1 : escape.Length;
+            var escape = GetEscape(rune);
+            var length = escape?.Length ?? rune.Utf16SequenceLength;
 
-            // Stop before a whole character or escape that does not fit, so truncation never
-            // leaves a dangling backslash from a split escape sequence.
+            // Stop before a whole scalar value or escape that does not fit, so truncation never
+            // leaves a dangling backslash from a split escape sequence or an unpaired surrogate.
             if (builder.Length + length > maxLength)
             {
                 break;
@@ -488,12 +492,14 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
             if (escape is null)
             {
-                builder.Append(c);
+                builder.Append(trimmed.Slice(position, rune.Utf16SequenceLength));
             }
             else
             {
                 builder.Append(escape);
             }
+
+            position += rune.Utf16SequenceLength;
         }
 
         if (escapedLength > MaxDbQueryTextLength)
@@ -503,7 +509,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         return builder.ToString();
 
-        static string? GetEscape(char c) => c switch
+        static string? GetEscape(Rune rune) => rune.Value switch
         {
             '\r' => "\\r",
             '\n' => "\\n",
