@@ -26,8 +26,7 @@ public class RoutesTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchor(this);
         FluentUISetupHelpers.SetupFluentTextField(this);
         JSInterop.SetupModule("/Components/Pages/Login.razor.js");
-        JSInterop.Setup<ViewportSize>("window.getWindowDimensions").SetResult(new ViewportSize(1440, 1000));
-        JSInterop.SetupVoid("window.listenToWindowResize", _ => true).SetVoidResult();
+        JSInterop.Setup<ViewportSize>("window.initializeWindowDimensions", _ => true).SetResult(new ViewportSize(1440, 1000));
     }
 
     [Theory]

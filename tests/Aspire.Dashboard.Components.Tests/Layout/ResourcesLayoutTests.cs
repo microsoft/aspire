@@ -488,16 +488,45 @@ public class ResourcesLayoutTests : DashboardTestContext
         // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.Single(JSInterop.Invocations["registerTabOverflow"]));
+        cut.WaitForAssertion(() => Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]));
 
-        var registration = Assert.Single(JSInterop.Invocations["registerTabOverflow"]);
-        var registrationId = Assert.IsType<string>(registration.Arguments[0]);
+        var registration = Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]);
+        var registrationId = Assert.IsType<string>(registration.Arguments[2]);
         Assert.NotEmpty(registrationId);
+        Assert.True(Assert.IsType<bool>(registration.Arguments[3]));
+        Assert.Empty(JSInterop.Invocations["registerPaneResizer"]);
+        Assert.Empty(JSInterop.Invocations["unregisterPaneResizer"]);
 
         await DisposeComponentsAsync();
 
-        var cleanup = Assert.Single(JSInterop.Invocations["unregisterTabOverflow"]);
-        Assert.Equal(registrationId, Assert.IsType<string>(Assert.Single(cleanup.Arguments)));
+        var cleanup = Assert.Single(JSInterop.Invocations["disposeResourcesLayout"]);
+        Assert.Equal(registrationId, Assert.IsType<string>(cleanup.Arguments[1]));
+    }
+
+    [Fact]
+    public void StartupJsInterop_InitializesOnceAndTogglesPaneResizerOnLaterLayoutChanges()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        // Home starts in full-canvas mode, so the pane resizer is not registered during startup.
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.HomeUrl());
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]));
+
+        var initialization = Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]);
+        Assert.False(Assert.IsType<bool>(initialization.Arguments[3]));
+        Assert.Empty(JSInterop.Invocations["registerPaneResizer"]);
+        Assert.Empty(JSInterop.Invocations["unregisterPaneResizer"]);
+
+        ResourceSetupHelpers.ToggleResourceList(cut);
+
+        Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]);
+        Assert.Single(JSInterop.Invocations["registerPaneResizer"]);
+
+        ResourceSetupHelpers.ToggleResourceList(cut);
+
+        Assert.Single(JSInterop.Invocations["unregisterPaneResizer"]);
     }
 
     [Theory]

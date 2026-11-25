@@ -1056,3 +1056,24 @@ export function focusPaneSelectionReveal(layoutElement, location) {
     target.tabIndex = -1;
     target.focus({ preventScroll: true });
 }
+
+export function initializeResourcesLayout(layoutElement, dotNetRef, tabOverflowRegistrationId, registerResizer, minimumWidth, maximumWidth, defaultWidth) {
+    registerTabOverflow(tabOverflowRegistrationId, dotNetRef);
+    registerResourceOrdering(layoutElement, dotNetRef);
+    registerResourceContextMenu(layoutElement, dotNetRef);
+    registerPaneActivityVisibility(layoutElement, dotNetRef);
+    if (registerResizer) {
+        registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth, defaultWidth);
+    }
+    return usesCommandSelectionModifier();
+}
+
+export function disposeResourcesLayout(layoutElement, tabOverflowRegistrationId) {
+    unregisterPaneResizer(layoutElement);
+    unregisterResourceOrdering(layoutElement);
+    unregisterResourceContextMenu(layoutElement);
+    unregisterPaneActivityVisibility(layoutElement);
+    unregisterResourcePicker(layoutElement);
+    cancelPaneSelectionReveal(layoutElement);
+    unregisterTabOverflow(tabOverflowRegistrationId);
+}

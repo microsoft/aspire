@@ -91,7 +91,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _isPaneFullCanvas;
     private bool _animatePaneTransition;
     private bool _isPaneSelectionReveal;
-    private Task? _paneInteractionsRegistration;
+    private Task? _layoutInitializationTask;
     private string? _animatedPaneNavigation;
     private string? _startPaneSelectionReveal;
     private string? _focusPaneSelectionReveal;
@@ -118,12 +118,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private int? _paneWidth;
     private ElementReference _layoutElement;
     private IJSObjectReference? _jsModule;
+    private Task<IJSObjectReference>? _jsModuleTask;
     private bool? _usesCommandSelectionModifier;
-    private bool _isTabOverflowRegistered;
+    private bool _isLayoutInitialized;
     private string[] _overflowTabIds = [];
     private DotNetObjectReference<ResourcesLayout>? _selfRef;
     private bool _isResizerRegistered;
-    private bool _isOrderingRegistered;
     private string? _orderStatus;
 
     [Inject]
@@ -644,6 +644,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
+    private bool ShowResizer => ViewportInformation.IsDesktop && !_isPaneCollapsed && !_isPaneFullCanvas;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // The menu is a sibling, not a child of this layout, so its entries need a separate refresh.
@@ -652,82 +654,91 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var focusResourcePicker = _focusResourcePicker && _isResourcePickerOpen;
         _focusResourcePicker = false;
         var pickerChanged = _isResourcePickerOpen != _wasResourcePickerOpen;
-        var showResizer = ViewportInformation.IsDesktop && !_isPaneCollapsed && !_isPaneFullCanvas;
-        var registrationChanged = showResizer != _isResizerRegistered || !_isOrderingRegistered;
-        if (_usesCommandSelectionModifier is not null && !pickerChanged && !focusResourcePicker &&
-            !registrationChanged && _isTabOverflowRegistered &&
-            _startPaneSelectionReveal is null && _focusPaneSelectionReveal is null)
+        var resizerChanged = ShowResizer != _isResizerRegistered;
+        if (_isLayoutInitialized && !pickerChanged && !focusResourcePicker &&
+            !resizerChanged && _startPaneSelectionReveal is null && _focusPaneSelectionReveal is null)
         {
             return;
         }
 
         try
         {
-            _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Layout/ResourcesLayout.razor.js"]}");
-            var renderSelectionModifier = _usesCommandSelectionModifier is null;
-            if (renderSelectionModifier)
+            var jsModule = await GetJsModuleAsync();
+            if (jsModule is null)
             {
-                _usesCommandSelectionModifier = await _jsModule.InvokeAsync<bool>("usesCommandSelectionModifier");
+                return;
             }
+
             _selfRef ??= DotNetObjectReference.Create(this);
-            if (pickerChanged)
+            var renderSelectionModifier = false;
+            if (!_isLayoutInitialized)
             {
-                await _jsModule.InvokeVoidAsync("setResourcePickerOpen", _layoutElement, _selfRef, _isResourcePickerOpen);
-                _wasResourcePickerOpen = _isResourcePickerOpen;
-            }
-            if (focusResourcePicker && _resourcePaneSearch is { } search)
-            {
-                await search.Element.FocusAsync();
-            }
-            if (!_isTabOverflowRegistered)
-            {
-                _isTabOverflowRegistered = true;
-                await _jsModule.InvokeVoidAsync("registerTabOverflow", _tabOverflowRegistrationId, _selfRef);
-            }
-            if (!_isOrderingRegistered)
-            {
-                // Re-renders can overlap asynchronous setup. Sharing the registration prevents
+                // Re-renders can overlap asynchronous setup. Sharing the initialization prevents
                 // handlers from being replaced while they hold the initiating selection control.
-                var registration = _paneInteractionsRegistration ??= RegisterPaneInteractionsAsync(_jsModule);
+                var isFirstAttempt = _layoutInitializationTask is null;
+                var initialization = _layoutInitializationTask ??= InitializeLayoutAsync(jsModule, ShowResizer);
                 try
                 {
-                    await registration;
+                    await initialization;
                 }
                 catch
                 {
                     // A faulted shared task would fail every later render, so the handlers could never
                     // register after the circuit reconnects. Only clear this attempt: an overlapping render
                     // may already have started a newer one.
-                    if (ReferenceEquals(_paneInteractionsRegistration, registration))
+                    if (ReferenceEquals(_layoutInitializationTask, initialization))
                     {
-                        _paneInteractionsRegistration = null;
+                        _layoutInitializationTask = null;
                     }
                     throw;
                 }
-                _isOrderingRegistered = true;
-            }
-            if (registrationChanged && showResizer)
-            {
-                await _jsModule.InvokeVoidAsync("registerPaneResizer", _layoutElement, _selfRef, MinimumPaneWidthPx, MaximumPaneWidthPx, DefaultPaneWidthPx);
-            }
-            else if (registrationChanged)
-            {
-                await _jsModule.InvokeVoidAsync("unregisterPaneResizer", _layoutElement);
+
+                renderSelectionModifier = isFirstAttempt;
             }
 
-            _isResizerRegistered = showResizer;
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (pickerChanged)
+            {
+                await jsModule.InvokeVoidAsync("setResourcePickerOpen", _layoutElement, _selfRef, _isResourcePickerOpen);
+                _wasResourcePickerOpen = _isResourcePickerOpen;
+            }
+            if (focusResourcePicker && _resourcePaneSearch is { } search)
+            {
+                await search.Element.FocusAsync();
+            }
+
+            // Re-read ShowResizer after awaiting initialization in case a concurrent render toggled it
+            // while initializeResourcesLayout was in flight.
+            var showResizer = ShowResizer;
+            if (showResizer != _isResizerRegistered)
+            {
+                if (showResizer)
+                {
+                    await jsModule.InvokeVoidAsync("registerPaneResizer", _layoutElement, _selfRef, MinimumPaneWidthPx, MaximumPaneWidthPx, DefaultPaneWidthPx);
+                }
+                else
+                {
+                    await jsModule.InvokeVoidAsync("unregisterPaneResizer", _layoutElement);
+                }
+
+                _isResizerRegistered = showResizer;
+            }
 
             if (_startPaneSelectionReveal is { } startLocation)
             {
                 _startPaneSelectionReveal = null;
-                await _jsModule.InvokeVoidAsync("startPaneSelectionReveal", _layoutElement, _selfRef, startLocation);
+                await jsModule.InvokeVoidAsync("startPaneSelectionReveal", _layoutElement, _selfRef, startLocation);
             }
             if (_focusPaneSelectionReveal is { } focusLocation)
             {
                 _focusPaneSelectionReveal = null;
                 // This render has removed inert. Focus only after the selected page is
                 // accessible, not while its normal-width surface is still clipped.
-                await _jsModule.InvokeVoidAsync("focusPaneSelectionReveal", _layoutElement, focusLocation);
+                await jsModule.InvokeVoidAsync("focusPaneSelectionReveal", _layoutElement, focusLocation);
             }
             if (renderSelectionModifier)
             {
@@ -738,13 +749,63 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             // The circuit disconnected while rendering. There is nothing to register.
         }
+        catch (ObjectDisposedException) when (_isDisposed)
+        {
+            // The layout was disposed while rendering. There is nothing left to register.
+        }
     }
 
-    private async Task RegisterPaneInteractionsAsync(IJSObjectReference jsModule)
+    private async Task<IJSObjectReference?> GetJsModuleAsync()
     {
-        await jsModule.InvokeVoidAsync("registerResourceOrdering", _layoutElement, _selfRef);
-        await jsModule.InvokeVoidAsync("registerResourceContextMenu", _layoutElement, _selfRef);
-        await jsModule.InvokeVoidAsync("registerPaneActivityVisibility", _layoutElement, _selfRef);
+        if (_jsModule is not null)
+        {
+            return _jsModule;
+        }
+
+        if (_isDisposed)
+        {
+            return null;
+        }
+
+        var moduleTask = _jsModuleTask ??= JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Layout/ResourcesLayout.razor.js"]}").AsTask();
+        try
+        {
+            var module = await moduleTask;
+            if (_isDisposed)
+            {
+                if (ReferenceEquals(_jsModuleTask, moduleTask))
+                {
+                    _jsModuleTask = null;
+                    await JSInteropHelpers.SafeDisposeAsync(module);
+                }
+                return null;
+            }
+
+            return _jsModule = module;
+        }
+        catch
+        {
+            if (ReferenceEquals(_jsModuleTask, moduleTask))
+            {
+                _jsModuleTask = null;
+            }
+            throw;
+        }
+    }
+
+    private async Task InitializeLayoutAsync(IJSObjectReference jsModule, bool registerResizer)
+    {
+        _usesCommandSelectionModifier = await jsModule.InvokeAsync<bool>(
+            "initializeResourcesLayout",
+            _layoutElement,
+            _selfRef,
+            _tabOverflowRegistrationId,
+            registerResizer,
+            MinimumPaneWidthPx,
+            MaximumPaneWidthPx,
+            DefaultPaneWidthPx);
+        _isResizerRegistered = registerResizer;
+        _isLayoutInitialized = true;
     }
 
     /// <summary>
@@ -3109,13 +3170,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             try
             {
-                await module.InvokeVoidAsync("unregisterPaneResizer", _layoutElement);
-                await module.InvokeVoidAsync("unregisterResourceOrdering", _layoutElement);
-                await module.InvokeVoidAsync("unregisterResourceContextMenu", _layoutElement);
-                await module.InvokeVoidAsync("unregisterPaneActivityVisibility", _layoutElement);
-                await module.InvokeVoidAsync("unregisterResourcePicker", _layoutElement);
-                await module.InvokeVoidAsync("cancelPaneSelectionReveal", _layoutElement);
-                await module.InvokeVoidAsync("unregisterTabOverflow", _tabOverflowRegistrationId);
+                await module.InvokeVoidAsync("disposeResourcesLayout", _layoutElement, _tabOverflowRegistrationId);
             }
             catch (JSDisconnectedException)
             {
