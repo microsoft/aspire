@@ -128,20 +128,56 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
             await File.ReadAllTextAsync(target));
     }
 
-    [Theory]
-    [InlineData("Our generated block starts with `<!-- aspire:begin` and is refreshed by the CLI.\n")]
-    [InlineData("<!-- aspire:begin -->\nAn unterminated section.\n")]
-    public async Task WriteAsync_LeavesFileWithAnotherBeginMarkerBeforeTheEndMarkerUnchanged(string earlierText)
+    [Fact]
+    public async Task WriteAsync_LeavesFileWithAnotherBeginMarkerBeforeTheEndMarkerUnchanged()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
-        var existing = $"# Rules\n\n{earlierText}\nKeep this team rule.\n\n{AgentInstructionsFile.CreateSection("old.cs", false, "\n")}\n";
+        var existing = $"# Rules\n\n<!-- aspire:begin -->\nAn unterminated section.\n\nKeep this team rule.\n\n{AgentInstructionsFile.CreateSection("old.cs", false, "\n")}\n";
         await File.WriteAllTextAsync(GetFilePath(workspace), existing);
 
         var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
 
         Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
         Assert.Equal(existing, await ReadFileAsync(workspace));
+    }
+
+    [Theory]
+    [InlineData("Our generated block starts with `<!-- aspire:begin` and is refreshed by the CLI.\n")]
+    [InlineData("```markdown\n<!-- aspire:begin -->\nTeam notes.\n<!-- aspire:end -->\n```\n")]
+    [InlineData("    <!-- aspire:begin -->\n    Team notes.\n    <!-- aspire:end -->\n")]
+    public async Task WriteAsync_UpdatesSectionAfterMarkerMentions(string earlierText)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        await File.WriteAllTextAsync(GetFilePath(workspace), $"# Rules\n\n{earlierText}\nKeep this team rule.\n\n{AgentInstructionsFile.CreateSection("old.cs", false, "\n")}\n");
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Updated, change);
+        Assert.Equal(
+            $"# Rules\n\n{earlierText}\nKeep this team rule.\n\n{AgentInstructionsFile.CreateSection("apphost.cs", false, "\n")}\n",
+            await ReadFileAsync(workspace));
+    }
+
+    [Theory]
+    [InlineData("# Rules\n\nNever remove `<!-- aspire:begin -->` or the team validation steps before `<!-- aspire:end -->`.\n")]
+    [InlineData("# Rules\n\n~~~markdown\n<!-- aspire:begin -->\nTeam validation steps.\n<!-- aspire:end -->\n~~~\n")]
+    [InlineData("# Rules\n\n```\nAn unclosed code block.\n")]
+    public async Task WriteAsync_AppendsSectionWhenMarkersAreOnlyMentioned(string existing)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        await File.WriteAllTextAsync(GetFilePath(workspace), existing);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+        var unchanged = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Appended, change);
+        Assert.Equal(AgentInstructionsFileChange.Unchanged, unchanged);
+        Assert.Equal(
+            $"{existing}\n{AgentInstructionsFile.CreateSection("apphost.cs", false, "\n")}\n",
+            await ReadFileAsync(workspace));
     }
 
     [Fact]

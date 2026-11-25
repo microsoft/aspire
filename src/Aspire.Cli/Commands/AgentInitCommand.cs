@@ -761,8 +761,11 @@ internal sealed class AgentInitCommand : BaseCommand
             cancellationToken);
 
         // --- Phase 7: Describe the start flow in AGENTS.md ---
+        // The AGENTS.md note names the microsoft/aspire-skills plugin, so only plugin registrations count.
+        // OpenCode registers skills catalog URLs instead of a plugin.
         hasErrors |= !await WriteAgentInstructionsForScopeAsync(
-            GetAspireSkillsRegisteredClients(registrationResults, skillSources).Any());
+            GetAspireSkillsRegisteredClients(registrationResults, skillSources)
+                .Any(static client => client.Id != OpenCodeAgentClient.ClientId));
 
         if (hasErrors)
         {

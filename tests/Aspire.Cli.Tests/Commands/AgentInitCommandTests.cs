@@ -210,6 +210,29 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             await File.ReadAllTextAsync(agentInstructionsPath));
     }
 
+    [Theory]
+    [InlineData("opencode", false)]
+    [InlineData("copilot,opencode", true)]
+    public async Task AgentInit_WritesAspireSkillsPluginNoteOnlyForPluginRegistration(string agents, bool aspireSkillsPluginRegistered)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
+            {"appHost":{"path":"src/AppHost/apphost.cs"}}
+            """);
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents {agents} --scope project --skills aspire --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("src/AppHost/apphost.cs", aspireSkillsPluginRegistered, newLine)}{newLine}",
+            await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
+    }
+
     [Fact]
     public async Task AgentInit_WritesAgentInstructionsForDiscoveredAppHostWithoutUninstalledSkills()
     {

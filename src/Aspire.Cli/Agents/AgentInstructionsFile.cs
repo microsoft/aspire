@@ -43,9 +43,9 @@ internal enum AgentInstructionsFileChange
 /// version can differ from any list written here, and the agent harness already lists the skills it loaded.
 /// </para>
 /// <para>
-/// An existing file is never overwritten. The Aspire section is delimited by HTML comment markers,
-/// which markdown renderers hide: when the file has no section, one is appended after the existing
-/// content; when it has one, only the text between the markers is replaced, so a later
+/// An existing file is never overwritten. The Aspire section is delimited by HTML comment markers, which
+/// markdown renderers hide, each at the start of its own line. When the file has no section, one is appended
+/// after the existing content; when it has one, only the text between the markers is replaced, so a later
 /// <c>aspire agent init</c> can add its plugin note to the section <c>aspire new</c> wrote.
 /// </para>
 /// </remarks>
@@ -176,7 +176,8 @@ internal static class AgentInstructionsFile
         var lineBreak = existing.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var section = CreateSection(relativeAppHostPath, aspireSkillsPluginRegistered, lineBreak);
 
-        var start = existing.IndexOf(SectionStartMarkerPrefix, StringComparison.Ordinal);
+        var fencedCodeBlocks = FindFencedCodeBlocks(existing);
+        var start = FindMarker(existing, SectionStartMarkerPrefix, 0, fencedCodeBlocks);
         if (start < 0)
         {
             var separator = existing.Length == 0
@@ -194,7 +195,7 @@ internal static class AgentInstructionsFile
         //   <!-- unrelated note -->
         // the next "-->" belongs to another comment, so treat the section as malformed rather
         // than deleting the user's text and that comment.
-        var endMarker = existing.IndexOf(SectionEndMarkerPrefix, start, StringComparison.Ordinal);
+        var endMarker = FindMarker(existing, SectionEndMarkerPrefix, start, fencedCodeBlocks);
         var endMarkerClose = endMarker < 0
             ? -1
             : existing.IndexOf(CommentEnd, endMarker + SectionEndMarkerPrefix.Length, StringComparison.Ordinal);
@@ -205,11 +206,11 @@ internal static class AgentInstructionsFile
         }
 
         // A second begin marker before the end marker means the first one is not the start of this section,
-        // for example an inline mention such as "`<!-- aspire:begin`" in the user's notes, or an unterminated
-        // section above a complete one. Pairing the first begin marker with the later end marker would delete
-        // the user's text between them, so the section is treated as malformed.
+        // for example an unterminated section above a complete one. Pairing the first begin marker with the
+        // later end marker would delete the user's text between them, so the section is treated as malformed.
         if (endMarkerClose >= 0 &&
-            existing.IndexOf(SectionStartMarkerPrefix, start + SectionStartMarkerPrefix.Length, endMarker - start - SectionStartMarkerPrefix.Length, StringComparison.Ordinal) >= 0)
+            FindMarker(existing, SectionStartMarkerPrefix, start + SectionStartMarkerPrefix.Length, fencedCodeBlocks) is >= 0 and var nextStart &&
+            nextStart < endMarker)
         {
             endMarkerClose = -1;
         }
@@ -374,6 +375,118 @@ internal static class AgentInstructionsFile
             Path.IsPathRooted(relativePath) ||
             relativePath == ".." ||
             relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Returns the index of the first section marker starting with <paramref name="prefix"/> at or after
+    /// <paramref name="startIndex"/> that begins a line outside a fenced code block, or -1 when there is none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="CreateSection"/> writes each marker at the start of its own line. Users also mention the
+    /// markers in their own instructions, inline or in an example block, as in
+    /// </para>
+    /// <code>
+    /// Never remove `&lt;!-- aspire:begin --&gt;` or the team validation steps before `&lt;!-- aspire:end --&gt;`.
+    ///
+    /// ```markdown
+    /// &lt;!-- aspire:begin --&gt;
+    /// ...
+    /// &lt;!-- aspire:end --&gt;
+    /// ```
+    /// </code>
+    /// <para>
+    /// and treating those mentions as markers would replace the user's text. A marker is therefore only
+    /// recognized at the start of a line, after at most three spaces as for a CommonMark HTML block
+    /// (https://spec.commonmark.org/0.31.2/#html-blocks); four spaces make an indented code block.
+    /// </para>
+    /// </remarks>
+    private static int FindMarker(string text, string prefix, int startIndex, List<(int Start, int End)> fencedCodeBlocks)
+    {
+        for (var lineStart = 0; lineStart < text.Length;)
+        {
+            var lineEnd = text.IndexOf('\n', lineStart);
+            var nextLineStart = lineEnd < 0 ? text.Length : lineEnd + 1;
+            var markerIndex = lineStart + CountIndentation(text, lineStart);
+            if (markerIndex >= startIndex &&
+                markerIndex - lineStart <= 3 &&
+                text.AsSpan(markerIndex).StartsWith(prefix, StringComparison.Ordinal) &&
+                !fencedCodeBlocks.Exists(block => markerIndex >= block.Start && markerIndex < block.End))
+            {
+                return markerIndex;
+            }
+
+            lineStart = nextLineStart;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Returns the spans of the closed fenced code blocks in <paramref name="text"/>, from the start of the
+    /// opening fence line to the end of the closing fence line.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A fence is a line of at least three backticks or tildes after at most three spaces, optionally followed
+    /// by an info string, which can't contain a backtick for a backtick fence. The block ends at a line of at
+    /// least as many of the same character followed only by whitespace
+    /// (https://spec.commonmark.org/0.31.2/#fenced-code-blocks).
+    /// </para>
+    /// <para>
+    /// CommonMark runs an unclosed fence to the end of the document. Such a fence is not reported here: the
+    /// section is appended after it, and ignoring markers after it would append another section on every run.
+    /// </para>
+    /// </remarks>
+    private static List<(int Start, int End)> FindFencedCodeBlocks(string text)
+    {
+        var blocks = new List<(int Start, int End)>();
+        var openStart = -1;
+        var fenceChar = '\0';
+        var fenceLength = 0;
+        for (var lineStart = 0; lineStart < text.Length;)
+        {
+            var lineEnd = text.IndexOf('\n', lineStart);
+            var nextLineStart = lineEnd < 0 ? text.Length : lineEnd + 1;
+            var line = text.AsSpan(lineStart, nextLineStart - lineStart);
+            var indentation = CountIndentation(text, lineStart);
+            if (indentation <= 3)
+            {
+                var fence = line[indentation..];
+                var runChar = fence.Length > 0 ? fence[0] : '\0';
+                var runLength = runChar is '`' or '~' ? fence.Length - fence.TrimStart(runChar).Length : 0;
+                var rest = fence[runLength..];
+                if (openStart < 0)
+                {
+                    if (runLength >= 3 && (runChar == '~' || !rest.Contains('`')))
+                    {
+                        openStart = lineStart;
+                        fenceChar = runChar;
+                        fenceLength = runLength;
+                    }
+                }
+                else if (runChar == fenceChar && runLength >= fenceLength && rest.IsWhiteSpace())
+                {
+                    blocks.Add((openStart, nextLineStart));
+                    openStart = -1;
+                }
+            }
+
+            lineStart = nextLineStart;
+        }
+
+        return blocks;
+    }
+
+    private static int CountIndentation(string text, int lineStart)
+    {
+        var index = lineStart;
+        while (index < text.Length && text[index] == ' ')
+        {
+            index++;
+        }
+
+        return index - lineStart;
     }
 
     private static async Task CreateFileAsync(string filePath, string content, CancellationToken cancellationToken)
