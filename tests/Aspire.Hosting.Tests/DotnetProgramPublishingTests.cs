@@ -501,12 +501,14 @@ public class DotnetProgramPublishingTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("artifacts.v1", true)]
-    [InlineData("image.tar", true)]
-    [InlineData("archive", false)]
-    [InlineData("image.custom", false)]
-    public void ArchiveOutputPathPreservesExistingFileAndDirectoryIntent(string name, bool directory)
+    [InlineData("artifacts.v1", true, false)]
+    [InlineData("image.tar", true, false)]
+    [InlineData("archive", false, false)]
+    [InlineData("image.custom", false, true)]
+    public void ArchiveOutputPathTreatsExistingDirectoriesAsDirectories(string name, bool directory, bool explicitArchive)
     {
+        // Existing directories stay directories even with a dotted name. Existing files follow the
+        // extension rule, so an extensionless file is a directory path that cannot be created.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, name);
         if (directory)
@@ -518,7 +520,7 @@ public class DotnetProgramPublishingTests(ITestOutputHelper outputHelper)
             File.WriteAllText(path, "archive");
         }
 
-        Assert.Equal(!directory, DotnetProgramPublishing.IsExplicitArchiveOutputPath(path));
+        Assert.Equal(explicitArchive, DotnetProgramPublishing.IsExplicitArchiveOutputPath(path));
     }
 
     private static Task ExecuteBuildPipelineAsync(DistributedApplication app, string stepName)

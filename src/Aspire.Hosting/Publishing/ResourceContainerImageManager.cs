@@ -441,6 +441,19 @@ internal sealed class ResourceContainerImageManager(
                 "Please set the OutputPath in the container build options.");
         }
 
+        if (!string.IsNullOrEmpty(options.OutputPath) &&
+            DotnetProgramPublishing.GetArchiveOutputPath(options.OutputPath, options.LocalImageName) is var archivePath &&
+            DotnetProgramPublishing.HasCompressedArchiveExtension(archivePath))
+        {
+            // Container image archives are uncompressed tars on every publishing path, matching the .NET SDK.
+            // A ".gz" name most likely means the caller expects gzip, so call out the mismatch.
+            logger.LogWarning(
+                "The container image archive for resource {ResourceName} is written to {ArchivePath} as an uncompressed tar file. " +
+                "Use a .tar extension to match its format.",
+                resource.Name,
+                archivePath);
+        }
+
         var hasContainerFiles = resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _);
         var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         if (containerRuntime is WslcContainerRuntime)
@@ -604,7 +617,11 @@ internal sealed class ResourceContainerImageManager(
 
         if (!string.IsNullOrEmpty(options.OutputPath))
         {
-            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerArchiveOutputPath", options.OutputPath));
+            // Resolve directories to an explicit file so the SDK writes exactly the archive that the
+            // layering path and ContainerImageReference use, instead of its own "<repository>.tar.gz".
+            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument(
+                "ContainerArchiveOutputPath",
+                DotnetProgramPublishing.GetArchiveOutputPath(options.OutputPath, options.LocalImageName)));
         }
 
         if (options.ImageFormat is not null)

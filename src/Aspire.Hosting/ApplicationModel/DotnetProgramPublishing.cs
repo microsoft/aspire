@@ -300,27 +300,39 @@ internal static class DotnetProgramPublishing
 
     internal static bool IsExplicitArchiveOutputPath(string outputPath)
     {
-        // The SDK accepts arbitrary file extensions, such as "image.custom". A trailing
-        // directory separator makes a dotted path such as "artifacts.v1\" unambiguous.
+        // Like the .NET SDK, any filename extension (such as "image.custom") names an archive file and a
+        // path without one names a directory. Path.HasExtension is false for a trailing separator, so
+        // "artifacts.v1\" is a directory. Unlike the SDK, an existing directory is always a directory;
+        // the SDK would try to replace "artifacts.v1" with a file. Aspire passes the SDK the resolved
+        // file path, so both publishing paths agree on this rule.
         // https://github.com/dotnet/sdk/blob/v10.0.400/src/Containers/Microsoft.NET.Build.Containers/LocalDaemons/ArchiveFileRegistry.cs
-        return !Directory.Exists(outputPath) &&
-            (File.Exists(outputPath) || Path.HasExtension(outputPath));
+        return !Directory.Exists(outputPath) && Path.HasExtension(outputPath);
     }
 
     /// <summary>
-    /// Gets the archive path that the .NET SDK writes for <paramref name="outputPath"/>.
+    /// Gets the archive file that .NET program publishing writes for <paramref name="outputPath"/>.
     /// </summary>
     /// <remarks>
-    /// Layered archives must land where the SDK writes non-layered archives, so consumers can find the
-    /// archive without knowing whether the resource has container files. The SDK names a directory's
-    /// archive <c>&lt;repository&gt;.tar.gz</c> even though it writes an uncompressed tar.
-    /// https://github.com/dotnet/sdk/blob/v10.0.400/src/Containers/Microsoft.NET.Build.Containers/LocalDaemons/ArchiveFileRegistry.cs
+    /// Both the SDK-only and the container-file layering paths write this exact file, so consumers can
+    /// find the archive without knowing whether the resource has container files. A directory receives
+    /// <c>&lt;image-name&gt;.tar</c> rather than the SDK's default <c>&lt;repository&gt;.tar.gz</c>, because
+    /// the archive is an uncompressed tar and the SDK default nests registry-qualified names in
+    /// subdirectories. See https://github.com/dotnet/sdk-container-builds/issues/518.
     /// </remarks>
-    internal static string GetArchiveOutputPath(string outputPath, string repository)
+    internal static string GetArchiveOutputPath(string outputPath, string imageName)
     {
         return IsExplicitArchiveOutputPath(outputPath)
             ? outputPath
-            : Path.Combine(outputPath, $"{repository}.tar.gz");
+            : Path.Combine(outputPath, $"{ResourceExtensions.FlattenContainerImageName(imageName)}.tar");
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether an archive file name suggests gzip compression.
+    /// </summary>
+    internal static bool HasCompressedArchiveExtension(string archivePath)
+    {
+        return archivePath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase) ||
+            archivePath.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task PublishArchiveAsync(
@@ -361,8 +373,8 @@ internal static class DotnetProgramPublishing
             {
                 tempFileCreated = true;
 
-                // The SDK writes an uncompressed tar regardless of the file extension, including the
-                // ".tar.gz" name it picks for directories. Match it so layering does not change the format.
+                // The SDK writes an uncompressed tar regardless of the file extension. Match it so layering
+                // does not change the format; BuildDotnetProgramImageAsync warns about ".gz" names.
                 await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
             }
 

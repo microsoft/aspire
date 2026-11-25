@@ -278,7 +278,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             throw new DistributedApplicationException(
                 $"Docker did not write an OCI image layout when saving '{imageName}'. Exporting a ContainerImageFormat.Oci archive " +
                 "for container-file layering requires Docker Engine 25 or later. Upgrade Docker, use ContainerImageFormat.Docker " +
-                "for this archive, or run the publish with Podman.");
+                "for this archive, or run the publish with a container runtime that can save OCI archives, such as Podman.");
         }
     }
 
