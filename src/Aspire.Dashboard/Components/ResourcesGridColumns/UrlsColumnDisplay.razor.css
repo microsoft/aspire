@@ -50,11 +50,7 @@
     font-weight: var(--aspire-font-weight-regular);
 }
 
-/* A quiet count keeps the brand color for links and the primary action. */
 ::deep .url-button-neutral {
-    padding: 1px 8px;
-    border-radius: var(--aspire-radius-round);
-    font-size: inherit;
     line-height: inherit;
 }
 

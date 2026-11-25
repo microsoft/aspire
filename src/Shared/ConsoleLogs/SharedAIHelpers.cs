@@ -571,7 +571,7 @@ internal static class SharedAIHelpers
     /// </summary>
     public static List<OtlpTraceDto> GetTracesFromOtlpData(IList<OtlpResourceSpansJson>? resourceSpans)
     {
-        var spansByTraceId = new Dictionary<string, List<OtlpSpanDto>>(StringComparer.Ordinal);
+        var spansByTraceId = new Dictionary<string, List<OtlpSpanDto>>(StringComparers.OtlpTraceId);
 
         if (resourceSpans is null)
         {

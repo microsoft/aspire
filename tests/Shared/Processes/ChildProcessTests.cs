@@ -156,6 +156,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             new ChildProcessOptions
             {
                 Lifetime = ChildProcessLifetime.OwnedTree,
+                TemporaryStorage = TestTemporaryStorage.Create(),
                 CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo
             });
         ProcessTestIdentity[] identities = [];
@@ -188,6 +189,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             new ChildProcessOptions
             {
                 Lifetime = ChildProcessLifetime.OwnedTree,
+                TemporaryStorage = TestTemporaryStorage.Create(),
                 CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
                 BeginGracefulShutdown = () => CancellationToken.None,
                 RequestGracefulShutdownAsync = async (pid, token) =>
@@ -233,6 +235,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             new ChildProcessOptions
             {
                 Lifetime = ChildProcessLifetime.OwnedTree,
+                TemporaryStorage = TestTemporaryStorage.Create(),
                 CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo
             });
         ProcessTestIdentity[] identities = [];
@@ -280,6 +283,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             new ChildProcessOptions
             {
                 Lifetime = ownedTree ? ChildProcessLifetime.OwnedTree : ChildProcessLifetime.CallerManaged,
+                TemporaryStorage = TestTemporaryStorage.Create(),
                 CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
                 BeginGracefulShutdown = () =>
                 {
@@ -392,6 +396,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             new ChildProcessOptions
             {
                 Lifetime = ownedTree ? ChildProcessLifetime.OwnedTree : ChildProcessLifetime.AppHost,
+                TemporaryStorage = TestTemporaryStorage.Create(),
                 KillEntireProcessTreeOnCancel = false,
                 CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
                 BeginGracefulShutdown = () => gracefulBudget.Token,

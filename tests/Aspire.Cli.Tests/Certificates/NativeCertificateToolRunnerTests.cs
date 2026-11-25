@@ -135,7 +135,7 @@ public class NativeCertificateToolRunnerTests(ITestOutputHelper outputHelper)
             logger ?? new FakeLogger<NativeCertificateToolRunner>());
 
     private sealed class TestCertificateManager(int version = CertificateManager.CurrentAspNetCoreCertificateVersion)
-        : CertificateManager(NullLogger.Instance, CertificateManager.LocalhostHttpsDistinguishedName, version, version)
+        : CertificateManager(NullLogger.Instance, CertificateManager.LocalhostHttpsDistinguishedName, version, version, temporaryStorage: null)
     {
         public List<byte[]> Certificates { get; } = [];
         public bool SaveCalled { get; private set; }

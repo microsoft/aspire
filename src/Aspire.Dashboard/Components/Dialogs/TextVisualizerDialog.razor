@@ -33,29 +33,16 @@
                         </OptionTemplate>
                     </FluentSelect>
                 }
-                @if (!_isLoading)
+                @if (IsTextContentDisplayed)
                 {
-                    @if (IsTextContentDisplayed)
-                    {
-                        <FluentButton Class="aspire-button text-visualizer-word-wrap"
-                                      Appearance="@(_noWrap ? ButtonAppearance.Default : ButtonAppearance.Primary)"
-                                      IconOnly="true"
-                                      IconStart="new Icons.Regular.Size16.TextWrap()"
-                                      OnClick="@ToggleWordWrap"
-                                      data-tooltip="@Loc[nameof(Dialogs.TextVisualizerWordWrap)]"
-                                      aria-label="@Loc[nameof(Dialogs.TextVisualizerWordWrap)]"
-                                      aria-pressed="@((!_noWrap).ToString().ToLowerInvariant())" />
-                    }
-                    <FluentButton Id="@_copyButtonId"
-                                  Class="aspire-button text-visualizer-copy"
-                                  Appearance="ButtonAppearance.Default"
+                    <FluentButton Class="aspire-button text-visualizer-word-wrap"
+                                  Appearance="@(_noWrap ? ButtonAppearance.Primary : ButtonAppearance.Default)"
                                   IconOnly="true"
-                                  data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
-                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
-                                  @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)], ("data-copy-duration", 2000))">
-                        <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
-                        <FluentIcon Class="checkmark-icon" Style="display:none" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" />
-                    </FluentButton>
+                                  IconStart="new Icons.Regular.Size16.TextWrapOff()"
+                                  OnClick="@ToggleWordWrap"
+                                  data-tooltip="@Loc[nameof(Dialogs.TextVisualizerWordWrapOff)]"
+                                  aria-label="@Loc[nameof(Dialogs.TextVisualizerWordWrapOff)]"
+                                  aria-pressed="@(_noWrap.ToString().ToLowerInvariant())" />
                 }
             </div>
         </div>
@@ -101,7 +88,7 @@
     </ChildContent>
 
     <ActionTemplate>
-        @if (!_isLoading && (ShowSecretsWarning is true || Content.DownloadFileName is not null))
+        @if (!_isLoading)
         {
             <div class="button-container">
                 <div class="button-container-right">
@@ -124,6 +111,17 @@
                         </FluentButton>
                     }
 
+                    <FluentButton Id="@_copyButtonId"
+                                  Class="aspire-button text-visualizer-copy"
+                                  Appearance="ButtonAppearance.Primary"
+                                  data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                  @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)], ("data-copy-duration", 2000))">
+                        <span class="copy-button-icon" slot="start" aria-hidden="true">
+                            <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
+                            <FluentIcon Class="checkmark-icon" Style="display:none" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" />
+                        </span>
+                        @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
+                    </FluentButton>
                 </div>
             </div>
         }

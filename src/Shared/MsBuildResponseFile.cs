@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
-using Microsoft.Extensions.Logging;
 
 #if ASPIRE_HOSTING_CORE
 namespace Aspire.Hosting.Internal;
@@ -15,19 +14,19 @@ internal static class MsBuildResponseFileFactory
     public static async Task<MsBuildResponseFile?> CreateAsync(
         IReadOnlyDictionary<string, string> properties,
         bool isFileBasedApp,
-        ILogger logger,
+        ITempFileSystemService temporaryFileSystem,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(properties);
-        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(temporaryFileSystem);
 
         if (properties.Count == 0)
         {
             return null;
         }
 
-        var directory = Directory.CreateTempSubdirectory("aspire-msbuild-");
-        var responseFilePath = Path.Combine(directory.FullName, "build-properties.rsp");
+        var directory = temporaryFileSystem.CreateTempSubdirectory("aspire-msbuild-");
+        var responseFilePath = Path.Combine(directory.Path, "build-properties.rsp");
         try
         {
             var options = new FileStreamOptions
@@ -62,11 +61,11 @@ internal static class MsBuildResponseFileFactory
                     cancellationToken).ConfigureAwait(false);
             }
 
-            return new MsBuildResponseFile(directory, responseFilePath, logger);
+            return new MsBuildResponseFile(directory, responseFilePath);
         }
         catch
         {
-            TryDeleteDirectory(directory, logger);
+            directory.Dispose();
             throw;
         }
     }
@@ -84,18 +83,6 @@ internal static class MsBuildResponseFileFactory
     // and appends ';' segments without '=' to the previous value, so list values must be passed unquoted.
     public static string CreateFileBasedAppListPropertyArgument(string name, IEnumerable<string> values) =>
         $"--property:{EscapePropertyValue(name)}={string.Join(';', values.Select(EscapePropertyValue))}";
-
-    internal static void TryDeleteDirectory(DirectoryInfo directory, ILogger logger)
-    {
-        try
-        {
-            directory.Delete(recursive: true);
-        }
-        catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            logger.LogDebug(ex, "Failed to delete temporary MSBuild response-file directory '{DirectoryPath}'.", directory.FullName);
-        }
-    }
 
     private static string EscapePropertyValue(string value)
     {
@@ -127,11 +114,10 @@ internal static class MsBuildResponseFileFactory
 }
 
 internal sealed class MsBuildResponseFile(
-    DirectoryInfo directory,
-    string responseFilePath,
-    ILogger logger) : IDisposable
+    TempDirectory directory,
+    string responseFilePath) : IDisposable
 {
-    private DirectoryInfo? _directory = directory;
+    private TempDirectory? _directory = directory;
 
     public string Argument { get; } = $"@{responseFilePath}";
 
@@ -139,10 +125,6 @@ internal sealed class MsBuildResponseFile(
 
     public void Dispose()
     {
-        var directoryToDelete = Interlocked.Exchange(ref _directory, null);
-        if (directoryToDelete is not null)
-        {
-            MsBuildResponseFileFactory.TryDeleteDirectory(directoryToDelete, logger);
-        }
+        Interlocked.Exchange(ref _directory, null)?.Dispose();
     }
 }

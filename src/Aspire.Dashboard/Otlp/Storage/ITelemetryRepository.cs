@@ -39,6 +39,7 @@ public interface ITelemetryRepository : IDisposable
 
     Task<PagedResult<OtlpLogEntry>> GetLogsAsync(GetLogsContext context, CancellationToken cancellationToken);
     Task<PagedResult<LogSummary>> GetLogSummariesAsync(GetLogsContext context, CancellationToken cancellationToken);
+    Task<OverviewLogs> GetOverviewLogsAsync(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken);
     OtlpLogEntry? GetLog(long logId);
     Task<List<OtlpLogEntry>> GetLogsForSpanAsync(string traceId, string spanId, CancellationToken cancellationToken);
     Task<List<OtlpLogEntry>> GetLogsForTraceAsync(string traceId, CancellationToken cancellationToken);

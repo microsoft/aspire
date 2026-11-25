@@ -24,7 +24,7 @@ internal static class SocketPermissionHelper
     /// </summary>
     internal static DirectoryInfo CreateDirectory(string path, bool repairExisting)
         => CreateDirectory(path, repairExisting, Environment.CurrentDirectory,
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Path.GetTempPath());
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Aspire.Shared.TemporaryStorage.SystemTempPath);
 
     /// <summary>
     /// Creates or repairs a socket directory using explicitly supplied environment paths.

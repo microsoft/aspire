@@ -39,6 +39,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
+    private int _cleanupResourcesCallCount;
     private readonly Action<CustomResource>? _beforeCreate;
     private readonly Func<CustomResource, CancellationToken, Task>? _beforeCreateAsync;
     private readonly bool _allocateServiceAddresses;
@@ -494,8 +495,11 @@ internal sealed class TestKubernetesService : IKubernetesService
         return Task.CompletedTask;
     }
 
+    public int CleanupResourcesCallCount => Volatile.Read(ref _cleanupResourcesCallCount);
+
     public Task CleanupResourcesAsync(CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _cleanupResourcesCallCount);
         return StopServerAsync("Full", cancellationToken);
     }
 

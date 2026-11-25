@@ -8,8 +8,9 @@
 
     @if (EnableMasking && IsMasked)
     {
-        <span class="grid-value masked" id="@_cellTextId">
-            @DashboardUIHelpers.GetMaskingText(length: 8).MarkupString
+        var mask = DashboardUIHelpers.GetMaskingText(length: 8);
+        <span class="grid-value masked" id="@_cellTextId" data-tooltip="@(ShowToolTip && ToolTip is not null ? mask.Text : null)">
+            @mask.MarkupString
         </span>
     }
     else

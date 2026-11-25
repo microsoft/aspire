@@ -14,9 +14,9 @@ using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Sections;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
@@ -109,7 +109,7 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         Assert.Equal(["api", "cache"], cut.FindAll("[data-resource-name]").Select(row => row.GetAttribute("data-resource-name")));
         Assert.Empty(cut.Instance.SelectedResourceNames);
         // The table isn't one of the tabs, so none is shown selected.
-        Assert.Equal("resource-tab-none", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Empty(header.FindAll(".resources-tab-header [aria-current]"));
         // Home has its own URL. It doesn't redirect to the overview.
         Assert.Equal(url.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
     }
@@ -172,9 +172,10 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
     }
 
-    // A narrow home selects the Home tab. Overview opens the overview of all resources, and Home goes back.
+    // A narrow layout has no tab strip: home and the views are listed in the main navigation menu. Home is current
+    // while the drawer shows the resource list. Overview opens the overview of all resources, and Home goes back.
     [Fact]
-    public async Task NarrowHome_SelectsTheHomeTabAndOverviewOpensTheOverview()
+    public async Task NarrowHome_NavMenuSelectsHomeAndOverviewOpensTheOverview()
     {
         var desktop = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var narrow = desktop with { IsDesktop = false };
@@ -186,31 +187,34 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         var cut = Render<CascadingValue<ViewportInformation>>(p => p.Add(v => v.Value, desktop).AddChildContent<ResourcesLayout>());
         var layout = cut.FindComponent<ResourcesLayout>();
         cut.WaitForAssertion(() => Assert.True(layout.Instance.IsLoaded));
-        // The wide layout goes home from the brand instead.
-        Assert.Empty(cut.FindAll("#resource-tab-home"));
 
         cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
+        Assert.Empty(cut.FindAll(".resources-tab-header"));
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         Assert.Equal("true", cut.Find(".resources-layout").GetAttribute("data-list-home"));
-        Assert.Equal("resource-tab-home", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
-        Assert.Equal("resource-tab-home", cut.FindComponents<FluentTab>()[0].Instance.Id);
+        Assert.Equal(
+            [Resources.Layout.ResourceTabHome, Resources.Layout.ResourceTabOverview, Resources.Layout.NavMenuConsoleLogsTab,
+                Resources.StructuredLogs.StructuredLogsHeader, Resources.Layout.NavMenuTracesTab, Resources.Layout.NavMenuMetricsTab],
+            layout.Instance.GetMobileNavMenuEntries().Select(e => e.Text));
+        Assert.Equal([Resources.Layout.ResourceTabHome], GetActiveEntries());
         Assert.Equal(ResourceTab.Overview, layout.Instance.CurrentTab);
 
-        // The layout's script reports a click on the current tab.
-        await cut.InvokeAsync(() => layout.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
+        // Choosing the current tab opens its content.
+        await cut.InvokeAsync(GetEntry(Resources.Layout.ResourceTabOverview).OnClick);
         cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
         Assert.Equal("resources", navigation.ToBaseRelativePath(navigation.Uri));
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         Assert.Null(cut.Find(".resources-layout").GetAttribute("data-list-home"));
-        Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Equal([Resources.Layout.ResourceTabOverview], GetActiveEntries());
 
-        var tabs = cut.FindComponent<FluentTabs>();
-        var home = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "resource-tab-home").Instance;
-        await cut.InvokeAsync(() => tabs.Instance.ActiveTabChanged.InvokeAsync(home));
+        await cut.InvokeAsync(GetEntry(Resources.Layout.ResourceTabHome).OnClick);
         cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
         Assert.Equal(string.Empty, navigation.ToBaseRelativePath(navigation.Uri));
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
-        Assert.Equal("resource-tab-home", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Equal([Resources.Layout.ResourceTabHome], GetActiveEntries());
+
+        MobileNavMenuEntry GetEntry(string text) => layout.Instance.GetMobileNavMenuEntries().Single(e => e.Text == text);
+        IEnumerable<string> GetActiveEntries() => layout.Instance.GetMobileNavMenuEntries().Where(e => e.IsActive).Select(e => e.Text);
     }
 
     [Fact]
@@ -306,14 +310,14 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/resources/api");
+        var header = Render<SectionOutlet>(p => p.Add(o => o.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
-        // What the brand does before it navigates home (see MainLayout.GoToAllResourcesAsync). The layout marks itself,
-        // so its script reports a click on the current tab, which FluentTabs doesn't.
+        // What the brand does before it navigates home (see MainLayout.GoToAllResourcesAsync).
         await cut.InvokeAsync(cut.Instance.OnHomeNavigationStarting);
         Assert.Equal("true", cut.Find(".resources-layout").GetAttribute("data-home-pending"));
-        await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
+        await header.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
         Assert.Equal("resources/api", navigation.ToBaseRelativePath(navigation.Uri));
 
         navigation.NavigateTo("/");

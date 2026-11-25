@@ -139,6 +139,22 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a value indicating whether the AppHost advertises the <c>stop-resource-cleanup.v1</c> capability,
+    /// meaning <see cref="StopAppHostAndWaitForResourceCleanupAsync"/> can confirm that its resources were torn down.
+    /// </summary>
+    bool SupportsStopResourceCleanupV1 { get; }
+
+    /// <summary>
+    /// Asks the AppHost to tear down its resources, waits for the teardown to complete, and then stops the AppHost.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token that bounds how long to wait for the teardown.</param>
+    /// <returns>
+    /// <see langword="true"/> if the AppHost confirmed that its resources were torn down; otherwise <see langword="false"/>.
+    /// The AppHost initiates its stop in both cases.
+    /// </returns>
+    Task<bool> StopAppHostAndWaitForResourceCleanupAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Calls an MCP tool on a resource via the AppHost backchannel.
     /// </summary>
     /// <param name="resourceName">The name of the resource.</param>

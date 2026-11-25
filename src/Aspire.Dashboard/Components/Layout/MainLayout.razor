@@ -1,5 +1,4 @@
 ﻿@using Aspire.Dashboard.Components.CustomIcons
-@using Aspire.Dashboard.Components.Dialogs
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Resources
 @using Microsoft.AspNetCore.Components.Sections
@@ -67,7 +66,7 @@
             }
             <FluentButton Class="header-button"
                           Id="@HelpButtonId"
-                          Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchHelpAsync(HelpButtonId, HelpDialogTab.Documentation))"
+                          Appearance="ButtonAppearance.Default" OnClick="@LaunchDocumentationHelpAsync"
                           data-tooltip="@Loc[nameof(Layout.MainLayoutHelp)]" aria-label="@Loc[nameof(Layout.MainLayoutHelp)]"
                           aria-haspopup="dialog" aria-keyshortcuts="?">
                 <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Default"/>
@@ -115,13 +114,11 @@
                 Class="navigation-button aspire-icon-button"/>
         </header>
 
-        <MobileNavMenu
-            HasResourceTerminals="@_navigationAvailability.HasResourceTerminals"
+        <MobileNavMenu @ref="_mobileNavMenu"
+            PageEntries="@_pageNavMenuEntries"
             IsNavMenuOpen="_isNavMenuOpen"
             CloseNavMenu="@CloseMobileNavMenu"
-            LaunchHelpAsync="@LaunchHelpAsync"
-            LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
-            IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
+            LaunchHelpAsync="@LaunchDocumentationHelpAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
     }

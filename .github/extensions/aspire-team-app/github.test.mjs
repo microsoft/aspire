@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayMs } from "./constants.mjs";
+import { dayMs, urgentReviewLabel } from "./constants.mjs";
 import { loadDashboard } from "./github.mjs";
 
 const originalFetch = globalThis.fetch;
@@ -10,37 +10,274 @@ test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test("Needs attention serializes a strict ten-card prefix and the complete deduplicated remainder", async () => {
-  for (const count of [0, 4, 10, 11, 25]) {
-    const createdAt = isoAgo(3 * dayMs);
-    const nodes = Array.from({ length: count }, (_, index) => {
-      const node = prNode(index + 1, isoAgo(hourMs));
-      node.createdAt = createdAt;
-      return node;
-    });
-    // Equal readiness timestamps and reversed responses exercise the ordinal PR-number tie
-    // across the split; duplicate accounts must not duplicate either side.
-    mockPullRequests(nodes.toReversed());
-    const dashboard = JSON.parse(JSON.stringify(await loadDashboard({
-      accounts: [
-        { token: "first", login: "davidfowl", repos: ["microsoft/aspire"] },
-        { token: "second", login: "joperezr", repos: ["microsoft/aspire"] },
-      ],
-      mode: "review", prefs: { reviewLimit: 50 }, dismissed: [], reviewLimit: 50,
-    })));
-    const { focus, focusRemainder, focusTotal, focusLimit } = dashboard.attention;
-    const positions = Array.from({ length: count }, (_, index) => index + 1);
-    assert.deepEqual(dashboard.errors, []);
-    assert.equal(dashboard.reviewLimit, 10);
-    assert.equal(focusLimit, 10);
-    assert.equal(focusTotal, count);
-    assert.deepEqual(focus.map((item) => item.queuePosition), positions.slice(0, 10));
-    assert.deepEqual(focusRemainder.map((item) => item.queuePosition), positions.slice(10));
-    assert.deepEqual([...focus, ...focusRemainder].map((item) => item.pr.number), positions);
+test("PR queue serializes a strict ten-card prefix and complete deduplicated urgent-first remainder", async () => {
+  for (const count of [0, 1, 9, 10, 11, 25]) {
+    for (const urgentCount of new Set([0, Math.min(3, count), Math.min(11, count), count])) {
+      const createdAt = isoAgo(3 * dayMs);
+      const nodes = Array.from({ length: count }, (_, index) => {
+        const node = prNode(index + 1, isoAgo(hourMs));
+        node.createdAt = createdAt;
+        node.labels.nodes = index >= count - urgentCount ? [{ name: urgentReviewLabel }] : [];
+        return node;
+      });
+      // Equal readiness timestamps and reversed responses exercise the ordinal PR-number tie
+      // across the split; duplicate accounts must not duplicate either side.
+      mockPullRequests(nodes.toReversed());
+      const dashboard = JSON.parse(JSON.stringify(await loadDashboard({
+        accounts: [
+          { token: "first", login: "davidfowl", repos: ["microsoft/aspire"] },
+          { token: "second", login: "joperezr", repos: ["microsoft/aspire"] },
+        ],
+        mode: "review", prefs: { reviewLimit: 50 }, dismissed: [], reviewLimit: 50,
+      })));
+      const { focus, focusRemainder, focusTotal, focusLimit } = dashboard.attention;
+      const positions = Array.from({ length: count }, (_, index) => index + 1);
+      assert.deepEqual(dashboard.errors, []);
+      assert.equal(dashboard.reviewLimit, 10);
+      assert.equal(focusLimit, 10);
+      assert.equal(focusTotal, count);
+      assert.deepEqual(focus.map((item) => item.queuePosition), positions.slice(0, 10));
+      assert.deepEqual(focusRemainder.map((item) => item.queuePosition), positions.slice(10));
+      const order = [...positions.filter((n) => n > count - urgentCount), ...positions.filter((n) => n <= count - urgentCount)];
+      assert.deepEqual([...focus, ...focusRemainder].map((item) => [item.pr.number, item.urgent]),
+        order.map((n) => [n, n > count - urgentCount]));
+    }
   }
 });
 
-test("priority label refreshes reorder the full Needs attention queue before its ten-card split", async () => {
+test("GitHub connection timeouts explain connectivity failures without hiding other request errors", async () => {
+  for (const [error, message] of [
+    [new TypeError("fetch failed", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } }),
+      "Connection to GitHub timed out. Check network connectivity and try refreshing again."],
+    [new Error("GitHub API 403 Forbidden"), "GitHub API 403 Forbidden"],
+  ]) {
+    globalThis.fetch = async () => { throw error; };
+    const dashboard = await loadReview();
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire: ${message}`]);
+  }
+});
+
+test("GitHub 403 errors preserve the provider message and rate-limit headers without retrying", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return {
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      headers: new Headers({
+        "retry-after": "120",
+        "x-ratelimit-remaining": "0",
+        "x-ratelimit-reset": "1767225600",
+      }),
+      json: async () => ({ message: "API rate limit exceeded for this installation." }),
+    };
+  };
+  const dashboard = await loadReview();
+  assert.equal(calls, 1);
+  assert.deepEqual(dashboard.errors, [
+    "microsoft/aspire: GitHub API 403 Forbidden - API rate limit exceeded for this installation.; " +
+      "Retry-After: 120; rate limit remaining: 0; rate limit resets: 2026-01-01T00:00:00.000Z",
+  ]);
+});
+
+test("a forbidden cursor request does not retry the same repository serially", async () => {
+  const queries = [];
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    queries.push(body.query);
+    if (body.query.includes("edges { cursor }")) {
+      return {
+        ok: false, status: 403, statusText: "Forbidden",
+        headers: new Headers({ "retry-after": "120" }),
+        json: async () => ({ message: "Secondary rate limit." }),
+      };
+    }
+    return jsonResponse({ data: { repository: { pullRequests: {
+      totalCount: 100,
+      nodes: [prNode(1, isoAgo(hourMs))],
+      pageInfo: { hasNextPage: true, endCursor: "first" },
+    } } } });
+  };
+  const dashboard = await loadReview();
+  assert.equal(queries.length, 2);
+  assert.deepEqual(dashboard.errors, [
+    "microsoft/aspire: GitHub API 403 Forbidden - Secondary rate limit.; Retry-After: 120",
+  ]);
+});
+
+test("Review and Ship produce both snapshots from one readiness-aware PR load", async () => {
+  for (const mode of ["review", "ship"]) {
+    let calls = 0;
+    globalThis.fetch = async (_url, options) => {
+      calls++;
+      assert.equal(JSON.parse(options.body).variables.includeReadiness, true);
+      return jsonResponse({ data: { repository: { pullRequests: {
+        nodes: [prNode(1, isoAgo(hourMs))],
+      } } } });
+    };
+    let related;
+    const dashboard = await loadDashboard({
+      accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire"] }],
+      mode, release: "9.5", prefs: {}, dismissed: [],
+      onRelated: (value) => { related = value; },
+    });
+    const review = mode === "review" ? dashboard : related;
+    const ship = mode === "ship" ? dashboard : related;
+    assert.equal(calls, 1);
+    assert.equal(review.mode, "review");
+    assert.deepEqual(review.attention.focus.map((item) => item.pr.number), [1]);
+    assert.equal(ship.mode, "ship");
+    assert.deepEqual(ship.lanes.flatMap((lane) => lane.items.map((item) => item.pr.number)), [1]);
+    assert.deepEqual(review.errors, []);
+    assert.deepEqual(ship.errors, []);
+  }
+});
+
+test("a cold PR board publishes trailing updates while a repository is still blocked", { timeout: 15_000 }, async (t) => {
+  let releaseSlow;
+  let signalPartial;
+  let signalTrailing;
+  const slow = new Promise((resolve) => { releaseSlow = resolve; });
+  const firstPartial = new Promise((resolve) => { signalPartial = resolve; });
+  const trailingPartial = new Promise((resolve) => { signalTrailing = resolve; });
+  t.after(() => releaseSlow());
+  globalThis.fetch = async (_url, options) => {
+    const { variables } = JSON.parse(options.body);
+    if (variables.name === "slow") await slow;
+    if (variables.name === "fast2") await new Promise((resolve) => setTimeout(resolve, 10));
+    const number = variables.name === "fast" ? 1 : variables.name === "fast2" ? 2 : 3;
+    const node = prNode(number, isoAgo(hourMs));
+    node.url = `https://github.com/microsoft/${variables.name}/pull/${node.number}`;
+    return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+  };
+  const loading = loadDashboard({
+    accounts: [{ token: "token", login: "octo", repos: ["microsoft/fast", "microsoft/fast2", "microsoft/slow"] }],
+    mode: "review", prefs: {}, dismissed: [],
+    onPartial: (value) => {
+      signalPartial(value);
+      if (value.counts.total === 2) signalTrailing(value);
+    },
+  });
+  const partial = await firstPartial;
+  assert.equal(partial.loading, true);
+  assert.deepEqual(partial.attention.focus.map((item) => item.pr.number), [1]);
+  const trailing = await trailingPartial;
+  assert.deepEqual(trailing.attention.focus.map((item) => item.pr.number), [1, 2]);
+  releaseSlow();
+  const complete = await loading;
+  assert.notEqual(complete.loading, true);
+  assert.deepEqual(complete.attention.focus.map((item) => item.pr.number), [1, 2, 3]);
+});
+
+test("a hung GitHub request is retried once on a fresh request instead of failing the board", async (t) => {
+  const timeout = AbortSignal.timeout.bind(AbortSignal);
+  t.mock.method(AbortSignal, "timeout", () => timeout(20));
+  // AbortSignal.timeout timers are unref'd; keep the test process alive until the retry settles.
+  const keepAlive = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(keepAlive));
+  let calls = 0;
+  globalThis.fetch = async (_url, options) => {
+    if (++calls === 1) {
+      return new Promise((_, reject) => options.signal.addEventListener("abort", () => reject(options.signal.reason)));
+    }
+    return jsonResponse({ data: { repository: { pullRequests: { nodes: [prNode(1, isoAgo(hourMs))] } } } });
+  };
+  const dashboard = await loadReview();
+  assert.equal(calls, 2);
+  assert.deepEqual(dashboard.errors, []);
+  assert.equal(dashboard.counts.total, 1);
+});
+
+test("large repositories load later PR pages concurrently and follow a growing tail", async () => {
+  // 130 open PRs at 40 per page when the cursor walk runs. The tail grows by 41 items before
+  // the last page loads, so that page reports another page that the loader must still follow.
+  const nodes = Array.from({ length: 171 }, (_, index) => prNode(index + 1, isoAgo(hourMs)));
+  const cursorIndex = (after) => after === null ? -1 : Number(after.slice(1));
+  const detailedPages = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  globalThis.fetch = async (_url, options) => {
+    const { query, variables } = JSON.parse(options.body);
+    const start = cursorIndex(variables.after) + 1;
+    if (query.includes("edges { cursor }")) {
+      const end = Math.min(start + 100, 130);
+      return jsonResponse({ data: { repository: { pullRequests: {
+        pageInfo: { hasNextPage: end < 130, endCursor: `c${end - 1}` },
+        edges: Array.from({ length: end - start }, (_, offset) => ({ cursor: `c${start + offset}` })),
+      } } } });
+    }
+    detailedPages.push(variables.after);
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    inFlight--;
+    const end = Math.min(start + 40, nodes.length);
+    return jsonResponse({ data: { repository: { pullRequests: {
+      totalCount: 130,
+      nodes: nodes.slice(start, end),
+      pageInfo: { hasNextPage: end < nodes.length, endCursor: `c${end - 1}` },
+    } } } });
+  };
+  const dashboard = await loadDashboard({
+    accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire"] }],
+    mode: "ship",
+    prefs: {},
+    dismissed: [],
+    showDrafts: true,
+  });
+  assert.deepEqual(detailedPages.toSorted(), ["c119", "c159", "c39", "c79", null].toSorted());
+  assert.ok(maxInFlight > 1, "later pages load concurrently");
+  assert.deepEqual(dashboard.errors, []);
+  assert.equal(dashboard.counts.total, 171);
+});
+
+test("PRs at positions 16, 17, and 18 jump to 1, 2, and 3, then return when urgency is removed", async () => {
+  const now = Date.now();
+  const nodes = Array.from({ length: 20 }, (_, index) => ({
+    ...prNode(index + 1, isoAgo(hourMs)),
+    createdAt: new Date(now - (30 - index) * dayMs).toISOString(),
+  }));
+  mockPullRequests(nodes.toReversed());
+  const original = (await loadReview()).attention;
+  const allCards = (attention) => [...attention.focus, ...attention.focusRemainder];
+  assert.deepEqual(allCards(original).map((item) => item.pr.number), Array.from({ length: 20 }, (_, i) => i + 1));
+  for (const number of [16, 17, 18]) {
+    nodes[number - 1].labels.nodes = [{ name: urgentReviewLabel }];
+    nodes[number - 1].updatedAt = new Date().toISOString();
+  }
+  const promoted = (await loadReview()).attention;
+  assert.deepEqual(promoted.focus.map((item) => item.pr.number), [16, 17, 18, 1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(promoted.focusRemainder.map((item) => item.pr.number), [8, 9, 10, 11, 12, 13, 14, 15, 19, 20]);
+  assert.deepEqual(allCards(promoted).map((item) => item.queuePosition), Array.from({ length: 20 }, (_, i) => i + 1));
+  for (const number of [16, 17, 18]) nodes[number - 1].labels.nodes = [];
+  const restored = (await loadReview()).attention;
+  assert.deepEqual(allCards(restored).map((item) => [item.pr.number, item.pr.firstReadyForReviewAt, item.urgent]),
+    allCards(original).map((item) => [item.pr.number, item.pr.firstReadyForReviewAt, false]));
+});
+
+test("urgency uses existing labels across watched repositories and hosts without merging distinct PRs", async () => {
+  globalThis.fetch = async (url, options) => {
+    const { variables } = JSON.parse(options.body);
+    const host = new URL(url).host === "ghe.example.com" ? "ghe.example.com" : "github.com";
+    const node = prNode(1, isoAgo(hourMs));
+    node.url = `https://${host}/microsoft/${variables.name}/pull/1`;
+    node.labels.nodes = host === "ghe.example.com" || variables.name === "dcp" ? [{ name: "REVIEW-urgent" }] : [];
+    return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+  };
+  const { attention, errors } = await loadReview([
+    { token: "public", login: "davidfowl", repos: ["microsoft/aspire", "microsoft/dcp"] },
+    { token: "enterprise", login: "joperezr", repos: ["microsoft/aspire"], graphql: "https://ghe.example.com/api/graphql" },
+  ]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(attention.focus.map((item) => [item.pr.url, item.urgent]), [
+    ["https://ghe.example.com/microsoft/aspire/pull/1", true],
+    ["https://github.com/microsoft/dcp/pull/1", true],
+    ["https://github.com/microsoft/aspire/pull/1", false],
+  ]);
+});
+
+test("priority label refreshes reorder the full PR queue before its ten-card split", async () => {
   const nodes = Array.from({ length: 12 }, (_, index) => {
     const node = prNode(index + 1, isoAgo(hourMs));
     node.createdAt = isoAgo((15 - index) * dayMs);
@@ -115,7 +352,7 @@ test("priority labels on a later PR label page reorder the complete queue on ref
   }
 });
 
-test("a PR label request failure preserves the PR outside Needs attention and continues pagination", async () => {
+test("a PR label request failure preserves the PR outside PR queue and continues pagination", async () => {
   for (const mode of ["review", "ship"]) {
     const nodes = [1, 2, 3, 4].map((number) => prNode(number, isoAgo(hourMs)));
     nodes[1].labels = transitionHistory([{ name: "urgent-review" }], true, "labels-15");
@@ -142,7 +379,7 @@ test("a PR label request failure preserves the PR outside Needs attention and co
     assert.deepEqual(numbers.sort((a, b) => a - b), mode === "ship" ? [1, 2, 3, 4] : [1, 3, 4], mode);
     assert.deepEqual(seenPages, [null, "prs-next"], mode);
     assert.deepEqual(dashboard.errors, [
-      "microsoft/aspire#2: labels unavailable; excluded from Needs attention. Label access denied",
+      "microsoft/aspire#2: labels unavailable; excluded from PR queue. Label access denied",
     ], mode);
     assert.equal(dashboard.counts.total, 4, mode);
     if (mode === "ship") {
@@ -155,7 +392,7 @@ test("a PR label request failure preserves the PR outside Needs attention and co
   }
 });
 
-test("incomplete labels do not hide verified author actions outside Needs attention", async () => {
+test("incomplete labels do not hide verified author actions outside PR queue", async () => {
   const node = prNode(1, isoAgo(hourMs));
   node.labels = transitionHistory([{ name: "urgent-review" }], true, "labels-15");
   node.commits.nodes[0].commit.statusCheckRollup.state = "FAILURE";
@@ -214,7 +451,7 @@ test("owned drafts with incomplete labels remain in draft buckets without leakin
       lane.items.map((item) => item.pr.number),
     ]), showDrafts ? [["your-prs", [1]]] : []);
     assert.deepEqual(dashboard.errors, nodes.map((node) =>
-      `microsoft/aspire#${node.number}: labels unavailable; excluded from Needs attention. Label page unavailable`));
+      `microsoft/aspire#${node.number}: labels unavailable; excluded from PR queue. Label page unavailable`));
   }
 });
 
@@ -270,7 +507,7 @@ test("Ship signals retain labels verified before a later label page fails", asyn
   assert.deepEqual(item.pr.labels, ["regression"]);
   assert.ok(item.signals.some((signal) => signal.label === "regression"));
   assert.deepEqual(dashboard.errors, [
-    "microsoft/aspire#1: labels unavailable; excluded from Needs attention. Label page unavailable",
+    "microsoft/aspire#1: labels unavailable; excluded from PR queue. Label page unavailable",
   ]);
 });
 
@@ -342,7 +579,7 @@ test("an initial PR label GraphQL error is isolated while later PRs and pages lo
 
   assert.deepEqual(seenPages, [null, "prs-next"]);
   assert.deepEqual(dashboard.errors, [
-    "microsoft/aspire#1: labels unavailable; excluded from Needs attention. Initial label connection unavailable",
+    "microsoft/aspire#1: labels unavailable; excluded from PR queue. Initial label connection unavailable",
   ]);
   assert.equal(dashboard.counts.total, 3);
   assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), [2, 3]);
@@ -381,13 +618,13 @@ test("multiple initial PR label GraphQL field errors retain whole messages for e
   const dashboard = await loadReview();
 
   assert.deepEqual(dashboard.errors, [
-    "microsoft/aspire#1: labels unavailable; excluded from Needs attention. Label names unavailable; Label cursors unavailable",
-    "microsoft/aspire#2: labels unavailable; excluded from Needs attention. Other PR labels unavailable",
+    "microsoft/aspire#1: labels unavailable; excluded from PR queue. Label names unavailable; Label cursors unavailable",
+    "microsoft/aspire#2: labels unavailable; excluded from PR queue. Other PR labels unavailable",
   ]);
   assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), [3]);
 });
 
-test("Your PRs outside Needs attention retains an author response with incomplete labels", async () => {
+test("Your PRs outside PR queue retains an author response with incomplete labels", async () => {
   const node = prNode(1, isoAgo(hourMs));
   node.commits.nodes[0].commit.committedDate = isoAgo(dayMs);
   node.reviews.nodes = [{
@@ -413,7 +650,7 @@ test("Your PRs outside Needs attention retains an author response with incomplet
   ]), [[1, "Changes were requested, so this is waiting on the author rather than the focused queue."]]);
 });
 
-test("Your PRs outside Needs attention explains an incomplete label result without another blocker", async () => {
+test("Your PRs outside PR queue explains an incomplete label result without another blocker", async () => {
   const node = prNode(1, isoAgo(hourMs));
   node.labels = transitionHistory([{ name: "ordinary" }], true, "labels-15");
   globalThis.fetch = async (_url, options) => {
@@ -430,7 +667,7 @@ test("Your PRs outside Needs attention explains an incomplete label result witho
     item.pr.number,
     item.signals[0].label,
     item.reason,
-  ]), [[1, "Labels unavailable", "Labels could not be loaded, so this PR is not ranked in Needs attention."]]);
+  ]), [[1, "Labels unavailable", "Labels could not be loaded, so this PR is not ranked in PR queue."]]);
 });
 
 test("a duplicate-account success supersedes a PR label failure in either completion order", async () => {
@@ -601,7 +838,7 @@ test("malformed PR label connections are reported without ranking a partial labe
     node.labels = labels;
     mockPullRequests([node]);
     const dashboard = await loadReview();
-    assert.deepEqual(dashboard.errors, ["microsoft/aspire#1: labels unavailable; excluded from Needs attention. Missing or malformed pull-request labels for #1"]);
+    assert.deepEqual(dashboard.errors, ["microsoft/aspire#1: labels unavailable; excluded from PR queue. Missing or malformed pull-request labels for #1"]);
     assert.equal(dashboard.counts.total, 1);
     assert.deepEqual(dashboard.attention.focus, []);
   }
@@ -628,7 +865,7 @@ test("PR label pagination failures and cursor safety guards never accept partial
     const error = failure === "request" ? "Label access denied" :
       failure === "missing-page" ? "Missing or malformed pull-request labels for #1" :
         "Incomplete pull-request labels for #1";
-    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: labels unavailable; excluded from Needs attention. ${error}`]);
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: labels unavailable; excluded from PR queue. ${error}`]);
     assert.equal(dashboard.counts.total, 1);
     assert.deepEqual(dashboard.attention.focus, []);
     assert.equal(calls, failure === "limit" ? 24 : ["missing-cursor", "invalid-cursor"].includes(failure) ? 0 : 1);
@@ -717,7 +954,7 @@ test("loadDashboard ranks review-ready PRs by time waiting for review", async ()
   assert.deepEqual(reviewQueue.items.map((item) => item.pr.number), [2, 1]);
 });
 
-test("Needs attention orders by first readiness, distinguishing PRs opened ready from drafts", async () => {
+test("PR queue orders by first readiness, distinguishing PRs opened ready from drafts", async () => {
   const openedReady = prNode(1, isoAgo(hourMs));
   openedReady.createdAt = isoAgo(10 * dayMs);
   openedReady.readinessTransitions = transitionHistory([
@@ -752,7 +989,7 @@ test("Needs attention orders by first readiness, distinguishing PRs opened ready
   assert.equal(draft.firstReadyForReviewAt, null);
 });
 
-test("Needs attention paginates draft and ready transitions on the account's GitHub host", async () => {
+test("PR queue paginates draft and ready transitions on the account's GitHub host", async () => {
   const nodes = [prNode(1, isoAgo(hourMs)), prNode(2, isoAgo(2 * hourMs))];
   const histories = [
     [
@@ -797,7 +1034,7 @@ test("Needs attention paginates draft and ready transitions on the account's Git
   assert.deepEqual(requests.map((variables) => variables.after ?? null), [null, "history-1", "history-2"]);
 });
 
-test("Needs attention keeps first-readiness order across human and Copilot review rounds and other activity", async () => {
+test("PR queue keeps first-readiness order across human and Copilot review rounds and other activity", async () => {
   const older = prNode(1, isoAgo(2 * dayMs), isoAgo(5 * dayMs));
   const newer = prNode(2, isoAgo(dayMs));
   newer.createdAt = isoAgo(3 * dayMs);
@@ -821,7 +1058,7 @@ test("Needs attention keeps first-readiness order across human and Copilot revie
   }
 });
 
-test("Needs attention retains the same relative order across repository fetch completion and watched scopes", async () => {
+test("PR queue retains the same relative order across repository fetch completion and watched scopes", async () => {
   const createdAt = isoAgo(3 * dayMs);
   const first = prNode(10, isoAgo(hourMs));
   const second = prNode(2, isoAgo(2 * hourMs));
@@ -856,7 +1093,7 @@ test("missing or inconsistent readiness history surfaces an error without guessi
     unknown.readinessTransitions = history;
     mockPullRequests([unknown, prNode(2, isoAgo(dayMs))]);
     const dashboard = await loadReview();
-    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from Needs attention. ${error}`]);
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from PR queue. ${error}`]);
     assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), [2]);
     const unranked = dashboard.attention.buckets.find((bucket) => bucket.label === "Quick wins").items.find((item) => item.pr.number === 1);
     assert.equal(unranked.pr.firstReadyForReviewAt, null);
@@ -882,7 +1119,7 @@ test("readiness pagination failures, repeated cursors, and the safety bound are 
     };
     const dashboard = await loadReview();
     const error = failure === "request" ? "Timeline access denied" : "Incomplete draft/ready transition history";
-    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from Needs attention. ${error}`]);
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from PR queue. ${error}`]);
     assert.deepEqual(dashboard.attention.focus, []);
     assert.equal(calls, failure === "limit" ? 24 : 1);
   }

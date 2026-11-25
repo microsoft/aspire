@@ -36,6 +36,23 @@ internal static class ResourcePaneNavigation
     }
 
     /// <summary>
+    /// Opens the main navigation menu from the header's button, which narrow layouts show in place of the tab strip.
+    /// </summary>
+    public static async Task<ILocator> OpenNavMenuAsync(IPage page)
+    {
+        await page.Locator(".navigation-button").ClickAsync();
+        var menu = page.Locator("fluent-menu-list.mobile-nav-menu");
+        await Assertions.Expect(menu).ToBeVisibleAsync();
+        return menu;
+    }
+
+    /// <summary>
+    /// An entry in the main navigation menu, found by its label.
+    /// </summary>
+    public static ILocator NavMenuItem(ILocator menu, string text) =>
+        menu.Locator($"fluent-menu-item[data-tooltip='{text}']");
+
+    /// <summary>
     /// Opens the overview of all resources. The dashboard's home page, "/", shows the resource list with no view open:
     /// the full-page table on desktop, the open drawer on narrow layouts. Its "All resources" row opens the overview at
     /// /resources. /resources itself already shows the overview.

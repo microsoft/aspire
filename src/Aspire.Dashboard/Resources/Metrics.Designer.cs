@@ -192,6 +192,12 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string MetricsPinLimitReached {
+            get {
+                return ResourceManager.GetString("MetricsPinLimitReached", resourceCulture);
+            }
+        }
+
         public static string MetricsUnpinInstrument {
             get {
                 return ResourceManager.GetString("MetricsUnpinInstrument", resourceCulture);
