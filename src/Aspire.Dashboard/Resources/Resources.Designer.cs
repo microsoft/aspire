@@ -1814,6 +1814,12 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceTagsAdd", resourceCulture);
             }
         }
+
+        public static string ResourceTagsLimitReached {
+            get {
+                return ResourceManager.GetString("ResourceTagsLimitReached", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Defined by the AppHost. This tag cannot be removed..

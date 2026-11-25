@@ -873,6 +873,9 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             => _inner.GetResourceLogsAsync(resourceName, follow, cancellationToken);
         public Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)
             => _inner.StopAppHostAsync(cancellationToken);
+        public bool SupportsStopResourceCleanupV1 => _inner.SupportsStopResourceCleanupV1;
+        public Task<bool> StopAppHostAndWaitForResourceCleanupAsync(CancellationToken cancellationToken = default)
+            => _inner.StopAppHostAndWaitForResourceCleanupAsync(cancellationToken);
         public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(string resourceName, string commandName, ExecuteResourceCommandOptions? options = null, CancellationToken cancellationToken = default)
             => _inner.ExecuteResourceCommandAsync(resourceName, commandName, options, cancellationToken);
         public Task<WaitForResourceResponse> WaitForResourceAsync(string resourceName, string status, int timeoutSeconds, CancellationToken cancellationToken = default)

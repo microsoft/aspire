@@ -218,6 +218,8 @@
 
 ::deep .property-grid-container {
     --property-grid-background-color: var(--property-grid-genai-dialog-background-color);
+    /* Use the standard data grid hover color to contrast with the lighter dialog grid surface. */
+    --property-grid-row-hover-color: var(--datagrid-hover-color);
 }
 
 ::deep .message-container .log-content {

@@ -402,6 +402,69 @@ public sealed partial class SqliteTelemetryRepository
         };
     }
 
+    private OverviewLogs GetOverviewLogsFromDatabase(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken) =>
+        MaterializeOverviewLogs(ReadOverviewLogRows(resourceKeys, recentCount, errorsOnly, cancellationToken));
+
+    internal List<OverviewLogRecord> ReadOverviewLogRows(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken)
+    {
+        using var connection = _database.OpenConnection();
+        using var interrupt = connection.RegisterInterrupt(cancellationToken);
+        var parameters = new DynamicParameters();
+        var resourcePredicate = BuildLogResourcePredicate(resourceKeys, parameters);
+        var from = resourcePredicate is null
+            ? "FROM telemetry_logs l"
+            : "FROM telemetry_logs l JOIN telemetry_resources r ON r.resource_id = l.resource_id";
+        parameters.Add("Warning", (int)LogLevel.Warning);
+        parameters.Add("Error", (int)LogLevel.Error);
+        parameters.Add("Critical", (int)LogLevel.Critical);
+        parameters.Add("RecentCount", recentCount);
+        // Unspecified OTLP severities map to LogLevel.None, which sorts above Critical.
+        var severityPredicate = errorsOnly
+            ? "l.severity BETWEEN @Error AND @Critical"
+            : "(SELECT WarningCount + ErrorCount FROM log_counts) = 0 OR l.severity BETWEEN @Warning AND @Critical";
+
+        // Keep the aggregate and the preview in one statement so new or trimmed entries can't move the page.
+        // The preview only needs the message and severity; don't join attributes or materialize structured logs.
+        return connection.Query<OverviewLogRecord>($"""
+            WITH log_counts AS (
+                SELECT COUNT(*) AS TotalCount,
+                    COUNT(*) FILTER (WHERE l.severity = @Warning) AS WarningCount,
+                    COUNT(*) FILTER (WHERE l.severity BETWEEN @Error AND @Critical) AS ErrorCount
+                {from}
+                {(resourcePredicate is null ? "" : $"WHERE {resourcePredicate}")}
+            ),
+            recent_logs AS (
+                SELECT l.log_id, l.timestamp_ticks, l.severity, l.message, l.resource_id
+                {from}
+                WHERE {(resourcePredicate is null ? "" : $"{resourcePredicate} AND ")}({severityPredicate})
+                ORDER BY l.timestamp_ticks DESC, l.log_id
+                LIMIT @RecentCount
+            )
+            SELECT c.TotalCount, c.WarningCount, c.ErrorCount,
+                p.log_id AS InternalId, p.timestamp_ticks AS TimestampTicks, p.severity, p.message, p.resource_id AS ResourceId
+            FROM log_counts c
+            LEFT JOIN recent_logs p ON 1 = 1
+            ORDER BY p.timestamp_ticks DESC, p.log_id;
+            """, parameters).AsList();
+    }
+
+    internal OverviewLogs MaterializeOverviewLogs(List<OverviewLogRecord> rows)
+    {
+        var counts = rows[0];
+        var recent = new List<OverviewLog>(rows.Count);
+        foreach (var row in rows)
+        {
+            // A resource can be deleted after the rows are buffered, invalidating its cached metadata.
+            if (row.InternalId is { } id && row.ResourceId is { } resourceId && GetCachedResource(resourceId) is { } resource)
+            {
+                recent.Add(new OverviewLog(id, new DateTime(row.TimestampTicks!.Value, DateTimeKind.Utc),
+                    (LogLevel)row.Severity!.Value, row.Message!, resource));
+            }
+        }
+
+        return new OverviewLogs(counts.TotalCount, counts.WarningCount, counts.ErrorCount, recent);
+    }
+
     private OtlpLogEntry? GetLogFromDatabase(long logId)
     {
         using var connection = _database.OpenConnection();
@@ -501,22 +564,9 @@ public sealed partial class SqliteTelemetryRepository
             parameters.Add("LogIds", context.LogIds);
             predicates.Add("l.log_id IN @LogIds");
         }
-        if (context.ResourceKeys.Count > 0)
+        if (BuildLogResourcePredicate(context.ResourceKeys, parameters) is { } resourcePredicate)
         {
-            var resourcePredicates = new List<string>();
-            for (var i = 0; i < context.ResourceKeys.Count; i++)
-            {
-                var key = context.ResourceKeys[i];
-                var predicate = $"r.resource_name = @ResourceName{i} COLLATE NOCASE";
-                parameters.Add($"ResourceName{i}", key.Name);
-                if (key.InstanceId is not null)
-                {
-                    predicate += $" AND r.instance_id = @InstanceId{i} COLLATE NOCASE";
-                    parameters.Add($"InstanceId{i}", key.InstanceId);
-                }
-                resourcePredicates.Add($"({predicate})");
-            }
-            predicates.Add($"({string.Join(" OR ", resourcePredicates)})");
+            predicates.Add(resourcePredicate);
         }
 
         var filterIndex = 0;
@@ -567,6 +617,30 @@ public sealed partial class SqliteTelemetryRepository
             """, parameters);
     }
 
+    private static string? BuildLogResourcePredicate(IReadOnlyList<ResourceKey> resourceKeys, DynamicParameters parameters)
+    {
+        if (resourceKeys.Count == 0)
+        {
+            return null;
+        }
+
+        var resourcePredicates = new List<string>(resourceKeys.Count);
+        for (var i = 0; i < resourceKeys.Count; i++)
+        {
+            var key = resourceKeys[i];
+            var predicate = $"r.resource_name = @ResourceName{i} COLLATE NOCASE";
+            parameters.Add($"ResourceName{i}", key.Name);
+            if (key.InstanceId is not null)
+            {
+                predicate += $" AND r.instance_id = @InstanceId{i} COLLATE NOCASE";
+                parameters.Add($"InstanceId{i}", key.InstanceId);
+            }
+            resourcePredicates.Add($"({predicate})");
+        }
+
+        return $"({string.Join(" OR ", resourcePredicates)})";
+    }
+
     private HashSet<long> GetMatchingLogIdsFromDatabase(GetLogsContext context)
     {
         using var connection = _database.OpenConnection();
@@ -584,7 +658,15 @@ public sealed partial class SqliteTelemetryRepository
                 return "1 = 1";
             }
             parameters.Add(parameterName, (int)severity);
-            return BuildNumericPredicate("l.severity", filter.Condition, parameterName);
+            var predicate = BuildNumericPredicate("l.severity", filter.Condition, parameterName);
+            // Unspecified severities are stored as None, which sorts above every actual log level.
+            if (severity is >= LogLevel.Trace and <= LogLevel.Critical &&
+                filter.Condition is FilterCondition.GreaterThan or FilterCondition.GreaterThanOrEqual)
+            {
+                return $"({predicate} AND l.severity <= {(int)LogLevel.Critical})";
+            }
+
+            return predicate;
         }
 
         if (filter.Field == nameof(OtlpLogEntry.TimeStamp))
@@ -841,6 +923,18 @@ public sealed partial class SqliteTelemetryRepository
         public bool? HasMetrics { get; init; }
         public string? ScopeName { get; init; }
         public string? ScopeVersion { get; init; }
+    }
+
+    internal sealed class OverviewLogRecord
+    {
+        public required int TotalCount { get; init; }
+        public required int WarningCount { get; init; }
+        public required int ErrorCount { get; init; }
+        public long? InternalId { get; init; }
+        public long? TimestampTicks { get; init; }
+        public int? Severity { get; init; }
+        public string? Message { get; init; }
+        public long? ResourceId { get; init; }
     }
 
     internal sealed class LogSummaryRecord

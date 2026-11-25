@@ -342,6 +342,24 @@ An unavailable stop RPC or shutdown timeout fails without escalation. `--pid`
 cannot be combined with `--all` or `--force`. Without `--pid`, existing project-level
 stop behavior is unchanged.
 
+## Waiting for resources to be torn down
+
+By default, `aspire stop` returns once the AppHost process has exited. The AppHost's
+resources, such as containers, can still be stopping in the background at that point,
+so a start issued right away can find a container with a fixed name still running.
+Use `--wait` to return only after the resources have been torn down:
+
+```bash
+aspire stop --wait
+```
+
+With `--wait`, the AppHost tears its resources down before it exits and confirms when
+they are gone. The command waits up to 120 seconds for that confirmation; use
+`--timeout <seconds>` to change it (for example, `aspire stop --wait --timeout 300`).
+`--timeout` requires `--wait`. The command exits with code 17 if the wait times out and
+code 9 if the AppHost's Aspire version does not support waiting; the AppHost is stopped
+in both cases. `--wait` can be combined with `--pid`, `--all`, and `--force`.
+
 ### Desktop tray companion (Preview)
 
 The native macOS, Windows, and glibc Linux CLI bundles include the Aspire menu

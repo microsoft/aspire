@@ -1285,9 +1285,9 @@ Nastavte aplikaci tak, aby exportovala protokoly, trasování a metriky přes [O
         <target state="translated">Vybrat formát</target>
         <note />
       </trans-unit>
-      <trans-unit id="TextVisualizerWordWrap">
-        <source>Word wrap</source>
-        <target state="translated">Zalamování řádků</target>
+      <trans-unit id="TextVisualizerWordWrapOff">
+        <source>Disable word wrap</source>
+        <target state="new">Disable word wrap</target>
         <note />
       </trans-unit>
     </body>

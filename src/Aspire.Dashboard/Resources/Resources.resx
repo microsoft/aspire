@@ -719,6 +719,10 @@
   <data name="ResourceTagsAdd" xml:space="preserve">
     <value>Add tag</value>
   </data>
+  <data name="ResourceTagsLimitReached" xml:space="preserve">
+    <value>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</value>
+    <comment>{0} is the maximum number of user-added resource tag assignments.</comment>
+  </data>
   <data name="ResourceTagsInputPlaceholder" xml:space="preserve">
     <value>Tag name</value>
   </data>

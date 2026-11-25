@@ -12056,6 +12056,60 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncWaitsForDcpResourceCleanup()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.True(resourcesCleanedUp);
+        Assert.Equal(1, kubernetesService.CleanupResourcesCallCount);
+    }
+
+    [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncCannotConfirmCleanupAfterARegularStop()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        await appExecutor.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(resourcesCleanedUp);
+        Assert.Equal(0, kubernetesService.CleanupResourcesCallCount);
+    }
+
+    [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncReportsCanceledCleanupAsUnconfirmed()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(new CancellationToken(canceled: true)).DefaultTimeout();
+
+        Assert.False(resourcesCleanedUp);
+    }
+
+    [Fact]
     public async Task ContainerAndExecutableShareContainerNetworkAllocationFailure()
     {
         var builder = DistributedApplication.CreateBuilder();

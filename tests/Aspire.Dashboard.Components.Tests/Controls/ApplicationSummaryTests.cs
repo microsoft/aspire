@@ -145,7 +145,7 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         Assert.Equal(loc[nameof(ResourceStrings.HomeLiveActivity)], cut.Find("#home-activity-title").TextContent);
         Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWindow)], cut.Find(".home-activity-window").TextContent);
-        cut.WaitForAssertion(() => Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWaiting)], cut.Find(".home-chart-empty").TextContent));
+        await cut.WaitForAssertionAsync(() => Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWaiting)], cut.Find(".home-chart-empty").TextContent));
         Assert.Equal(
             new[] { nameof(ResourceStrings.HomeLogsLabel), nameof(ResourceStrings.HomeTracesLabel), nameof(ResourceStrings.HomeMetricsLabel) }
                 .Select(key => $"0 {loc[key]}"),
@@ -277,7 +277,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         var tags = Services.GetRequiredService<ResourceTagStore>();
         foreach (var name in new[] { "api", "worker", "other", "parameter", "hidden-parameter" })
         {
-            tags.AddTag(name, "Backend");
+            await tags.AddTagAsync(name, "Backend");
         }
 
         var navigation = Services.GetRequiredService<NavigationManager>();
@@ -336,7 +336,7 @@ public class ApplicationSummaryTests : DashboardTestContext
     [InlineData(false, false)]
     [InlineData(true, true)]
     [InlineData(false, true)]
-    public void Render_LayoutToggleChangesViewsWithMissingParameters(bool isDesktop, bool missingParameters)
+    public async Task Render_LayoutToggleChangesViewsWithMissingParameters(bool isDesktop, bool missingParameters)
     {
         var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: !isDesktop);
         JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
@@ -356,12 +356,12 @@ public class ApplicationSummaryTests : DashboardTestContext
             Assert.Contains("parameter", outlet.Find(".missing-parameters-link").GetAttribute("href"));
         }
 
-        outlet.Find("[aria-label='Graph']").Click();
+        await outlet.InvokeAsync(() => outlet.Find("[aria-label='Graph']").ClickAsync());
         cut.WaitForAssertion(() => Assert.False(cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
         Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
         Assert.Equal("true", outlet.Find("[aria-label='Graph']").GetAttribute("aria-pressed"));
 
-        outlet.Find("[aria-label='Summary']").Click();
+        await outlet.InvokeAsync(() => outlet.Find("[aria-label='Summary']").ClickAsync());
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home-hero")));
         Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
         Assert.Equal("true", outlet.Find("[aria-label='Summary']").GetAttribute("aria-pressed"));
@@ -437,7 +437,11 @@ public class ApplicationSummaryTests : DashboardTestContext
                         new ScopeLogs
                         {
                             Scope = TelemetryTestHelpers.CreateScope(),
-                            LogRecords = { logTimes.Select(time => TelemetryTestHelpers.CreateLogRecord(time: time, observedTime: time, severity: SeverityNumber.Error)) }
+                            LogRecords =
+                            {
+                                logTimes.Select(time => TelemetryTestHelpers.CreateLogRecord(time: time, observedTime: time, severity: SeverityNumber.Error)),
+                                TelemetryTestHelpers.CreateLogRecord(time: requestTime, severity: SeverityNumber.Unspecified)
+                            }
                         }
                     }
                 }
@@ -458,6 +462,34 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Equal("No requests were recorded in this run.", cut.Find(".home-chart-empty").TextContent));
         Assert.Empty(cut.FindAll(".home-chart-axis"));
+    }
+
+    [Fact]
+    public async Task Live_InitialScopeAndSelectionChangeLoadWithoutWaitingForLiveRefresh()
+    {
+        var holding = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ComponentFactories.Add(() =>
+        {
+            var summary = Activator.CreateInstance<ApplicationSummary>();
+            summary.TelemetryRefreshDelayAsync = (_, cancellationToken) =>
+            {
+                holding.TrySetResult();
+                return held.Task.WaitAsync(cancellationToken);
+            };
+            return summary;
+        });
+
+        // A scoped initial render must not show the request belonging to the unselected resource.
+        var context = await RenderLiveSummaryAsync(GroupOverview.Summary, resourceNames: ["missing"]);
+        var cut = context.Summary;
+        cut.WaitForAssertion(() => Assert.Equal("0", cut.Find(".home-activity-totals a:nth-child(2) strong").TextContent));
+
+        context.Timers.Advance(ApplicationSummary.s_activityBucketSize);
+        await holding.Task.WaitAsync(DefaultWaitTimeout);
+
+        await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["TestService-TestId"])));
+        cut.WaitForAssertion(() => Assert.Equal("1", cut.Find(".home-activity-totals a:nth-child(2) strong").TextContent));
     }
 
     [Fact]
@@ -485,18 +517,23 @@ public class ApplicationSummaryTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Live_OtherLayoutDoesNotRefreshActivityPeriodically()
+    public async Task Live_GraphSkipsActivityAndSummaryLoadsImmediately()
     {
         JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        ComponentFactories.Add(() =>
+        {
+            var summary = Activator.CreateInstance<ApplicationSummary>();
+            summary.TelemetryRefreshDelayAsync = (_, token) => Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return summary;
+        });
         var context = await RenderLiveSummaryAsync(GroupOverview.Graph);
-        context.Summary.WaitForAssertion(() => Assert.True(Volatile.Read(ref context.RequestQueries.Count) > 0), DefaultWaitTimeout);
-        var queries = Volatile.Read(ref context.RequestQueries.Count);
-
         context.Timers.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(0, Volatile.Read(ref context.RequestQueries.Count));
 
-        // Longer than the delay before a queued refresh runs.
-        await Task.Delay(TimeSpan.FromSeconds(2));
-        Assert.Equal(queries, Volatile.Read(ref context.RequestQueries.Count));
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await context.Summary.InvokeAsync(() => preferences.SetGroupOverviewAsync(GroupOverview.Summary));
+        await context.Summary.WaitForAssertionAsync(() => Assert.Single(context.Summary.FindAll(".home-chart-bar")));
+        Assert.Equal(1, Volatile.Read(ref context.RequestQueries.Count));
     }
 
     [Fact]
@@ -505,7 +542,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         var context = await RenderLiveSummaryAsync(GroupOverview.Summary);
         context.Summary.WaitForAssertion(() => Assert.Single(context.Summary.FindAll(".home-chart-bar")), DefaultWaitTimeout);
 
-        await DisposeComponentsAsync();
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
         var queries = Volatile.Read(ref context.RequestQueries.Count);
         context.Timers.Advance(TimeSpan.FromSeconds(30));
 
@@ -514,7 +551,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Equal(queries, Volatile.Read(ref context.RequestQueries.Count));
     }
 
-    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(GroupOverview overview)
+    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(GroupOverview overview, IReadOnlyList<string>? resourceNames = null)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var timers = new FakeTimeProvider();
@@ -560,8 +597,10 @@ public class ApplicationSummaryTests : DashboardTestContext
             }
         });
 
-        var cut = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
-        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(overview));
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await preferences.EnsureLoadedAsync();
+        await preferences.SetGroupOverviewAsync(overview);
+        var cut = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport).Add(p => p.ResourceNames, resourceNames));
         return new LiveSummaryContext(cut, clock, timers, requestQueries);
     }
 

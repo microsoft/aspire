@@ -45,7 +45,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             var pane = page.Locator(".resource-pane");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "resource-a", Exact = true })).ToBeVisibleAsync();
             // Telemetry sources are listed by default.
-            var telemetrySection = pane.Locator("button.resource-pane-section-header", new() { HasTextRegex = new Regex("^Telemetry sources") });
+            var telemetrySection = pane.GetByRole(AriaRole.Button, new() { Name = "Expand or collapse Telemetry sources", Exact = true });
             await Assertions.Expect(telemetrySection.First).ToBeVisibleAsync();
             if (await telemetrySection.First.GetAttributeAsync("aria-expanded") == "false")
             {
@@ -99,13 +99,13 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
 
             // Switching tabs keeps all resources selected, including when returning to the overview.
-            await ClickResourceTabAndWaitForRenderAsync(page, () => page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab }).ClickAsync());
+            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
-            await Assertions.Expect(page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab })).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab })).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
 
             await Assertions.Expect(page.GetByRole(AriaRole.Region, new() { Name = Resources.Layout.NavMenuConsoleLogsTab, Exact = true })).ToBeVisibleAsync();
-            await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
+            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
             await Assertions.Expect(selectAll).ToContainTextAsync(Resources.Layout.ResourceHeaderAllResources);
@@ -287,7 +287,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             var title = page.Locator("h1.resource-title");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "multi-a", Exact = true }).First).ToBeVisibleAsync();
             // Telemetry sources are listed by default.
-            var telemetrySection = pane.Locator("button.resource-pane-section-header", new() { HasTextRegex = new Regex("^Telemetry sources") });
+            var telemetrySection = pane.GetByRole(AriaRole.Button, new() { Name = "Expand or collapse Telemetry sources", Exact = true });
             if (await telemetrySection.CountAsync() > 0 &&
                 await telemetrySection.GetAttributeAsync("aria-expanded") == "false")
             {
@@ -298,7 +298,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
             await Assertions.Expect(title).ToHaveTextAsync(string.Format(CultureInfo.CurrentCulture, Resources.Layout.ResourceHeaderSelectedResources, 2));
-            await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(2);
+            await Assertions.Expect(pane.Locator(".resource-row-link[aria-current='true']")).ToHaveCountAsync(2);
 
             // Shift+click selects the rows between the last clicked row (multi-c) and the clicked row.
             Assert.NotEmpty(await page.EvaluateAsync<string>("""
@@ -336,9 +336,9 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await GetRowLink("multi-a").ClickAsync();
             await Assertions.Expect(GetRowLink("multi-a")).ToHaveAttributeAsync("aria-current", "page");
             await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
-            await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(2);
+            await Assertions.Expect(pane.Locator(".resource-row-link[aria-current='true']")).ToHaveCountAsync(2);
             await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
-            await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(3);
+            await Assertions.Expect(pane.Locator(".resource-row-link[aria-current='true']")).ToHaveCountAsync(3);
             await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
 
@@ -552,7 +552,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             var pane = page.Locator(".resource-pane");
             var tagGroup = pane.GetByRole(AriaRole.Group, new LocatorGetByRoleOptions { Name = tag });
             await Assertions.Expect(tagGroup.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = resourceName })).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator("fluent-tab[aria-selected='true']")).ToHaveAccessibleNameAsync(Resources.Layout.ResourceTabOverview);
+            await Assertions.Expect(page.Locator("a.resource-tab[aria-current='page']")).ToHaveAccessibleNameAsync(Resources.Layout.ResourceTabOverview);
 
             // Grouping is remembered when reloading a resource URL.
             await page.GotoAsync($"/resources/{resourceName}");
@@ -562,7 +562,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await page.GetByRole(AriaRole.Menuitemradio, new PageGetByRoleOptions { Name = Resources.Layout.ResourcePaneGroupingNone, Exact = true }).ClickAsync();
             await Assertions.Expect(tagGroup).ToHaveCountAsync(0);
             await Assertions.Expect(pane.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = resourceName })).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator("fluent-tab[aria-selected='true']")).ToHaveAccessibleNameAsync(Resources.Layout.ResourceTabOverview);
+            await Assertions.Expect(page.Locator("a.resource-tab[aria-current='page']")).ToHaveAccessibleNameAsync(Resources.Layout.ResourceTabOverview);
         });
     }
 

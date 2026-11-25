@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
@@ -58,7 +59,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 AuxiliaryBackchannelCapabilities.V2,
                 AuxiliaryBackchannelCapabilities.V3,
                 AuxiliaryBackchannelCapabilities.Terminals_V1,
-                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1,
+                AuxiliaryBackchannelCapabilities.StopResourceCleanup_V1
             ]
         });
     }
@@ -263,8 +265,40 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public async Task<StopAppHostResponse> StopAsync(StopAppHostRequest? request = null, CancellationToken cancellationToken = default)
     {
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(StopAsync), streaming: false, request?.TraceContext);
-        await StopAppHostAsync(cancellationToken).ConfigureAwait(false);
-        return new StopAppHostResponse();
+        if (request?.WaitForResourceCleanup is not true)
+        {
+            await StopAppHostAsync(cancellationToken).ConfigureAwait(false);
+            return new StopAppHostResponse();
+        }
+
+        try
+        {
+            // The regular stop returns immediately and the resources are torn down by DCP after the AppHost
+            // process has exited, so a caller has no way to know when they are gone. Tear them down here,
+            // before responding, so the response can report that the application resources (for example,
+            // fixed-name containers) no longer exist. The caller bounds the wait with its cancellation token.
+            var resourcesCleanedUp = await StopAndWaitForResourceCleanupAsync(cancellationToken).ConfigureAwait(false);
+            return new StopAppHostResponse { ResourcesCleanedUp = resourcesCleanedUp };
+        }
+        finally
+        {
+            // Always stop the AppHost, including when the caller gave up waiting: its resources are already
+            // being torn down, so the AppHost must not keep running without them.
+            await StopAppHostAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken)
+    {
+        var orchestrator = serviceProvider.GetService<ApplicationOrchestrator>();
+        if (orchestrator is null)
+        {
+            // The orchestrator only exists in run mode. Without it the AppHost created no resources to tear down.
+            return true;
+        }
+
+        logger.LogDebug("Tearing down application resources before stopping the AppHost");
+        return await orchestrator.StopAndWaitForResourceCleanupAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
