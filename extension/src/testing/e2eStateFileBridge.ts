@@ -20,6 +20,7 @@ import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/Asp
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { certificateBase64ToPem } from '../utils/security';
 import { isCommandCancellation, onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { ResourceItem } from '../views/treeItems/resourceItems';
@@ -34,6 +35,7 @@ import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
 import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
 import { attachWhenResourceResponds, runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
+import { ResumeInterruptedInspectionRequests, type ResumeInterruptionClassification } from './resumeInterruptedInspectionRequests';
 
 let atomicWriteSequence = 0;
 
@@ -1364,6 +1366,8 @@ async function proveAttachedResourceDebugging(
   const terminatedSessionIds = new Set<string>();
   const attachRequests: DebugAdapterMessageSummary[] = [];
   const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
+  const resumeInterruptedInspectionResponses: Array<DebugAdapterMessageSummary & { classification: ResumeInterruptionClassification }> = [];
+  const resumeInterruptedInspectionRequests = new ResumeInterruptedInspectionRequests();
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
   const stoppedEvents: DebugAdapterStoppedEvent[] = [];
   const pendingBreakpointRequests = new Map<string, { sourcePath?: string; lines: number[]; afterRemoval: boolean }>();
@@ -1381,6 +1385,7 @@ async function proveAttachedResourceDebugging(
     createDebugAdapterTracker(session) {
       return {
         onWillReceiveMessage(message) {
+          resumeInterruptedInspectionRequests.onRequest(session.id, message);
           if (message?.type === 'request' && message.command === 'attach') {
             attachRequests.push({
               sessionId: session.id,
@@ -1402,15 +1407,23 @@ async function proveAttachedResourceDebugging(
           }
         },
         onDidSendMessage(message) {
+          resumeInterruptedInspectionRequests.onEvent(session.id, message);
+          const resumeInterruption = resumeInterruptedInspectionRequests.onResponse(session.id, message);
           if (message?.type === 'response' && message.success === false) {
-            debugAdapterResponses.push({
+            const failedResponse: DebugAdapterMessageSummary = {
               sessionId: session.id,
               sessionType: session.type,
               sessionName: session.name,
               command: message.command,
               success: false,
               body: redactDebugAdapterArguments(message),
-            });
+            };
+            if (resumeInterruption) {
+              resumeInterruptedInspectionResponses.push({ ...failedResponse, classification: resumeInterruption });
+            }
+            else {
+              debugAdapterResponses.push(failedResponse);
+            }
           }
           if (message?.type === 'response' && message.command === 'setBreakpoints') {
             const breakpointResponse = {
@@ -1588,6 +1601,7 @@ async function proveAttachedResourceDebugging(
         extensionLogOutputChannel.info(`Resource debug E2E ${expectedDebugType} adapter acknowledged breakpoint removal.`);
       },
       continueExecution: async () => {
+        resumeInterruptedInspectionRequests.expectProofResume(attachedSessionForDetach.id);
         await attachedSessionForDetach.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
       },
       waitForResourceResponse: async phase => {
@@ -1601,6 +1615,11 @@ async function proveAttachedResourceDebugging(
         return body;
       },
       detach: async () => {
+        // Stopping at the breakpoint opened Run and Debug and hid the Aspire view, so the attach session is
+        // the only thing keeping resource state live. Show the Aspire view before detaching, as a user
+        // checking on the resource afterwards would, so the post-detach response check and later attaches
+        // still read live resource state.
+        await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
         await vscode.debug.stopDebugging(attachedSessionForDetach);
         await waitForE2eValue(
           `${expectedDebugType} attach session termination`,
@@ -1629,6 +1648,7 @@ async function proveAttachedResourceDebugging(
       attachRequests,
       breakpointResponses,
       debugAdapterResponses,
+      resumeInterruptedInspectionResponses,
       resourceResponseAfterDetach: responseBody,
       sessionTerminated: true,
     };
@@ -1639,6 +1659,7 @@ async function proveAttachedResourceDebugging(
       attachRequests,
       breakpointResponses,
       debugAdapterResponses,
+      resumeInterruptedInspectionResponses,
       stoppedEvents,
       terminatedSessionIds: [...terminatedSessionIds],
       toolPayload,
@@ -2439,7 +2460,7 @@ async function closeBrowserPageThroughCdp(proxy: BrowserCdpProxy, timeoutMs: num
         // Events and replies for other request IDs are not acknowledgements of our close.
         const response = JSON.parse(data.toString()) as { id?: number; error?: unknown };
         if (response?.id === 1) {
-          finish(response.error === undefined
+          finish(response.error === undefined || isCdpProxyTargetClosedError(response.error)
             ? undefined
             : new Error(`Browser CDP Page.close failed: ${JSON.stringify(response.error)}`));
         }
@@ -2468,6 +2489,16 @@ async function closeBrowserPageThroughCdp(proxy: BrowserCdpProxy, timeoutMs: num
     socket.on('error', onError);
     socket.on('close', onClose);
   });
+}
+
+// Page.close can also destroy its target before the browser replies while the proxy socket stays
+// open. js-debug then rejects the pending request with this error instead of closing the socket.
+// Like a close after Page.close, it only ends the transport operation; the caller still requires
+// root, page, and Mono termination.
+// https://github.com/microsoft/vscode-js-debug/blob/v1.117.0/src/cdp/connection.ts#L385-L388
+function isCdpProxyTargetClosedError(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
+  return code === 0 && message === 'Connection is closed';
 }
 
 function findSuccessfulBreakpointResponse(
@@ -3046,6 +3077,13 @@ async function stopDebuggingForE2E(
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider
 ): Promise<void> {
+  // Earlier test steps can leave the Aspire view hidden: opening the workspace folder or reloading the
+  // window restarts VS Code with Explorer showing, and some tests switch to Explorer on purpose. Once the
+  // last debug session ends with the view hidden, nothing is watching the AppHost list, so it stops
+  // refreshing and the stopped AppHost never leaves the snapshot. Show the Aspire view, as a user
+  // watching the AppHost stop would.
+  await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
+
   const trackedSessions = aspireContext.aspireDebugSessions;
   if (trackedSessions.length > 0) {
     const stoppedDebugSessionIds = new Set(trackedSessions.map(debugSession => debugSession.debugSessionId));
@@ -3409,16 +3447,16 @@ function getE2eBreakpoints(): Array<{ filePath: string; line: number; enabled: b
 
 // Verify the packaged extension's externally visible DCP /info response, rather
 // than only calling the in-process capability helper.
-async function getDcpRunSessionInfoForE2E({ address, token }: DcpServerConnectionInfo): Promise<unknown> {
+async function getDcpRunSessionInfoForE2E({ address, token, certificate }: DcpServerConnectionInfo): Promise<unknown> {
   return await new Promise((resolve, reject) => {
     const request = https.get(`https://${address}/info`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'microsoft-developer-dcp-instance-id': 'aspire-extension-e2e',
       },
-      // The opt-in E2E bridge calls the extension's loopback-only DCP server,
-      // which uses a per-session self-signed certificate.
-      rejectUnauthorized: false,
+      // The opt-in E2E bridge calls the extension's loopback-only DCP server, which uses a
+      // per-session self-signed certificate. Trust exactly that certificate instead of disabling validation.
+      ca: certificateBase64ToPem(certificate),
     }, response => {
       const chunks: Buffer[] = [];
       response.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));

@@ -87,7 +87,6 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData(".github/workflows/analyze-ci-failure.md")]
     [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
-    [InlineData(".github/workflows/analyze-ci-failure/prepare-report-templates.js")]
     public void AnalyzerReportingInputsSelectScriptBehaviorTests(string path)
     {
         var result = SelectWithRealMap(path);
@@ -358,6 +357,10 @@ public sealed class TestTriggerMapTests
             ["job:cli-starter-validation"]
         },
         {
+            "eng/scripts/stage-cli-starter-validation-diagnostics.ps1",
+            ["test:Infrastructure.Tests", "job:cli-starter-validation"]
+        },
+        {
             "eng/scripts/test-native-dashboard.ps1",
             ["job:native-dashboard-validation"]
         },
@@ -367,7 +370,7 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/scripts/verify-native-dashboard-warnings.ps1",
-            ["test:Infrastructure.Tests", "job:native-dashboard-validation"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Templates.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:native-dashboard-validation", "job:extension-e2e", "job:homebrew-installer", "job:polyglot", "job:winget-installer"]
         },
         {
             ".github/workflows/native-dashboard-validation.yml",
@@ -430,7 +433,7 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/Bundle.proj",
-            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Templates.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:native-dashboard-validation", "job:extension-e2e", "job:homebrew-installer", "job:polyglot", "job:winget-installer"]
         },
         {
             "tools/CreateLayout/verify-tray-payload.sh",
@@ -569,6 +572,7 @@ public sealed class TestTriggerMapTests
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalTitle.test.mjs")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalDock.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/d3.v7.min.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraph.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph-game.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraphGame.test.mjs")]
@@ -649,7 +653,6 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
-    [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
     public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
@@ -658,6 +661,17 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);
         Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Fact]
+    public void StabilizationSmokeScriptSelectsItsWrapperCoverage()
+    {
+        var result = SelectWithRealMap("eng/scripts/stabilization-smoke-init-restore.sh");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
         Assert.Empty(result.Jobs);
     }
 
@@ -756,6 +770,26 @@ public sealed class TestTriggerMapTests
             cause => cause.Kind == CauseKind.AffectedProject);
         Assert.Equal(
             ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("eng/Bundle.proj")]
+    [InlineData("eng/scripts/verify-native-dashboard-warnings.ps1")]
+    [InlineData("eng/aspire-managed-entitlements.plist")]
+    public void SharedBundlePhasesSelectRegularRuntimePackageConsumers(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Templates.Tests", "Infrastructure.Tests"],
+            result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Contains(result.TestCauses["Aspire.Templates.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+        Assert.Equal(
+            ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:native-dashboard-validation", "job:polyglot", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
     }
 

@@ -83,7 +83,15 @@ func main() {
 
 	sharepoint := project.AddSharePointTool("sharepoint-tool", []string{"https://contoso.sharepoint.com", "MySite"})
 	fabric := project.AddFabricTool("fabric-tool", []string{"workspace-id"})
-	azFunc := project.AddAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q")
+	azFunc := project.AddAzureFunctionTool("az-func-tool", &aspire.AzureFunctionToolOptions{
+		FunctionName:        "myFunction",
+		Description:         "Does something",
+		ParametersJson:      "{}",
+		InputQueueEndpoint:  "https://queue.core.windows.net",
+		InputQueueName:      "input-q",
+		OutputQueueEndpoint: "https://queue.core.windows.net",
+		OutputQueueName:     "output-q",
+	})
 	funcTool := project.AddFunctionTool("func-tool", "myFunc", "{}")
 	promptAgent := project.AddPromptAgent("prompt-agent", chat)
 	promptAgent.WithTool(codeInterpreter).
@@ -139,15 +147,17 @@ server.listen(port, '127.0.0.1');
 			hostedAgentScript,
 		})
 
-	hostedAgent.AsHostedAgent(project, &aspire.HostedAgentOptions{
-		Description: aspire.StringPtr("Validation hosted agent"),
-		Cpu:         aspire.Float64Ptr(1),
-		Memory:      aspire.Float64Ptr(2),
-		Metadata: map[string]string{
-			"scenario": "validation",
-		},
-		EnvironmentVariables: map[string]string{
-			"VALIDATION_MODE": "true",
+	hostedAgent.AsHostedAgent(project, &aspire.AsHostedAgentOptions{
+		Options: &aspire.HostedAgentOptions{
+			Description: aspire.StringPtr("Validation hosted agent"),
+			Cpu:         aspire.Float64Ptr(1),
+			Memory:      aspire.Float64Ptr(2),
+			Metadata: map[string]string{
+				"scenario": "validation",
+			},
+			EnvironmentVariables: map[string]string{
+				"VALIDATION_MODE": "true",
+			},
 		},
 	})
 
@@ -161,7 +171,7 @@ server.listen(port, '127.0.0.1');
 		})
 	// Both hosted agents run as plain host processes (not containers), so they must not share the
 	// default 8088 target port or the second process fails to bind with EADDRINUSE.
-	hostedAgentWithProtocol.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{TargetPort: aspire.Float64Ptr(8089)})
+	hostedAgentWithProtocol.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{TargetPort: aspire.IntPtr(8089)})
 	hostedAgentWithProtocol.AsHostedAgentWithProtocol(project, aspire.HostedAgentProtocolInvocations, "1.0.0", nil)
 
 	_ = builder.AddContainer("api", "nginx")

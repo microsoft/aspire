@@ -2,12 +2,43 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Utils;
+using Aspire.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Xunit;
+using LayoutResources = Aspire.Dashboard.Resources.Layout;
 
 namespace Aspire.Dashboard.Tests;
 
 public class DashboardUIHelpersTests
 {
+    [Theory]
+    [InlineData(-5, "now", "a moment ago", "now")]
+    [InlineData(59, "now", "a moment ago", "now")]
+    [InlineData(60, "1 minute ago", "1 minute ago", "1m ago")]
+    [InlineData(119, "1 minute ago", "1 minute ago", "1m ago")]
+    [InlineData(120, "2 minutes ago", "2 minutes ago", "2m ago")]
+    [InlineData(2730, "45 minutes ago", "45 minutes ago", "45m ago")]
+    [InlineData(3600, "1h ago", "1h ago", "1h ago")]
+    [InlineData(86399, "23h ago", "23h ago", "23h ago")]
+    [InlineData(86400, "1 day ago", "1 day ago", "1d ago")]
+    [InlineData(172799, "1 day ago", "1 day ago", "1d ago")]
+    [InlineData(172800, "2 days ago", "2 days ago", "2d ago")]
+    [UseCulture("en-US")]
+    public void FormatTimeAgo_PreservesRelativeTimeStyles(int seconds, string pauseAge, string runAge, string shortAge)
+    {
+        using var services = new ServiceCollection().AddLogging().AddLocalization().BuildServiceProvider();
+        var loc = services.GetRequiredService<IStringLocalizer<LayoutResources>>();
+        var age = TimeSpan.FromSeconds(seconds);
+
+        Assert.Equal(pauseAge, DashboardUIHelpers.FormatTimeAgo(age, loc, useShortFormat: false,
+            lessThanMinuteText: loc[nameof(LayoutResources.ResourceStartedAgeNow)]));
+        Assert.Equal(runAge, DashboardUIHelpers.FormatTimeAgo(age, loc, useShortFormat: false,
+            lessThanMinuteText: loc[nameof(LayoutResources.DashboardRunSelectMomentAgo)]));
+        Assert.Equal(shortAge, DashboardUIHelpers.FormatTimeAgo(age, loc, useShortFormat: true,
+            lessThanMinuteText: loc[nameof(LayoutResources.ResourceStartedAgeNow)]));
+    }
+
     [Theory]
     [InlineData("redis://:password@localhost:6379", "redis://localhost:6379")]
     [InlineData("https://user:p%40ssword@[::1]:7443/a%2Fb?token=secret#access_token=secret", "https://[::1]:7443/a%2Fb?token=MASK")]

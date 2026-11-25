@@ -2,177 +2,194 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../ConfigSourceStrings.resx">
     <body>
-      <trans-unit id="Accept">
-        <source>Yes</source>
-        <target state="new">Yes</target>
+      <trans-unit id="AccessHelp">
+        <source>For help accessing this configuration source, see {0}.</source>
+        <target state="translated">Nápovědu pro přístup k tomuto zdroji konfigurace najdete v {0}.</target>
+        <note>{0} is a hyperlink to the configuration source README.</note>
+      </trans-unit>
+      <trans-unit id="AlreadyUpToDate">
+        <source>Configuration is already up to date with its source.</source>
+        <target state="translated">Konfigurace už odpovídá aktuálnímu stavu svého zdroje.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppliedVersionMissing">
         <source>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</source>
-        <target state="new">A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</target>
+        <target state="translated">Uložený zdroj konfigurace nemá žádnou zaznamenanou použitou verzi. Spusťte příkaz `aspire update --config-source` a uložte jeho povolená nastavení i použitou verzi.</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
       <trans-unit id="AuthenticationFailed">
         <source>Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</source>
-        <target state="new">Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</target>
+        <target state="translated">Git se nemohl ověřit ve zdroji konfigurace. Nakonfigurujte pomocnou rutinu přihlašovacích údajů Gitu nebo ověřování SSH a zkuste to znovu.</target>
         <note />
       </trans-unit>
       <trans-unit id="BindingChanged">
         <source>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</source>
-        <target state="new">The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</target>
+        <target state="translated">Při načítání se změnil uložený zdroj konfigurace. Nebyla použita žádná nastavení zdroje. Zkuste to znovu s uloženou zdrojovou vazbou.</target>
         <note />
-      </trans-unit>
-      <trans-unit id="Candidate">
-        <source>Configuration source: {0}
-Configuration file: {1}
-Configuration ref: {2}
-Source origin: {3}</source>
-        <target state="new">Configuration source: {0}
-Configuration file: {1}
-Configuration ref: {2}
-Source origin: {3}</target>
-        <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</note>
       </trans-unit>
       <trans-unit id="CheckFailed">
         <source>The configuration source update check failed: {0} Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed: {0} Continuing with the saved configuration.</target>
+        <target state="translated">Kontrola aktualizace zdroje konfigurace se nezdařila: {0} Pokračuje se s uloženou konfigurací.</target>
         <note>{0} is the configuration source check failure message.</note>
       </trans-unit>
       <trans-unit id="CheckFailedWithoutDetails">
         <source>The configuration source update check failed. Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed. Continuing with the saved configuration.</target>
+        <target state="translated">Kontrola aktualizace zdroje konfigurace se nezdařila. Pokračuje se s uloženou konfigurací.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigLockFailed">
         <source>The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</source>
-        <target state="new">The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</target>
+        <target state="translated">Soubor nastavení se nepovedlo analyzovat. Nebyla použita žádná nastavení zdroje. Zkuste to znovu, až ostatní procesy zapisující konfiguraci dokončí svou činnost.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationFile">
+        <source>Configuration file</source>
+        <target state="translated">Konfigurační soubor</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsentRequired">
-        <source>A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</source>
-        <target state="new">A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
+        <source>A configuration source is available, but confirmation can't be requested in non-interactive mode. Specify --use-config-source to use it, or --use-config-source false to use the standard Aspire configuration.</source>
+        <target state="translated">Zdroj konfigurace je dostupný, ale v neinteraktivním režimu nejde požádat o potvrzení. Zadejte --use-config-source, pokud ho chcete použít, nebo --use-config-source false pro standardní konfiguraci Aspire.</target>
         <note>Do not translate "--use-config-source" or "false".</note>
-      </trans-unit>
-      <trans-unit id="Decline">
-        <source>No, use standard Aspire configuration</source>
-        <target state="new">No, use standard Aspire configuration</target>
-        <note />
       </trans-unit>
       <trans-unit id="DefaultBranch">
         <source>default branch</source>
-        <target state="new">default branch</target>
+        <target state="translated">výchozí větev</target>
         <note />
       </trans-unit>
       <trans-unit id="EmployeeOrigin">
         <source>Microsoft employee default</source>
-        <target state="new">Microsoft employee default</target>
+        <target state="translated">Výchozí nastavení zaměstnance Microsoftu</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Explanation">
+        <source>A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.</source>
+        <target state="translated">Ve vašem počítači byl rozpoznán zdroj konfigurace. Umožňuje organizaci sdílet nastavení Aspire a přizpůsobit vám tak prostředí pro vývoj.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
-        <target state="new">Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</target>
+        <target state="translated">Git se nepodařilo spustit. Pokud chcete tento zdroj konfigurace použít, ověřte, že je Git nainstalovaný a dostupný v PATH.</target>
         <note>Do not translate "PATH".</note>
       </trans-unit>
       <trans-unit id="GitTimeout">
         <source>The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</source>
-        <target state="new">The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</target>
+        <target state="translated">Vypršel časový limit operace Gitu se zdrojem konfigurace. Zkontrolujte přístup k úložišti a přihlašovací údaje Gitu a pak to zkuste znovu.</target>
         <note />
       </trans-unit>
       <trans-unit id="IncompatibleOptions">
-        <source>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</source>
-        <target state="new">--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</target>
+        <source>--config-source cannot be combined with --self, --migrate, --dry-run, --channel, --quality, or --nuget-config-dir.</source>
+        <target state="translated">Přepínač --config-source se nedá kombinovat s přepínači --self, --migrate, --dry-run, --channel, --quality ani --nuget-config-dir.</target>
         <note>Do not translate the command-line option names.</note>
+      </trans-unit>
+      <trans-unit id="InitUseSourcePrompt">
+        <source>Initialize Aspire using configuration from this source?</source>
+        <target state="translated">Inicializovat Aspire pomocí konfigurace z tohoto zdroje?</target>
+        <note />
       </trans-unit>
       <trans-unit id="InvalidBinding">
         <source>The configSource binding must contain a Git repository address and a repository-relative configuration file path.</source>
-        <target state="new">The configSource binding must contain a Git repository address and a repository-relative configuration file path.</target>
+        <target state="translated">Vazba configSource musí obsahovat adresu úložiště Gitu a cestu ke konfiguračnímu souboru relativní k úložišti.</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
       <trans-unit id="InvalidCache">
         <source>The configuration source cache is invalid. Restore or remove its cache entry and retry.</source>
-        <target state="new">The configuration source cache is invalid. Restore or remove its cache entry and retry.</target>
+        <target state="translated">Zdrojová mezipaměť konfigurace je neplatná. Obnovte nebo odeberte její položku mezipaměti a zkuste to znovu.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguration">
         <source>The source configuration must be a valid Aspire JSON object.</source>
-        <target state="new">The source configuration must be a valid Aspire JSON object.</target>
+        <target state="translated">Zdrojová konfigurace musí být platný objekt JSON Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidPath">
         <source>The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</source>
-        <target state="new">The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</target>
+        <target state="translated">Konfigurační soubor musí být neprázdná cesta relativní k úložišti, která používá oddělovače „/“ a neobsahuje „.“, „..“ ani prázdné segmenty cesty.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InvalidReadmeUrl">
+        <source>{0} must be a nonempty absolute HTTP or HTTPS URL without control characters.</source>
+        <target state="translated">Proměnná prostředí {0} musí obsahovat neprázdnou absolutní adresu URL s protokolem HTTP nebo HTTPS bez řídicích znaků.</target>
+        <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="InvalidRef">
         <source>The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</source>
-        <target state="new">The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</target>
+        <target state="translated">Odkaz na zdroj konfigurace musí být název větve nebo úplné potvrzení SHA, nikoli prázdná hodnota, značka, výraz revize nebo možnost příkazu.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidRepository">
         <source>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</source>
-        <target state="new">The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</target>
+        <target state="translated">Zdrojem konfigurace musí být absolutní cesta k místnímu úložišti nebo HTTPS adresa úložiště Git nebo SSH bez hesel, tokenů, dotazů či fragmentů.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingFile">
         <source>The configuration file is missing or is not a Git blob at the selected Git branch or commit.</source>
-        <target state="new">The configuration file is missing or is not a Git blob at the selected Git branch or commit.</target>
+        <target state="translated">Konfigurační soubor chybí nebo se nejedná o objekt blob Gitu ve vybrané větvi nebo potvrzení Gitu.</target>
         <note />
       </trans-unit>
       <trans-unit id="NestedSource">
         <source>A source configuration file cannot declare another configSource.</source>
-        <target state="new">A source configuration file cannot declare another configSource.</target>
+        <target state="translated">Zdrojový konfigurační soubor nemůže deklarovat jiný configSource.</target>
         <note>Do not translate "configSource".</note>
+      </trans-unit>
+      <trans-unit id="NewUseSourcePrompt">
+        <source>Create app using configuration from this source?</source>
+        <target state="translated">Vytvořit aplikaci s použitím konfigurace z tohoto zdroje?</target>
+        <note />
       </trans-unit>
       <trans-unit id="NoBinding">
         <source>No configuration source to update.</source>
-        <target state="new">No configuration source to update.</target>
+        <target state="translated">Není k dispozici žádný zdroj konfigurace, který by bylo možné aktualizovat.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoCandidate">
         <source>No configuration source is available. Set {0} to a Git repository address.</source>
-        <target state="new">No configuration source is available. Set {0} to a Git repository address.</target>
+        <target state="translated">Není k dispozici žádný zdroj konfigurace. Nastavte {0} na adresu úložiště Git.</target>
         <note>{0} is the environment variable name.</note>
+      </trans-unit>
+      <trans-unit id="ReadmeLink">
+        <source>Read more about this configuration source</source>
+        <target state="translated">Přečíst si více o tomto zdroji konfigurace</target>
+        <note />
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
         <source>Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</source>
-        <target state="new">Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="Refreshed">
-        <source>configuration updated</source>
-        <target state="new">configuration updated</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RefreshedUnchanged">
-        <source>configuration already up to date</source>
-        <target state="new">configuration already up to date</target>
+        <target state="translated">Použijte povolená nastavení z nejbližších místních uložených zdrojů konfigurace Gitu a nahraďte místní úpravy zadaných nastavení bez nutnosti aktualizovat balíčky nebo rozhraní příkazového řádku.</target>
         <note />
       </trans-unit>
       <trans-unit id="RepositoryUnavailable">
         <source>Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</source>
-        <target state="new">Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</target>
+        <target state="translated">Git nemohl přečíst zdrojové úložiště konfigurace. Zkontrolujte přístup k úložišti, síťové připojení a ověřování Git a pak to zkuste znovu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOrigin">
+        <source>Source origin</source>
+        <target state="translated">Původ zdroje</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListUseSourcePrompt">
+        <source>Include template sources from this configuration source?</source>
+        <target state="translated">Zahrnout zdroje šablon z tohoto zdroje konfigurace?</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateAvailable">
         <source>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</source>
-        <target state="new">A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</target>
+        <target state="translated">K dispozici je nová verze zdroje konfigurace. Spuštěním příkazu `aspire update --config-source` ji použijte.</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
-      <trans-unit id="UseNotice">
-        <source>Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</source>
-        <target state="new">Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</target>
-        <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</note>
+      <trans-unit id="UpdateUseSourcePrompt">
+        <source>Update app to use configuration from this source?</source>
+        <target state="translated">Aktualizovat aplikaci s použitím konfigurace z tohoto zdroje?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Updated">
+        <source>Configuration updated to the latest version from its source.</source>
+        <target state="translated">Konfigurace se ze zdroje aktualizovala na nejnovější verzi.</target>
+        <note />
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
         <source>Use the proposed Git configuration source. Specify false to decline it.</source>
-        <target state="new">Use the proposed Git configuration source. Specify false to decline it.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="UseSourcePrompt">
-        <source>Use configuration from this source?</source>
-        <target state="new">Use configuration from this source?</target>
+        <target state="translated">Použijte navržený zdroj konfigurace Gitu. Pokud ho chcete odmítnout, zadejte false.</target>
         <note />
       </trans-unit>
     </body>

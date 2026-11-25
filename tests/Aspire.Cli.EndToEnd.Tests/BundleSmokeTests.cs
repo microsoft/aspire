@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Hex1b.Input;
@@ -58,6 +59,7 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("unset AspireUseCliBundle", counter);
 
         await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
 
@@ -73,7 +75,9 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
 
         var appHostProject = File.ReadAllText(appHostProjectPath);
         Assert.Contains("<Nullable>enable</Nullable>", appHostProject);
-        Assert.Contains("<AspireUseCliBundle>true</AspireUseCliBundle>", appHostProject);
+        Assert.Equal(
+            ["OutputType", "TargetFramework", "ImplicitUsings", "Nullable", "UserSecretsId"],
+            XDocument.Parse(appHostProject).Root!.Elements("PropertyGroup").Elements().Select(property => property.Name.LocalName).ToArray());
 
         File.WriteAllText(
             appHostSourcePath,
@@ -216,6 +220,7 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("unset AspireUseCliBundle", counter);
 
         await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
 
@@ -227,12 +232,17 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
         Assert.True(File.Exists(appHostSourcePath), $"Expected AppHost source file to exist at: {appHostSourcePath}");
 
         var appHostSource = File.ReadAllText(appHostSourcePath);
-        Assert.StartsWith("#:package Aspire.Hosting.AppHost@", appHostSource);
-        Assert.False(string.IsNullOrWhiteSpace(CliE2ETestHelpers.GetAppHostVersion(appHostSource)));
-        Assert.Contains("#:package Aspire.Hosting.Dotnet@", appHostSource);
-        Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", appHostSource);
-        Assert.DoesNotContain("#:sdk Aspire.AppHost.Sdk@", appHostSource);
-        Assert.Contains("#:property AspireUseCliBundle=true", appHostSource);
+        var version = CliE2ETestHelpers.GetAppHostVersion(appHostSource);
+        var compatibilityDirective = CliE2ETestHelpers.GetExpectedCliBundleCompatibilityDirective(version);
+        var expected = $$"""
+            #:package Aspire.Hosting.AppHost@{{version}}
+            #:package Aspire.Hosting.Dotnet@{{version}}{{compatibilityDirective}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            builder.Build().Run();
+            """;
+        Assert.Equal(expected.ReplaceLineEndings("\n"), appHostSource.ReplaceLineEndings("\n").TrimEnd('\n'));
 
         File.WriteAllText(
             appHostSourcePath,

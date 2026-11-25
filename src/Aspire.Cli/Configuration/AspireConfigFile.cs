@@ -108,6 +108,7 @@ internal sealed class AspireConfigFile
     /// Feature flags.
     /// </summary>
     [JsonPropertyName("features")]
+    [JsonConverter(typeof(FlexibleBooleanDictionaryConverter))]
     [Description("Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).")]
     public Dictionary<string, bool>? Features { get; set; }
 
@@ -139,6 +140,13 @@ internal sealed class AspireConfigFile
     [JsonPropertyName(AspireConfigContainerTunnel.SectionName)]
     [Description("Container network tunnel configuration.")]
     public AspireConfigContainerTunnel? ContainerTunnel { get; set; }
+
+    /// <summary>
+    /// Port allocation configuration.
+    /// </summary>
+    [JsonPropertyName(AspireConfigPortAllocation.SectionName)]
+    [Description("Port allocation configuration.")]
+    public AspireConfigPortAllocation? PortAllocation { get; set; }
 
     /// <summary>
     /// Launch profiles (ports, env vars). Replaces apphost.run.json.
@@ -492,6 +500,8 @@ internal sealed class AspireConfigFile
                         : PackageEntry.Nuget(string.IsNullOrEmpty(trimmed) ? null : trimmed);
                 }
             }
+
+            config.PortAllocation = settings.PortAllocation;
         }
 
         config.Profiles = profiles;
@@ -582,6 +592,24 @@ internal sealed class AspireConfigContainerTunnel
     [JsonPropertyName(BaseImagePropertyName)]
     [Description("Base image used by the container network tunnel that routes traffic to host services.")]
     public string? BaseImage { get; set; }
+}
+
+/// <summary>
+/// Port allocation configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigPortAllocation
+{
+    public const string SectionName = "portAllocation";
+    public const string PersistInIsolatedModePropertyName = "persistInIsolatedMode";
+    public const string PersistInIsolatedModeConfigPath = SectionName + ":" + PersistInIsolatedModePropertyName;
+    public const string PersistInIsolatedModeConfigKey = SectionName + "." + PersistInIsolatedModePropertyName;
+
+    /// <summary>
+    /// Whether generated port allocations should be persisted when the AppHost runs in isolated mode.
+    /// </summary>
+    [JsonPropertyName(PersistInIsolatedModePropertyName)]
+    [Description("Persist generated port allocations when the AppHost runs in isolated mode.")]
+    public bool? PersistInIsolatedMode { get; set; }
 }
 
 /// <summary>

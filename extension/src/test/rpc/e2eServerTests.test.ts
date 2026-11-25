@@ -10,6 +10,7 @@ import { getAndActivateExtension } from '../common';
 import { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AcquiredTestRunSession } from '../../dcp/TestRunSessionManager';
 import { AspireExtensionApi } from '../../types/extensionApi';
+import { certificateBase64ToPem } from '../../utils/security';
 
 interface TestOnlyExtensionExports {
 	__testOnlyRpcServerInfo?: RpcServerConnectionInfo;
@@ -81,7 +82,8 @@ suite('End-to-end RPC server auth tests', () => {
 		const client = tls.connect({
 			port,
 			host: 'localhost',
-			rejectUnauthorized: false,
+			// Trust exactly the server's per-session self-signed certificate rather than disabling validation.
+			ca: rpcServerInfo.cert,
 		});
 		await new Promise<void>((resolve) => client.once('secureConnect', resolve));
 
@@ -103,7 +105,8 @@ suite('End-to-end RPC server auth tests', () => {
 				port: Number(port),
 				path: '/info',
 				method: 'GET',
-				rejectUnauthorized: false,
+				// Trust exactly the DCP server's per-session self-signed certificate (base64 DER in the lease env).
+				ca: certificateBase64ToPem(lease.env.DEBUG_SESSION_SERVER_CERTIFICATE),
 				headers: {
 					Authorization: `Bearer ${lease.env.DEBUG_SESSION_TOKEN}`,
 					'Microsoft-Developer-DCP-Instance-ID': `${lease.sessionId}-test`

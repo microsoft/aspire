@@ -39,6 +39,14 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     public int TimeoutMilliseconds { get; set; } = 120_000;
 
     /// <summary>
+    /// Gets or sets environment variables to set for the command.
+    /// </summary>
+    /// <remarks>
+    /// The item identity is the variable name and its <c>Value</c> metadata is the variable value.
+    /// </remarks>
+    public ITaskItem[] EnvironmentVariables { get; set; } = [];
+
+    /// <summary>
     /// Gets the command exit code, or <c>-1</c> when the command did not exit normally.
     /// </summary>
     [Output]
@@ -152,6 +160,11 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             UseShellExecute = false
         };
         ProcessStartInfoHelper.SetCommand(startInfo, FileName, arguments, Path.DirectorySeparatorChar == '\\');
+
+        foreach (var environmentVariable in EnvironmentVariables)
+        {
+            startInfo.Environment[environmentVariable.ItemSpec] = environmentVariable.GetMetadata(ArgumentValueMetadataName);
+        }
 
         return startInfo;
     }

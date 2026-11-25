@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="GraphPageTitle">
         <source>Graph</source>
-        <target state="new">Graph</target>
+        <target state="translated">Graf</target>
         <note />
       </trans-unit>
       <trans-unit id="HealthCheckStatusJustNowFormat">
@@ -24,312 +24,337 @@
       </trans-unit>
       <trans-unit id="HomeActivityBucketTooltip">
         <source>{0} · {1} requests, {2} failed</source>
-        <target state="new">{0} · {1} requests, {2} failed</target>
+        <target state="translated">{0} · počet požadavků: {1}, počet neúspěšných: {2}</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
+      </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceHint">
+        <source>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</source>
+        <target state="new">View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</target>
+        <note />
       </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
         <source>Requests per 30 seconds over the last 15 minutes</source>
-        <target state="new">Requests per 30 seconds over the last 15 minutes</target>
+        <target state="translated">Požadavky za 30 sekund za posledních 15 minut</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeActivityHistoricalCaption">
+        <source>Incoming requests · last 15 min of this run</source>
+        <target state="translated">Příchozí žádosti · posledních 15 minut tohoto spuštění</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeActivityHistoricalTitle">
+        <source>Activity</source>
+        <target state="translated">Aktivita</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityLoading">
         <source>Loading activity…</source>
-        <target state="new">Loading activity…</target>
+        <target state="translated">Načítá se aktivita…</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeActivityNoRecordedRequests">
+        <source>No requests were recorded in this run.</source>
+        <target state="translated">Při tomto spuštění nebyly zaznamenány žádné požadavky.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWaiting">
         <source>Waiting for requests. Interact with your app to see live traffic.</source>
-        <target state="new">Waiting for requests. Interact with your app to see live traffic.</target>
+        <target state="translated">Čeká se na požadavky. Při používání aplikace uvidíte provoz v reálném čase.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindow">
         <source>Incoming requests · last 15 min</source>
-        <target state="new">Incoming requests · last 15 min</target>
+        <target state="translated">Příchozí požadavky · posledních 15 minut</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindowEnd">
         <source>now</source>
-        <target state="new">now</target>
+        <target state="translated">teď</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindowStart">
         <source>15 min ago</source>
-        <target state="new">15 min ago</target>
+        <target state="translated">Před 15 minutami</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeBusiestResources">
         <source>Busiest resources</source>
-        <target state="new">Busiest resources</target>
+        <target state="translated">Nejvytíženější prostředky</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeEndpointTooltip">
         <source>{0}: {1} ({2} requests)</source>
-        <target state="new">{0}: {1} ({2} requests)</target>
+        <target state="translated">{0}: {1} (počet požadavků: {2})</target>
         <note>{0} is the resource name, {1} is the endpoint label, and {2} is the request count.</note>
       </trans-unit>
       <trans-unit id="HomeErrorHotspots">
         <source>Error hotspots</source>
-        <target state="new">Error hotspots</target>
+        <target state="translated">Místa s vysokým výskytem chyb</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeErrorHotspotsHint">
         <source>failed requests + error logs</source>
-        <target state="new">failed requests + error logs</target>
+        <target state="translated">Neúspěšné požadavky + protokoly chyb</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeErrorLogCount">
         <source>{0} error logs</source>
-        <target state="new">{0} error logs</target>
+        <target state="translated">Počet protokolů chyb: {0}</target>
         <note>{0} is the error log count.</note>
       </trans-unit>
       <trans-unit id="HomeErrorRate">
         <source>error rate</source>
-        <target state="new">error rate</target>
+        <target state="translated">chybovost</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeFailedCount">
         <source>{0} failed</source>
-        <target state="new">{0} failed</target>
+        <target state="translated">Neúspěšné: {0}</target>
         <note>{0} is the failed request count.</note>
       </trans-unit>
       <trans-unit id="HomeFailedRequestCount">
         <source>{0} failed requests</source>
-        <target state="new">{0} failed requests</target>
+        <target state="translated">Počet neúspěšných požadavků: {0}</target>
         <note>{0} is the failed request count.</note>
+      </trans-unit>
+      <trans-unit id="HomeFinishedLabel">
+        <source>Finished</source>
+        <target state="translated">Dokončeno</target>
+        <note>Legend label on the overview's health bar for resources that finished or exited without an error</note>
       </trans-unit>
       <trans-unit id="HomeHeadlineAllRunning">
         <source>All {0} resources are running</source>
-        <target state="new">All {0} resources are running</target>
+        <target state="translated">Všechny prostředky (celkem {0}) jsou spuštěné</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineAttention">
         <source>{0} of {1} resources need attention</source>
-        <target state="new">{0} of {1} resources need attention</target>
+        <target state="translated">Prostředky vyžadující pozornost: {0} z(e) {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineHealthy">
         <source>No resources need attention</source>
-        <target state="new">No resources need attention</target>
+        <target state="translated">Žádné prostředky nevyžadují pozornost</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlinePending">
         <source>{0} of {1} resources are pending</source>
-        <target state="new">{0} of {1} resources are pending</target>
+        <target state="translated">Čekající prostředky: {0} z(e) {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSingleAttention">
         <source>1 resource needs attention</source>
-        <target state="new">1 resource needs attention</target>
+        <target state="translated">1 prostředek vyžaduje pozornost</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSinglePending">
         <source>1 resource is pending</source>
-        <target state="new">1 resource is pending</target>
+        <target state="translated">1 prostředek čeká na vyřízení</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSingleRunning">
         <source>1 resource is running</source>
-        <target state="new">1 resource is running</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="HomeInactiveLabel">
-        <source>Inactive</source>
-        <target state="new">Inactive</target>
+        <target state="translated">1 prostředek je spuštěný</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeInsightsLabel">
         <source>Insights</source>
-        <target state="new">Insights</target>
+        <target state="translated">Přehledy</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeLiveActivity">
         <source>Live activity</source>
-        <target state="new">Live activity</target>
+        <target state="translated">Aktivita živě</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeLogsLabel">
         <source>logs</source>
-        <target state="new">logs</target>
+        <target state="translated">protokoly</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeMetricsLabel">
         <source>metrics</source>
-        <target state="new">metrics</target>
+        <target state="translated">metriky</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNeedsAttentionLabel">
         <source>Need attention</source>
-        <target state="new">Need attention</target>
+        <target state="translated">Vyžaduje pozornost</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNoFailedTraces">
         <source>No failed traces</source>
-        <target state="new">No failed traces</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="HomeNoRecentActivityErrors">
-        <source>No errors in the last 15 minutes</source>
-        <target state="new">No errors in the last 15 minutes</target>
+        <target state="translated">Žádná neúspěšná trasování</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNoRecentErrors">
         <source>No errors logged</source>
-        <target state="new">No errors logged</target>
+        <target state="translated">Nebyly zaprotokolovány žádné chyby.</target>
         <note />
       </trans-unit>
-      <trans-unit id="HomeNoRecentRequests">
-        <source>No requests in the last 15 minutes</source>
-        <target state="new">No requests in the last 15 minutes</target>
-        <note />
+      <trans-unit id="HomeNotStartedLabel">
+        <source>Not started</source>
+        <target state="translated">Nezahájeno</target>
+        <note>Legend label on the overview's health bar for resources that haven't been started</note>
       </trans-unit>
       <trans-unit id="HomeP95Label">
         <source>p95</source>
-        <target state="new">p95</target>
+        <target state="translated">p95</target>
         <note>Abbreviation for the 95th percentile.</note>
       </trans-unit>
       <trans-unit id="HomeP95Latency">
         <source>p95 latency</source>
-        <target state="new">p95 latency</target>
+        <target state="translated">Latence p95</target>
         <note />
       </trans-unit>
       <trans-unit id="HomePendingLabel">
         <source>Pending</source>
-        <target state="new">Pending</target>
+        <target state="translated">Čekající</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRecentErrorsTitle">
         <source>Recent errors</source>
-        <target state="new">Recent errors</target>
+        <target state="translated">Nedávné chyby</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRecentFailedTracesTitle">
         <source>Recent failed traces</source>
-        <target state="new">Recent failed traces</target>
+        <target state="translated">Nedávná neúspěšná trasování</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRequestCount">
         <source>{0} requests</source>
-        <target state="new">{0} requests</target>
+        <target state="translated">Počet žádostí: {0}</target>
         <note>{0} is the request count.</note>
       </trans-unit>
       <trans-unit id="HomeRequestCountShort">
         <source>{0} req</source>
-        <target state="new">{0} req</target>
+        <target state="translated">{0} požad.</target>
         <note>{0} is the request count. This label is abbreviated to fit in the endpoint list.</note>
       </trans-unit>
       <trans-unit id="HomeRequestsPerMinute">
         <source>requests / min</source>
-        <target state="new">requests / min</target>
+        <target state="translated">Požadavky za minutu</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeResourceActions">
         <source>Actions for {0}</source>
-        <target state="new">Actions for {0}</target>
+        <target state="translated">Akce pro {0}</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="HomeResourceColumn">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">Prostředek</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeResourceStatesLabel">
         <source>Resource states</source>
-        <target state="new">Resource states</target>
+        <target state="translated">Stavy prostředků</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRunningLabel">
         <source>Running</source>
-        <target state="new">Running</target>
+        <target state="translated">Spuštěné</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HomeSingleRequestCount">
+        <source>{0} request</source>
+        <target state="new">{0} request</target>
+        <note>{0} is the request count, which is one.</note>
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
         <source>Slowest endpoints</source>
-        <target state="new">Slowest endpoints</target>
+        <target state="translated">Nejpomalejší koncové body</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeStartedAt">
         <source>Started {0}</source>
-        <target state="new">Started {0}</target>
+        <target state="translated">Zahájeno: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeSummaryLandmark">
         <source>Summary</source>
-        <target state="new">Summary</target>
+        <target state="translated">Souhrn</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeTelemetryLandmark">
         <source>Telemetry</source>
-        <target state="new">Telemetry</target>
+        <target state="translated">Telemetrie</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeTracesLabel">
         <source>traces</source>
-        <target state="new">traces</target>
+        <target state="translated">trasování</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HomeUnknownLabel">
+        <source>Unknown</source>
+        <target state="translated">Neznámé</target>
+        <note>Legend label on the overview's health bar for resources whose state the dashboard can't tell</note>
       </trans-unit>
       <trans-unit id="HomeUnviewedErrors">
         <source>{0} unviewed error logs</source>
-        <target state="new">{0} unviewed error logs</target>
+        <target state="translated">Počet nezobrazených protokolů chyb: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LayoutLabel">
         <source>Layout</source>
-        <target state="new">Layout</target>
+        <target state="translated">Rozložení</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParameterCount">
         <source>{0} parameter needs a value</source>
-        <target state="new">{0} parameter needs a value</target>
+        <target state="translated">{0} parametr vyžaduje hodnotu.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersCardTitle">
         <source>Missing parameter values</source>
-        <target state="new">Missing parameter values</target>
+        <target state="translated">Hodnoty parametrů nebyly nalezeny</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersCount">
         <source>{0} parameters need values</source>
-        <target state="new">{0} parameters need values</target>
+        <target state="translated">Parametry (celkem {0}) vyžadují hodnoty.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersPanelDescription">
         <source>Enter the missing values together, then apply them without leaving the resource overview.</source>
-        <target state="new">Enter the missing values together, then apply them without leaving the resource overview.</target>
+        <target state="translated">Zadejte chybějící hodnoty najednou a pak je použijte, aniž byste opustili přehled prostředku.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersReview">
         <source>Review missing parameters</source>
-        <target state="new">Review missing parameters</target>
+        <target state="translated">Zkontrolovat chybějící parametry</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersSaveToUserSecrets">
         <source>Save values to user secrets</source>
-        <target state="new">Save values to user secrets</target>
+        <target state="translated">Uložit hodnoty do tajných kódů uživatele</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersSetValues">
         <source>Set parameter values</source>
-        <target state="new">Set parameter values</target>
+        <target state="translated">Nastavit hodnoty parametrů</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueRequired">
         <source>Value required</source>
-        <target state="new">Value required</target>
+        <target state="translated">Hodnota je povinná</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueSet">
         <source>Value set</source>
-        <target state="new">Value set</target>
+        <target state="translated">Sada hodnot</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersAllValuesSet">
         <source>All values are set</source>
-        <target state="new">All values are set</target>
+        <target state="translated">Všechny hodnoty jsou nastavené.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersPageTitle">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">Parametry</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceActionCommandsText">
@@ -417,6 +442,11 @@
         <target state="translated">Zobrazit protokoly konzoly</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceDisplayOrder">
+        <source>Display order</source>
+        <target state="translated">Pořadí zobrazení</target>
+        <note>Name of the property holding the default display order a resource declares in the AppHost.</note>
+      </trans-unit>
       <trans-unit id="ResourceExpandAllChildren">
         <source>Expand child resources</source>
         <target state="translated">Rozbalit podřízené prostředky</target>
@@ -429,342 +459,347 @@
       </trans-unit>
       <trans-unit id="ResourceGraphGameExit">
         <source>Exit</source>
-        <target state="new">Exit</target>
+        <target state="translated">Ukončit</target>
         <note>Text of the button that leaves the Aspire Outage game in the resource graph.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameExitLabel">
         <source>Exit Aspire Outage and return to the graph</source>
-        <target state="new">Exit Aspire Outage and return to the graph</target>
+        <target state="translated">Ukončit Aspire Outage a vrátit se do grafu</target>
         <note>Accessible label of the button that leaves the Aspire Outage game in the resource graph.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameHardCoreStopped">
         <source>Resources still stopped: {0}</source>
-        <target state="new">Resources still stopped: {0}</target>
+        <target state="translated">Počet prostředků, které zůstávají zastavené: {0}</target>
         <note>Shown on the game over screen of Aspire Outage after hard core mode stopped real resources. {0} is the number of resources.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameHardCoreWarning">
         <source>Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</source>
-        <target state="new">Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</target>
+        <target state="translated">Zničením nepřítele se jeho prostředek skutečně zastaví. Zastavené prostředky se znovu spustí po zdolání vlny, ale zůstanou zastavené, pokud prohrajete nebo hru ukončíte.</target>
         <note>Warning shown when the hard core mode of the Aspire Outage game is selected.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameInstructions">
         <source>Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</source>
-        <target state="new">Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</target>
+        <target state="translated">Aspire Outage. K pohybu slouží šipkové klávesy nebo klávesy A a D, ke střelbě mezerník, k pozastavení klávesa P, ke ztlumení zvuku klávesa M, k přepnutí mezi normálním a hardcore režimem na úvodní obrazovce klávesa H a k návratu do grafu klávesa Esc.</target>
         <note>Accessible description of the Aspire Outage game in the resource graph. Aspire Outage is the name of the game. The key names refer to keyboard keys.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameModeHardCore">
         <source>Hard core</source>
-        <target state="new">Hard core</target>
+        <target state="translated">Hardcore</target>
         <note>Game mode of Aspire Outage in which destroying an enemy really stops the matching resource.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameModeNormal">
         <source>Normal</source>
-        <target state="new">Normal</target>
+        <target state="translated">Normální</target>
         <note>Default game mode of Aspire Outage, which has no effect on resources.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGamePlay">
         <source>Play Aspire Outage</source>
-        <target state="new">Play Aspire Outage</target>
+        <target state="translated">Hrát Aspire Outage</target>
         <note>Tooltip and accessible name of the resource graph button that launches the game. Aspire Outage is the name of the game.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameSoundOff">
         <source>Sound: off</source>
-        <target state="new">Sound: off</target>
+        <target state="translated">Zvuk: vypnutý</target>
         <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is off.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameSoundOn">
         <source>Sound: on</source>
-        <target state="new">Sound: on</target>
+        <target state="translated">Zvuk: zapnutý</target>
         <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</note>
       </trans-unit>
       <trans-unit id="ResourceOverviewBrowseMeters">
         <source>Browse meters</source>
-        <target state="new">Browse meters</target>
+        <target state="translated">Procházet měřiče</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewConsoleTitle">
         <source>Console</source>
-        <target state="new">Console</target>
+        <target state="translated">Konzola</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewCountOfTotal">
         <source>{0} of {1}</source>
-        <target state="new">{0} of {1}</target>
+        <target state="translated">{0} z(e) {1}</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewEndpointAlsoAt">
+        <source>{0}, also at {1}</source>
+        <target state="translated">{0}, také na adrese {1}</target>
+        <note>Tooltip of an endpoint's address on the resource overview. {0} is the address, {1} is the same endpoint's other address, such as its localhost address</note>
       </trans-unit>
       <trans-unit id="ResourceOverviewEndpointsTitle">
         <source>Endpoints</source>
-        <target state="new">Endpoints</target>
+        <target state="translated">Koncové body</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewErrors">
         <source>Errors</source>
-        <target state="new">Errors</target>
+        <target state="translated">Chyby</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewExitCode">
         <source>Exit code</source>
-        <target state="new">Exit code</target>
+        <target state="translated">Ukončovací kód</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewFailed">
         <source>Failed</source>
-        <target state="new">Failed</target>
+        <target state="translated">Neúspěšné</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewFilterEnvironmentVariables">
         <source>Filter environment variables</source>
-        <target state="new">Filter environment variables</target>
+        <target state="translated">Filtrovat proměnné prostředí</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewHideEmptyPanels">
         <source>Hide empty panels</source>
-        <target state="new">Hide empty panels</target>
+        <target state="translated">Skrýt prázdné panely</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewInstruments">
         <source>Instruments</source>
-        <target state="new">Instruments</target>
+        <target state="translated">Nástroje</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewInternalEndpoint">
         <source>Internal</source>
-        <target state="new">Internal</target>
+        <target state="translated">Interní</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewLogsTitle">
         <source>Structured logs</source>
-        <target state="new">Structured logs</target>
+        <target state="translated">Strukturované protokoly</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewMeters">
         <source>Meters</source>
-        <target state="new">Meters</target>
+        <target state="translated">Metry</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewMetricsTitle">
         <source>Metrics</source>
-        <target state="new">Metrics</target>
+        <target state="translated">Metriky</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoAttentionLogs">
         <source>No warnings or errors</source>
-        <target state="new">No warnings or errors</target>
+        <target state="translated">Žádná upozornění ani chyby</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoConsoleLogs">
         <source>No console output</source>
-        <target state="new">No console output</target>
+        <target state="translated">Žádný výstup konzoly</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoEndpoints">
         <source>No endpoints</source>
-        <target state="new">No endpoints</target>
+        <target state="translated">Žádné koncové body</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoEnvironmentVariables">
         <source>No environment variables</source>
-        <target state="new">No environment variables</target>
+        <target state="translated">Žádné proměnné prostředí</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoHealthChecks">
         <source>No health checks</source>
-        <target state="new">No health checks</target>
+        <target state="translated">Žádné kontroly stavu</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoMatchingEnvironmentVariables">
         <source>No environment variables match the filter</source>
-        <target state="new">No environment variables match the filter</target>
+        <target state="translated">Filtru neodpovídají žádné proměnné prostředí.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoMetrics">
         <source>No metrics</source>
-        <target state="new">No metrics</target>
+        <target state="translated">Žádné metriky</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoPinnedMetrics">
         <source>Pin the metrics you want to keep an eye on and they'll show up here.</source>
-        <target state="new">Pin the metrics you want to keep an eye on and they'll show up here.</target>
+        <target state="translated">Připněte metriky, které chcete sledovat, a zobrazí se tady.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoProperties">
         <source>No properties</source>
-        <target state="new">No properties</target>
+        <target state="translated">Žádné vlastnosti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoRelationships">
         <source>No relationships</source>
-        <target state="new">No relationships</target>
+        <target state="translated">Žádné vztahy</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoTelemetry">
         <source>This resource hasn't sent telemetry</source>
-        <target state="new">This resource hasn't sent telemetry</target>
+        <target state="translated">Tento prostředek neodeslal telemetrii.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoTraces">
         <source>No traces</source>
-        <target state="new">No traces</target>
+        <target state="translated">Žádná trasování</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoVolumes">
         <source>No volumes</source>
-        <target state="new">No volumes</target>
+        <target state="translated">Žádné svazky</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNotFound">
         <source>Resource '{0}' was not found.</source>
-        <target state="new">Resource '{0}' was not found.</target>
+        <target state="translated">Prostředek „{0}“ se nenašel.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Open console</source>
-        <target state="new">Open console</target>
+        <target state="translated">Otevřít konzoli</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">
         <source>Resource overview</source>
-        <target state="new">Resource overview</target>
+        <target state="translated">Přehled prostředku</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPanelsLabel">
         <source>Panels</source>
-        <target state="new">Panels</target>
+        <target state="translated">Panely</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPropertiesTitle">
         <source>Properties</source>
-        <target state="new">Properties</target>
+        <target state="translated">Vlastnosti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewRelationshipGraph">
         <source>Relationship graph</source>
-        <target state="new">Relationship graph</target>
+        <target state="translated">Graf relací</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewRelationshipsTitle">
         <source>Relationships</source>
-        <target state="new">Relationships</target>
+        <target state="translated">Vztahy</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAllEnvironmentVariables">
         <source>Show all environment variables</source>
-        <target state="new">Show all environment variables</target>
+        <target state="translated">Zobrazit všechny proměnné prostředí</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAllPanels">
         <source>Show all panels</source>
-        <target state="new">Show all panels</target>
+        <target state="translated">Zobrazit všechny panely</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAppModelEnvironmentVariables">
         <source>Show only environment variables from the app model</source>
-        <target state="new">Show only environment variables from the app model</target>
+        <target state="translated">Zobrazit jen proměnné prostředí z modelu aplikace</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowLess">
         <source>Show less</source>
-        <target state="new">Show less</target>
+        <target state="translated">Zobrazit méně</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowMore">
         <source>{0} more</source>
-        <target state="new">{0} more</target>
+        <target state="translated">{0} další(ch)</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewStatusTitle">
         <source>Status</source>
-        <target state="new">Status</target>
+        <target state="translated">Stav</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewStopTime">
         <source>Stop time</source>
-        <target state="new">Stop time</target>
+        <target state="translated">Čas zastavení</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewTotal">
         <source>Total</source>
-        <target state="new">Total</target>
+        <target state="translated">Celkem</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewTracesTitle">
         <source>Traces</source>
-        <target state="new">Traces</target>
+        <target state="translated">Trasování</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewViewAll">
         <source>View all</source>
-        <target state="new">View all</target>
+        <target state="translated">Zobrazit vše</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewWarnings">
         <source>Warnings</source>
-        <target state="new">Warnings</target>
+        <target state="translated">Upozornění</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentLifetime">
         <source>Persistent</source>
-        <target state="new">Persistent</target>
+        <target state="translated">Trvalé</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentLifetimeDescription">
         <source>Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</source>
-        <target state="new">Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</target>
+        <target state="translated">Nezastaví se automaticky, když se zastaví AppHost. Tato životnost nezaručuje trvalé uchování dat.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentType">
         <source>{0} (persistent)</source>
-        <target state="new">{0} (persistent)</target>
+        <target state="translated">{0} (s trvalou životností)</target>
         <note>{0} is the resource type, for example Container. Persistence describes the container lifetime, not durable data.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsAdd">
         <source>Add tag</source>
-        <target state="new">Add tag</target>
+        <target state="translated">Přidat značku</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsAppHostDefined">
         <source>Defined by the AppHost. This tag cannot be removed.</source>
-        <target state="new">Defined by the AppHost. This tag cannot be removed.</target>
+        <target state="translated">Definováno AppHostem. Tuto značku nelze odebrat.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsCreate">
         <source>Create tag "{0}"</source>
-        <target state="new">Create tag "{0}"</target>
+        <target state="translated">Vytvořit značku {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsInputLabel">
         <source>Add a tag to {0}</source>
-        <target state="new">Add a tag to {0}</target>
+        <target state="translated">Přidat značku k {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsInputPlaceholder">
         <source>Tag name</source>
-        <target state="new">Tag name</target>
+        <target state="translated">Název značky</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsLabel">
         <source>Tags</source>
-        <target state="new">Tags</target>
+        <target state="translated">Značky</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsLimitReached">
+        <source>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</source>
+        <target state="new">Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</target>
+        <note>{0} is the maximum number of user-added resource tag assignments.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsRemove">
         <source>Remove tag {0}</source>
-        <target state="new">Remove tag {0}</target>
+        <target state="translated">Odebrat značku {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsSuggestions">
         <source>Tags</source>
-        <target state="new">Tags</target>
+        <target state="translated">Značky</target>
         <note />
-      </trans-unit>
-      <trans-unit id="ResourceTraitDashboardPosition">
-        <source>Dashboard position</source>
-        <target state="new">Dashboard position</target>
-        <note>Name of the property holding the default position a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourceTraitDashboardTags">
         <source>Dashboard tags</source>
-        <target state="new">Dashboard tags</target>
+        <target state="translated">Značky řídicího panelu</target>
         <note>Name of the property listing the tags a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourcesActionsColumnHeader">
@@ -864,7 +899,7 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsResourceTypeDisplayNameProperty">
         <source>Type display name</source>
-        <target state="new">Type display name</target>
+        <target state="translated">Zobrazovaný název typu</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">
@@ -906,6 +941,16 @@
         <source>Resource actions for {0}</source>
         <target state="translated">Akce pro prostředek {0}</target>
         <note>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</note>
+      </trans-unit>
+      <trans-unit id="ResourcesGraphTagActionsButton">
+        <source>Tag actions for {0}</source>
+        <target state="translated">Akce pro značku {0}</target>
+        <note>Accessible label and tooltip for the cog on a graph tag label. {0} is the tag name.</note>
+      </trans-unit>
+      <trans-unit id="ResourcesGraphTagNoCommands">
+        <source>No commands for this group</source>
+        <target state="translated">Pro tuto skupinu nejsou k dispozici žádné příkazy.</target>
+        <note />
       </trans-unit>
       <trans-unit id="ResourcesGraphZoomInButton">
         <source>Zoom in</source>

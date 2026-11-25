@@ -9,17 +9,17 @@
       </trans-unit>
       <trans-unit id="ConfigurationArrayIndexInvalid">
         <source>Configuration key '{0}' requires a non-negative integer array index.</source>
-        <target state="new">Configuration key '{0}' requires a non-negative integer array index.</target>
+        <target state="translated">Konfigurační klíč {0} vyžaduje nezáporný celočíselný index pole.</target>
         <note>{0} is the configuration key.</note>
       </trans-unit>
       <trans-unit id="ConfigurationArrayIndexOutOfRange">
         <source>Array index {0} in configuration key '{1}' is out of range. Edit an existing element or append at index {2}.</source>
-        <target state="new">Array index {0} in configuration key '{1}' is out of range. Edit an existing element or append at index {2}.</target>
+        <target state="translated">Index pole {0} v konfiguračním klíči '{1}' je mimo rozsah. Upravte existující element nebo ho připojte na {2} indexu.</target>
         <note>{0} is the requested index, {1} is the configuration key, and {2} is the array length.</note>
       </trans-unit>
       <trans-unit id="ConfigurationArrayRequired">
         <source>Configuration key '{0}' requires an array, but the existing value is not an array.</source>
-        <target state="new">Configuration key '{0}' requires an array, but the existing value is not an array.</target>
+        <target state="translated">Konfigurační klíč {0} vyžaduje pole, ale existující hodnota není pole.</target>
         <note>{0} is the configuration key.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeyDeletedGlobally">
@@ -34,7 +34,7 @@
       </trans-unit>
       <trans-unit id="ConfigurationKeyInvalid">
         <source>Configuration key '{0}' is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices.</source>
-        <target state="new">Configuration key '{0}' is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices.</target>
+        <target state="translated">Konfigurační klíč {0} je neplatný. Pro vnořené vlastnosti a závorky obsahující nezáporné celé číslo pro indexy polí použijte tečky.</target>
         <note>{0} is the configuration key.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeySetGlobally">
@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
         <source>The configuration key to delete. Use dots for nested properties and [index] for array elements.</source>
-        <target state="needs-review-translation">Konfigurační klíč, který se má odstranit</target>
+        <target state="translated">Konfigurační klíč, který se má odstranit. Použijte tečky pro vnořené vlastnosti a [index] pro elementy pole.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -89,7 +89,7 @@
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
         <source>The configuration key to retrieve. Use dots for nested properties and [index] for array elements.</source>
-        <target state="needs-review-translation">Konfigurační klíč, který se má načíst</target>
+        <target state="translated">Konfigurační klíč, který se má načíst. Použijte tečky pro vnořené vlastnosti a [index] pro elementy pole.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -189,7 +189,7 @@
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
         <source>The configuration key to set. Use dots for nested properties and [index] to create or edit array elements.</source>
-        <target state="needs-review-translation">Konfigurační klíč, který se má nastavit</target>
+        <target state="translated">Konfigurační klíč, který se má nastavit. Pro vytvoření nebo úpravu prvků pole použijte tečky pro vnořené vlastnosti a zápis [index].</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">

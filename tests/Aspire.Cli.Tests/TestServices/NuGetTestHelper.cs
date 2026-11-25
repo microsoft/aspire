@@ -40,10 +40,10 @@ internal static class NuGetTestHelper
 
     public static BundleNuGetService CreateService(IMachineWideSettings? machineWideSettings = null)
         => new(NullLogger<BundleNuGetService>.Instance, CreateClient(machineWideSettings),
-            new TestConfigurationService());
+            new TestConfigurationService(), new Aspire.Shared.TemporaryStorage());
 
     public static NuGetClient CreateClient(IMachineWideSettings? machineWideSettings = null)
-        => new(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
+        => new(new TestFeatures(), new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance)
         {
             AmbientSettingsLoader = LoadSettings,
             MachineWideSettingsFactory = () => machineWideSettings ?? s_emptyMachineWideSettings
@@ -94,7 +94,7 @@ internal static class NuGetTestHelper
         var configuration = NuGetConfigurationBuilder.Build(
             settings, "standalone", mappings, restrictToSelectedSources: false,
             packageScopedAppendSource: null, hasAuthoritativeAspirePolicy: true);
-        return TemporaryNuGetConfigFile.CreateAsync(path => CreateService().WriteNuGetConfig(
+        return TemporaryNuGetConfigFile.CreateAsync(new Aspire.Shared.TemporaryStorage(), path => CreateService().WriteNuGetConfig(
             configuration, path, configureGlobalPackagesFolder ? globalPackagesFolderValue ?? ".nugetpackages" : null,
             TestContext.Current.CancellationToken));
     }

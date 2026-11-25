@@ -43,7 +43,7 @@
         var isSelected = string.Equals(run.RunId, Content.SelectedRunId, StringComparison.Ordinal);
         var tooltip = !run.IsCompatible
             ? Loc[nameof(Layout.DashboardRunSelectIncompatibleTooltip)].Value
-            : run.IsCurrent ? null : FormatRunDate(run.StartedAtUtc);
+            : run.IsCurrent ? null : FormatRunTooltip(run.StartedAtUtc);
         var pinLabel = Loc[run.IsPinned ? nameof(Layout.DashboardRunSelectUnpin) : nameof(Layout.DashboardRunSelectPin)];
         var description = DashboardRunSelect.FormatRunDuration(run);
 

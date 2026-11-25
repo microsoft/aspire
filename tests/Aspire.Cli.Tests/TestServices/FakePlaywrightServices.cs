@@ -46,8 +46,10 @@ internal sealed class FakePlaywrightCliRunner : IPlaywrightCliRunner
 {
     internal static string SkillBaseDirectory { get; } = Path.Combine(".claude", "skills");
 
+    public SemVersion? InstalledVersion { get; set; }
+
     public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
-        => Task.FromResult<SemVersion?>(null);
+        => Task.FromResult(InstalledVersion);
 
     public Task<bool> InstallSkillsAsync(string workingDirectory, CancellationToken cancellationToken)
     {

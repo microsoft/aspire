@@ -374,6 +374,7 @@ internal sealed class DescribeCommand : BaseCommand
 
         return CliExitCodes.Success;
     }
+
     private void DisplayResourcesTable(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl)
     {
         if (snapshots.Count == 0)
@@ -387,7 +388,9 @@ internal sealed class DescribeCommand : BaseCommand
             .OrderBy(x => x.DisplayName)
             .ToList();
 
-        var table = new Table();
+        var rowLinkDashboardUrl = TelemetryCommandHelpers.GetRowLinkDashboardUrl(HostEnvironment, dashboardBaseUrl);
+
+        var table = HostEnvironment.CreateTable();
         table.AddBoldColumn(DescribeCommandStrings.HeaderName);
         table.AddBoldColumn(DescribeCommandStrings.HeaderType);
         table.AddBoldColumn(DescribeCommandStrings.HeaderState);
@@ -402,13 +405,13 @@ internal sealed class DescribeCommand : BaseCommand
                 : "-";
 
             var type = snapshot.ResourceTypeDisplayName?.EscapeMarkup() ?? "-";
-            var stateText = ColorState(snapshot.State);
+            var stateText = GetSnapshotStateMarkup(snapshot);
             var healthText = ColorHealth(snapshot.HealthStatus?.EscapeMarkup() ?? "-");
 
             string nameMarkup;
-            if (!string.IsNullOrEmpty(dashboardBaseUrl))
+            if (!string.IsNullOrEmpty(rowLinkDashboardUrl))
             {
-                var resourceUrl = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: snapshot.Name));
+                var resourceUrl = DashboardUrls.CombineUrl(rowLinkDashboardUrl, DashboardUrls.ResourcesUrl(resource: snapshot.Name));
                 nameMarkup = MarkupHelpers.SafeLink(InteractionService, resourceUrl, displayName);
             }
             else
@@ -446,6 +449,17 @@ internal sealed class DescribeCommand : BaseCommand
 
     private string ColorResourceName(string name, string displayMarkup) =>
         $"[{_resourceColorMap.GetColor(name)}]{displayMarkup}[/]";
+
+    internal static string GetSnapshotStateMarkup(ResourceSnapshot snapshot)
+    {
+        if (snapshot.ExitCode is int exitCode && snapshot.State?.ToUpperInvariant() is "FINISHED" or "EXITED")
+        {
+            var text = string.Format(CultureInfo.CurrentCulture, DescribeCommandStrings.StateWithExitCode, snapshot.State, exitCode).EscapeMarkup();
+            return exitCode is 0 ? $"[grey]{text}[/]" : $"[red]{text}[/]";
+        }
+
+        return ColorState(snapshot.State);
+    }
 
     private static string ColorState(string? state)
     {

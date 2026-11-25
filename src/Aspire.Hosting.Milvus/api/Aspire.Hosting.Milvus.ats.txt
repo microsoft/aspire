@@ -10,6 +10,7 @@ Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource [ExposeProperti
 Aspire.Hosting.ApplicationModel/MilvusDatabaseResource.connectionStringExpression(context: Aspire.Hosting.Milvus/Aspire.Hosting.ApplicationModel.MilvusDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/MilvusDatabaseResource.databaseName(context: Aspire.Hosting.Milvus/Aspire.Hosting.ApplicationModel.MilvusDatabaseResource) -> string
 Aspire.Hosting.ApplicationModel/MilvusDatabaseResource.parent(context: Aspire.Hosting.Milvus/Aspire.Hosting.ApplicationModel.MilvusDatabaseResource) -> Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource
+Aspire.Hosting.ApplicationModel/MilvusDatabaseResource.resourceTypeDisplayName(context: Aspire.Hosting.Milvus/Aspire.Hosting.ApplicationModel.MilvusDatabaseResource) -> string
 Aspire.Hosting.Milvus/addDatabase(name: string, databaseName?: string) -> Aspire.Hosting.Milvus/Aspire.Hosting.ApplicationModel.MilvusDatabaseResource
 Aspire.Hosting.Milvus/addMilvus(name: string, apiKey?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, grpcPort?: number) -> Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource
 Aspire.Hosting.Milvus/MilvusServerResource.apiKeyParameter(context: Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
@@ -18,6 +19,7 @@ Aspire.Hosting.Milvus/MilvusServerResource.databases(context: Aspire.Hosting.Mil
 Aspire.Hosting.Milvus/MilvusServerResource.host(context: Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.Milvus/MilvusServerResource.port(context: Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.Milvus/MilvusServerResource.primaryEndpoint(context: Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting.Milvus/MilvusServerResource.resourceTypeDisplayName(context: Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource) -> string
 Aspire.Hosting.Milvus/MilvusServerResource.token(context: Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Milvus/MilvusServerResource.uriExpression(context: Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Milvus/withAttu(configureContainer?: callback, containerName?: string) -> Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.MilvusServerResource

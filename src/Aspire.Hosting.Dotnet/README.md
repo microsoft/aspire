@@ -54,14 +54,25 @@ await builder.build().run();
 
 Before resources start, Aspire collects projects with compatible SDK and environment contexts into
 generated MSBuild traversal projects under the AppHost's intermediate output. Build groups run serially, while projects within
-each traversal group share one NuGet graph restore and can build in parallel. File-based apps use serialized direct builds so their
-`#:project` references cannot build shared outputs concurrently. Launch-profile and `WithEnvironment`
-values are runtime configuration and do not prevent projects from sharing a traversal build. Each
-traditional project is then launched with the `RunCommand` and `RunArguments` resolved from the
-already-built project, so runtime environment variables cannot change which output is selected.
-File-based apps launch with `dotnet run --file <path> --no-build` after their direct build; uncoordinated
-file-based launches use `--no-cache` instead. Start and Restart reuse the coordinated output, matching
-project-based resources. Use the Rebuild command after source changes to rebuild and restart the resource.
+each traversal group share one NuGet graph restore and can build in parallel. Outside legacy project-only IDE
+sessions, file-based apps use serialized direct builds so their `#:project` references cannot build shared
+outputs concurrently. Launch-profile and `WithEnvironment` values are runtime configuration and do not
+prevent projects from sharing a traversal build. Each traditional project is then launched with the
+`RunCommand` and `RunArguments` resolved from the already-built project, so runtime environment variables
+cannot change which output is selected. File-based apps launch with `dotnet run --file <path> --no-build`
+after their direct build; uncoordinated file-based launches use `--no-cache` instead. Start and Restart reuse
+the coordinated output, matching project-based resources. Use the Rebuild command after source changes to
+rebuild and restart the resource.
+
+Legacy project-only IDE sessions keep the existing file-app launch path. File apps wait for the final
+coordinated project prebuild, preventing overlap with that prebuild, but separate file apps are not mutually
+serialized and can still race when sharing `#:project` outputs. In capability-less Visual Studio sessions,
+`WaitForStart` only waits for the `dotnet run` process to start, not for its implicit build to finish.
+To avoid shared-output races, run outside the legacy IDE session (for example, with `aspire run`) or use an
+external-build-capable IDE so Aspire coordinates file-app builds. Within a legacy session, configure an
+application-readiness health check on the preceding app and use `WaitFor` on the next app; the check must
+only pass after the preceding app has finished building. Without such a check, `WaitFor` does not provide
+a build-completion barrier either.
 
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration. V2 VB services prefer
@@ -169,6 +180,10 @@ builds instead of a shared traversal build. Build environment variables are not 
 configure the same variable with `WithEnvironment` as well when it is needed at runtime. The same build-only
 values are applied when the project is published through the .NET SDK container targets.
 
+IDE debugging with `WithBuildEnvironment` requires a launcher that advertises
+`project-with-external-build.v1` and consumes the coordinated build context. Aspire rejects legacy
+project-only IDE sessions because those launchers cannot reliably locate customized build output.
+
 Container publishing rejects build environment properties that can redirect the artifact tracked by Aspire:
 `ContainerRepository`, `ContainerImageTag`, `ContainerImageTags`, `ContainerRegistry`,
 `ContainerImageName`, `PublishImageTag`, `AutoGenerateImageTag`, `RegistryUrl`,
@@ -177,10 +192,10 @@ Container publishing rejects build environment properties that can redirect the 
 supported image identity, destination, format, and target platform settings with
 `WithContainerBuildOptions` instead.
 
-Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in IDE launch metadata and
-process environments. Protected temporary MSBuild response files preserve global-property semantics
-without exposing values in process command lines, but values can appear in build diagnostics and are
-not a general-purpose secret transport.
+Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in build process environments
+and, for external-build-capable IDEs, launch metadata. Protected temporary MSBuild response files
+preserve global-property semantics without exposing values in process command lines, but values can
+appear in build diagnostics and are not a general-purpose secret transport.
 
 **C#**
 

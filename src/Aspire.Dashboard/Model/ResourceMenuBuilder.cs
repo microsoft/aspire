@@ -27,6 +27,7 @@ public sealed class ResourceMenuBuilder
     private static readonly Icon s_linkMultipleIcon = new Icons.Regular.Size16.LinkMultiple();
     private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
     private static readonly Icon s_exportEnvIcon = new Icons.Regular.Size16.DocumentText();
+    private static readonly Icon s_tagIcon = new Icons.Regular.Size16.Tag();
 
     private readonly NavigationManager _navigationManager;
     private readonly DashboardDataSource _dataSource;
@@ -287,6 +288,82 @@ public sealed class ResourceMenuBuilder
         }
     }
 
+    internal List<MenuButtonItem> CreateTagGroupMenuItems(
+        string tagName,
+        string headerId,
+        Func<IReadOnlyList<ResourceViewModel>> getMembers,
+        Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting,
+        Func<ResourceViewModel, CommandViewModel, Task> executeCommand) =>
+        CreateGroupMenuItems(tagName, headerId, s_tagIcon, getMembers, isCommandExecuting, executeCommand, showEmptyGroup: false);
+
+    internal List<MenuButtonItem> CreateGroupMenuItems(
+        string groupName,
+        string headerId,
+        Icon? headerIcon,
+        Func<IReadOnlyList<ResourceViewModel>> getMembers,
+        Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting,
+        Func<ResourceViewModel, CommandViewModel, Task> executeCommand,
+        bool showEmptyGroup)
+    {
+        var members = getMembers();
+        if (members.Count == 0 && !showEmptyGroup)
+        {
+            return [];
+        }
+
+        var memberNames = members.Select(r => r.Name).ToHashSet(StringComparers.ResourceName);
+        var items = new List<MenuButtonItem>
+        {
+            new() { Id = headerId, IsHeader = true, Text = groupName, Icon = headerIcon }
+        };
+        var commands = members
+            // Parameter actions operate on individual rows. Count parameters in the group total, but don't offer their commands for bulk execution.
+            .Where(resource => !resource.IsParameter)
+            .SelectMany(resource => resource.Commands
+                .Where(command => command.State != CommandViewModelState.Hidden)
+                .Select(command => (Resource: resource, Command: command)))
+            .GroupBy(pair => pair.Command.Name, StringComparers.CommandName)
+            .Select(group => (
+                Command: group.First().Command,
+                Highlighted: group.Any(pair => pair.Command.IsHighlighted),
+                EligibleCount: group.Count(pair => CanExecute(pair.Resource, pair.Command))))
+            .OrderByDescending(entry => entry.Highlighted)
+            .ThenBy(entry => entry.Command.GetDisplayName(), StringComparer.CurrentCultureIgnoreCase);
+
+        foreach (var (command, _, eligibleCount) in commands)
+        {
+            var item = CreateCommandMenuItem(command, () => ExecuteForGroupAsync(command.Name), isDisabled: eligibleCount == 0);
+            if (eligibleCount > 0 && eligibleCount < members.Count)
+            {
+                item.Description = _loc[nameof(Resources.Resources.ResourceOverviewCountOfTotal), eligibleCount, members.Count];
+            }
+            items.Add(item);
+        }
+
+        if (items.Count == 1)
+        {
+            items.Add(new MenuButtonItem { Text = _loc[nameof(Resources.Resources.ResourcesGraphTagNoCommands)], IsDisabled = true });
+        }
+
+        return items;
+
+        bool CanExecute(ResourceViewModel resource, CommandViewModel command) =>
+            !resource.IsParameter && !_dashboardClient.IsReadOnly && command.State == CommandViewModelState.Enabled && !isCommandExecuting(resource, command);
+
+        Task ExecuteForGroupAsync(string commandName)
+        {
+            // Re-read membership and commands at activation. Never extend the action to nodes added since the menu opened.
+            return Task.WhenAll(getMembers().Where(resource => memberNames.Contains(resource.Name)).Select(async resource =>
+            {
+                var command = resource.Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparisons.CommandName));
+                if (command is not null && CanExecute(resource, command))
+                {
+                    await executeCommand(resource, command).ConfigureAwait(false);
+                }
+            }));
+        }
+    }
+
     private void AddCommandMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, EventCallback<CommandViewModel> commandSelected, Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting)
     {
         var menuCommands = resource.Commands
@@ -336,16 +413,18 @@ public sealed class ResourceMenuBuilder
             }
         }
 
-        MenuButtonItem CreateMenuItem(CommandViewModel command)
-        {
-            return new MenuButtonItem
-            {
-                Text = command.GetDisplayName(),
-                Tooltip = command.GetDisplayDescription(),
-                Icon = _iconResolver.ResolveCommandIcon(command.IconName, command.IconVariant),
-                OnClick = () => commandSelected.InvokeAsync(command),
-                IsDisabled = _dashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
-            };
-        }
+        MenuButtonItem CreateMenuItem(CommandViewModel command) => CreateCommandMenuItem(
+            command,
+            () => commandSelected.InvokeAsync(command),
+            _dashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command));
     }
+
+    private MenuButtonItem CreateCommandMenuItem(CommandViewModel command, Func<Task> onClick, bool isDisabled) => new()
+    {
+        Text = command.GetDisplayName(),
+        Tooltip = command.GetDisplayDescription(),
+        Icon = _iconResolver.ResolveCommandIcon(command.IconName, command.IconVariant),
+        OnClick = onClick,
+        IsDisabled = isDisabled
+    };
 }

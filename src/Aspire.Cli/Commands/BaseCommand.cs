@@ -13,6 +13,7 @@ using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
@@ -66,6 +67,7 @@ internal abstract class BaseCommand : Command
 
     protected AspireCliTelemetry Telemetry { get; }
     protected ConfigSourceService ConfigSources { get; }
+    protected ICliHostEnvironment HostEnvironment { get; }
 
     // Commands that start an AppHost or dashboard provide their own stopping message.
     // Other commands report a neutral cancellation.
@@ -82,6 +84,7 @@ internal abstract class BaseCommand : Command
         InteractionService = services.InteractionService;
         Telemetry = services.Telemetry;
         ConfigSources = services.ConfigSources;
+        HostEnvironment = services.HostEnvironment;
         SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
             _executionContext.ResetSourceTrustWarning();
@@ -193,8 +196,15 @@ internal abstract class BaseCommand : Command
         }
         catch (ConfigSourceException ex)
         {
-            ConfigSourceService.DisplayGitTimeoutOutput(InteractionService, ex.GitOutput);
-            result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
+            ConfigSourceService.DisplayGitOutput(InteractionService, ex.GitOutput);
+            var errorMessage = ex.Message;
+            if (ex.ReadmeUrl is { } readmeUrl)
+            {
+                errorMessage = ex.Message.EscapeMarkup() + Environment.NewLine
+                    + string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.AccessHelp,
+                        MarkupHelpers.SafeLink(InteractionService, readmeUrl));
+            }
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage, errorMessageHasMarkup: ex.ReadmeUrl is not null);
         }
         catch (NonInteractiveException)
         {
@@ -226,11 +236,12 @@ internal abstract class BaseCommand : Command
                 result.ErrorMessage,
                 _executionContext.LogFilePath,
                 ExecutionContext.AppHostCliLogFilePath,
+                result.ErrorMessageHasMarkup,
                 CancellationToken.None).ConfigureAwait(false);
 
         if (!displayedActionableFailure && result.ErrorMessage is not null)
         {
-            InteractionService.DisplayError(result.ErrorMessage);
+            InteractionService.DisplayError(result.ErrorMessage, allowMarkup: result.ErrorMessageHasMarkup);
         }
 
         if (result.ShouldDisplayHelp)

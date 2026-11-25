@@ -92,6 +92,11 @@
         <target state="translated">Запрос поиска интеграции.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="translated">Настроен один или несколько источников интеграции. Источник интеграции позволяет организации делиться интеграциями и настраивать ваш процесс разработки.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Ни одного пакета интеграции не найдено. Проверьте подключение к Интернету и конфигурацию источника NuGet.</target>
@@ -124,7 +129,7 @@
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresIntegrationName">
         <source>An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</source>
-        <target state="new">An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</target>
+        <target state="translated">В неинтерактивном режиме требуется указать имя интеграции. Укажите точный идентификатор пакета или понятное имя, например: "aspire add redis".</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">

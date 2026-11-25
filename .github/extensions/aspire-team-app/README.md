@@ -88,8 +88,9 @@ card shows are driven by its lane and its signal pills:
 ## PR queue order
 
 **PR queue** is the first content section in Review mode, above the personal
-**For you** picks. Eligible PRs with the **`review-urgent`** GitHub label come
-before regular PRs. Label matching is case-insensitive and exact (not a substring)
+**For you** picks. Eligible PRs with the **`review-urgent`**, **`urgent-review`**, or **`fixes-ci`**
+GitHub label come before regular PRs; any of these labels, or several, gives the
+same priority. Label matching is case-insensitive and exact (not a substring)
 across watched repositories and GitHub hosts; the label does not bypass any
 eligibility rule. Urgent cards have an **Urgent** text badge and an emphasized
 border; urgent entries in the collapsed position lookup have the same badge.

@@ -41,6 +41,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             Assert.NotNull(viewer);
             var connectionCount = connection.ConnectionCount;
             var overview = page.Locator(".resource-overview");
+            var statusCard = overview.Locator(".overview-status-card");
             var documentation = page.Locator(".overview-terminal-card a.overview-card-action");
 
             foreach (var focused in new[] { true, false })
@@ -48,6 +49,15 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 await Assertions.Expect(overview).ToHaveClassAsync(focused
                     ? new Regex("terminal-focused")
                     : new Regex("^(?!.*terminal-focused)"));
+                if (focused)
+                {
+                    await Assertions.Expect(statusCard).ToHaveCountAsync(1);
+                    await Assertions.Expect(statusCard).ToBeHiddenAsync();
+                }
+                else
+                {
+                    await Assertions.Expect(statusCard).ToBeVisibleAsync();
+                }
                 await Assertions.Expect(documentation).ToHaveAttributeAsync("href", "https://aka.ms/aspire/dashboard-terminal");
                 await Assertions.Expect(documentation).ToHaveAttributeAsync("aria-label", "More information");
                 foreach (var keyboard in new[] { false, true })

@@ -7,7 +7,7 @@ param tags object = { }
 
 param env_acr_outputs_name string
 
-resource env 'Microsoft.App/managedEnvironments@2025-07-01' existing = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' existing = {
   name: 'existing-env'
   scope: resourceGroup('existing-subscription', 'existing-rg')
 }

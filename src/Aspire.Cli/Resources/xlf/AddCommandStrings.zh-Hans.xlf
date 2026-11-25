@@ -92,6 +92,11 @@
         <target state="translated">集成搜索查询。</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="translated">配置了一个或多个集成源。集成源允许组织共享集成以自定义开发体验。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">找不到集成包。请检查 Internet 连接或 NuGet 源配置。</target>
@@ -124,7 +129,7 @@
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresIntegrationName">
         <source>An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</source>
-        <target state="new">An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</target>
+        <target state="translated">非交互模式下需要集成名称。指定确切的包 ID 或友好名称，例如 “aspire add redis”。</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">

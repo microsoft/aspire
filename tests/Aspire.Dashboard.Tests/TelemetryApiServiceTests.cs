@@ -65,6 +65,38 @@ public class TelemetryApiServiceTests
         Assert.Contains("résumé", receivedItems[0]);
     }
 
+    [Fact]
+    public async Task FollowLogsAsync_WithSeverity_ExcludesUnspecifiedFromSnapshotAndLiveUpdates()
+    {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
+        var repository = repositoryContext.Repository;
+        await AddLogsToRepository(repository, [
+            CreateLogRecord(time: s_testTime.AddSeconds(1), message: "snapshot-unspecified", severity: SeverityNumber.Unspecified),
+            CreateLogRecord(time: s_testTime.AddSeconds(2), message: "snapshot-error", severity: SeverityNumber.Error)
+        ]);
+
+        var service = CreateService(repository);
+        using var cancellation = new CancellationTokenSource();
+        await using var enumerator = service.FollowLogsAsync(null, null, "error", null, cancellation.Token).GetAsyncEnumerator();
+        Assert.True(await enumerator.MoveNextAsync().DefaultTimeout());
+        Assert.Contains("snapshot-error", enumerator.Current);
+
+        await AddLogsToRepository(repository, [
+            CreateLogRecord(time: s_testTime.AddSeconds(3), message: "live-unspecified", severity: SeverityNumber.Unspecified),
+            CreateLogRecord(time: s_testTime.AddSeconds(4), message: "live-critical", severity: SeverityNumber.Fatal)
+        ]);
+
+        try
+        {
+            Assert.True(await enumerator.MoveNextAsync().DefaultTimeout());
+            Assert.Contains("live-critical", enumerator.Current);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+        }
+    }
+
     [Theory]
     [InlineData(false, 1)]
     [InlineData(true, 1)]
@@ -315,6 +347,33 @@ public class TelemetryApiServiceTests
         Assert.Equal(2, spans.Count);
         Assert.Contains(spans, s => DecodeSpanId(s.SpanId) == "short-error-span");
         Assert.Contains(spans, s => DecodeSpanId(s.SpanId) == "long-ok-span");
+    }
+
+    [Theory]
+    [InlineData(3, new[] { "span1b", "span2a", "span2b" })]
+    [InlineData(10, new[] { "span1a", "span1b", "span2a", "span2b" })]
+    [InlineData(0, new string[0])]
+    public async Task GetSpans_WithLimit_ReturnsMostRecentSpansAcrossTraces(int limit, string[] expectedSpanIds)
+    {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        await AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "span1a", startTime: s_testTime, endTime: s_testTime.AddSeconds(1)),
+            CreateSpan(traceId: "trace1", spanId: "span1b", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(2))
+        ]);
+        await AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace2", spanId: "span2a", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(1).AddSeconds(1)),
+            CreateSpan(traceId: "trace2", spanId: "span2b", startTime: s_testTime.AddMinutes(1).AddSeconds(1), endTime: s_testTime.AddMinutes(1).AddSeconds(2))
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = await service.GetSpansAsync(resourceNames: null, traceId: null, hasError: null, limit: limit, cancellationToken: CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(4, result.TotalCount);
+        Assert.Equal(expectedSpanIds.Length, result.ReturnedCount);
+        Assert.Equal(expectedSpanIds, GetAllSpans(result).Select(s => DecodeSpanId(s.SpanId)));
     }
 
     [Fact]

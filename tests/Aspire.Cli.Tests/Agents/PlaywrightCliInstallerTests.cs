@@ -63,7 +63,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 }
             };
             var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
-                new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+                new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
             var sharedDirectory = Path.Combine(root.FullName, scope, ".agents", "skills");
             var destinations = new HashSet<string>
             {
@@ -72,10 +72,11 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 Path.Combine(root.FullName, scope, ".claude", "skills")
             };
 
-            var (status, message) = await installer.InstallSelectedAsync(destinations, CancellationToken.None);
+            var (status, message, installedSkillDirectories) = await installer.InstallSelectedAsync(destinations, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Installed, status);
             Assert.Null(message);
+            Assert.Equal(destinations.Order(StringComparer.Ordinal), installedSkillDirectories.Order(StringComparer.Ordinal));
             Assert.Equal(1, npmRunner.PackCallCount);
             Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
             Assert.True(npmRunner.InstallGlobalCalled);
@@ -104,13 +105,14 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
             var npmRunner = new TestNpmRunner { ResolveResult = new NpmPackageInfo { Version = version } };
             var playwrightRunner = new TestPlaywrightCliRunner { InstalledVersion = version, InstallSkillsResult = false };
             var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
-                new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+                new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, message) = await installer.InstallSelectedAsync(
+            var (status, message, installedSkillDirectories) = await installer.InstallSelectedAsync(
                 new HashSet<string> { Path.Combine(root.FullName, ".agents", "skills") }, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Failed, status);
             Assert.NotNull(message);
+            Assert.Empty(installedSkillDirectories);
             Assert.NotNull(playwrightRunner.InstallSkillsWorkingDirectory);
             Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
             Assert.Empty(root.GetFileSystemInfos());
@@ -141,9 +143,9 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
             var npmRunner = new TestNpmRunner { ResolveResult = new NpmPackageInfo { Version = version } };
             var playwrightRunner = new TestPlaywrightCliRunner { InstalledVersion = version, InstallSkillsResult = true };
             var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
-                new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+                new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, message) = await installer.InstallSelectedAsync(selectedDirectories, CancellationToken.None);
+            var (status, message, installedSkillDirectories) = await installer.InstallSelectedAsync(selectedDirectories, CancellationToken.None);
 
             Assert.Equal(successfulDestination ? PlaywrightInstallStatus.InstalledWithWarnings : PlaywrightInstallStatus.Failed, status);
             Assert.Equal(successfulDestination
@@ -152,7 +154,12 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
             Assert.Equal("existing file", await File.ReadAllTextAsync(blockedPath));
             if (successfulDestination)
             {
+                Assert.Equal(destination, Assert.Single(installedSkillDirectories));
                 Assert.Equal("# Playwright CLI Skill", await File.ReadAllTextAsync(Path.Combine(destination, PlaywrightCliInstaller.PlaywrightCliSkillName, "SKILL.md")));
+            }
+            else
+            {
+                Assert.Empty(installedSkillDirectories);
             }
             Assert.NotNull(playwrightRunner.InstallSkillsWorkingDirectory);
             Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
@@ -178,13 +185,14 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 OnInstallSkills = _ => { }
             };
             var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
-                new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+                new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, message) = await installer.InstallSelectedAsync(
+            var (status, message, installedSkillDirectories) = await installer.InstallSelectedAsync(
                 new HashSet<string> { Path.Combine(root.FullName, "skills") }, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Failed, status);
             Assert.Equal(AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, message);
+            Assert.Empty(installedSkillDirectories);
             Assert.Empty(root.GetFileSystemInfos());
             Assert.NotNull(playwrightRunner.InstallSkillsWorkingDirectory);
             Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
@@ -223,10 +231,10 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 }
             };
             var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
-                new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+                new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
             var destination = Path.Combine(root.FullName, "skills");
 
-            var (status, message) = await installer.InstallSelectedAsync(new HashSet<string> { destination }, CancellationToken.None);
+            var (status, message, _) = await installer.InstallSelectedAsync(new HashSet<string> { destination }, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Installed, status);
             Assert.Null(message);
@@ -261,9 +269,9 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 ResolveResult = null
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, message, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Failed, status);
             Assert.NotNull(message);
@@ -294,11 +302,12 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 InstalledVersion = version,
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, _, installedSkillDirectories) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Installed, status);
+            Assert.Empty(installedSkillDirectories);
             Assert.True(playwrightRunner.InstallSkillsCalled);
             Assert.False(npmRunner.PackCalled);
             Assert.False(npmRunner.InstallGlobalCalled);
@@ -330,7 +339,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 InstalledVersion = version,
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -364,9 +373,9 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 InstalledVersion = installedVersion,
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, _, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Installed, status);
             Assert.True(playwrightRunner.InstallSkillsCalled);
@@ -395,9 +404,9 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 PackResult = null
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, message, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Failed, status);
             Assert.NotNull(message);
@@ -434,12 +443,12 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
             {
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, _, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
                 Assert.Equal(PlaywrightInstallStatus.Installed, status);
                 Assert.True(npmRunner.InstallGlobalCalled);
@@ -479,12 +488,12 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
             };
             var provenanceChecker = new TestNpmProvenanceChecker();
             var playwrightRunner = new TestPlaywrightCliRunner { InstallSkillsResult = true };
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
             var repoRoot = CreateTestRepoRoot();
 
             try
             {
-                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, _, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
                 Assert.Equal(PlaywrightInstallStatus.Installed, status);
                 Assert.Equal(expectedIntegrity, provenanceChecker.CapturedSriIntegrity);
@@ -522,12 +531,12 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 InstallGlobalResult = false
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (status, message) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, message, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
                 Assert.Equal(PlaywrightInstallStatus.Failed, status);
                 Assert.NotNull(message);
@@ -570,12 +579,12 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 InstalledVersion = installedVersion,
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, _, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
                 Assert.Equal(PlaywrightInstallStatus.Installed, status);
                 Assert.True(npmRunner.PackCalled);
@@ -631,7 +640,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
             };
             var provenanceChecker = new TestNpmProvenanceChecker();
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -669,9 +678,9 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
             };
             var provenanceChecker = new TestNpmProvenanceChecker { ProvenanceOutcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, message, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Failed, status);
             Assert.NotNull(message);
@@ -712,12 +721,12 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                     [PlaywrightCliInstaller.DisablePackageValidationKey] = "true"
                 })
                 .Build();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), configuration, new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var repoRoot = CreateTestRepoRoot();
             try
             {
-                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+                var (status, _, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
 
                 Assert.Equal(PlaywrightInstallStatus.Installed, status);
                 Assert.False(provenanceChecker.ProvenanceCalled);
@@ -757,7 +766,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                     [PlaywrightCliInstaller.VersionOverrideKey] = "0.2.0"
                 })
                 .Build();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             // PackAsync returns null by default — we only care about the resolved range
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
@@ -796,9 +805,9 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                     [PlaywrightCliInstaller.VersionOverrideKey] = invalidVersion
                 })
                 .Build();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
-            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+            var (status, message, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
             Assert.Equal(PlaywrightInstallStatus.Failed, status);
             Assert.NotNull(message);
@@ -827,7 +836,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 ResolveResult = new NpmPackageInfo { Version = version }
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             // PackAsync returns null by default — we only care about the resolved range
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
@@ -875,6 +884,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 _context.Clients,
                 npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
+                new Aspire.Shared.TemporaryStorage(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
 
             var selectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -882,8 +892,11 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 Path.Combine(".claude", "skills"),
                 Path.Combine(".agents", "skills")
             };
-            await installer.InstallAsync(tempDir, selectedDirs, CancellationToken.None);
+            var (status, message, installedSkillDirectories) = await installer.InstallAsync(tempDir, selectedDirs, CancellationToken.None);
 
+            Assert.Equal(PlaywrightInstallStatus.Installed, status);
+            Assert.Null(message);
+            Assert.Equal(selectedDirs.Order(StringComparer.Ordinal), installedSkillDirectories.Order(StringComparer.Ordinal));
             Assert.Equal(
                 [
                     Path.Combine(".agents", "skills", "playwright-cli", "SKILL.md"),
@@ -972,6 +985,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 _context.Clients,
                 npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
+                new Aspire.Shared.TemporaryStorage(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
 
             // Only select Standard (.agents/skills)
@@ -1024,6 +1038,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 _context.Clients,
                 npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
+                new Aspire.Shared.TemporaryStorage(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
 
             // Only select Standard — .claude/skills is NOT selected
@@ -1075,6 +1090,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
                 _context.Clients,
                 npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
+                new Aspire.Shared.TemporaryStorage(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
 
             var selectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

@@ -13,17 +13,51 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
+using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
 
 public partial class NewCommandLocalTemplateTests
 {
+    [Fact]
+    public async Task ConfiguredSources_SingleSourceShowsDetailsWithoutGroupHeading()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateSearchTemplateAsync(workspace, "template", "sample", "Sample", "Found");
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("Hello");
+        interaction.PromptForSelectionCallback = (_, choices, _, _) =>
+        {
+            Assert.Single(interaction.DisplayedRenderables);
+            Assert.Empty(interaction.ShownStatuses);
+            Assert.Null(Assert.Single(Assert.Single(interaction.GroupedSelectionPromptCalls)).Group);
+            Assert.Equal([NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+                interaction.DisplayedMessages.Select(message => message.Message));
+            return choices.Cast<object>().Single();
+        };
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.RemoveAll<ITemplateFactory>();
+        services.AddSingleton<ITemplateFactory, TemplateEngineFactory>();
+        using var provider = services.BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["company"] = Path.Combine(workspace.Path, "template") });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("Found: Hello", await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("""{ "templateSources": null }""")]
     [InlineData("""{ "templates": { "not-a-source": true } }""")]
     [InlineData("""{ "unrelated": true }""")]
+    // Older CLIs stored the retired Go polyglot flag as a nested feature object.
+    [InlineData("""{ "features": { "stagingChannelEnabled": "true", "experimentalPolyglot": { "go": "true" } } }""")]
     public async Task ConfiguredSources_AbsentSettingHasNoSources(string json)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -107,6 +141,7 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "repository": "http://example.test/templates" }""")]
     [InlineData("""{ "repository": "git@example.test:templates" }""")]
     [InlineData("""{ "repository": "https://token@example.test/templates" }""")]
+    [InlineData("""{ "repository": "ssh://git:password@example.test/templates" }""")]
     [InlineData("""{ "repository": "https://example.test/templates?q=search" }""")]
     [InlineData("""{ "repository": "https://example.test/templates#main" }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": 42 }""")]
@@ -218,7 +253,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(query.Length == 0
             ? ["second-source", "first-source"]
             : expectedCount == 0 ? [] : new[] { "first-source" }, results.Select(result => result.SourceName));
-        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Equal([NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+            interaction.DisplayedMessages.Select(message => message.Message));
     }
 
     [Fact]
@@ -237,7 +273,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal("company-api", result.Template.Name);
         Assert.Equal("Company starter", result.Template.Description);
         Assert.Equal("Uses PostgreSQL", result.Template.SearchDescription);
-        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Equal([NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+            interaction.DisplayedMessages.Select(message => message.Message));
     }
 
     [Fact]
@@ -263,6 +300,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal("working", result.SourceName);
         Assert.Equal("valid", result.Template.Name);
         Assert.Collection(interaction.DisplayedMessages,
+            message => Assert.Equal(NewCommandStrings.TemplateSourceExplanation, message.Message),
+            message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
             message =>
             {
                 Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
@@ -335,8 +374,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, selectionCount);
         var groupedChoices = Assert.Single(interaction.GroupedSelectionPromptCalls);
         Assert.Equal(
-            [new SelectionChoiceGroup("source:first-source", "Company [templates]"),
-                new SelectionChoiceGroup("source:second-source", "Company [templates]")],
+            [new SelectionChoiceGroup("source:first-source", "Company [templates]") { Style = new Style(Color.Green) },
+                new SelectionChoiceGroup("source:second-source", "Company [templates]") { Style = new Style(Color.Green) }],
             groupedChoices.TakeLast(2).Select(choice => choice.Group));
         Assert.Equal(["Same template", "Same template"], groupedChoices.TakeLast(2).Select(choice => choice.DisplayLabel));
         Assert.All(groupedChoices.SkipLast(2), choice =>
@@ -345,6 +384,40 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(["Greeting text"],
             interaction.StringPromptCalls.Select(call => call.PromptText));
         await Verify(ReadOutput(workspace)).UseParameters(noBuiltIns);
+    }
+
+    [Fact]
+    public async Task ConfiguredSources_LogsSelectedAliasWhenSourcesShareCachedTemplate()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateSearchTemplateAsync(workspace, "template", "sample", "Sample", "Found");
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("Welcome");
+        interaction.PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().Last();
+        var loggerProvider = new FakeLoggerProvider();
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.RemoveAll<ITemplateFactory>();
+        services.AddSingleton<ITemplateFactory, TemplateEngineFactory>();
+        services.AddLogging(logging =>
+        {
+            logging.AddProvider(loggerProvider);
+            logging.SetMinimumLevel(LogLevel.Debug);
+        });
+        using var provider = services.BuildServiceProvider();
+        var templatePath = Path.Combine(workspace.Path, "template");
+        await WriteConfiguredSourcesAsync(provider, new()
+        {
+            ["first-source"] = templatePath,
+            ["second-source"] = templatePath
+        });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(loggerProvider.Collector.GetSnapshot(), entry =>
+            entry.Message == "Selected template sample from configured template source second-source.");
+        await Verify(ReadOutput(workspace));
     }
 
     [Fact]
@@ -371,7 +444,10 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, selectionCount);
         Assert.Equal("Sample (Observable services)", Assert.Single(interaction.GroupedSelectionPromptCalls)[^1].DisplayLabel);
-        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Equal(new SelectionChoiceGroup("source:company", "company") { Style = new Style(Color.Green) },
+            Assert.Single(interaction.GroupedSelectionPromptCalls)[^1].Group);
+        Assert.Equal([NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+            interaction.DisplayedMessages.Select(message => message.Message));
         Assert.Equal(["Greeting text"], interaction.StringPromptCalls.Select(call => call.PromptText));
         Assert.Equal([true], interaction.StringPromptLogResponses);
         await Verify(ReadOutput(workspace));
@@ -392,8 +468,7 @@ public partial class NewCommandLocalTemplateTests
             selectionCount++;
             var options = choices.Cast<object>().ToArray();
             Assert.NotEmpty(options);
-            Assert.All(Assert.Single(interaction.GroupedSelectionPromptCalls), choice =>
-                Assert.Equal(new SelectionChoiceGroup("builtin", NewCommandStrings.BuiltInTemplates), choice.Group));
+            Assert.All(Assert.Single(interaction.GroupedSelectionPromptCalls), choice => Assert.Null(choice.Group));
             cancellation.Cancel();
             throw new OperationCanceledException(cancellation.Token);
         };
@@ -413,7 +488,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
         Assert.Equal(1, selectionCount);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
-        Assert.Equal(KnownEmojis.PoliceCarLight, Assert.Single(interaction.DisplayedMessages).Emoji);
+        Assert.Equal([KnownEmojis.Information, KnownEmojis.PoliceCarLight, KnownEmojis.PoliceCarLight],
+            interaction.DisplayedMessages.Select(message => message.Emoji));
         Assert.Empty(interaction.StringPromptCalls);
     }
 
@@ -479,6 +555,7 @@ public partial class NewCommandLocalTemplateTests
         else
         {
             Assert.Empty(interaction.DisplayedMessages);
+            Assert.Empty(interaction.DisplayedRenderables);
         }
     }
 

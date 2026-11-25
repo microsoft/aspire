@@ -92,6 +92,11 @@
         <target state="translated">Tümleştirme arama sorgusu.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="translated">Bir veya daha fazla tümleştirme kaynağı yapılandırıldı. Tümleştirme kaynağı, geliştirme deneyiminizi özelleştirmek için kuruluşların tümleştirmeleri paylaşmasına olanak tanır.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Hiçbir tümleştirme paketi bulunamadı. Lütfen internet bağlantınızı veya NuGet kaynak yapılandırmanızı kontrol edin.</target>
@@ -124,7 +129,7 @@
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresIntegrationName">
         <source>An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</source>
-        <target state="new">An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</target>
+        <target state="translated">Etkileşimli olmayan modda tümleştirme adı gereklidir. Tam bir paket kimliği veya kolay bir ad belirtin (örneğin 'aspire add redis').</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">

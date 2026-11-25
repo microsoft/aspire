@@ -14,13 +14,39 @@ namespace Infrastructure.Tests;
 public sealed class TrayBundleTests(ITestOutputHelper output)
 {
     [Theory]
+    [InlineData("win-x64", "")]
+    [InlineData("win-x64", " ")]
+    [InlineData("win-arm64", "")]
+    [InlineData("win-arm64", " ")]
+    [InlineData("osx-x64", "")]
+    [InlineData("osx-x64", " ")]
+    [InlineData("osx-arm64", "")]
+    [InlineData("osx-arm64", " ")]
+    [InlineData("linux-x64", "")]
+    [InlineData("linux-x64", " ")]
+    [InlineData("linux-arm64", "")]
+    [InlineData("linux-arm64", " ")]
+    public void DesktopLayoutsRejectEmptyTrayDirectory(string rid, string directory)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false,
+            trayDirectory: directory, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
+
+        var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
+
+        Assert.Equal($"The {rid} bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).", error.Message);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.Path));
+    }
+
+    [Theory]
     [InlineData("linux-x64")]
     [InlineData("linux-arm64")]
     public void LinuxLayoutsRequireExplicitNativePayload(string rid)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, null, null, null);
-        Assert.Equal("The Linux bundle requires --tray-linux pointing to the pre-built native tray publish directory.",
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false,
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
+        Assert.Equal($"The {rid} bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).",
             Assert.Throws<InvalidOperationException>(builder.CopyTray).Message);
     }
 
@@ -36,7 +62,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         LinuxTrayTestPayload.Create(source, rid);
         File.WriteAllText(Path.Combine(source, "aspire-tray.dbg"), "symbols");
         var layout = Path.Combine(workspace.Path, rid);
-        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, null, source);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false,
+            trayDirectory: source, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
         builder.CopyTray();
         var archivePath = await builder.CreateArchiveAsync();
         await using var archive = File.OpenRead(archivePath);
@@ -64,7 +91,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     public void MuslLayoutsDoNotPackageTray(string rid)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, "missing.app", "missing-windows", "missing-linux");
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false,
+            trayDirectory: "missing-tray", dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         builder.CopyTray();
 
@@ -77,11 +105,12 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     public void MacLayoutRequiresExplicitTrayInput(string rid)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, null, null, null);
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false,
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
-        Assert.Contains("--tray-app", error.Message);
+        Assert.Equal($"The {rid} bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).", error.Message);
     }
 
     [Theory]
@@ -94,7 +123,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var source = MacTrayTestPayload.Create(workspace.Path);
         File.Delete(Path.Combine(source, missingFile));
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false,
+            trayDirectory: source, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
@@ -109,7 +139,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var source = MacTrayTestPayload.Create(workspace.Path);
         File.SetUnixFileMode(Path.Combine(source, "Contents/MacOS/aspire-tray"), UnixFileMode.UserRead);
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false,
+            trayDirectory: source, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
@@ -125,7 +156,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         var source = MacTrayTestPayload.Create(workspace.Path);
         var layout = Path.Combine(workspace.Path, "osx-arm64");
         var destination = Path.Combine(layout, "tray", "Aspire Tray.app");
-        using var builder = new LayoutBuilder(layout, workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
+        using var builder = new LayoutBuilder(layout, workspace.Path, "osx-arm64", "Debug", "test", false,
+            trayDirectory: source, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         builder.CopyTray();
 
@@ -176,7 +208,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         File.WriteAllText(scriptPath, """
             param([string]$RepositoryRoot, [string]$AppPath, [string]$ArchivePath)
             & "$RepositoryRoot/dotnet.sh" msbuild "$RepositoryRoot/src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj" `
-                /t:PrepareTraySigning /p:RuntimeIdentifier=osx-arm64 `
+                /t:CreateTrayAppSigningArchive /p:RuntimeIdentifier=osx-arm64 `
                 "/p:TrayAppPath=$AppPath" "/p:TraySigningArchive=$ArchivePath" /nologo
             exit $LASTEXITCODE
             """);
@@ -241,7 +273,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         WindowsTrayTestPayload.Create(source, rid);
         File.WriteAllText(Path.Combine(source, "smoke.stdout.log"), "not runtime content");
         var layout = Path.Combine(workspace.Path, rid);
-        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source, null);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false,
+            trayDirectory: source, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         builder.CopyTray();
 
@@ -289,12 +322,12 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
             File.Copy(typeof(TrayBundleTests).Assembly.Location, Path.Combine(source, "aspire-tray.exe"), overwrite: true);
         }
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path,
-            scenario == "unsupported-rid" ? "win-x86" : "win-x64", "Debug", "test", false, null,
-            scenario == "missing-input" ? null : source, null);
+            scenario == "unsupported-rid" ? "win-x86" : "win-x64", "Debug", "test", false,
+            trayDirectory: scenario == "missing-input" ? null : source, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         if (scenario == "missing-input")
         {
-            Assert.Equal("The Windows bundle requires --tray-windows pointing to the pre-built native tray publish directory.",
+            Assert.Equal("The win-x64 bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).",
                 Assert.Throws<InvalidOperationException>(builder.CopyTray).Message);
         }
         else
@@ -319,7 +352,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         WindowsTrayTestPayload.Create(source, rid);
         File.Copy(Path.Combine(RepoRoot.Path, "src/Shared/Aspire.ico"), Path.Combine(source, "Aspire.ico"), overwrite: true);
         var layout = Path.Combine(workspace.Path, rid);
-        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source, null);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false,
+            trayDirectory: source, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
         builder.CopyTray();
         var tray = Path.Combine(layout, "tray");
         switch (scenario)
@@ -374,7 +408,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         var source = Path.Combine(workspace.Path, "publish with spaces");
         LinuxTrayTestPayload.Create(source, rid);
         var layout = Path.Combine(workspace.Path, rid);
-        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, null, source);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false,
+            trayDirectory: source, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
         builder.CopyTray();
         var tray = Path.Combine(layout, "tray");
         switch (scenario)
@@ -465,7 +500,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         {
             File.Delete(executable);
         }
-        using var builder = new LayoutBuilder(layout, workspace.Path, "linux-x64", "Debug", "test", false, null, null, null);
+        using var builder = new LayoutBuilder(layout, workspace.Path, "linux-x64", "Debug", "test", false,
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
         var archive = await builder.CreateArchiveAsync();
         if (scenario == "invalid-archive")
         {

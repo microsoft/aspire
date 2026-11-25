@@ -678,7 +678,12 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(configPath, """
             {
-              "features": { "polyglotSupportEnabled": "true", "showAllTemplates": "false" }
+              "features": {
+                "polyglotSupportEnabled": "true",
+                "showAllTemplates": "false",
+                "whitespacePaddedEnabled": " true ",
+                "whitespacePaddedDisabled": "false "
+              }
             }
             """);
 
@@ -688,6 +693,33 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result.Features);
         Assert.True(result.Features["polyglotSupportEnabled"]);
         Assert.False(result.Features["showAllTemplates"]);
+        Assert.True(result.Features["whitespacePaddedEnabled"]);
+        Assert.False(result.Features["whitespacePaddedDisabled"]);
+    }
+
+    [Fact]
+    public void Load_IgnoresNestedFeatureEntries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "features": {
+                "stagingChannelEnabled": "true",
+                "experimentalPolyglot": { "go": "true" },
+                "legacyList": [ true ],
+                "showAllTemplates": false
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result?.Features);
+        Assert.Equal(
+            [new("showAllTemplates", false), new("stagingChannelEnabled", true)],
+            result.Features.OrderBy(f => f.Key, StringComparer.Ordinal));
     }
 
     [Fact]
@@ -763,6 +795,28 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 
         // Path should be re-based from .aspire/-relative to root-relative
         Assert.Equal("src/apphost.ts", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_PortAllocation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "portAllocation": {
+                    "persistInIsolatedMode": true
+                }
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        Assert.True(config.PortAllocation?.PersistInIsolatedMode);
+        var saved = AspireConfigFile.Load(root);
+        Assert.True(saved?.PortAllocation?.PersistInIsolatedMode);
     }
 
     [Fact]

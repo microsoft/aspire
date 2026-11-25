@@ -279,7 +279,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var channelSources = new List<string>();
         var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
         var matchedChannels = !string.IsNullOrEmpty(configuredChannelName)
-            ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
+            ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparisons.ChannelName))
             : channels.Where(c => c.Type == PackageChannelType.Explicit);
 
         foreach (var ch in matchedChannels)
@@ -499,6 +499,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         var options = new ProcessInvocationOptions
         {
+            NoAutoResponse = true,
             StandardOutputCallback = outputCollector.AppendOutput,
             StandardErrorCallback = outputCollector.AppendError
         };

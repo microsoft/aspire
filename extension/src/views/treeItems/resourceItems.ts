@@ -145,7 +145,7 @@ export class ResourceItem extends vscode.TreeItem {
         this.iconPath = getResourceIcon(resource);
         this.description = buildResourceDescription(resource);
         this.tooltip = buildResourceTooltip(resource);
-        this.contextValue = getResourceContextValue(resource, canAttachDebugger);
+        this.contextValue = getResourceContextValue(resource, canAttachDebugger, appHostPath);
     }
 }
 

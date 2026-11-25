@@ -249,6 +249,10 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
                 ? $"Could not capture peer process output: {message}"
                 : "Could not capture peer process output.",
             ProcessCaptureFailureKind.TimedOut => $"Peer probe timed out after {_timeout.TotalSeconds:F1}s.",
+            // The peer exited on its own; a descendant holding the inherited pipe (or slow
+            // reader continuations) must not discard what it already wrote. The parsers below
+            // still reject output that is incomplete or unusable.
+            ProcessCaptureFailureKind.OutputDrainTimedOut => null,
             _ => null,
         };
 

@@ -229,12 +229,15 @@ Aspire.Hosting.Docker/configureDashboard(configure: callback) -> Aspire.Hosting.
 Aspire.Hosting.Docker/configureEnvFile(configure: callback) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource
 Aspire.Hosting.Docker/DockerComposeAspireDashboardResource.otlpGrpcEndpoint(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeAspireDashboardResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 Aspire.Hosting.Docker/DockerComposeAspireDashboardResource.primaryEndpoint(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeAspireDashboardResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting.Docker/DockerComposeAspireDashboardResource.resourceTypeDisplayName(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeAspireDashboardResource) -> string
 Aspire.Hosting.Docker/DockerComposeEnvironmentResource.dashboardEnabled(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource) -> boolean
 Aspire.Hosting.Docker/DockerComposeEnvironmentResource.defaultNetworkName(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource) -> string
 Aspire.Hosting.Docker/DockerComposeEnvironmentResource.getHostAddressExpression(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource, endpointReference: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
+Aspire.Hosting.Docker/DockerComposeEnvironmentResource.resourceTypeDisplayName(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource) -> string
 Aspire.Hosting.Docker/DockerComposeEnvironmentResource.setDashboardEnabled(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource, value: boolean) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource
 Aspire.Hosting.Docker/DockerComposeEnvironmentResource.setDefaultNetworkName(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource, value: string) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource
 Aspire.Hosting.Docker/DockerComposeServiceResource.parent(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeServiceResource) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource
+Aspire.Hosting.Docker/DockerComposeServiceResource.resourceTypeDisplayName(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeServiceResource) -> string
 Aspire.Hosting.Docker/publishAsDockerComposeService(configure: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting.Docker/withDashboard(enabled?: boolean) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource
 Aspire.Hosting.Docker/withForwardedHeaders(enabled?: boolean) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeAspireDashboardResource

@@ -15,9 +15,9 @@ import {
   hourMs,
   nonBlockingCheckFailureRules,
   personalPickActions,
+  priorityReviewLabels,
   releaseBlockingLabelMarker,
   reviewDebtSignalLabel,
-  urgentReviewLabel,
 } from "./constants.mjs";
 
 const approvedAgingMs = 2 * dayMs;
@@ -775,7 +775,7 @@ function compareFirstReadiness(a, b) {
 }
 
 export function isUrgentPullRequest(pr) {
-  return pr.labels.some((label) => label.toLowerCase() === urgentReviewLabel.toLowerCase());
+  return pr.labels.some((label) => priorityReviewLabels.includes(label.toLowerCase()));
 }
 
 export function computeFocusItems(buckets) {
@@ -855,7 +855,8 @@ function focusExclusionReason(pr, bucketLabels) {
   if (hasMergeConflicts(pr)) return { kind: "merge-conflicts", label: "Merge conflicts", detail: "The author needs to rebase before reviewers can finish it.", tone: "danger" };
   if (pr.review.unresolvedThreadCount > 0) return { kind: "unresolved-feedback", label: "Unresolved feedback", detail: "Open review threads make it author-blocked.", tone: "danger" };
   if (hasNeedsAuthorActionLabel(pr)) return { kind: "held-by-label", label: "Held by label", detail: "A do-not-merge label keeps it out of the focused queue.", tone: "danger" };
-  if (isWaitingOnAuthor(bucketLabels)) return { kind: "author-response", label: "Author response", detail: "Changes were requested, so this is waiting on the author rather than the focused queue.", tone: "danger" };
+  if (isWaitingOnAuthor(bucketLabels, pr)) return { kind: "author-response", label: "Author response", detail: "Changes were requested, so this is waiting on the author rather than the focused queue.", tone: "danger" };
+  if (pr.labelsUnavailable) return { kind: "labels-unavailable", label: "Labels unavailable", detail: "Labels could not be loaded, so this PR is not ranked in PR queue.", tone: "warning" };
   if (isCommunityPullRequest(pr) && !isAgedOutCommunityPullRequest(pr)) return { kind: "community-list", label: "Community list", detail: "Active external-contributor PRs show in the Community list.", tone: "accent" };
   const specialized = bucketLabels.find((l) => specializedFocusBucketLabels.has(l));
   if (specialized) return { kind: "specialized-lane", label: `${specialized} lane`, detail: `Routed to the ${specialized} lane instead of PR queue.`, tone: "accent" };
@@ -866,13 +867,16 @@ function focusExclusionReason(pr, bucketLabels) {
   return { kind: "outside-queue", label: "Outside queue", detail: "It does not currently match a focused, actionable lane.", tone: "muted" };
 }
 function exReasonRank(kind) {
-  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "readiness-unavailable", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
+  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "labels-unavailable", "readiness-unavailable", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
 }
 
 // A PR with requested changes is waiting on its author, not the focused queue. Once the
 // author pushes a response and it needs re-review, it re-enters under "Re-review needed".
-function isWaitingOnAuthor(bucketLabels) {
-  return bucketLabels.includes("Author response") && !bucketLabels.includes("Re-review needed");
+function isWaitingOnAuthor(bucketLabels, pr = null) {
+  const authorResponse = bucketLabels.includes("Author response") ||
+    (pr?.labelsUnavailable && pr.review.state === "changes_requested");
+  return authorResponse && !bucketLabels.includes("Re-review needed") &&
+    !(pr?.labelsUnavailable && needsReReview(pr));
 }
 function bucketLabelsByPr(buckets) {
   const map = new Map();

@@ -8,6 +8,8 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestGitCommandRunner : IGitCommandRunner
 {
+    public IGitCommandRunner WithStandardErrorHandler(Action<string> standardErrorHandler) => this;
+
     public const string DefaultCommitSha = "0123456789abcdef0123456789abcdef01234567";
 
     public ConcurrentQueue<GitCommandInvocation> Commands { get; } = new();
@@ -27,16 +29,26 @@ internal sealed class TestGitCommandRunner : IGitCommandRunner
                 case "checkout":
                     return string.Empty;
                 case "fetch":
-                    await checkout(command.Arguments[5], command.WorkingDirectory, command.Arguments[6], token);
+                    var (repository, reference) = GetFetchArguments(command);
+                    await checkout(repository, command.WorkingDirectory, reference, token);
                     return string.Empty;
                 case "rev-parse":
-                    return commands.Commands.Last(call => call.Arguments[0] == "fetch"
-                        && call.WorkingDirectory.FullName == command.WorkingDirectory.FullName).Arguments[6];
+                    var fetch = commands.Commands.Last(call => call.Arguments[0] == "fetch"
+                        && call.WorkingDirectory.FullName == command.WorkingDirectory.FullName);
+                    return GetFetchArguments(fetch).Reference;
                 default:
                     throw new InvalidOperationException($"Unexpected Git command: {command.Arguments[0]}.");
             }
         };
         return commands;
+    }
+
+    public static (string Repository, string Reference) GetFetchArguments(GitCommandInvocation command)
+    {
+        var separator = Array.IndexOf(command.Arguments, "--");
+        Assert.True(separator >= 0 && separator + 2 < command.Arguments.Length,
+            $"Expected Git fetch arguments ending in '-- <repository> <reference>': {string.Join(' ', command.Arguments)}");
+        return (command.Arguments[separator + 1], command.Arguments[separator + 2]);
     }
 
     public async Task<string> RunAsync(DirectoryInfo workingDirectory, string[] arguments, GitCommandMode mode, CancellationToken cancellationToken)

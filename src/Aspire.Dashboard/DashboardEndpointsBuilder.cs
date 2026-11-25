@@ -82,10 +82,28 @@ public static class DashboardEndpointsBuilder
             }
             requestCulture ??= new RequestCulture(newLanguage.Name, newLanguage.Name);
 
+            var cookieOptions = new CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddYears(1), // consistent with theme cookie expiry
+                // The culture cookie is only read on the server by the request localization middleware.
+                HttpOnly = true,
+                SameSite = SameSiteMode.Lax
+            };
+
+            // Only mark the cookie Secure when the request was made over HTTPS. The dashboard is commonly served over
+            // plain HTTP, e.g. http://localhost or a standalone container on http://host:18888. Browsers silently drop
+            // Secure cookies set from a non-localhost HTTP origin, which would break language selection.
+            // IsHttps honors X-Forwarded-Proto when forwarded headers are enabled, so cookies set behind a
+            // TLS-terminating reverse proxy are also Secure. This matches the dashboard auth cookies (SameAsRequest).
+            if (httpContext.Request.IsHttps)
+            {
+                cookieOptions.Secure = true;
+            }
+
             httpContext.Response.Cookies.Append(
                 CookieRequestCultureProvider.DefaultCookieName,
                 CookieRequestCultureProvider.MakeCookieValue(requestCulture),
-                new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) }); // consistent with theme cookie expiry
+                cookieOptions);
 
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();
@@ -153,6 +171,11 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateLimit(limit) is { } invalidLimitResult)
+            {
+                return invalidLimitResult;
+            }
+
             if (follow == true)
             {
                 await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, search, cancellationToken), cancellationToken).ConfigureAwait(false);
@@ -185,6 +208,11 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateLimit(limit) is { } invalidLimitResult)
+            {
+                return invalidLimitResult;
+            }
+
             if (follow == true)
             {
                 await StreamNdjsonAsync(httpContext, service.FollowLogsAsync(resource, traceId, severity, search, cancellationToken), cancellationToken).ConfigureAwait(false);
@@ -214,6 +242,11 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateLimit(limit) is { } invalidLimitResult)
+            {
+                return invalidLimitResult;
+            }
+
             var response = await service.GetTracesAsync(resource, hasError, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
@@ -244,6 +277,21 @@ public static class DashboardEndpointsBuilder
             }
             return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
+    }
+
+    private static IResult? ValidateLimit(int? limit)
+    {
+        if (limit is <= 0)
+        {
+            return Results.BadRequest(new ProblemDetails
+            {
+                Title = "Invalid limit",
+                Detail = "The limit value must be greater than 0.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        return null;
     }
 
     private static async Task StreamNdjsonAsync(HttpContext httpContext, IAsyncEnumerable<string> items, CancellationToken cancellationToken)

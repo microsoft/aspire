@@ -234,6 +234,61 @@ test("urgency does not bypass shared-queue eligibility or specialize other lanes
   }
 });
 
+test("computeFocusItems promotes exact case-insensitive priority labels", () => {
+  for (const label of ["fixes-ci", "urgent-review", "FiXeS-CI", "URGENT-REVIEW"]) {
+    const older = makePr({ number: 1, firstReadyForReviewAt: isoAgo(5 * dayMs) });
+    const priority = makePr({ number: 2, labels: [label], firstReadyForReviewAt: isoAgo(dayMs) });
+    const lookalikes = ["fixes-ci-extra", "not-urgent-review", " fixes-ci", "urgent-review "]
+      .map((label, index) => makePr({ number: index + 3, labels: [label], firstReadyForReviewAt: older.firstReadyForReviewAt }));
+
+    const focus = computeFocusItems(createAttentionBuckets([older, ...lookalikes, priority]));
+
+    assert.deepEqual(focus.map((item) => item.pullRequest.number), [2, 1, 3, 4, 5, 6], label);
+  }
+});
+
+test("computeFocusItems preserves deterministic readiness order within equal priority groups", () => {
+  const firstReadyForReviewAt = isoAgo(3 * dayMs);
+  const ordered = [
+    makePr({ number: 9, labels: ["urgent-review"], firstReadyForReviewAt: isoAgo(4 * dayMs) }),
+    makePr({ number: 10, labels: ["fixes-ci"], firstReadyForReviewAt, url: "https://ghe.example.com/microsoft/aspire/pull/10" }),
+    makePr({ number: 2, labels: ["fixes-ci", "urgent-review"], firstReadyForReviewAt }),
+    makePr({ number: 3, labels: ["urgent-review"], firstReadyForReviewAt }),
+    makePr({ number: 1, repository: "microsoft/dcp", url: "https://github.com/microsoft/dcp/pull/1", labels: ["fixes-ci"], firstReadyForReviewAt }),
+    makePr({ number: 8, firstReadyForReviewAt: isoAgo(5 * dayMs) }),
+    makePr({ number: 6, firstReadyForReviewAt }),
+    makePr({ number: 7, firstReadyForReviewAt }),
+  ];
+  for (const input of [ordered, ordered.toReversed()]) {
+    const focus = computeFocusItems(createAttentionBuckets(input));
+    assert.deepEqual(focus.map((item) => [item.pullRequest.repository, item.pullRequest.number]),
+      ordered.map((pr) => [pr.repository, pr.number]));
+  }
+});
+
+test("priority labels do not bypass PR queue eligibility", () => {
+  const blockers = [
+    { draft: true },
+    { mergeableState: "dirty" },
+    { labels: ["needs-author-action"] },
+    { labels: ["no-merge"] },
+    { checks: { state: "failure" } },
+    { review: { state: "changes_requested", lastReviewedAt: isoAgo(hourMs) } },
+    { review: { state: "reviewed", unresolvedThreadCount: 1, lastReviewedAt: isoAgo(hourMs) } },
+    { author: "external-contributor" },
+    { author: "dependabot[bot]", authorType: "Bot" },
+    { firstReadyForReviewAt: null },
+  ];
+  for (const label of ["fixes-ci", "urgent-review"]) {
+    for (const blocker of blockers) {
+      const blocked = makePr({ ...blocker, labels: [label, ...(blocker.labels ?? [])] });
+      const eligible = makePr({ number: 2 });
+      const focus = computeFocusItems(createAttentionBuckets([blocked, eligible]));
+      assert.deepEqual(focus.map((item) => item.pullRequest.number), [2], `${label}: ${JSON.stringify(blocker)}`);
+    }
+  }
+});
+
 test("blocked PRs return at their original first-readiness priority", () => {
   const older = makePr({ number: 1, firstReadyForReviewAt: isoAgo(5 * dayMs) });
   const newer = makePr({ number: 2, url: "https://github.com/microsoft/aspire/pull/2", firstReadyForReviewAt: isoAgo(3 * dayMs) });

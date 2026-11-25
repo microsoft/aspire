@@ -10,6 +10,7 @@ Aspire.Hosting.ApplicationModel/GarnetResource.host(context: Aspire.Hosting.Garn
 Aspire.Hosting.ApplicationModel/GarnetResource.passwordParameter(context: Aspire.Hosting.Garnet/Aspire.Hosting.ApplicationModel.GarnetResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting.ApplicationModel/GarnetResource.port(context: Aspire.Hosting.Garnet/Aspire.Hosting.ApplicationModel.GarnetResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/GarnetResource.primaryEndpoint(context: Aspire.Hosting.Garnet/Aspire.Hosting.ApplicationModel.GarnetResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting.ApplicationModel/GarnetResource.resourceTypeDisplayName(context: Aspire.Hosting.Garnet/Aspire.Hosting.ApplicationModel.GarnetResource) -> string
 Aspire.Hosting.ApplicationModel/GarnetResource.uriExpression(context: Aspire.Hosting.Garnet/Aspire.Hosting.ApplicationModel.GarnetResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Garnet/addGarnet(name: string, port?: number, password?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Garnet/Aspire.Hosting.ApplicationModel.GarnetResource
 Aspire.Hosting.Garnet/withDataBindMount(source: string, isReadOnly?: boolean) -> Aspire.Hosting.Garnet/Aspire.Hosting.ApplicationModel.GarnetResource

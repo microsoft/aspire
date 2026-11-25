@@ -29,15 +29,6 @@ public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
         builder.CloseElement();
     }
 
-    /// <summary>
-    /// Refreshes virtualized data and renders this grid when the refresh originates outside a Blazor event.
-    /// </summary>
-    public async Task RefreshDataAndRenderAsync()
-    {
-        await RefreshDataAsync(force: true);
-        StateHasChanged();
-    }
-
     private void RenderLoadingContent(RenderTreeBuilder builder)
     {
         builder.OpenComponent<FluentStack>(0);

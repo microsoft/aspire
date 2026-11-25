@@ -32,9 +32,11 @@ builder.Logging
     .AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
 builder.Services.AddSingleton(settings);
 builder.Services.AddSingleton(settings.Options.TimeProvider);
+builder.Services.AddSingleton<ITemporaryStorage, TemporaryStorage>();
 builder.Services.Configure<ConsoleLifetimeOptions>(options => options.SuppressStatusMessages = true);
 builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = settings.Options.CleanupTimeout);
 builder.Services.AddHostedService(services => new NativeServerHostedService(settings, args,
-    services.GetRequiredService<ILoggerFactory>(), services.GetRequiredService<IHostApplicationLifetime>()));
+    services.GetRequiredService<ILoggerFactory>(), services.GetRequiredService<IHostApplicationLifetime>(),
+    services.GetRequiredService<ITemporaryStorage>()));
 using var host = builder.Build();
 await host.RunAsync().ConfigureAwait(false);

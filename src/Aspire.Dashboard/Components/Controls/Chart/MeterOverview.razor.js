@@ -4,6 +4,14 @@
  cards would otherwise call the server for every card that crosses the margin.
  */
 export function observeCards(container, dotNetReference) {
+    // Blazor passes an element that's no longer in the page as null. That happens when the overview is removed while
+    // this module loads, for example by switching from Metrics to Traces right after opening an instrument
+    // (https://github.com/microsoft/aspire/issues/21714). An error here would end the circuit, and there's nothing to
+    // observe, so the caller gets an observer that does nothing.
+    if (!container) {
+        return { dispose() { } };
+    }
+
     const visibleIds = new Set();
     let reportTimer = null;
     let disposed = false;

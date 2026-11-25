@@ -169,32 +169,32 @@
       </trans-unit>
       <trans-unit id="GitAuthenticationFailed">
         <source>Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</source>
-        <target state="new">Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</target>
+        <target state="translated">Git 驗證失敗。執行此命令前，請設定 Git 認證或 SSH 驗證；終端機認證提示已停用。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitCommandFailed">
         <source>The Git command failed. Check the repository and selected reference.</source>
-        <target state="new">The Git command failed. Check the repository and selected reference.</target>
+        <target state="translated">Git 命令失敗。請檢查存放庫和選取的參照。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitRepositoryUnavailable">
         <source>The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</source>
-        <target state="new">The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</target>
+        <target state="translated">無法存取 Git 存放庫。檢查其位址、網路連線和您的存取權限。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitTimedOut">
         <source>The Git operation timed out after two minutes.</source>
-        <target state="new">The Git operation timed out after two minutes.</target>
+        <target state="translated">Git 作業在兩分鐘後逾時。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnattendedSshUnsupported">
         <source>Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</source>
-        <target state="new">Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</target>
+        <target state="translated">無人值守的 Git 需要經過驗證的 OpenSSH 可執行檔，不能使用自訂的 SSH 命令或包裝函式。請以互動方式執行，或使用 GIT_SSH 選取 OpenSSH，並在 OpenSSH 設定檔中設定金鑰和主機選項，而不要使用 GIT_SSH_COMMAND 或 core.sshCommand。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">無法啟動 Git。請安裝 Git，並確定 Git 位於 PATH 中。</target>
         <note />
       </trans-unit>
       <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="InvalidIntegrationSource">
         <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
-        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <target state="translated">'{0}' 中的整合來源設定無效。指定一個不包含內嵌憑證的 NuGet 來源，並可選擇性地指定一個非空白允許套件模式清單 (精確的識別碼、以 * 或 * 結尾的前綴)。</target>
         <note>{0} is the configuration key. Do not translate NuGet or *.</note>
       </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
@@ -244,7 +244,7 @@
       </trans-unit>
       <trans-unit id="InvalidSourceName">
         <source>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
-        <target state="new">Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <target state="translated">'{0}' 中的來源名稱無效。來源名稱必須包含 1 至 64 個 ASCII 字母、數字、句點、連字號或底線，且開頭必須是字母或數字。</target>
         <note>{0} is the configuration key. Do not translate ASCII.</note>
       </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
@@ -279,7 +279,7 @@
       </trans-unit>
       <trans-unit id="NuGetSourceKeyAlreadyInUse">
         <source>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</source>
-        <target state="new">NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</target>
+        <target state="translated">NuGet 來源金鑰 '{0}' 已由其他來源或其設定保留。請選擇其他整合來源金鑰，或手動更新 NuGet 設定。</target>
         <note>{0} is the source key. Do not translate NuGet.</note>
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">

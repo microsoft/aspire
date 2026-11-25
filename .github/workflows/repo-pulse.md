@@ -454,4 +454,4 @@ Emit exactly one safe-output of type `update_issue`:
 **Always emit exactly one `update_issue` output.** If the data files are
 unexpectedly missing or empty, still emit the body with every section
 header present and the appropriate empty-state message under each.
-**Never emit** `missing_tool`, `missing_data`, or `noop`.
+**Never emit** `report_missing_tool`, `report_missing_data`, or `noop`.

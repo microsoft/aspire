@@ -17,6 +17,7 @@ internal sealed class IntegrationHostProcessLauncher(
     RemoteHostProfilingTelemetry profilingTelemetry,
     ILogger<IntegrationHostLauncher> logger,
     IChildProcessFactory processFactory,
+    ITemporaryStorage temporaryStorage,
     TimeProvider timeProvider)
 {
     public async Task<ProcessScope> LaunchAsync(IntegrationHostDescriptor descriptor, string registrationId, CancellationToken cancellationToken)
@@ -56,6 +57,7 @@ internal sealed class IntegrationHostProcessLauncher(
             var execution = processFactory.Create(startInfo, logger, new ChildProcessOptions
             {
                 Lifetime = ChildProcessLifetime.OwnedTree,
+                TemporaryStorage = temporaryStorage,
                 TimeProvider = timeProvider,
                 TerminationTimeout = configuration.ShutdownTimeout,
                 OutputDrainIdleTimeout = configuration.OutputDrainIdleTimeout,

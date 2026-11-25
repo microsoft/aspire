@@ -127,7 +127,7 @@ public class DashboardUrlTests
                 var resourceRow = page.Locator($".resource-row[data-resource-name='{resourceName}']");
 
                 await Assertions.Expect(resourceRow).ToBeVisibleAsync();
-                await Assertions.Expect(resourceRow.GetByText(initialState, new() { Exact = true })).ToBeVisibleAsync();
+                await Assertions.Expect(DashboardResourceAssertions.RowState(resourceRow, initialState)).ToBeVisibleAsync();
 
                 var updatedResourceTask = app.ResourceNotifications.WaitForResourceAsync(
                     resourceName,
@@ -141,7 +141,7 @@ public class DashboardUrlTests
 
                 // PublishUpdateAsync updates the application notification stream while the AppHost breakpoint remains held.
                 // Dashboard consumption and browser rendering are asynchronous, so wait separately for the rendered change.
-                await Assertions.Expect(resourceRow.GetByText(updatedState, new() { Exact = true })).ToBeVisibleAsync();
+                await Assertions.Expect(DashboardResourceAssertions.RowState(resourceRow, updatedState)).ToBeVisibleAsync();
             }
             finally
             {

@@ -52,6 +52,7 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
         await using var process = ProcessTestFixture.CreateProcess(startInfo, new ChildProcessOptions
         {
             Lifetime = ChildProcessLifetime.OwnedTree,
+            TemporaryStorage = TestTemporaryStorage.Create(),
             CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
             StandardOutputCallback = stdout.Enqueue
         });

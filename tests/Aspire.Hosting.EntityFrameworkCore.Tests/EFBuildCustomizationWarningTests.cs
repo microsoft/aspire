@@ -27,8 +27,15 @@ public class EFBuildCustomizationWarningTests
     public async Task WarnsOnlyForParticipatingBuildCustomizationsAndContinues(string customization, bool expectWarning)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        // This launcher owns builds, so the test can focus on EF without materializing a run-mode coordinator.
+        // Use the external-build contract so WithBuildEnvironment remains valid. Complete that synthetic build below
+        // so this test can focus on EF warnings rather than exercising the build coordinator.
         builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[KnownConfigNames.DebugSessionInfo] = $$"""
+            {
+              "protocols_supported": ["test"],
+              "supported_launch_configurations": ["{{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}}"]
+            }
+            """;
         var startupPath = new Projects.ServiceA().ProjectPath;
         var startup = customization == "startup-metadata"
             ? builder.AddResource(new DotnetProjectResource("api", Path.GetDirectoryName(startupPath)!))
@@ -68,6 +75,10 @@ public class EFBuildCustomizationWarningTests
                 break;
         }
         using var app = builder.Build();
+        await CoordinatedBuildTestHelpers.CompleteBuildsAsync(
+            builder,
+            app,
+            TestContext.Current.CancellationToken);
         var sink = new TestSink();
         var logger = new TestLogger("EF", sink, level => level >= LogLevel.Information);
         var tool = new TestEfTool();
