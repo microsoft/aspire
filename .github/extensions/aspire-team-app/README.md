@@ -74,8 +74,11 @@ card shows are driven by its lane and its signal pills:
   **Auto** toolbar switch can pause automatic UI updates; when paused, an **Apply
   update** pill appears only after changed data is ready. The refresh button tooltip
   counts down to the next background data check. GitHub requests time out after
-  30 seconds, including stalled response bodies, so a provider cannot block tab
-  changes indefinitely. Failed sources show an error and can be retried with Refresh.
+  30 seconds, including stalled response bodies, and a timed-out read is retried once
+  on a fresh request, so a provider cannot block tab changes indefinitely. Failed
+  sources show an error and can be retried with Refresh. Repositories with more than
+  two pages of open PRs or issues find later page boundaries with a cheap cursor-only
+  query and load those pages a few at a time instead of one after another.
 - **Responsive navigation** — tabs select immediately while their complete board
   loads. Additional clicks during a load retain only the latest destination instead
   of queuing a full provider refresh for every click. Settings remain accessible.

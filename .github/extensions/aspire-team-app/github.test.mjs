@@ -22,6 +22,68 @@ test("GitHub connection timeouts explain connectivity failures without hiding ot
   }
 });
 
+test("a hung GitHub request is retried once on a fresh request instead of failing the board", async (t) => {
+  const timeout = AbortSignal.timeout.bind(AbortSignal);
+  t.mock.method(AbortSignal, "timeout", () => timeout(20));
+  // AbortSignal.timeout timers are unref'd; keep the test process alive until the retry settles.
+  const keepAlive = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(keepAlive));
+  let calls = 0;
+  globalThis.fetch = async (_url, options) => {
+    if (++calls === 1) {
+      return new Promise((_, reject) => options.signal.addEventListener("abort", () => reject(options.signal.reason)));
+    }
+    return jsonResponse({ data: { repository: { pullRequests: { nodes: [prNode(1, isoAgo(hourMs))] } } } });
+  };
+  const dashboard = await loadReview();
+  assert.equal(calls, 2);
+  assert.deepEqual(dashboard.errors, []);
+  assert.equal(dashboard.counts.total, 1);
+});
+
+test("large repositories load later PR pages concurrently and still follow PRs opened during the load", async () => {
+  // 130 open PRs at 40 per page when the cursor walk runs. 41 more open before the last page
+  // loads, so that page reports another page that the loader must still follow.
+  const nodes = Array.from({ length: 171 }, (_, index) => prNode(index + 1, isoAgo(hourMs)));
+  const cursorIndex = (after) => after === null ? -1 : Number(after.slice(1));
+  const detailedPages = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  globalThis.fetch = async (_url, options) => {
+    const { query, variables } = JSON.parse(options.body);
+    const start = cursorIndex(variables.after) + 1;
+    if (query.includes("edges { cursor }")) {
+      const end = Math.min(start + 100, 130);
+      return jsonResponse({ data: { repository: { pullRequests: {
+        pageInfo: { hasNextPage: end < 130, endCursor: `c${end - 1}` },
+        edges: Array.from({ length: end - start }, (_, offset) => ({ cursor: `c${start + offset}` })),
+      } } } });
+    }
+    detailedPages.push(variables.after);
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    inFlight--;
+    const end = Math.min(start + 40, nodes.length);
+    return jsonResponse({ data: { repository: { pullRequests: {
+      totalCount: 130,
+      nodes: nodes.slice(start, end),
+      pageInfo: { hasNextPage: end < nodes.length, endCursor: `c${end - 1}` },
+    } } } });
+  };
+  const dashboard = await loadDashboard({
+    accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire"] }],
+    mode: "ship",
+    prefs: {},
+    dismissed: [],
+    showDrafts: true,
+  });
+  assert.deepEqual(detailedPages.toSorted(), ["c119", "c159", "c39", "c79", null].toSorted());
+  assert.ok(maxInFlight > 1, "later pages load concurrently");
+  assert.deepEqual(dashboard.errors, []);
+  assert.equal(dashboard.counts.total, 171);
+});
+
 test("Needs attention serializes a strict ten-card prefix and the complete deduplicated remainder", async () => {
   for (const count of [0, 4, 10, 11, 25]) {
     const createdAt = isoAgo(3 * dayMs);

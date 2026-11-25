@@ -89,6 +89,25 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL, { allowPartial
 // explicit safety bound (25 pages * 40 = up to 1000 open items per repo per account)
 // so a pathological repo can't spin the loader indefinitely.
 const MAX_PAGES = 25;
+const PAGE_SIZE = 40;
+
+// Each detailed PR page costs GitHub several seconds to resolve (reviews, threads, checks,
+// timelines, closing issues), and microsoft/aspire has hundreds of open PRs, so walking those
+// pages one cursor at a time took over a minute per Review/Ship load. When the first page reports
+// more items, a cheap cursor-only walk finds every later page boundary and the detailed pages
+// load a few at a time instead of serially.
+const PAGE_CONCURRENCY = 4;
+const CURSOR_PAGE_SIZE = 100;
+
+const pageCursorQuery = (connection) => `
+query($owner:String!, $name:String!, $after:String) {
+  repository(owner:$owner, name:$name) {
+    ${connection}(states:OPEN, first:${CURSOR_PAGE_SIZE}, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      pageInfo { hasNextPage endCursor }
+      edges { cursor }
+    }
+  }
+}`;
 
 const READINESS_TRANSITIONS = `
   pageInfo { hasNextPage endCursor }
@@ -103,7 +122,8 @@ const PR_QUERY = `
 query($owner:String!, $name:String!, $after:String, $includeReadiness:Boolean!) {
   repository(owner:$owner, name:$name) {
     isPrivate
-    pullRequests(states:OPEN, first:40, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+    pullRequests(states:OPEN, first:${PAGE_SIZE}, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      totalCount
       pageInfo { hasNextPage endCursor }
       nodes {
         number title url isDraft state createdAt updatedAt
@@ -164,7 +184,8 @@ query($owner:String!, $name:String!, $number:Int!, $after:String!) {
 const ISSUE_QUERY = `
 query($owner:String!, $name:String!, $after:String) {
   repository(owner:$owner, name:$name) {
-    issues(states:OPEN, first:40, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+    issues(states:OPEN, first:${PAGE_SIZE}, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      totalCount
       pageInfo { hasNextPage endCursor }
       nodes {
         number title url createdAt updatedAt
@@ -239,6 +260,77 @@ function getPullRequestLabelErrors(errors, nodes) {
     errorsByNode.set(index, mergeErrors(errorsByNode.get(index), message));
   }
   return errorsByNode;
+}
+
+// Loads every open page of a repository connection. `loadPage(after)` fetches and records one
+// detailed page and returns its connection ({ totalCount, pageInfo }).
+async function loadOpenPages(account, owner, name, connection, loadPage) {
+  const first = await loadPage(null);
+  if (!first?.pageInfo?.hasNextPage) return;
+  let starts = null;
+  if (Number.isInteger(first.totalCount) && first.totalCount > PAGE_SIZE * 2) {
+    try {
+      starts = await loadPageStarts(account, owner, name, connection, first.pageInfo.endCursor);
+    } catch {
+      // The cursor walk is only an optimization; the serial walk below still loads every page.
+      starts = null;
+    }
+  }
+  if (!starts?.length) {
+    await loadSerialPages(loadPage, first, 1);
+    return;
+  }
+
+  // Middle pages are bounded by the next page's start cursor, so only the last page follows
+  // `hasNextPage`, which also picks up items opened after the cursor walk.
+  const results = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < starts.length) {
+      const index = next++;
+      const page = await loadPage(starts[index]);
+      if (index === starts.length - 1) await loadSerialPages(loadPage, page, starts.length + 1);
+    }
+  };
+  for (let i = 0; i < Math.min(PAGE_CONCURRENCY, starts.length); i++) results.push(worker());
+  // Wait for every in-flight page before reporting a failure so no request keeps mutating the
+  // dashboard maps after this repository has settled.
+  const settled = await Promise.allSettled(results);
+  const failure = settled.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+}
+
+async function loadSerialPages(loadPage, page, pagesLoaded) {
+  for (let loaded = pagesLoaded; loaded < MAX_PAGES && page?.pageInfo?.hasNextPage; loaded++) {
+    page = await loadPage(page.pageInfo.endCursor);
+  }
+}
+
+// Returns the `after` cursor for each detailed page following the first one, capped by MAX_PAGES.
+async function loadPageStarts(account, owner, name, connection, firstEndCursor) {
+  if (typeof firstEndCursor !== "string" || !firstEndCursor) return null;
+  const starts = [firstEndCursor];
+  const query = pageCursorQuery(connection);
+  let after = firstEndCursor;
+  let sincePageStart = 0;
+  while (starts.length < MAX_PAGES - 1) {
+    const data = await gql(account.token, query, { owner, name, after }, account.graphql);
+    const conn = data.repository?.[connection];
+    const edges = conn?.edges;
+    if (!Array.isArray(edges) || typeof conn.pageInfo?.hasNextPage !== "boolean") return null;
+    for (const [index, edge] of edges.entries()) {
+      if (typeof edge?.cursor !== "string" || !edge.cursor) return null;
+      sincePageStart++;
+      const isLast = !conn.pageInfo.hasNextPage && index === edges.length - 1;
+      if (sincePageStart === PAGE_SIZE && !isLast && starts.length < MAX_PAGES - 1) {
+        starts.push(edge.cursor);
+        sincePageStart = 0;
+      }
+    }
+    if (!conn.pageInfo.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return starts;
 }
 
 async function loadPullRequestLabels(account, owner, name, node) {
@@ -887,20 +979,17 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           }
           try {
             if (wantIssues) {
-              let after = null;
-              for (let page = 0; page < MAX_PAGES; page++) {
+              await loadOpenPages(acct, owner, name, "issues", async (after) => {
                 const data = await gql(acct.token, ISSUE_QUERY, { owner, name, after }, acct.graphql);
                 const conn = data.repository?.issues;
                 for (const node of conn?.nodes ?? []) {
                   const issue = normalizeIssue(repo, node, viewers);
                   if (!issueById.has(issue.url)) issueById.set(issue.url, issue);
                 }
-                if (!conn?.pageInfo?.hasNextPage) break;
-                after = conn.pageInfo.endCursor;
-              }
+                return conn;
+              });
             } else {
-              let after = null;
-              for (let page = 0; page < MAX_PAGES; page++) {
+              await loadOpenPages(acct, owner, name, "pullRequests", async (after) => {
                 const { data, errors: graphqlErrors = [] } = await gql(
                   acct.token,
                   PR_QUERY,
@@ -943,9 +1032,8 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                   const existing = prById.get(pr.url);
                   prById.set(pr.url, existing ? mergePullRequestSnapshots(existing, pr, mode) : pr);
                 }
-                if (!conn?.pageInfo?.hasNextPage) break;
-                after = conn.pageInfo.endCursor;
-              }
+                return conn;
+              });
             }
             okRepos.add(hostRepoKey(acct.graphql, repo));
           } catch (e) {
