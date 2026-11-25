@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES003
 
 using System.Reflection;
@@ -10,6 +9,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
+using Aspire.TestUtilities;
 using Aspire.Tests.Utils;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.DependencyInjection;
@@ -174,6 +174,7 @@ public class KubernetesManifestTests(ITestOutputHelper outputHelper)
     [InlineData("Python")]
     [InlineData("Java")]
     [InlineData("Rust")]
+    [RequiresTools(["gofmt"])]
     public async Task WithField_GeneratedSdkAcceptsStructuredValues(string language)
     {
         var scannedContext = AtsCapabilityScanner.ScanAssemblies([typeof(KubernetesResource).Assembly]).ToAtsContext();

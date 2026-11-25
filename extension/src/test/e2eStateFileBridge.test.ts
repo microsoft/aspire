@@ -419,6 +419,28 @@ suite('E2E state file bridge', () => {
         provider.dispose();
     });
 
+    test('clears notifications with the VS Code clear-all command', async () => {
+        const repository = createRepository([]);
+        const terminalProvider = {} as AspireTerminalProvider;
+        const launchService = createLaunchService();
+        const provider = {} as AspireAppHostTreeProvider;
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+        const markStarted = sandbox.spy();
+
+        await dispatchControlCommand(
+            { name: 'clearAllNotifications' },
+            repository,
+            launchService,
+            provider,
+            terminalProvider,
+            markStarted);
+
+        assert.deepStrictEqual(executeCommandStub.getCalls().map(call => call.args), [
+            ['notifications.clearAll'],
+        ]);
+        assert.strictEqual(markStarted.callCount, 1);
+    });
+
     test('scopes missing and exact C# extension version overrides to resource configuration creation', async () => {
         const repository = createRepository([]);
         const terminalProvider = {} as AspireTerminalProvider;

@@ -64,6 +64,11 @@ internal sealed class ProcessInvocationOptions
     public bool NoLaunchProfile { get; set; }
 
     /// <summary>
+    /// Disables automatic MSBuild response files for CLI-generated projects without changing user project builds.
+    /// </summary>
+    public bool NoAutoResponse { get; set; }
+
+    /// <summary>
     /// Suppresses implicit restore during single-file project property and target queries.
     /// </summary>
     public bool NoRestore { get; set; }
@@ -77,6 +82,8 @@ internal sealed class ProcessInvocationOptions
     /// Imports invocation-scoped NuGet restore targets for candidate graph validation.
     /// </summary>
     public FileInfo? NuGetRestoreTargetsFile { get; set; }
+
+    public DirectoryInfo? IsolatedRestorePackagesDirectory { get; set; }
 
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
@@ -182,9 +189,11 @@ internal sealed class ProcessInvocationOptions
         StandardOutputCallback = StandardOutputCallback,
         StandardErrorCallback = StandardErrorCallback,
         NoLaunchProfile = NoLaunchProfile,
+        NoAutoResponse = NoAutoResponse,
         NoRestore = NoRestore,
         ExcludeRestorePackageImports = ExcludeRestorePackageImports,
         NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
+        IsolatedRestorePackagesDirectory = IsolatedRestorePackagesDirectory,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
@@ -1259,6 +1268,15 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         string[] cliArgs = ["restore", projectFilePath.FullName];
+        if (options.NoAutoResponse)
+        {
+            cliArgs = [.. cliArgs, "-noAutoResponse"];
+        }
+
+        if (options.IsolatedRestorePackagesDirectory is { } packagesDirectory)
+        {
+            cliArgs = [.. cliArgs, "--packages", packagesDirectory.FullName, "--no-http-cache", "--force"];
+        }
         if (options.NuGetRestoreTargetsFile is { } restoreTargets)
         {
             cliArgs = [.. cliArgs, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(restoreTargets.FullName)}"];
@@ -1284,6 +1302,10 @@ internal sealed class DotNetCliRunner(
         var noRestoreSwitch = noRestore ? "--no-restore" : string.Empty;
         string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
+        if (options.NoAutoResponse)
+        {
+            cliArgs = [.. cliArgs, "-noAutoResponse"];
+        }
 
         // File-based AppHosts derive their RunCommand during build. Persist suppression into that
         // generated command so the later dotnet run --no-build cannot recursively invoke Aspire CLI.

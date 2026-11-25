@@ -150,8 +150,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         await auto.AssertResourcesExistAsync(counter, "cache");
         await auto.AspireStopAsync(counter);
 
-        // Step 7: Suppress the post-update CLI self-update prompt (UpdateCommand.cs:243-265) so it
-        // doesn't block waiting on "Update successful!". Pattern borrowed from CentralPackageManagementTests.
+        // Step 7: Disable update notifications so the post-command CLI update banner doesn't add noise.
+        // This does not suppress the self-update confirmation that `aspire update` may show after the
+        // project update; PreviewStableUpdateAndDeclineAsync handles it.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -396,8 +397,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
                 "This test requires a non-stable initial channel so 'aspire update --channel stable' can preview stable-channel updates.");
         }
 
-        // Suppress the post-update CLI self-update prompt so it doesn't block waiting on
-        // "Update successful!". No cleanup needed — each test runs in its own Docker container.
+        // Disable update notifications so the post-command CLI update banner doesn't add noise. This does
+        // not suppress the self-update confirmation that `aspire update` may show after the project update;
+        // PreviewStableUpdateAndDeclineAsync handles it. No cleanup needed — each test runs in its own Docker container.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -480,7 +482,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             await auto.TypeAsync("n");
         }
 
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForAspireUpdateCompletionAsync(counter);
         Assert.Equal(originalConfig, await File.ReadAllBytesAsync(aspireConfigPath));
     }
 

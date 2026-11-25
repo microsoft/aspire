@@ -8,6 +8,17 @@
 //------------------------------------------------------------------------------
 namespace Aspire.TypeSystem
 {
+    public sealed partial class ApiReferenceExportOptions
+    {
+        public ApiReferenceExportOptions(string packageName, string packageVersion, System.Collections.Generic.IReadOnlyCollection<string> exportingAssemblyNames) { }
+
+        public System.Collections.Generic.IReadOnlyCollection<string> ExportingAssemblyNames { get { throw null; } }
+
+        public string PackageName { get { throw null; } }
+
+        public string PackageVersion { get { throw null; } }
+    }
+
     public sealed partial class AspireExportData
     {
         public string? Description { get { throw null; } init { } }
@@ -57,6 +68,8 @@ namespace Aspire.TypeSystem
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
         public System.Collections.Generic.IReadOnlyList<AtsTypeRef> ExpandedTargetTypes { get { throw null; } set { } }
+
+        public bool IsExperimental { get { throw null; } init { } }
 
         public bool IsObsolete { get { throw null; } init { } }
 
@@ -212,6 +225,9 @@ namespace Aspire.TypeSystem
 
         public bool IsCallback { get { throw null; } init { } }
 
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
+
         public bool IsOptional { get { throw null; } init { } }
 
         public required string Name { get { throw null; } init { } }
@@ -227,6 +243,9 @@ namespace Aspire.TypeSystem
 
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
 
         public required System.Collections.Generic.IReadOnlyList<AtsDtoPropertyInfo> Properties { get { throw null; } init { } }
@@ -239,6 +258,9 @@ namespace Aspire.TypeSystem
         public System.Type? ClrType { get { throw null; } init { } }
 
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
 
         public required string Name { get { throw null; } init { } }
 
@@ -253,6 +275,9 @@ namespace Aspire.TypeSystem
     {
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
     }
 
@@ -261,6 +286,9 @@ namespace Aspire.TypeSystem
         public string? Description { get { throw null; } init { } }
 
         public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
 
         public required string OwningAssemblyName { get { throw null; } init { } }
 
@@ -332,6 +360,9 @@ namespace Aspire.TypeSystem
 
         public bool IsInterface { get { throw null; } init { } }
 
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsObsolete { get { throw null; } init { } }
+
         public bool IsResourceBuilder { get { throw null; } }
     }
 
@@ -395,6 +426,8 @@ namespace Aspire.TypeSystem
 
         public static AspireValueData? GetAspireValueData(System.Reflection.PropertyInfo property) { throw null; }
 
+        public static ObsoleteData? GetObsoleteData(System.Reflection.FieldInfo field) { throw null; }
+
         public static ObsoleteData? GetObsoleteData(System.Reflection.MethodInfo method) { throw null; }
 
         public static ObsoleteData? GetObsoleteData(System.Reflection.PropertyInfo property) { throw null; }
@@ -408,6 +441,10 @@ namespace Aspire.TypeSystem
         public static bool HasAspireExportIgnoreData(System.Reflection.PropertyInfo property) { throw null; }
 
         public static bool HasAspireExportIgnoreData(System.Type type) { throw null; }
+
+        public static bool HasExperimentalData(System.Reflection.MethodInfo method) { throw null; }
+
+        public static bool HasExperimentalData(System.Reflection.PropertyInfo property) { throw null; }
     }
 
     public sealed partial class CommandSpec
@@ -417,6 +454,19 @@ namespace Aspire.TypeSystem
         public required string Command { get { throw null; } init { } }
 
         public System.Collections.Generic.Dictionary<string, string>? EnvironmentVariables { get { throw null; } init { } }
+
+        public CommandUpToDateCheck? UpToDateCheck { get { throw null; } init { } }
+    }
+
+    public sealed partial class CommandUpToDateCheck
+    {
+        public string[]? FileExtensions { get { throw null; } init { } }
+
+        public required string[] Inputs { get { throw null; } init { } }
+
+        public string[]? Outputs { get { throw null; } init { } }
+
+        public required string StampFile { get { throw null; } init { } }
     }
 
     public sealed partial class DetectionResult
@@ -457,6 +507,13 @@ namespace Aspire.TypeSystem
         public const string ResourceBuilderInterface = "Aspire.Hosting.ApplicationModel.IResourceBuilder`1";
         public const string ResourceInterface = "Aspire.Hosting.ApplicationModel.IResource";
         public const string ValueProviderInterface = "Aspire.Hosting.ApplicationModel.IValueProvider";
+    }
+
+    public partial interface IApiReferenceExporter
+    {
+        string Language { get; }
+
+        System.Text.Json.JsonElement ExportApi(AtsContext context, ApiReferenceExportOptions options, System.Threading.CancellationToken cancellationToken);
     }
 
     public partial interface ICodeGenerator

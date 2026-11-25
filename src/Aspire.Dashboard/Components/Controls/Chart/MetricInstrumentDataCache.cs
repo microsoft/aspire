@@ -44,6 +44,10 @@ internal static class MetricInstrumentDataCache
         IReadOnlyList<MetricDimensionCursor> cursors,
         DateTime windowStart)
     {
+        // A delta number is observed at its end, so the refreshed read starts after the cursor and a value ending exactly
+        // at the cursor is kept from the previous read. Other values overlapping the cursor are read again.
+        var isDeltaNumber = cached.Summary.AggregationTemporality == OtlpAggregationTemporality.Delta &&
+            cached.Summary.Type != OtlpInstrumentType.Histogram;
         var dimensions = new List<DimensionScope>(refreshed.Dimensions.Count);
         foreach (var refreshedDimension in refreshed.Dimensions)
         {
@@ -56,9 +60,11 @@ internal static class MetricInstrumentDataCache
             }
 
             var mergedDimension = new DimensionScope(refreshedDimension.Capacity, refreshedDimension.Attributes);
+            var cursorUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(cursor.StartTime);
             foreach (var value in cachedDimension.Values)
             {
-                if (value.End >= windowStart && value.End < cursor.StartTime)
+                if (value.End >= windowStart &&
+                    (isDeltaNumber ? value.EndTimeUnixNano <= cursorUnixNano : value.End < cursor.StartTime))
                 {
                     mergedDimension.Values.Add(MetricValueBase.Clone(value));
                 }

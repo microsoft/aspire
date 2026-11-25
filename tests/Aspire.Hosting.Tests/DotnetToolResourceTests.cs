@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL // Type is for evaluation purposes only and is subject to change or removal in future updates.
-#pragma warning disable ASPIRECOMMAND001
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;

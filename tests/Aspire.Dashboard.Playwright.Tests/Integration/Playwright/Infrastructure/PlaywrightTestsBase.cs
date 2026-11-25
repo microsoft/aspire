@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Microsoft.Playwright;
 using Xunit;
 
@@ -27,9 +29,27 @@ public class PlaywrightTestsBase<TDashboardServerFixture> : IClassFixture<TDashb
         _ownsTestGate = true;
     }
 
-    public async Task RunTestAsync(Func<IPage, Task> test)
+    /// <summary>
+    /// Runs a test in a new page.
+    /// </summary>
+    /// <param name="test">The test.</param>
+    /// <param name="useCompactDensity">
+    /// Whether to start with a saved Compact preference instead of the dashboard default.
+    /// </param>
+    public async Task RunTestAsync(Func<IPage, Task> test, bool useCompactDensity = false)
     {
         var page = await CreateNewPageAsync();
+        if (useCompactDensity)
+        {
+            // Only when nothing is stored, so a density the test chooses in the settings survives a reload. Stored
+            // values are JSON, so the density is a JSON string.
+            await page.AddInitScriptAsync($$"""
+                if (localStorage.getItem('{{BrowserStorageKeys.ResourceListDensity}}') === null) {
+                    localStorage.setItem('{{BrowserStorageKeys.ResourceListDensity}}', '"{{nameof(ResourceListDensity.Compact)}}"');
+                }
+                """);
+        }
+
         try
         {
             await test(page);

@@ -12,21 +12,25 @@ internal sealed class CommandResult
 
     public string? ErrorMessage { get; }
 
+    public bool ErrorMessageHasMarkup { get; }
+
     public bool ShouldDisplayHelp { get; }
 
     public bool ShouldDisplayCancellationMessage { get; }
 
-    private CommandResult(int exitCode, string? errorMessage = null, bool shouldDisplayHelp = false, bool shouldDisplayCancellationMessage = false)
+    private CommandResult(int exitCode, string? errorMessage = null, bool shouldDisplayHelp = false, bool shouldDisplayCancellationMessage = false, bool errorMessageHasMarkup = false)
     {
         ExitCode = exitCode;
         ErrorMessage = errorMessage;
+        ErrorMessageHasMarkup = errorMessageHasMarkup;
         ShouldDisplayHelp = shouldDisplayHelp;
         ShouldDisplayCancellationMessage = shouldDisplayCancellationMessage;
     }
 
     public static CommandResult Success() => new(CliExitCodes.Success);
 
-    public static CommandResult Failure(int exitCode, string? errorMessage = null) => new(exitCode, errorMessage);
+    public static CommandResult Failure(int exitCode, string? errorMessage = null, bool errorMessageHasMarkup = false) =>
+        new(exitCode, errorMessage, errorMessageHasMarkup: errorMessageHasMarkup);
 
     /// <summary>
     /// Indicates the command was cancelled by the user (e.g. Ctrl+C).

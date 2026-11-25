@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Authentication.Connection;
 using Aspire.Dashboard.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -15,7 +16,8 @@ internal sealed class DashboardExperienceRedirectMiddleware(
 
     public Task InvokeAsync(HttpContext context)
     {
-        if (!HttpMethods.IsGet(context.Request.Method) ||
+        if (!context.IsFrontendConnection() ||
+            !HttpMethods.IsGet(context.Request.Method) ||
             !context.Request.Headers.Accept.Any(value => value?.Contains("text/html", StringComparison.OrdinalIgnoreCase) == true))
         {
             return next(context);
@@ -96,6 +98,8 @@ internal sealed class DashboardExperienceRedirectMiddleware(
         return s_sharedPageSegments.Contains(segment, StringComparer.OrdinalIgnoreCase);
     }
 
+    // Keep the server paths in sync with LegacyNavUrls.ShouldRewriteToLegacy, which keeps the legacy layout from
+    // rewriting navigations to them below /legacy.
     private static bool IsExcludedPath(string path) =>
         string.Equals(path, "/login", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("/error", StringComparison.OrdinalIgnoreCase) ||

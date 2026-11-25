@@ -36,7 +36,6 @@ internal sealed partial class TemplateEngineFactory(
     INuGetClient nuGetClient,
     ILogger<TemplateEngineFactory> logger) : ITemplateFactory, IDisposable
 {
-    private static readonly TimeSpan s_gitOperationTimeout = TimeSpan.FromMinutes(2);
     private readonly List<IDisposable> _resources = [];
     private readonly Dictionary<string, ITemplate[]> _discoveredTemplates = new(StringComparer.Ordinal);
     private bool _disposed;
@@ -244,7 +243,7 @@ internal sealed partial class TemplateEngineFactory(
     private async Task<T> WithGitTimeoutAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var deadline = new CancellationTokenSource(s_gitOperationTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
@@ -396,7 +395,9 @@ internal sealed partial class TemplateEngineFactory(
         try
         {
             var evaluatedDefaults = promptDefaults.Evaluate(settings, name, cancellationToken);
-            var promptState = (hostEnvironment.SupportsInteractiveInput || computedParameters.Count > 0) && template.ParameterDefinitions.Any(parameter =>
+            // Disabled parameters must be skipped before injecting well-known values even without
+            // prompts: a full SDK version is not a valid value for a major/minor-only choice.
+            var promptState = template.ParameterDefinitions.Any(parameter =>
                 !string.IsNullOrEmpty(parameter.Precedence.IsEnabledCondition) || !string.IsNullOrEmpty(parameter.Precedence.IsRequiredCondition))
                 ? new TemplateParameterPromptState(settings, template, name, logger, computedParameters)
                 : null;

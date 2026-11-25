@@ -9,7 +9,11 @@
     {
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) },
         { "aria-haspopup", "menu" },
-        { "aria-expanded", _visible ? "true" : "false" }
+        { "aria-expanded", _visible ? "true" : "false" },
+        // fluent-button adds role="button" only once its custom element upgrades. Until then, aria-haspopup and
+        // aria-expanded sit on an element with no role, which assistive technologies and axe treat as invalid, for
+        // example on rows that were just rendered.
+        { "role", "button" }
     };
 }
 

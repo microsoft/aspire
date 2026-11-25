@@ -704,7 +704,6 @@ public class HostedAgentExtensionTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=primary"));
-#pragma warning disable ASPIRECONNECTIONSTRINGS001
         var names = ConnectionStringEnvironmentVariableNames.Create(connection.Resource, "my-db-http");
         var reference = new ConnectionStringReference(
             connection.Resource, optional: false, names, "HttpConnectionStringExpression",
@@ -712,7 +711,6 @@ public class HostedAgentExtensionTests
         var agent = builder.AddExecutable("agent", "python", ".")
             .WithEnvironment(names.OriginalName, reference)
             .WithEnvironment(names.PortableName, reference);
-#pragma warning restore ASPIRECONNECTIONSTRINGS001
 
         using var app = builder.Build();
         var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);

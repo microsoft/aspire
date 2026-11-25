@@ -211,13 +211,16 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false, true, false, false)]
-    [InlineData(true, true, false, false)]
-    [InlineData(false, false, false, false)]
-    [InlineData(false, true, true, false)]
-    [InlineData(false, false, false, true)]
+    [InlineData(false, true, false, false, false)]
+    [InlineData(true, true, false, false, false)]
+    [InlineData(false, false, false, false, false)]
+    [InlineData(false, true, true, false, false)]
+    [InlineData(false, false, false, true, false)]
+    [InlineData(false, true, false, false, true)]
+    [InlineData(true, true, false, false, true)]
+    [InlineData(false, true, true, false, true)]
     public async Task CandidateRestore_AcquiresSdkAndRestoresUpdatedVersionsBeforePersisting(
-        bool fileBased, bool childOwnPolicy, bool customChildTargets, bool escapedPath)
+        bool fileBased, bool childOwnPolicy, bool customChildTargets, bool escapedPath, bool isolated)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = escapedPath ? workspace.CreateDirectory("app ('literal')%@$") : workspace.WorkspaceRoot;
@@ -296,7 +299,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 """
             : $$"""
                 <Project Sdk="Aspire.AppHost.Sdk/{{sdkVersion}}">
-                  <PropertyGroup><TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework><RestorePackagesPath>{{MSBuildEscaping.Escape(rootCache.FullName)}}</RestorePackagesPath><DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences></PropertyGroup>
+                  <PropertyGroup><TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework><RestorePackagesPath>{{MSBuildEscaping.Escape(rootCache.FullName)}}</RestorePackagesPath><DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
                   <ItemGroup>
                     <PackageReference Include="{{rootPackage}}" Version="2.0.0" />
                     <ProjectReference Include="child/Child.csproj" />
@@ -317,7 +320,9 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var settings = new DotNetRestoreSettings(
             fileBased ? projectFile.FullName + ".csproj" : projectFile.FullName,
             Path.Combine(sdkDirectory, "NuGet.targets"), []);
-        var sdkCache = nuGetService.GetGlobalPackagesFolder(root);
+        var isolatedDirectory = isolated ? workspace.CreateDirectory("validation") : null;
+        var isolatedOutputDirectory = isolated ? isolatedDirectory!.CreateSubdirectory("restore-output") : null;
+        var sdkCache = isolated ? Path.Combine(isolatedDirectory!.FullName, "packages") : nuGetService.GetGlobalPackagesFolder(root);
         var sdkPackageDirectory = Path.Combine(sdkCache, "aspire.apphost.sdk", sdkVersion);
         Assert.False(Directory.Exists(sdkPackageDirectory));
         var childRestoreTargets = childTargets;
@@ -334,42 +339,68 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             using (var preview = await DotNetAppHostRestorePreview.CreateAsync(
                 nuGetService, candidate, settings, projectFile,
                 fileBased ? new Dictionary<string, string>() : new Dictionary<string, string> { [childFile.FullName] = childRestoreTargets },
-                TestContext.Current.CancellationToken))
+                isolatedOutputDirectory, TestContext.Current.CancellationToken))
             {
                 await nuGetService.AcquirePackageAsync(
-                    ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration, sdkCache,
-                    TestContext.Current.CancellationToken);
+                    ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration!, sdkCache,
+                    bypassCaches: isolated, TestContext.Current.CancellationToken);
                 Assert.True(File.Exists(Path.Combine(sdkPackageDirectory, "Sdk", "Sdk.props")));
                 // SDK-only packages have no runtime-asset manifest to invalidate. A deleted
                 // package directory must be acquired again rather than treated as cached.
                 Directory.Delete(sdkPackageDirectory, recursive: true);
                 await nuGetService.AcquirePackageAsync(
-                    ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration, sdkCache,
-                    TestContext.Current.CancellationToken);
+                    ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration!, sdkCache,
+                    bypassCaches: isolated, TestContext.Current.CancellationToken);
                 Assert.True(File.Exists(Path.Combine(sdkPackageDirectory, "Sdk", "Sdk.props")));
-                var (exitCode, stdout, stderr) = await RunNativeDotNetAsync(root, sdkCache,
-                    ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(preview.TargetsFile.FullName)}"]);
+                string[] restoreArguments =
+                    ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(preview.TargetsFile.FullName)}"];
+                if (isolated)
+                {
+                    restoreArguments = [.. restoreArguments, "--packages", sdkCache, "--no-http-cache", "--force"];
+                }
+                var (exitCode, stdout, stderr) = await RunNativeDotNetAsync(root, sdkCache, restoreArguments);
                 Assert.True(exitCode == 0, stdout + stderr);
                 Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
+                if (isolated)
+                {
+                    Assert.False(Directory.Exists(Path.Combine(root.FullName, "obj")));
+                    Assert.False(Directory.Exists(Path.Combine(childDirectory.FullName, "obj")));
+                    Assert.False(File.Exists(Path.Combine(root.FullName, "packages.lock.json")));
+                }
                 if (!fileBased)
                 {
-                    using var graph = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "obj", "Root.csproj.nuget.dgspec.json")));
+                    var rootOutput = isolated ? FindRestoreOutput(isolatedOutputDirectory!, "Root.csproj") : Path.Combine(root.FullName, "obj");
+                    var childOutput = isolated ? FindRestoreOutput(isolatedOutputDirectory!, "Child.csproj") : Path.Combine(childDirectory.FullName, "obj");
+                    using var graph = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(rootOutput, "Root.csproj.nuget.dgspec.json")));
                     var projects = graph.RootElement.GetProperty("projects");
                     Assert.Equal([newFeed.FullName, oldFeed.FullName], projects.GetProperty(projectFile.FullName).GetProperty("restore").GetProperty("sources")
                         .EnumerateObject().Select(static source => source.Name).ToArray());
                     using var childGraph = JsonDocument.Parse(await File.ReadAllTextAsync(
-                        Path.Combine(childDirectory.FullName, "obj", "Child.csproj.nuget.dgspec.json")));
+                        Path.Combine(childOutput, "Child.csproj.nuget.dgspec.json")));
                     var childProject = childGraph.RootElement.GetProperty("projects").EnumerateObject().Single().Value;
                     string[] expectedChildSources = childOwnPolicy ? [childFeed.FullName] : [newFeed.FullName, oldFeed.FullName];
                     Assert.Equal(expectedChildSources, childProject.GetProperty("restore").GetProperty("sources")
                         .EnumerateObject().Select(static source => source.Name).ToArray());
-                    Assert.Equal(childCache.FullName, childProject.GetProperty("restore").GetProperty("packagesPath").GetString()?.TrimEnd(Path.DirectorySeparatorChar));
+                    Assert.Equal(isolated ? sdkCache : childCache.FullName,
+                        childProject.GetProperty("restore").GetProperty("packagesPath").GetString()?.TrimEnd(Path.DirectorySeparatorChar));
+                    if (isolated)
+                    {
+                        Assert.Empty(rootCache.EnumerateFileSystemInfos());
+                        Assert.Empty(childCache.EnumerateFileSystemInfos());
+                        Assert.True(File.Exists(Path.Combine(rootOutput, "project.assets.json")));
+                        Assert.True(File.Exists(Path.Combine(childOutput, "project.assets.json")));
+                        Assert.True(File.Exists(Path.Combine(rootOutput, "packages.lock.json")));
+                    }
                     if (customChildTargets)
                     {
                         Assert.Equal("preserved" + Environment.NewLine,
                             await File.ReadAllTextAsync(Path.Combine(childDirectory.FullName, "custom-targets-ran")));
                     }
                 }
+            }
+            if (isolated)
+            {
+                return;
             }
             await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
             if (customChildTargets)
@@ -443,6 +474,87 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal([integrationPackage + "/1.0.0", dependencyPackage + "/1.0.0"],
             assets.RootElement.GetProperty("libraries").EnumerateObject().Select(static package => package.Name));
     }
+
+    [Theory]
+    [InlineData(null, "packages.lock.json", false)]
+    [InlineData(null, "packages.App.lock.json", false)]
+    [InlineData("locks/custom.lock.json", "locks/custom.lock.json", false)]
+    [InlineData(null, "packages.App.lock.json", true)]
+    public async Task IsolatedRestoreOutputs_HonorExistingLockFileWithoutChangingProject(string? lockFileProperty, string lockFile, bool lockedMode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feed = workspace.CreateDirectory("feed");
+        var cache = workspace.CreateDirectory("cache");
+        var project = workspace.CreateDirectory("project");
+        var package = $"Aspire.LockedRestore.{Guid.NewGuid():N}";
+        NuGetTestHelper.CreatePackage(feed, package, "1.0.0", new Dictionary<string, string> { ["lib/net10.0/_._"] = "" });
+        NuGetTestHelper.CreatePackage(feed, package, "2.0.0", new Dictionary<string, string> { ["lib/net10.0/_._"] = "" });
+        await File.WriteAllTextAsync(Path.Combine(project.FullName, "NuGet.Config"), $$"""
+            <configuration><packageSources><clear /><add key="feed" value="{{feed.FullName}}" /></packageSources></configuration>
+            """);
+        var projectFile = new FileInfo(Path.Combine(project.FullName, "App.csproj"));
+        async Task WriteProjectAsync(string version) => await File.WriteAllTextAsync(projectFile.FullName, $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework>
+                <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+                <PackageId>Contoso App</PackageId>
+                <AssemblyName>DifferentAssembly</AssemblyName>
+                <RestoreLockedMode>{{lockedMode.ToString().ToLowerInvariant()}}</RestoreLockedMode>
+                <NuGetLockFilePath>{{lockFileProperty}}</NuGetLockFilePath>
+              </PropertyGroup>
+              <ItemGroup><PackageReference Include="{{package}}" Version="{{version}}" /></ItemGroup>
+            </Project>
+            """);
+        // Generate a real lockfile at the original version in the location NuGet would choose,
+        // then move to the candidate version and discard the original restore outputs.
+        await WriteProjectAsync("1.0.0");
+        var lockFilePath = Path.Combine(project.FullName, lockFile);
+        var (seedExitCode, seedOutput, seedError) = await RunNativeDotNetAsync(project, cache.FullName,
+            ["restore", projectFile.FullName, "-property:RestoreLockedMode=false", "-property:RestorePackagesWithLockFile=true"]);
+        Assert.True(seedExitCode == 0, seedOutput + seedError);
+        if (lockFileProperty is null && lockFile != "packages.lock.json")
+        {
+            File.Move(Path.Combine(project.FullName, "packages.lock.json"), lockFilePath);
+        }
+        Assert.Contains($"\"{package}\"", await File.ReadAllTextAsync(lockFilePath));
+        Directory.Delete(Path.Combine(project.FullName, "obj"), recursive: true);
+        await WriteProjectAsync("2.0.0");
+        var originalLockFile = await File.ReadAllBytesAsync(lockFilePath);
+        var outputDirectory = workspace.CreateDirectory("validation");
+        var (versionExitCode, versionOutput, versionError) = await RunNativeDotNetAsync(project, null, ["--version"]);
+        Assert.True(versionExitCode == 0, versionOutput + versionError);
+        var restoreTargets = Path.Combine(Path.GetDirectoryName(GetDotNetExecutablePath())!, "sdk", versionOutput.Trim(), "NuGet.targets");
+
+        using var preview = await DotNetAppHostRestorePreview.CreateAsync(
+            NuGetTestHelper.CreateService(), candidate: null, new DotNetRestoreSettings(projectFile.FullName, restoreTargets, []),
+            projectFile, new Dictionary<string, string>(), outputDirectory, TestContext.Current.CancellationToken);
+        var (exitCode, stdout, stderr) = await RunNativeDotNetAsync(project, cache.FullName,
+            ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(preview.TargetsFile.FullName)}"]);
+
+        Assert.Equal(originalLockFile, await File.ReadAllBytesAsync(lockFilePath));
+        Assert.False(Directory.Exists(Path.Combine(project.FullName, "obj")));
+        if (lockedMode)
+        {
+            // Locked mode is the project's policy, so validation reports the mismatch, e.g.:
+            //   error NU1004: The package reference Aspire.LockedRestore.<id> version has changed from [1.0.0, ) to [2.0.0, ).
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("NU1004", stdout + stderr);
+            var existingLockFile = await File.ReadAllTextAsync(
+                Path.Combine(FindRestoreOutput(outputDirectory, "App.csproj"), "packages.lock.json"));
+            Assert.Contains("\"resolved\": \"1.0.0\"", existingLockFile);
+            return;
+        }
+
+        Assert.True(exitCode == 0, stdout + stderr);
+        var updatedLockFile = await File.ReadAllTextAsync(
+            Path.Combine(FindRestoreOutput(outputDirectory, "App.csproj"), "packages.lock.json"));
+        Assert.Contains($"\"resolved\": \"2.0.0\"", updatedLockFile);
+    }
+
+    private static string FindRestoreOutput(DirectoryInfo outputDirectory, string projectFileName)
+        => Path.GetDirectoryName(Directory.EnumerateFiles(
+            outputDirectory.FullName, projectFileName + ".nuget.dgspec.json", SearchOption.AllDirectories).Single())!;
 
     private static async Task<(int ExitCode, string Output, string Error)> RunNativeDotNetAsync(
         DirectoryInfo workingDirectory, string? packagesDirectory, string[] arguments)
@@ -840,9 +952,15 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RestoreAsyncRunsDotnetRestoreCommand(bool candidate)
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task RestoreAsyncRunsDotnetRestoreCommand(bool noAutoResponse, bool candidate, bool isolated)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -852,9 +970,12 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var targets = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "candidate;targets%('literal')@$?.targets"));
+        var packages = new DirectoryInfo(Path.Combine(workspace.Path, "restore packages"));
         var options = new ProcessInvocationOptions
         {
-            NuGetRestoreTargetsFile = candidate ? targets : null
+            NoAutoResponse = noAutoResponse,
+            NuGetRestoreTargetsFile = candidate ? targets : null,
+            IsolatedRestorePackagesDirectory = isolated ? packages : null
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -863,15 +984,69 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (args, _, _, _) =>
             {
-                Assert.Equal(candidate
-                    ? ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(targets.FullName)}"]
-                    : ["restore", projectFile.FullName], args);
+                string[] expected = ["restore", projectFile.FullName];
+                if (noAutoResponse)
+                {
+                    expected = [.. expected, "-noAutoResponse"];
+                }
+                if (isolated)
+                {
+                    expected = [.. expected, "--packages", packages.FullName, "--no-http-cache", "--force"];
+                }
+                if (candidate)
+                {
+                    expected = [.. expected, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(targets.FullName)}"];
+                }
+                Assert.Equal(expected, args);
             },
             0);
 
         var exitCode = await runner.RestoreAsync(projectFile, options, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BuildAndRestoreAsync_ControlAutomaticResponseFiles(bool build, bool noAutoResponse)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("generated");
+        var projectFile = new FileInfo(Path.Combine(projectDirectory.FullName, "Generated.csproj"));
+        var resultPath = Path.Combine(projectDirectory.FullName, "result.txt");
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.rsp"),
+            "-property:ResponseFileValue=from-response-file");
+        // No SDK or packages are needed: both commands execute a target that records the
+        // property supplied by the parent response file, or its project-defined default.
+        await File.WriteAllTextAsync(projectFile.FullName, """
+            <Project>
+              <PropertyGroup>
+                <ResponseFileValue>from-project</ResponseFileValue>
+              </PropertyGroup>
+              <Target Name="Restore">
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/result.txt" Lines="$(ResponseFileValue)" Overwrite="true" />
+              </Target>
+              <Target Name="Build" DependsOnTargets="Restore" />
+            </Project>
+            """);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ =>
+                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        }).BuildServiceProvider();
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+        var options = new ProcessInvocationOptions { NoAutoResponse = noAutoResponse };
+
+        var exitCode = build
+            ? await runner.BuildAsync(projectFile, noRestore: false, options, TestContext.Current.CancellationToken).DefaultTimeout()
+            : await runner.RestoreAsync(projectFile, options, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(noAutoResponse ? "from-project" : "from-response-file",
+            (await File.ReadAllTextAsync(resultPath)).Trim());
     }
 
     [Fact]
@@ -911,8 +1086,12 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
-    [Fact]
-    public async Task BuildAsyncIncludesNoRestoreFlagWhenNoRestoreIsTrue()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BuildAsyncRunsDotnetBuildCommand(bool noRestore, bool noAutoResponse)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -921,7 +1100,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        var options = new ProcessInvocationOptions();
+        var options = new ProcessInvocationOptions { NoAutoResponse = noAutoResponse };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -929,13 +1108,21 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (args, env, _, _) =>
             {
-                // Verify that --no-restore is included when noRestore is true
-                Assert.Contains("build", args);
-                Assert.Contains("--no-restore", args);
+                var expected = new List<string> { "build" };
+                if (noRestore)
+                {
+                    expected.Add("--no-restore");
+                }
+                expected.Add(projectFile.FullName);
+                if (noAutoResponse)
+                {
+                    expected.Add("-noAutoResponse");
+                }
+                Assert.Equal(expected, args);
             },
             0);
 
-        var exitCode = await runner.BuildAsync(projectFile, noRestore: true, options, CancellationToken.None).DefaultTimeout();
+        var exitCode = await runner.BuildAsync(projectFile, noRestore, options, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
     }

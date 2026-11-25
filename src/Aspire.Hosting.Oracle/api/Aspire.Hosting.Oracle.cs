@@ -49,6 +49,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public OracleDatabaseServerResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
@@ -72,6 +74,8 @@ namespace Aspire.Hosting.ApplicationModel
         public EndpointReferenceExpression Port { get { throw null; } }
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ReferenceExpression UriExpression { get { throw null; } }
 

@@ -292,16 +292,23 @@ internal class ResourceSnapshotBuilder
             return [];
         }
 
-        // IDE launches report the application PID rather than a dotnet run/watch launcher.
-        // Their effective arguments belong to the application, so use structured project metadata.
-        if (resource.Spec.ExecutionType == ExecutionType.IDE &&
-            KnownLaunchConfigurationTypes.IsProject(launchConfigurationType) &&
-            resource.TryGetProjectLaunchConfiguration(out var launchConfiguration) &&
-            KnownLaunchConfigurationTypes.IsProject(launchConfiguration.Type))
+        // IDE launches never invoke `dotnet run` or `dotnet watch` through DCP, and their effective
+        // arguments belong to the IDE run session or application rather than the dotnet CLI. Only emit
+        // `"ide"` when the resource uses the native project PID contract (declared project launch or
+        // unannotated legacy ProjectResource); custom debugger types such as `"azure-functions"` can
+        // launch a separate host process even under project compatibility, so fail closed for them.
+        if (resource.Spec.ExecutionType == ExecutionType.IDE)
         {
-            return launchConfiguration.BuildConfiguration is { } buildConfiguration
-                ? [new(KnownProperties.Project.LaunchCommand, "ide"), new(KnownProperties.Project.Configuration, buildConfiguration)]
-                : [new(KnownProperties.Project.LaunchCommand, "ide")];
+            if ((launchConfigurationType is null || KnownLaunchConfigurationTypes.IsProject(launchConfigurationType)) &&
+                resource.TryGetProjectLaunchConfiguration(out var launchConfiguration) &&
+                KnownLaunchConfigurationTypes.IsProject(launchConfiguration.Type))
+            {
+                return launchConfiguration.BuildConfiguration is { } buildConfiguration
+                    ? [new(KnownProperties.Project.LaunchCommand, "ide"), new(KnownProperties.Project.Configuration, buildConfiguration)]
+                    : [new(KnownProperties.Project.LaunchCommand, "ide")];
+            }
+
+            return [new(KnownProperties.Project.LaunchCommand, null)];
         }
 
         if (effectiveArgs is null ||

@@ -402,7 +402,7 @@ internal sealed class DescribeCommand : BaseCommand
                 : "-";
 
             var type = snapshot.ResourceTypeDisplayName?.EscapeMarkup() ?? "-";
-            var stateText = ColorState(snapshot.State);
+            var stateText = GetSnapshotStateMarkup(snapshot);
             var healthText = ColorHealth(snapshot.HealthStatus?.EscapeMarkup() ?? "-");
 
             string nameMarkup;
@@ -446,6 +446,17 @@ internal sealed class DescribeCommand : BaseCommand
 
     private string ColorResourceName(string name, string displayMarkup) =>
         $"[{_resourceColorMap.GetColor(name)}]{displayMarkup}[/]";
+
+    internal static string GetSnapshotStateMarkup(ResourceSnapshot snapshot)
+    {
+        if (snapshot.ExitCode is int exitCode && snapshot.State?.ToUpperInvariant() is "FINISHED" or "EXITED")
+        {
+            var text = string.Format(CultureInfo.CurrentCulture, DescribeCommandStrings.StateWithExitCode, snapshot.State, exitCode).EscapeMarkup();
+            return exitCode is 0 ? $"[grey]{text}[/]" : $"[red]{text}[/]";
+        }
+
+        return ColorState(snapshot.State);
+    }
 
     private static string ColorState(string? state)
     {

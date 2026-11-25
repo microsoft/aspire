@@ -21,9 +21,9 @@ const identity = await builder.addAzureUserAssignedIdentity("identity");
 const vault = await builder.addAzureKeyVault("vault");
 
 // Existing registrations: configuration only, with literal or parameter IDs in any combination.
-const existingEntra = await builder.addExistingEntraApplication("existing-entra", tenantId, exampleClient);
-await builder.addExistingEntraApplication("existing-entra-literals", exampleTenant, exampleClient);
-await builder.addExistingEntraApplication("existing-entra-parameters", tenantId, clientId);
+const existingEntra = await builder.addExistingEntraIdApplication("existing-entra", tenantId, exampleClient);
+await builder.addExistingEntraIdApplication("existing-entra-literals", exampleTenant, exampleClient);
+await builder.addExistingEntraIdApplication("existing-entra-parameters", tenantId, clientId);
 await existingEntra.withInstance("https://login.microsoftonline.com/");
 await existingEntra.withSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs);
 await existingEntra.withAudience("api://example");
@@ -50,7 +50,7 @@ const fluentExistingEntra = await builder.addEntraIdApplication("fluent-existing
 await fluentExistingEntra.asExistingApplication(exampleTenant, clientId);
 
 // An existing API registration is configuration only: its URI and scope IDs describe what the registration already defines.
-const existingApi = await builder.addExistingEntraApplication("existing-api", exampleTenant, exampleClient);
+const existingApi = await builder.addExistingEntraIdApplication("existing-api", exampleTenant, exampleClient);
 await existingApi.withApplicationIdUri({ applicationIdUri: "api://contoso-orders" });
 await existingApi.withScope("orders.read", "Read orders.", { id: "33334444-aaaa-5555-bbbb-6666cccc7777" });
 

@@ -63,14 +63,24 @@
         <note />
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
-        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</source>
-        <target state="translated">無法為 '{1}' 套用通道 '{0}'，因為 MSBuild 會覆寫 NuGet 設定： {2}。移除這些覆寫以啟用明確通道更新。仍支援沒有明確通道的匯報。</target>
+        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
+        <target state="needs-review-translation">無法為 '{1}' 套用通道 '{0}'，因為 MSBuild 會覆寫 NuGet 設定： {2}。移除這些覆寫以啟用明確通道更新。仍支援沒有明確通道的匯報。</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
         <source>Checking for updates...</source>
         <target state="translated">正在檢查更新...</target>
         <note />
+      </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeAndOutputFormat">
+        <source>Command '{0}' failed with exit code {1}:</source>
+        <target state="new">Command '{0}' failed with exit code {1}:</target>
+        <note>{0} is the command line that was run. {1} is the process exit code. The command's own output follows on indented lines.</note>
+      </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeFormat">
+        <source>Command '{0}' failed with exit code {1}.</source>
+        <target state="new">Command '{0}' failed with exit code {1}.</target>
+        <note>{0} is the command line that was run. {1} is the process exit code.</note>
       </trans-unit>
       <trans-unit id="ConditionalSdkEvaluationRequiredFormat">
         <source>Cannot determine active conditional Aspire.AppHost.Sdk declarations for '{0}' without successful MSBuild evaluation; update the conditional SDK version explicitly.</source>
@@ -81,6 +91,11 @@
         <source>Cannot safely update conditional Aspire.AppHost.Sdk declarations for '{0}'; update the conditional SDK version explicitly.</source>
         <target state="translated">無法安全更新 '{0}' 中的條件式 Aspire.AppHost.Sdk 宣告；請明確更新條件式 SDK 版本。</target>
         <note>{0} = AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="ConfiguredChannelNotFoundFormat">
+        <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
+        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
         <source>Could not find PackageVersion element for '{0}' in {1}</source>
@@ -105,6 +120,53 @@
       <trans-unit id="DotNetToolSelfUpdateMessage">
         <source>To update the Aspire CLI when installed as a .NET tool, run:</source>
         <target state="translated">若要以 .NET 工具形式安裝 Aspire CLI，請執行:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunBackupRecoveryFormat">
+        <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
+        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunBackupsNotReplaced">
+        <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
+        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunExistingBackupsFormat">
+        <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+{0}</source>
+        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+{0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunOptionDescription">
+        <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
+        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunReplaceBackupsPrompt">
+        <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
+        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunRequiresChannel">
+        <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
+        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunRequiresDotNet">
+        <source>--dry-run is supported only for .NET AppHosts.</source>
+        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunSuccessful">
+        <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
+        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunValidating">
+        <source>Validating the channel update...</source>
+        <target state="new">Validating the channel update...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -148,9 +210,9 @@
         <note>{0} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
-        <source>Failed to restore packages for project {0} after update.</source>
-        <target state="translated">無法在更新後還原專案 '{0}' 的套件。</target>
-        <note />
+        <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
+        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
         <source>Failed to update package reference for {0} in project {1}.</source>
@@ -158,8 +220,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">注意: 由於無法解析的 AppHost SDK，已使用後援剖析產生更新計劃。相依性分析的正確性可能因此降低。</target>
+        <source>Note: Update plan generated using fallback parsing because MSBuild could not evaluate the AppHost project. Dependency analysis may have reduced accuracy.</source>
+        <target state="needs-review-translation">注意: 由於無法解析的 AppHost SDK，已使用後援剖析產生更新計劃。相依性分析的正確性可能因此降低。</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
@@ -436,6 +498,11 @@
         <source>Update successful!</source>
         <target state="translated">更新成功!</target>
         <note />
+      </trans-unit>
+      <trans-unit id="UsingConfiguredChannelFormat">
+        <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
+        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>

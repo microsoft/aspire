@@ -6,6 +6,10 @@ const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const {
+  createBrowserDebuggerAppHostProject,
+  resolveAppHostSdkVersion: resolveAppHostSdkVersionFromResult,
+} = require('./e2e-apphost-sdk-version');
+const {
   ensureDownloadCache,
   projectDownloadCache,
   removePathWithoutFollowingLinks,
@@ -1733,27 +1737,7 @@ function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersi
   fs.mkdirSync(projectDirectory, { recursive: true });
   // The standalone client still consumes generated Projects metadata. Keep that SDK and
   // the browser fixtures' project-reference graph for restore/build prewarming.
-  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net11.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../StandaloneClient/StandaloneClient.csproj" />
-    <ProjectReference Include="../HostedGlobal/HostedGlobal/HostedGlobal.csproj" />
-    <ProjectReference Include="../HostedGlobal/HostedGlobal.Client/HostedGlobal.Client.csproj" />
-    <ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />
-    <ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />
-    <PackageReference Include="Aspire.Hosting.Blazor" Version="${resolvedAppHostSdkVersion}" />
-    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
-  </ItemGroup>
-
-</Project>
-`);
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), createBrowserDebuggerAppHostProject(resolvedAppHostSdkVersion));
 
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREBLAZOR001
 using Aspire.Hosting.ApplicationModel;
@@ -2209,40 +2193,26 @@ func main() {
 }
 
 function resolveAppHostSdkVersion(resolvedCliPath) {
-  if (process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION) {
-    return process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
-  }
-
-  const availablePackageVersions = getAvailableAppHostSdkVersions();
   const versionResult = spawnSync(resolvedCliPath, ['--version'], {
     cwd: extensionRoot,
     env: getAspireCliEnvironment(),
     shell: false,
     encoding: 'utf8',
   });
-  if (versionResult.status === 0) {
-    const version = versionResult.stdout.trim().split('+')[0];
-    if (/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-      if (availablePackageVersions.includes(version) || process.env.CI) {
-        return version;
-      }
-
-      const localVersion = availablePackageVersions[0];
-      if (localVersion) {
-        console.warn(`Using local Aspire.AppHost.Sdk ${localVersion} for E2E fixture restore because ${version} is not available in local package sources.`);
-        return localVersion;
-      }
-
-      return version;
-    }
+  const resolution = resolveAppHostSdkVersionFromResult(versionResult, getAvailableAppHostSdkVersions, () => {
+    const versionsProps = fs.readFileSync(path.join(repoRoot, 'eng', 'Versions.props'), 'utf8');
+    const major = getXmlProperty(versionsProps, 'MajorVersion');
+    const minor = getXmlProperty(versionsProps, 'MinorVersion');
+    const patch = getXmlProperty(versionsProps, 'PatchVersion');
+    const prerelease = getXmlProperty(versionsProps, 'PreReleaseVersionLabel');
+    return `${major}.${minor}.${patch}-${prerelease}`;
+  }, process.env);
+  if (resolution.usedLocalVersion) {
+    const cliVersion = versionResult.stdout.trim().split('+')[0];
+    console.warn(`Using local Aspire.AppHost.Sdk ${resolution.version} for E2E fixture restore because ${cliVersion} is not available in local package sources.`);
   }
 
-  const versionsProps = fs.readFileSync(path.join(repoRoot, 'eng', 'Versions.props'), 'utf8');
-  const major = getXmlProperty(versionsProps, 'MajorVersion');
-  const minor = getXmlProperty(versionsProps, 'MinorVersion');
-  const patch = getXmlProperty(versionsProps, 'PatchVersion');
-  const prerelease = getXmlProperty(versionsProps, 'PreReleaseVersionLabel');
-  return `${major}.${minor}.${patch}-${prerelease}`;
+  return resolution.version;
 }
 
 /**

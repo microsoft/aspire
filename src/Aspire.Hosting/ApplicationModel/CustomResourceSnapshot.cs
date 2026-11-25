@@ -31,15 +31,20 @@ public sealed record CustomResourceSnapshot
     public required string ResourceType { get; init; }
 
     /// <summary>
-    /// Gets or initializes the human-readable resource type label, falling back to <see cref="ResourceType"/> when not set.
+    /// Gets the human-readable resource type label, falling back to <see cref="ResourceType"/> when not set.
     /// </summary>
     /// <remarks>
     /// This label is presentation metadata and must not be used to identify resource capabilities.
+    /// To change it, override <see cref="Resource.ResourceTypeDisplayName"/> or call
+    /// <see cref="ResourceBuilderExtensions.WithResourceTypeDisplayName{T}"/>.
     /// </remarks>
     public string ResourceTypeDisplayName
     {
         get => _resourceTypeDisplayName ?? ResourceType;
-        init
+        // Only ResourceNotificationService sets this, from the annotation or the resource's virtual
+        // override. Keeping the setter internal means snapshot producers cannot add a third,
+        // competing way to set the label.
+        internal init
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(value);
             _resourceTypeDisplayName = value;

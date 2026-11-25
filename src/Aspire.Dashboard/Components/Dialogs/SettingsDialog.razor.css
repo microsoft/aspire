@@ -6,7 +6,7 @@
 	display: grid;
 	grid-template-columns: 132px minmax(0, 1fr);
 	align-items: center;
-	gap: 12px;
+	gap: var(--aspire-space-3);
 }
 
 .setting-row .setting-title {
@@ -20,7 +20,7 @@
 
 .settings-group {
 	display: grid;
-	gap: 10px;
+	gap: var(--aspire-space-2);
 	padding: 2px 0 12px;
 	border-bottom: 1px solid var(--colorNeutralStroke3);
 }
@@ -36,8 +36,8 @@
 .settings-group-title {
 	margin: 0;
 	color: var(--colorNeutralForeground2);
-	font-size: 11px;
-	font-weight: var(--fontWeightSemibold);
+	font-size: var(--aspire-font-size-caption);
+	font-weight: var(--aspire-font-weight-semibold);
 	letter-spacing: .06em;
 	line-height: 16px;
 	text-transform: uppercase;
@@ -54,7 +54,7 @@
 	flex-direction: column;
 	gap: 2px;
 	color: var(--colorNeutralForeground2);
-	font-size: 11px;
+	font-size: var(--aspire-font-size-caption);
 	line-height: 16px;
 	text-align: start;
 }
@@ -91,8 +91,8 @@
 
 ::deep fluent-radio-group > fluent-field > label[slot="label"] {
 	color: var(--colorNeutralForeground1);
-	font-size: var(--fontSizeBase300);
-	font-weight: var(--fontWeightRegular);
+	font-size: var(--aspire-font-size-body);
+	font-weight: var(--aspire-font-weight-regular);
 	line-height: var(--lineHeightBase300);
 }
 
@@ -108,7 +108,7 @@
 
 .setting-subtext {
 	color: var(--foreground-settings-text);
-	font-size: 12px;
+	font-size: var(--aspire-font-size-secondary);
 	line-height: 20px;
 	margin: 0;
 }
@@ -130,7 +130,7 @@
 @media (max-width: 600px) {
 	.setting-row {
 		grid-template-columns: minmax(0, 1fr);
-		gap: 4px;
+		gap: var(--aspire-space-1);
 	}
 
 	.setting-row .setting-title {

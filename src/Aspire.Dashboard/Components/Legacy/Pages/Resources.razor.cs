@@ -402,7 +402,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                         new GraphHiddenIconDto(
                             Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
                             Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value),
-                        ResourceGraphMapper.GetGameStrings(Loc));
+                        // The Aspire Outage game is only offered by the new dashboard's overview graph.
+                        Game: null);
 
                     await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
                     _graphInitialized = true;
@@ -502,12 +503,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 });
             }
         }
-
-        [JSInvokable]
-        public Task<bool?> ExecuteGraphGameCommand(string id, string commandName) =>
-            resources._resourceByName.TryGetValue(id, out var resource)
-                ? resources.DashboardCommandExecutor.ExecuteGraphGameCommandAsync(resource, commandName, resources.GetResourceName)
-                : Task.FromResult<bool?>(null);
     }
 
     internal IEnumerable<ResourceViewModel> GetFilteredResources()

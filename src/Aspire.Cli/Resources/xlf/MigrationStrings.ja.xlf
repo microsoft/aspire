@@ -27,6 +27,11 @@
         <target state="translated">'{0}' を '{1}' に移行しました。</target>
         <note>{0} is the legacy apphost.ts file name, {1} is the modern apphost.mts file name.</note>
       </trans-unit>
+      <trans-unit id="NoAutomaticMigrationsAppHostSdkObsolete">
+        <source>No automatic migrations apply. This AppHost still uses Aspire.AppHost.Sdk (ASPIRE012), which is obsolete. See https://aka.ms/aspire/diagnostics/aspire012 for how to migrate.</source>
+        <target state="new">No automatic migrations apply. This AppHost still uses Aspire.AppHost.Sdk (ASPIRE012), which is obsolete. See https://aka.ms/aspire/diagnostics/aspire012 for how to migrate.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NothingToMigrate">
         <source>Nothing to migrate. The current project is already using the latest recommended Aspire conventions.</source>
         <target state="translated">移行するものがありません。現在のプロジェクトでは、推奨される最新の Aspire 規則を既に使用しています。</target>
