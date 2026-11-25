@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload CLI E2E .NET Docker image
         if: ${{ inputs.uploadImageArtifacts }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.CLI_E2E_DOTNET_IMAGE_ARTIFACT }}
           path: artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
@@ -177,7 +177,7 @@ jobs:
 
       - name: Upload CLI E2E polyglot Docker image
         if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.CLI_E2E_POLYGLOT_IMAGE_ARTIFACT }}
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz
@@ -185,7 +185,7 @@ jobs:
 
       - name: Upload CLI E2E Java Docker image
         if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT }}
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
@@ -193,7 +193,7 @@ jobs:
 
       - name: Upload CLI E2E Go Docker image
         if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.CLI_E2E_POLYGLOT_GO_IMAGE_ARTIFACT }}
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-go.tar.gz
