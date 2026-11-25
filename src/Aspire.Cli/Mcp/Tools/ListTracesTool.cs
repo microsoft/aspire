@@ -49,7 +49,7 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             },
             "traceId": {
               "type": "string",
-              "description": "Return every span of this trace instead of a list of traces. resourceName, search, limit and format are ignored when traceId is set."
+              "description": "Return every span of this trace, including span events such as recorded exceptions with their stack traces, instead of a list of traces. resourceName, search, limit and format are ignored when traceId is set."
             },
             "format": {
               "type": "string",
@@ -253,7 +253,9 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             };
         }
 
-        var traceData = SharedAIHelpers.GetTraceDto(trace, new PromptContext(), getResourceName, dashboardBaseUrl)
+        // Include span events: the list summary shows a recorded exception as a truncated "type: message", and the
+        // detail view is where the full message and stack trace can be read.
+        var traceData = SharedAIHelpers.GetTraceDto(trace, new PromptContext(), getResourceName, includeEvents: true, dashboardBaseUrl)
             .ToJsonString(SharedAIHelpers.s_jsonSerializerOptions);
 
         var text = $"""

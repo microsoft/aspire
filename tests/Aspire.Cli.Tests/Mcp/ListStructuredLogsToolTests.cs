@@ -877,9 +877,10 @@ public class ListStructuredLogsToolTests
     [Fact]
     public async Task ListStructuredLogsTool_BoundsDuplicateAttributeReferences_WhenKeyIsLong()
     {
-        // A repeated value is written as a reference that embeds the key of the original attribute. Here each reference
-        // would be about 2.5 KB, far larger than the 256-character value it replaces, so the newest log would pass the
-        // attribute size check but exceed the whole list budget and the response would contain no logs at all.
+        // A repeated value is written as a reference that embeds the key of the first attribute holding it. A reference
+        // embedding this key would be about 2.5 KB, far larger than the 256-character value it replaces, so the newest log
+        // would pass the attribute size check but exceed the whole list budget. The long-key value is written without
+        // being registered, so the repeats refer to the first short key instead.
         var longKey = new string('k', 2500);
         var value = new string('v', 256);
         var resourceLogs = CreateResourceLogs("api", (0, "older small"), (1, "newest with references"));
@@ -908,10 +909,50 @@ public class ListStructuredLogsToolTests
 
         var newest = logs[1]!;
         Assert.Null(newest["attributesTruncated"]);
-        var reference = $"""Duplicate of attribute "{new string('k', 128)}...[TRUNCATED]" for log entry 1""";
+        var reference = """Duplicate of attribute "d0" for log entry 1""";
         Assert.Equal(
-            [(longKey, value), .. Enumerable.Range(0, 5).Select(index => ($"d{index}", reference))],
+            [(longKey, value), ("d0", value), .. Enumerable.Range(1, 4).Select(index => ($"d{index}", reference))],
             newest["attributes"]!.AsObject().Select(a => (a.Key, a.Value!.GetValue<string>())));
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_WritesUnambiguousAttributes_WhenLongKeysSharePrefix()
+    {
+        // Both keys are longer than the 128-byte key bound and share their first 150 characters. References naming a
+        // shortened key would be identical for both attributes although they hold different values, so the repeated
+        // values in the newest log must be written under their exact keys instead.
+        var firstKey = new string('k', 150) + new string('a', 50);
+        var secondKey = new string('k', 150) + new string('b', 50);
+        var firstValue = new string('x', 300);
+        var secondValue = new string('y', 300);
+        var resourceLogs = CreateResourceLogs("api", (0, "older"), (1, "newest"));
+        foreach (var logRecord in resourceLogs.ScopeLogs![0].LogRecords!)
+        {
+            logRecord.Attributes =
+            [
+                .. logRecord.Attributes!,
+                new OtlpKeyValueJson { Key = firstKey, Value = new OtlpAnyValueJson { StringValue = firstValue } },
+                new OtlpKeyValueJson { Key = secondKey, Value = new OtlpAnyValueJson { StringValue = secondValue } }
+            ];
+        }
+
+        using var handler = CreateHandler(CreateResourceLogsResponse(resourceLogs));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+        Assert.StartsWith("Returned 2 log entries.", text, StringComparison.Ordinal);
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal([0, 1], logs.Select(log => log!["logId"]!.GetValue<long>()));
+        Assert.All(logs, log =>
+        {
+            Assert.Null(log!["attributesTruncated"]);
+            Assert.Equal(
+                [(firstKey, firstValue), (secondKey, secondValue)],
+                log["attributes"]!.AsObject().Select(a => (a.Key, a.Value!.GetValue<string>())));
+        });
     }
 
     [Theory]

@@ -913,6 +913,68 @@ public class ListTracesToolTests
         Assert.Equal("Trace 'missing' not found.", Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text);
     }
 
+    [Fact]
+    public async Task ListTracesTool_ReturnsFullException_WhenTraceIdProvidedAndSummaryTruncatesIt()
+    {
+        const string exceptionType = "System.InvalidOperationException";
+        var exceptionMessage = new string('x', 1000);
+        const string stackTrace = "   at Orders.Api.OrderHandler.HandleAsync()\n   at Microsoft.AspNetCore.Routing.EndpointMiddleware.Invoke(HttpContext httpContext)";
+        var apiResponse = CreateTracesResponse(CreateResourceSpans("api",
+            new OtlpSpanJson
+            {
+                TraceId = "trace1",
+                SpanId = "root",
+                Name = "GET /orders",
+                StartTimeUnixNano = 1706540400000000000,
+                EndTimeUnixNano = 1706540400100000000,
+                Status = new OtlpSpanStatusJson { Code = 2 },
+                Events =
+                [
+                    new OtlpSpanEventJson
+                    {
+                        Name = "exception",
+                        TimeUnixNano = 1706540400090000000,
+                        Attributes =
+                        [
+                            new OtlpKeyValueJson { Key = "exception.type", Value = new OtlpAnyValueJson { StringValue = exceptionType } },
+                            new OtlpKeyValueJson { Key = "exception.message", Value = new OtlpAnyValueJson { StringValue = exceptionMessage } },
+                            new OtlpKeyValueJson { Key = "exception.stacktrace", Value = new OtlpAnyValueJson { StringValue = stackTrace } }
+                        ]
+                    }
+                ]
+            }));
+        using var handler = CreateHandler(apiResponse, ["api"]);
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var summaryResult = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var summaryText = Assert.IsType<TextContentBlock>(Assert.Single(summaryResult.Content!)).Text;
+        var summary = Assert.Single(JsonNode.Parse(summaryText[summaryText.IndexOf('[')..(summaryText.LastIndexOf(']') + 1)])!.AsArray())!;
+        Assert.Equal(
+            $"{$"{exceptionType}: {exceptionMessage}"[..512]}...[TRUNCATED]",
+            summary["firstErrorSpan"]!["exception"]!.GetValue<string>());
+
+        var detailArguments = new Dictionary<string, JsonElement>
+        {
+            ["traceId"] = JsonSerializer.SerializeToElement("trace1")
+        };
+        var detailResult = await tool.CallToolAsync(CallToolContextTestHelper.Create(detailArguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(detailResult.IsError is null or false);
+        var detailText = Assert.IsType<TextContentBlock>(Assert.Single(detailResult.Content!)).Text;
+        var trace = JsonNode.Parse(detailText[detailText.IndexOf('{')..(detailText.LastIndexOf('}') + 1)])!.AsObject();
+        var span = Assert.Single(trace["spans"]!.AsArray())!;
+        var spanEvent = Assert.Single(span["events"]!.AsArray())!;
+        Assert.Equal("exception", spanEvent["name"]!.GetValue<string>());
+        Assert.Equal(
+            [
+                new KeyValuePair<string, string>("exception.type", exceptionType),
+                new KeyValuePair<string, string>("exception.message", exceptionMessage),
+                new KeyValuePair<string, string>("exception.stacktrace", stackTrace)
+            ],
+            spanEvent["attributes"]!.AsObject().Select(a => new KeyValuePair<string, string>(a.Key, a.Value!.GetValue<string>())));
+    }
+
     [Theory]
     [InlineData("""{"limit":0}""", "Argument 'limit' must be an integer from 1 through 800.")]
     [InlineData("""{"limit":"5"}""", "Argument 'limit' must be an integer from 1 through 800.")]

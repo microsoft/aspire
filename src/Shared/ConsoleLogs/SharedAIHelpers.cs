@@ -178,7 +178,7 @@ internal static class SharedAIHelpers
             maximumTokenLength,
             "trace",
             "traces",
-            t => GetTraceDto(t, promptContext, getResourceName, dashboardBaseUrl),
+            t => GetTraceDto(t, promptContext, getResourceName, includeEvents: false, dashboardBaseUrl),
             EstimateSerializedJsonTokenSize);
 
         var jsonArray = new JsonArray(trimmedItems.ToArray());
@@ -390,7 +390,7 @@ internal static class SharedAIHelpers
         var traces = GetTracesFromOtlpData(resourceSpans);
         var trace = traces.FirstOrDefault() ?? throw new InvalidOperationException("No trace found in OTLP data.");
         var promptContext = new PromptContext();
-        var dto = GetTraceDto(trace, promptContext, getResourceName, dashboardBaseUrl);
+        var dto = GetTraceDto(trace, promptContext, getResourceName, includeEvents: false, dashboardBaseUrl);
 
         return dto.ToJsonString(s_jsonSerializerOptions);
     }
@@ -406,7 +406,7 @@ internal static class SharedAIHelpers
     {
         var spans = GetSpanDtosFromOtlpData(resourceSpans);
         var context = new PromptContext(processValues: false);
-        var jsonArray = new JsonArray(spans.Select(s => GetSpanDto(s, context, getResourceName, dashboardBaseUrl)).ToArray<JsonNode>());
+        var jsonArray = new JsonArray(spans.Select(s => GetSpanDto(s, context, getResourceName, includeEvents: false, dashboardBaseUrl)).ToArray<JsonNode>());
         return jsonArray.ToJsonString(s_jsonSerializerOptions);
     }
 
@@ -434,7 +434,7 @@ internal static class SharedAIHelpers
     {
         var traces = GetTracesFromOtlpData(resourceSpans);
         var context = new PromptContext(processValues: false);
-        var jsonArray = new JsonArray(traces.Select(t => GetTraceDto(t, context, getResourceName, dashboardBaseUrl)).ToArray<JsonNode>());
+        var jsonArray = new JsonArray(traces.Select(t => GetTraceDto(t, context, getResourceName, includeEvents: false, dashboardBaseUrl)).ToArray<JsonNode>());
         return jsonArray.ToJsonString(s_jsonSerializerOptions);
     }
 
@@ -447,20 +447,26 @@ internal static class SharedAIHelpers
         string? dashboardBaseUrl = null)
     {
         var context = new PromptContext(processValues: false);
-        return GetTraceDto(traceDto, context, getResourceName ?? (s => s.ResourceName), dashboardBaseUrl)
+        return GetTraceDto(traceDto, context, getResourceName ?? (s => s.ResourceName), includeEvents: false, dashboardBaseUrl)
             .ToJsonString(s_jsonSerializerOptions);
     }
 
     /// <summary>
     /// Creates a JsonObject representing a single span for AI processing.
     /// </summary>
+    /// <param name="spanDto">The span to convert.</param>
+    /// <param name="context">The prompt context for tracking duplicate values.</param>
+    /// <param name="getResourceName">Function to resolve resource names.</param>
+    /// <param name="includeEvents">Whether to include the span events, such as recorded exceptions, and their attributes.</param>
+    /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     public static JsonObject GetSpanDto(
         OtlpSpanDto spanDto,
         PromptContext context,
         Func<IOtlpResource, string> getResourceName,
+        bool includeEvents,
         string? dashboardBaseUrl = null)
     {
-        // `aspire otel spans --format json` and trace JSON output use this shape;
+        // `aspire otel spans --format json` and trace JSON output use this shape (without events);
         // keep docs/specs/cli-output-formats.md in sync when changing it.
         var span = spanDto.Span;
         var spanId = span.SpanId ?? string.Empty;
@@ -485,6 +491,39 @@ internal static class SharedAIHelpers
                 ["spanId"] = link.SpanId ?? string.Empty
             }).ToArray();
             linksArray = new JsonArray(linkObjects);
+        }
+
+        // Exceptions are recorded as span events named "exception" carrying exception.type, exception.message and
+        // exception.stacktrace attributes; the trace summary only shows a truncated "type: message", so the trace
+        // detail includes events to make the full exception available.
+        // See https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/
+        JsonArray? eventsArray = null;
+        if (includeEvents && span.Events is { Length: > 0 })
+        {
+            var eventObjects = span.Events.Select((spanEvent, eventIndex) =>
+            {
+                var eventAttributesObj = new JsonObject();
+                if (spanEvent.Attributes is not null)
+                {
+                    foreach (var attr in spanEvent.Attributes)
+                    {
+                        eventAttributesObj[attr.Key!] = context.AddValue(
+                            GetAttributeValue(attr),
+                            id => $@"Duplicate of attribute ""{id.Key}"" for event {id.EventIndex} of span {OtlpHelpers.ToShortenedId(id.SpanId)}",
+                            (SpanId: spanId, EventIndex: eventIndex, attr.Key));
+                    }
+                }
+
+                return (JsonNode)StripNullProperties(new JsonObject
+                {
+                    ["name"] = spanEvent.Name,
+                    ["timestamp"] = spanEvent.TimeUnixNano is { } eventNano
+                        ? OtlpHelpers.UnixNanoSecondsToDateTime(eventNano)
+                        : (DateTime?)null,
+                    ["attributes"] = eventAttributesObj
+                });
+            }).ToArray();
+            eventsArray = new JsonArray(eventObjects);
         }
 
         var resourceName = getResourceName?.Invoke(spanDto.Resource) ?? spanDto.Resource.ResourceName;
@@ -515,7 +554,8 @@ internal static class SharedAIHelpers
             ["durationMs"] = CalculateDurationMs(span.StartTimeUnixNano, span.EndTimeUnixNano),
             ["timestamp"] = timestamp,
             ["attributes"] = attributesObj,
-            ["links"] = linksArray
+            ["links"] = linksArray,
+            ["events"] = eventsArray
         };
 
         if (dashboardBaseUrl is not null)
@@ -621,20 +661,22 @@ internal static class SharedAIHelpers
     /// <param name="trace">The trace DTO to convert.</param>
     /// <param name="context">The prompt context for tracking duplicate values.</param>
     /// <param name="getResourceName">Optional function to resolve resource names.</param>
+    /// <param name="includeEvents">Whether to include span events, such as recorded exceptions, and their attributes.</param>
     /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     /// <returns>A JsonObject containing the trace data.</returns>
     public static JsonObject GetTraceDto(
         OtlpTraceDto trace,
         PromptContext context,
         Func<IOtlpResource, string> getResourceName,
+        bool includeEvents,
         string? dashboardBaseUrl = null)
     {
-        // `aspire otel traces --format json` uses this shape;
+        // `aspire otel traces --format json` uses this shape (without events);
         // keep docs/specs/cli-output-formats.md in sync when changing it.
         var spanObjects = new List<JsonNode>();
         foreach (var s in trace.Spans)
         {
-            var spanObj = GetSpanDto(s, context, getResourceName, dashboardBaseUrl: null);
+            var spanObj = GetSpanDto(s, context, getResourceName, includeEvents, dashboardBaseUrl: null);
             spanObjects.Add(spanObj);
         }
 
@@ -1075,10 +1117,12 @@ internal static class SharedAIHelpers
             {
                 // Bound the key as well as the value: keys are producer-supplied, and one very long key would otherwise
                 // use the whole field budget and hide every attribute after it.
+                // Shortened keys aren't registered with the prompt context, so no reference ever names one.
                 var boundedKey = LimitSerializedLength(key, MaximumSummaryResourceNameLength);
                 if (attributesObject.ContainsKey(boundedKey))
                 {
-                    // Two long keys with the same prefix; keep the first rather than overwrite it.
+                    // Two long keys share the shortened prefix. Keep the first rather than overwrite it; the entry is
+                    // already marked with attributesTruncated, and the full attributes are available from the dashboard.
                     continue;
                 }
 
@@ -1091,17 +1135,23 @@ internal static class SharedAIHelpers
 
                 attributesObject[boundedKey] = boundedValue;
             }
+            else if (maximumFieldLength is not null && GetSerializedLength(key) > MaximumSummaryResourceNameLength)
+            {
+                // A repeated value is written as a reference that embeds the key of the first attribute holding it, so a
+                // long key could make a later reference larger than the value it replaces and the entry exceed the budget.
+                // Shortening the key in the reference would make it ambiguous: two keys sharing the shortened prefix would
+                // produce identical references to different values. Write the value without registering it instead, so
+                // references only name keys of at most MaximumSummaryResourceNameLength bytes, exactly. A reference is
+                // then at most about 190 serialized bytes (23 + 2 + 128 for the key + 2 + 15 + 20 for the log id), and the
+                // prompt context only references values of at least 256 characters, so a reference is always smaller
+                // than the value it replaces.
+                // The key is written in full because the size check above counted it, and the value is capped the same
+                // way the size check measured it.
+                attributesObject[key] = LimitLength(value, MaximumStringLength);
+            }
             else
             {
-                // The size check above measured the value, but a repeated value is written as a reference that embeds the
-                // key, so a long key could make the reference larger than the value and the entry exceed the budget.
-                // When bounding, shorten the key in the reference to MaximumSummaryResourceNameLength bytes. A reference is
-                // then at most about 204 serialized bytes (23 + 2 + 142 for the shortened key with its marker + 2 + 15 +
-                // 20 for the log id), and the prompt context only references values of at least 256 characters, so a
-                // reference is always smaller than the value it replaces. The shortened key is still a prefix of the
-                // referenced key, so the target remains identifiable.
-                var referenceKey = maximumFieldLength is null ? key : LimitSerializedLength(key, MaximumSummaryResourceNameLength);
-                attributesObject[key] = context.AddValue(value, id => $@"Duplicate of attribute ""{id.Key}"" for log entry {id.LogId}", (LogId: logId, Key: referenceKey));
+                attributesObject[key] = context.AddValue(value, id => $@"Duplicate of attribute ""{id.Key}"" for log entry {id.LogId}", (LogId: logId, Key: key));
             }
         }
 
