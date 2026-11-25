@@ -35,7 +35,7 @@ public sealed class ProcessExecutionFactoryEnvironmentTests(ITestOutputHelper ou
         Assert.True(logger.IsEnabled(LogLevel.Trace));
         var stdout = new List<string>();
         var stderr = new List<string>();
-        var factory = new ProcessExecutionFactory(new TestEnvironment(), logger);
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), logger);
         await using var execution = factory.CreateExecution(script, [], null, workspace.WorkspaceRoot, new ProcessInvocationOptions
         {
             SuppressLogging = suppressLogging,
@@ -206,5 +206,5 @@ public sealed class ProcessExecutionFactoryEnvironmentTests(ITestOutputHelper ou
     private static DirectoryInfo WorkingDirectory => new(AppContext.BaseDirectory);
 
     private static ProcessExecutionFactory CreateFactory()
-        => new(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        => new(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
 }

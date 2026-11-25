@@ -291,11 +291,25 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return StopCoreAsync(_options.Value.WaitForResourceCleanup, cancellationToken);
+    }
+
+    public Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken)
+    {
+        return StopCoreAsync(waitForResourceCleanup: true, cancellationToken);
+    }
+
+    /// <returns>
+    /// <see langword="true"/> when DCP confirmed that the application resources were cleaned up before this method returned.
+    /// </returns>
+    private async Task<bool> StopCoreAsync(bool waitForResourceCleanup, CancellationToken cancellationToken)
     {
         if (Interlocked.CompareExchange(ref _stopped, 1, 0) != 0)
         {
-            return; // Already stopped/stop in progress.
+            // Already stopped/stop in progress. That stop may not wait for resource cleanup, so it cannot be confirmed here.
+            return false;
         }
 
         _shutdownCancellation.Cancel();
@@ -313,11 +327,15 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             _logger.LogDebug(ex, "One or more monitoring tasks terminated with an error.");
         }
 
+        var resourcesCleanedUp = false;
         try
         {
-            if (_options.Value.WaitForResourceCleanup)
+            if (waitForResourceCleanup)
             {
+                // DCP reports cleanup failures itself, through its logs, which reach the AppHost through the DCP
+                // log stream.
                 await _kubernetesService.CleanupResourcesAsync(cancellationToken).ConfigureAwait(false);
+                resourcesCleanedUp = true;
             }
 
             // The app orchestrator (represented by kubernetesService here) will perform a resource cleanup
@@ -336,6 +354,8 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             _logger.LogDebug(ex, "Application orchestrator could not be stopped programmatically.");
         }
+
+        return resourcesCleanedUp;
     }
 
     public async ValueTask DisposeAsync()

@@ -31,13 +31,20 @@ The **...** menu on each group header lists commands for that group's resources.
 available on individual parameter rows, not as bulk actions.
 
 When search and filters are clear, drag a group's header handle to move the entire group, or focus its
-handle and press **Alt+Up** or **Alt+Down**. Each grouping mode has its own saved order in the AppHost
-settings database. New groups are appended, and temporarily absent groups retain their position when they return.
+handle and press **Alt+Up** or **Alt+Down**. Group moves are saved per grouping mode in protected browser local storage.
+New groups follow the default sort. A saved move places the group on the chosen side of the original drop
+target, using the other neighbor from the drop position if the target is missing.
 
 With grouping set to **None** and no search or filters active, drag a resource's reorder handle to move it
 before or after a sibling. Alternatively, focus the handle and press **Alt+Up** or **Alt+Down**.
-Children stay under their parent. Order is stored alongside tags in the AppHost's application settings database
-and survives dashboard and AppHost restarts; new resources are appended to their sibling list.
+Children stay under their parent. The ungrouped pane uses AppHost display priority for its default sort,
+including for resources discovered after the dashboard opens. Resources with a priority of zero or no
+priority are sorted by type and name. Grouped views do not use display priority.
+Only custom moves are saved in protected browser local storage. The dashboard applies them to the current default order,
+so new resources are still sorted normally. A move places the resource on the chosen side of the original
+drop target. If the target is missing or no longer a sibling, the move falls back to the other neighbor
+from the drop position. If the dashboard can no longer decrypt saved moves, it uses the default order.
+Routine key rotation does not reset saved moves as long as the keys that protected them remain available.
 Persistent containers show a pin after their state and resource type.
 
 Resource rows are muted when they do not apply to the current tab or have not sent that type of

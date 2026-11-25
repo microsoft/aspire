@@ -4,6 +4,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
@@ -274,19 +275,19 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Parse table data rows for assertion
-        var dataRows = ParseTableDataRows(outputWriter.Logs);
+        var dataRows = ParseBorderlessTableDataRows(outputWriter.Logs);
 
         // Traces are sorted oldest first: trace1 (s_testTime) first, trace2 (s_testTime+10ms) second
         Assert.Equal(2, dataRows.Length);
 
         Assert.Equal(FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime), dataRows[0][0]);
-        Assert.Equal("frontend: GET /frontend abc1234 (http://localhost:18888/traces/detail/abc1234567890def)", dataRows[0][1]);
+        Assert.Equal("frontend: GET /frontend abc1234", dataRows[0][1]);
         Assert.Equal("1", dataRows[0][2]);
         Assert.Equal("50ms", dataRows[0][3]);
         Assert.Equal("OK", dataRows[0][4]);
 
         Assert.Equal(FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10)), dataRows[1][0]);
-        Assert.Equal("backend: GET /backend def9876 (http://localhost:18888/traces/detail/def9876543210abc)", dataRows[1][1]);
+        Assert.Equal("backend: GET /backend def9876", dataRows[1][1]);
         Assert.Equal("1", dataRows[1][2]);
         Assert.Equal("20ms", dataRows[1][3]);
         Assert.Equal("OK", dataRows[1][4]);
@@ -325,19 +326,19 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Parse table data rows for assertion
-        var dataRows = ParseTableDataRows(outputWriter.Logs);
+        var dataRows = ParseBorderlessTableDataRows(outputWriter.Logs);
 
         // Traces sorted oldest first: trace1 (s_testTime) first, trace2 (s_testTime+10ms) second
         Assert.Equal(2, dataRows.Length);
 
         Assert.Equal(FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime), dataRows[0][0]);
-        Assert.Equal("apiservice-55555555: GET /apiservice abc1234 (http://localhost:18888/traces/detail/abc1234567890def)", dataRows[0][1]);
+        Assert.Equal("apiservice-55555555: GET /apiservice abc1234", dataRows[0][1]);
         Assert.Equal("1", dataRows[0][2]);
         Assert.Equal("75ms", dataRows[0][3]);
         Assert.Equal("OK", dataRows[0][4]);
 
         Assert.Equal(FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10)), dataRows[1][0]);
-        Assert.Equal("apiservice-eeeeeeee: GET /apiservice def9876 (http://localhost:18888/traces/detail/def9876543210abc)", dataRows[1][1]);
+        Assert.Equal("apiservice-eeeeeeee: GET /apiservice def9876", dataRows[1][1]);
         Assert.Equal("1", dataRows[1][2]);
         Assert.Equal("50ms", dataRows[1][3]);
         Assert.Equal("ERR", dataRows[1][4]);
@@ -345,6 +346,196 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         // Check summary line
         var summaryLine = outputWriter.Logs.Last(l => l.StartsWith("Showing", StringComparison.Ordinal));
         Assert.Equal("Showing 2 of 2 traces", summaryLine);
+    }
+
+    [Fact]
+    public async Task TelemetryTracesCommand_InteractiveOutput_RendersBordersAndDashboardLinks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+            resources:
+            [
+                new ResourceInfoJson { Name = "frontend", InstanceId = null },
+            ],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/traces"] = BuildTracesJson(
+                ("abc1234567890def", "frontend", null, "span001", s_testTime, s_testTime.AddMilliseconds(50), false))
+            },
+            hostEnvironment: TestHelpers.CreateInteractiveHostEnvironment());
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The test console doesn't support hyperlinks, so the dashboard link is written as "text (url)".
+        var dataRow = Assert.Single(ParseTableDataRows(outputWriter.Logs));
+        Assert.Equal(
+            [
+                FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime),
+                "frontend: GET /frontend abc1234 (http://localhost:18888/traces/detail/abc1234567890def)",
+                "1",
+                "50ms",
+                "OK"
+            ],
+            dataRow);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TelemetryTracesCommand_TraceDetail_ShowsDbQueryText(bool interactiveOutput)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        var longStatement = "SELECT " + string.Join(", ", Enumerable.Range(1, 40).Select(i => $"c{i}")) + " FROM wide_table";
+        // The '\n' escape would occupy output positions 196-197, straddling the 197-character truncation point.
+        var escapeAtTruncationStatement = "SELECT " + new string('x', 189) + "\nFROM t";
+        var resourceSpans = new OtlpResourceSpansJson[]
+        {
+            new()
+            {
+                Resource = TelemetryTestHelper.CreateOtlpResource("api", null),
+                ScopeSpans =
+                [
+                    new OtlpScopeSpansJson
+                    {
+                        Spans =
+                        [
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "root001",
+                                Name = "GET /orders",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(50)),
+                                Status = new OtlpSpanStatusJson { Code = 1 }
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "db00001",
+                                ParentSpanId = "root001",
+                                Name = "postgres",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(10)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(30)),
+                                Status = new OtlpSpanStatusJson { Code = 1 },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson
+                                    {
+                                        Key = "db.query.text",
+                                        Value = new OtlpAnyValueJson { StringValue = "SELECT o.id, o.total\n    FROM orders AS o\n    WHERE o.customer_id = @p0" }
+                                    }
+                                ]
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "db00002",
+                                ParentSpanId = "root001",
+                                Name = "legacy",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(30)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(40)),
+                                Status = new OtlpSpanStatusJson { Code = 1 },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson
+                                    {
+                                        Key = "db.statement",
+                                        Value = new OtlpAnyValueJson { StringValue = longStatement }
+                                    }
+                                ]
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "db00003",
+                                ParentSpanId = "root001",
+                                Name = "quoted",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(40)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(45)),
+                                Status = new OtlpSpanStatusJson { Code = 1 },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson
+                                    {
+                                        Key = "db.query.text",
+                                        Value = new OtlpAnyValueJson { StringValue = "SELECT * FROM t WHERE name = 'a  b'\t" }
+                                    }
+                                ]
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "db00004",
+                                ParentSpanId = "root001",
+                                Name = "split",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(45)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(48)),
+                                Status = new OtlpSpanStatusJson { Code = 1 },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson
+                                    {
+                                        Key = "db.query.text",
+                                        Value = new OtlpAnyValueJson { StringValue = escapeAtTruncationStatement }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        var traceJson = JsonSerializer.Serialize(new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans },
+            TotalCount = 1,
+            ReturnedCount = 1
+        }, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+            resources:
+            [
+                new ResourceInfoJson { Name = "api", InstanceId = null },
+            ],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/traces"] = traceJson
+            },
+            hostEnvironment: interactiveOutput ? TestHelpers.CreateInteractiveHostEnvironment() : TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --trace-id abc1234567890def");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // Span rows only carry a dashboard link when stdout is an interactive terminal.
+        string SpanId(string spanId) => interactiveOutput
+            ? $"{spanId} (http://localhost:18888/traces/detail/abc1234567890def?spanId={spanId})"
+            : spanId;
+
+        Assert.Equal(
+            [
+                "Trace: abc1234 (http://localhost:18888/traces/detail/abc1234567890def)",
+                "Duration: 50ms  Spans: 5",
+                "",
+                "api",
+                $"└─ {SpanId("root001")} GET /orders OK     50ms",
+                $"   ├─ {SpanId("db00001")} postgres OK     20ms SELECT o.id, o.total\\n    FROM orders AS o\\n    WHERE o.customer_id = @p0",
+                $"   ├─ {SpanId("db00002")} legacy OK     10ms {longStatement[..197]}...",
+                $"   ├─ {SpanId("db00003")} quoted OK      5ms SELECT * FROM t WHERE name = 'a  b'",
+                $"   └─ {SpanId("db00004")} split OK      3ms SELECT {new string('x', 189)}...",
+            ],
+            outputWriter.Logs.SkipWhile(l => !l.StartsWith("Trace:", StringComparison.Ordinal)));
     }
 
     /// <summary>
@@ -360,6 +551,32 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
             .Skip(1) // Skip header row
             .Select(line => line.Split('│', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             .Where(cells => cells.Length >= 5)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Parses rows of a borderless table, as rendered when stdout is not an interactive terminal.
+    /// Columns are space-aligned, so each header's offset gives the start of its column:
+    /// <code>
+    /// Timestamp    Name                             Spans Duration Status
+    /// 00:00:00.000 frontend: GET /frontend abc1234  1     50ms     OK
+    /// </code>
+    /// </summary>
+    private static string[][] ParseBorderlessTableDataRows(IReadOnlyList<string> outputLines)
+    {
+        var headerIndex = outputLines.ToList().FindIndex(line => line.StartsWith(TelemetryCommandStrings.HeaderTimestamp, StringComparison.Ordinal));
+        Assert.True(headerIndex >= 0, "Table header row not found.");
+
+        var columnStarts = Regex.Matches(outputLines[headerIndex], @"\S+").Select(m => m.Index).ToArray();
+
+        return outputLines
+            .Skip(headerIndex + 1)
+            .TakeWhile(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("Showing", StringComparison.Ordinal))
+            .Select(line => columnStarts
+                .Select((start, i) => i + 1 < columnStarts.Length
+                    ? line[start..columnStarts[i + 1]].Trim()
+                    : line[start..].Trim())
+                .ToArray())
             .ToArray();
     }
 
@@ -439,7 +656,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        var dataRows = ParseTableDataRows(outputWriter.Logs);
+        var dataRows = ParseBorderlessTableDataRows(outputWriter.Logs);
         Assert.Single(dataRows);
         Assert.Contains("frontend", dataRows[0][1]);
     }

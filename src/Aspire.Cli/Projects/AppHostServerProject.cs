@@ -8,6 +8,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -37,6 +38,7 @@ internal sealed class AppHostServerProjectFactory(
     CliExecutionContext executionContext,
     IEnvironment environment,
     IProcessExecutionFactory processExecutionFactory,
+    ITemporaryStorage temporaryStorage,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
     public string GetInstanceIdentifier(string appPath)
@@ -93,7 +95,7 @@ internal sealed class AppHostServerProjectFactory(
         if (IsNativeServerEnabled(appPath))
         {
             return await NativeAppHostServerProject.CreateAsync(appPath, bundleService, environment,
-                processExecutionFactory, loggerFactory.CreateLogger<NativeAppHostServerProject>(), cancellationToken).ConfigureAwait(false);
+                processExecutionFactory, temporaryStorage, loggerFactory.CreateLogger<NativeAppHostServerProject>(), cancellationToken).ConfigureAwait(false);
         }
 
         var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");

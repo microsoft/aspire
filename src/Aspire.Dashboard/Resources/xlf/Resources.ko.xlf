@@ -27,6 +27,11 @@
         <target state="translated">{0} · 요청 {1}개, {2}개 실패</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceHint">
+        <source>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</source>
+        <target state="new">View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
         <source>Requests per 30 seconds over the last 15 minutes</source>
         <target state="translated">지난 15분 동안 30초당 요청 수</target>
@@ -251,6 +256,11 @@
         <source>Running</source>
         <target state="translated">실행 중</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HomeSingleRequestCount">
+        <source>{0} request</source>
+        <target state="new">{0} request</target>
+        <note>{0} is the request count, which is one.</note>
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
         <source>Slowest endpoints</source>
@@ -771,6 +781,11 @@
         <source>Tags</source>
         <target state="translated">태그</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsLimitReached">
+        <source>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</source>
+        <target state="new">Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</target>
+        <note>{0} is the maximum number of user-added resource tag assignments.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsRemove">
         <source>Remove tag {0}</source>

@@ -149,10 +149,11 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             }
         };
         var checker = new DcpConnectionChecker(
-            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null),
+            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null, temporaryStorage: new Aspire.Shared.TemporaryStorage()),
             processExecutionFactory,
             CreateExecutionContext(workspace),
             new HostEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<DcpConnectionChecker>.Instance);
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
@@ -292,7 +293,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         RemoteExecutor.Invoke(static homePath =>
         {
-            var certificateManager = CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null);
+            var certificateManager = CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null, temporaryStorage: new Aspire.Shared.TemporaryStorage());
             using var certificate = certificateManager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(30));

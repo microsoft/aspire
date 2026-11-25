@@ -6699,7 +6699,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     public async Task PersistentPlainExecutable_UsesStableCertificateOutputPath()
     {
         var builder = DistributedApplication.CreateBuilder();
-        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         using var aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store");
 
         using var certificate = CreateTestCertificate();
@@ -6741,7 +6741,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     public async Task PersistentPlainExecutable_WritesCustomBundleDirectoryOwnerOnly()
     {
         var builder = DistributedApplication.CreateBuilder();
-        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         using var aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store");
 
         using var certificate = CreateTestCertificate();
@@ -12056,6 +12056,60 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncWaitsForDcpResourceCleanup()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.True(resourcesCleanedUp);
+        Assert.Equal(1, kubernetesService.CleanupResourcesCallCount);
+    }
+
+    [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncCannotConfirmCleanupAfterARegularStop()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        await appExecutor.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(resourcesCleanedUp);
+        Assert.Equal(0, kubernetesService.CleanupResourcesCallCount);
+    }
+
+    [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncReportsCanceledCleanupAsUnconfirmed()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(new CancellationToken(canceled: true)).DefaultTimeout();
+
+        Assert.False(resourcesCleanedUp);
+    }
+
+    [Fact]
     public async Task ContainerAndExecutableShareContainerNetworkAllocationFailure()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -12913,7 +12967,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         });
         var ks = kubernetesService ?? new TestKubernetesService();
         var dcpEvts = events ?? new DcpExecutorEvents();
-        var fileSystemService = new FileSystemService(configuration);
+        var fileSystemService = new FileSystemService(configuration, new Aspire.Shared.TemporaryStorage());
         var locations = new Locations(fileSystemService);
         var aspireStoreDirectory = configuration[AspireStore.AspireStorePathKeyName];
         if (string.IsNullOrWhiteSpace(aspireStoreDirectory))

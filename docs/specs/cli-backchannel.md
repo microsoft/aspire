@@ -144,6 +144,7 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V2 = "aux.v2";  // 13.2+ with request objects
     public const string V3 = "aux.v3";  // 13.4+ with batched console log streaming
     public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
+    public const string StopResourceCleanup_V1 = "stop-resource-cleanup.v1";
 }
 ```
 
@@ -164,6 +165,12 @@ internal static class AuxiliaryBackchannelCapabilities
 When both sides advertise `resource-snapshot-versions.v1`, `ResourceSnapshot.Version` is monotonic and can order the initial GET against watch updates. The CLI starts the watch before the GET and retains the newest snapshot when the calls overlap.
 
 Older AppHosts omit `ResourceSnapshot.Version`, which deserializes as `0`. Without the capability, the CLI treats snapshot ordering as unknown and preserves the legacy GET-first behavior. A version of `0` must not participate in stale-snapshot comparisons.
+
+### Stop Resource Cleanup Compatibility
+
+When the AppHost advertises `stop-resource-cleanup.v1`, `StopAsync(StopAppHostRequest)` honors `WaitForResourceCleanup = true`: the AppHost asks DCP to clean up the application resources, waits until DCP reports the cleanup complete, responds with `StopAppHostResponse.ResourcesCleanedUp`, and then stops itself. The client bounds the wait with its cancellation token; the AppHost still stops when the wait is canceled. `aspire stop --wait` uses this to return only after resources such as fixed-name containers are gone.
+
+Older AppHosts ignore `WaitForResourceCleanup` and stop without waiting. Without the capability, the CLI does not send the request, stops the AppHost normally, and reports that the teardown could not be confirmed.
 
 ### Compatibility Matrix
 

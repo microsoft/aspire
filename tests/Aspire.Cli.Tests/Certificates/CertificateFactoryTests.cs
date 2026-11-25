@@ -96,7 +96,7 @@ public class CertificateFactoryTests
     [Fact]
     public void CreateAspNetCoreHttpsDevelopmentCertificate_PreservesHttpsExtensions()
     {
-        var manager = CertificateManager.Create(NullLogger.Instance, TestEnvironment.CreateLinux(), nssDbOverride: null);
+        var manager = CertificateManager.Create(NullLogger.Instance, TestEnvironment.CreateLinux(), nssDbOverride: null, temporaryStorage: new Aspire.Shared.TemporaryStorage());
         var notBefore = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(notBefore, notBefore.AddDays(2));
 

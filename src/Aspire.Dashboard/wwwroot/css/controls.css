@@ -909,6 +909,14 @@ fluent-menu-item:state(disabled) {
     color: var(--colorBrandForegroundLinkPressed);
 }
 
+.aspire-menu-container.mobile-nav-menu .mobile-nav-menu-error-count {
+    min-width: 20px;
+    margin-inline-start: var(--spacingHorizontalS);
+    padding: 1px 3px;
+    font-weight: var(--aspire-font-weight-regular);
+    vertical-align: middle;
+}
+
 .aspire-menu-container.mobile-nav-menu fluent-divider {
     --colorNeutralStroke2: var(--mobile-nav-divider-color);
     height: 1px;

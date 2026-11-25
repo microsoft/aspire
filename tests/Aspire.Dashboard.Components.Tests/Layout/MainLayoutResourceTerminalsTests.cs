@@ -47,6 +47,31 @@ public partial class MainLayoutTests
     }
 
     [Theory]
+    [InlineData("/terminals")]
+    [InlineData("/terminals/resource/shell")]
+    public async Task MobileNavigation_OnTerminalPage_OnlyResourceTerminalIsCurrent(string url)
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            initialResources: [TerminalSetupHelpers.CreateTerminalResource("shell")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        SetupMainLayoutServices(dashboardClient: client);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(url);
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        var terminalTitle = Resources.TerminalStrings.TerminalTitle;
+        cut.Instance.SetPageNavMenuEntries(() => [new("terminal", terminalTitle, () => Task.CompletedTask, IsActive: true)]);
+        cut.WaitForAssertion(() => Assert.True(Services.GetRequiredService<ShortcutManager>().IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals)));
+
+        await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+
+        Assert.Equal(
+            [terminalTitle, Resources.Layout.MainLayoutHelp, Resources.Layout.MainLayoutLaunchNotifications, Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip")));
+        var currentItem = Assert.Single(cut.FindAll("""fluent-menu-item[aria-current="page"]"""));
+        Assert.Equal(terminalTitle, currentItem.TextContent.Trim());
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task ResourceTerminalsNavigation_RunSwitchCancelsAndRestartsAvailabilityWatch(bool isDesktop)
@@ -69,28 +94,15 @@ public partial class MainLayoutTests
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.True(HasTerminals());
-            Assert.True(shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals));
-        });
+        cut.WaitForAssertion(() => Assert.True(shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals)));
         Assert.Equal(1, client.ResourceSubscriptionCount);
         await cut.InvokeAsync(() => cut.Instance.SwitchDashboardRunAsync("historical"));
         await disposed.Task.WaitAsync(DefaultWaitTimeout);
-        Assert.False(HasTerminals());
         Assert.False(shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals));
         Assert.Empty(cut.FindComponents<NavigationAvailabilityProvider>());
         await cut.InvokeAsync(() => cut.Instance.SwitchDashboardRunAsync(null));
-        cut.WaitForAssertion(() =>
-        {
-            Assert.True(HasTerminals());
-            Assert.True(shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals));
-        });
+        cut.WaitForAssertion(() => Assert.True(shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals)));
         Assert.Equal(2, client.ResourceSubscriptionCount);
-
-        bool HasTerminals() => isDesktop
-            ? shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals)
-            : cut.FindComponent<MobileNavMenu>().Instance.HasResourceTerminals;
     }
 
     [Theory]
@@ -107,10 +119,6 @@ public partial class MainLayoutTests
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        if (!isDesktop)
-        {
-            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
-        }
         AssertNavigation(false);
         await AssertShortcutNavigationAsync(false);
         var resource = TerminalSetupHelpers.CreateTerminalResource("shell", hidden: hidden);
@@ -131,10 +139,6 @@ public partial class MainLayoutTests
         {
             Assert.Equal(expected, cut.Instance.SubscribedShortcuts.Contains(AspireKeyboardShortcut.GoToTerminals));
             Assert.Equal(expected, shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals));
-            if (!isDesktop)
-            {
-                Assert.Equal(expected, cut.FindComponent<MobileNavMenu>().Instance.HasResourceTerminals);
-            }
         }
 
         async Task AssertShortcutNavigationAsync(bool expected)

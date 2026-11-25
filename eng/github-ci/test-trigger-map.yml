@@ -158,6 +158,7 @@ path_rules:
   - paths:
       - src/Directory.Build.props
       - src/Directory.Build.targets
+      - src/BannedSymbols.txt
       - tests/Directory.Build.props
       - tests/Directory.Build.targets
       - tests/Directory.Packages.props

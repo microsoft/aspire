@@ -576,7 +576,12 @@
     opacity: 0.45;
 }
 
-.home-chart-bar:hover rect {
+.home-chart-bar {
+    cursor: pointer;
+}
+
+.home-chart-bar:hover rect,
+.home-chart-bar:focus-visible rect {
     opacity: 1;
 }
 

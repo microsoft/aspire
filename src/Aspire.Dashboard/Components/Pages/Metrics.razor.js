@@ -1,6 +1,12 @@
 const registrations = new WeakMap();
 
 export function registerMetricsSplitter(element, dotNetRef) {
+    // Registration runs after an awaited module import. If the user navigates away in the meantime, the
+    // splitter is removed from the DOM and Blazor passes null for the stale ElementReference.
+    if (!element) {
+        return false;
+    }
+
     unregisterMetricsSplitter(element);
 
     const splitter = element.querySelector(':scope > .fluent-multi-splitter');
