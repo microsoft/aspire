@@ -856,15 +856,13 @@ internal sealed class AgentInitCommand : BaseCommand
                 return appHost;
             }
 
-            // Run from a subdirectory such as src/Web, the AppHost can live in a sibling such as src/AppHost,
-            // which that walk never visits, so search the whole workspace. A selection prompt in the reused
-            // discovery always returns a choice, so reaching here means it did not prompt, except when the user
-            // picked a settings-provided AppHost outside the workspace. When the working directory is the
-            // workspace root (each contains the other), searching it again would repeat that discovery.
-            if (AgentInstructionsFile.IsInDirectory(workspaceRoot.FullName, workingDirectory))
-            {
-                return null;
-            }
+            // Search the whole workspace without settings. Run from a subdirectory such as src/Web, the AppHost can
+            // live in a sibling such as src/AppHost, which that walk never visits. Run from the workspace root, the
+            // reused discovery may have skipped its search because saved settings named an AppHost outside the
+            // workspace, or found several candidates without interactive input because one came from a parent
+            // aspire.config.json. A selection prompt in the reused discovery always returns a choice, so this
+            // search can prompt a second time only when the user picked a settings-provided AppHost outside the
+            // workspace and the workspace itself contains several AppHosts.
         }
 
         // Settings are read relative to the working directory, which does not describe this whole workspace. The

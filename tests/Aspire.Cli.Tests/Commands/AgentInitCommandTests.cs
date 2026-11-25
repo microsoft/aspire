@@ -325,6 +325,38 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
     }
 
+    [Fact]
+    public async Task AgentInit_WritesAgentInstructionsForWorkspaceAppHostWhenSettingsNameExternalAppHost()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var externalDirectory = context.Workspace.CreateDirectory("external");
+        var externalAppHost = new FileInfo(Path.Combine(externalDirectory.FullName, "External.AppHost", "External.AppHost.csproj"));
+        var appHost = new FileInfo(Path.Combine(context.Project.FullName, "App.AppHost", "App.AppHost.csproj"));
+        List<(string Directory, AppHostDiscoveryScope Scope)> searches = [];
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(externalAppHost),
+                FindAppHostProjectFilesAsyncCallback = (directory, scope, _, _) =>
+                {
+                    searches.Add((directory.FullName, scope));
+                    return Task.FromResult<List<FileInfo>>([appHost]);
+                }
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --workspace-root \"{context.Project.FullName}\" --agents copilot --scope project --skills none --mcp=false --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal([(context.Project.FullName, AppHostDiscoveryScope.ExplicitDirectory)], searches);
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("App.AppHost/App.AppHost.csproj", aspireSkillsPluginRegistered: false, newLine)}{newLine}",
+            await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("9.0.302")]
