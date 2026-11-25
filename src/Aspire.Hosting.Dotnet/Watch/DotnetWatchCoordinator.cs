@@ -843,6 +843,16 @@ internal static class DotnetWatchCoordinator
                 {
                     continue;
                 }
+                if (GetDuplicateProjectNameReason(group) is { } duplicateNames)
+                {
+                    // The watcher can't build such a group, and its services would wait for a fix the user can't save.
+                    // Projects that share outputs are in one group, so the whole group returns to ordinary builds.
+                    foreach (var project in group)
+                    {
+                        reasons.TryAdd(project, duplicateNames);
+                    }
+                    continue;
+                }
                 var multipleRoots = group.Select(project => DotnetWatchProjectGraph.Normalize(project.ProjectPath))
                     .Distinct(DotnetWatchProjectGraph.PathComparer).Count() > 1;
                 if (multipleRoots)
@@ -1018,6 +1028,29 @@ internal static class DotnetWatchCoordinator
 
         private static string FormatResourceNames(IEnumerable<IResource> resources) =>
             string.Join(", ", resources.Select(resource => $"'{resource.Name}'"));
+
+        // The watcher builds several physical roots through one temporary solution, and a solution needs distinct
+        // project names: the project file name without its extension, compared case-insensitively within a solution
+        // folder. For example, this fails to load with "Project name 'Api' already exists":
+        //   <Solution><Project Path="/src/Orders/Api.csproj" /><Project Path="/src/Billing/Api.csproj" /></Solution>
+        // The watcher builds file-based apps separately. See https://github.com/dotnet/sdk/issues/57360,
+        // https://github.com/dotnet/sdk/blob/7a6b95d17bde142343a81adcd7cc27bd5bbd3be0/src/Dotnet.Watch/Watch/HotReload/HotReloadDotNetWatcher.cs#L1199-L1209
+        // and https://github.com/microsoft/vs-solutionpersistence/blob/21e6c361ea088e94f4b97b8859625c62eb5bad36/src/Microsoft.VisualStudio.SolutionPersistence/Model/SolutionModel.cs#L583-L605.
+        // Revisit this check once the shipped watchers include the fix for that issue.
+        private static string? GetDuplicateProjectNameReason(IEnumerable<WatchedProject> group)
+        {
+            var duplicates = group
+                .Where(project => !((IProjectMetadata)project.Metadata).IsFileBasedApp)
+                .GroupBy(project => DotnetWatchProjectGraph.Normalize(project.ProjectPath), DotnetWatchProjectGraph.PathComparer)
+                .GroupBy(root => Path.GetFileNameWithoutExtension(root.Key), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(name => name.Count() > 1);
+
+            return duplicates is null
+                ? null
+                : $"Resources {FormatResourceNames(duplicates.SelectMany(root => root).Select(project => project.Resource))} use " +
+                    $"different projects named '{duplicates.Key}'. The hot reload watcher builds a watch group's projects through a " +
+                    "temporary solution, which needs distinct project names. Rename one of the projects to watch the group.";
+        }
 
         private static string GetOrdinaryWorkingDirectory(IResource resource, IProjectMetadata metadata)
         {

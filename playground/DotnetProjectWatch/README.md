@@ -243,6 +243,10 @@ file-based apps, package/project reference changes and AppHost edits. Still open
   group then fails with `The given key '1021' was not present in the dictionary`. That happens when the project sets
   `StaticWebAssetsEnabled`, `JSModulesEnabled` or `EnableHotReloadInRuntimeConfigDevFile` to `false`. Opt such a project
   out with `WithWatch(false)` ([dotnet/sdk#57358](https://github.com/dotnet/sdk/issues/57358)).
+- **Projects with the same name in one watch group**: the watchers build a group's projects through a temporary
+  solution, which rejects two projects with the same file name (`Project name 'Api' already exists`). Preflight
+  detects that and runs the group's services without watching; rename one of the projects to watch them
+  ([dotnet/sdk#57360](https://github.com/dotnet/sdk/issues/57360)).
 
 ## Repro
 

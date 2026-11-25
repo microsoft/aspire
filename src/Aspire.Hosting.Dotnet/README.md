@@ -282,6 +282,10 @@ When it does, the group's watcher gets a private temp directory that pins the gr
 group's services get their own temp directory back when they launch. Preflight doesn't evaluate the
 projects with that private temp directory, so a project whose evaluated outputs or imports depend on
 `TMPDIR` (`TMP` or `TEMP` on Windows) isn't supported in such a group.
+The temporary solution also needs distinct project names: if two of a group's projects have the same
+project file name (compared without the extension and ignoring case), the group's services run without
+watching, and their resource logs say which projects to rename
+([dotnet/sdk#57360](https://github.com/dotnet/sdk/issues/57360)).
 
 Representable non-Debug configurations, file-based C# services, working directories, launch profiles,
 arguments, and build environments are retained. The watcher requires managed hot-reload agents;

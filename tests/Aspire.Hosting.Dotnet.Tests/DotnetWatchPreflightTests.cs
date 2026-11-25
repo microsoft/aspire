@@ -1676,6 +1676,28 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task DuplicateProjectNamesReturnTheirWatchGroupToOrdinaryBuilds()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = CreateBuilder(new());
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var orders = AddProject(builder, workspace, "orders", Path.Combine("orders", "Api.csproj"));
+        var billing = AddProject(builder, workspace, "billing", Path.Combine("billing", "api.csproj"));
+        var worker = AddProject(builder, workspace, "worker");
+        using var app = builder.Build();
+
+        await BeforeStartAsync(app, CancellationToken.None);
+
+        Assert.Empty(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        Assert.All(new[] { orders, billing, worker }, resource => Assert.True(Metadata(resource).SuppressBuild));
+        Assert.Equal(3, Assert.Single(Model(app).Resources.OfType<DotnetProjectBuildResource>()).ProjectPaths.Count);
+        Assert.Contains(app.Services.GetFakeLogCollector().GetSnapshot(), entry => entry.Message ==
+            "Resource 'worker' cannot be watched: Resources 'orders', 'billing' use different projects named 'Api'. " +
+            "The hot reload watcher builds a watch group's projects through a temporary solution, which needs distinct " +
+            "project names. Rename one of the projects to watch the group.");
+    }
+
+    [Fact]
     public async Task NormalShutdownWaitsForWatchHostCleanupBeforeRemovingRunDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(output);
@@ -1838,9 +1860,13 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
     }
 
     private static IResourceBuilder<DotnetProjectResource> AddProject(
-        IDistributedApplicationBuilder builder, TemporaryWorkspace workspace, string name)
+        IDistributedApplicationBuilder builder, TemporaryWorkspace workspace, string name) =>
+        AddProject(builder, workspace, name, Path.Combine(name, $"{name}.csproj"));
+
+    private static IResourceBuilder<DotnetProjectResource> AddProject(
+        IDistributedApplicationBuilder builder, TemporaryWorkspace workspace, string name, string relativePath)
     {
-        var path = Path.Combine(workspace.Path, name, $"{name}.csproj");
+        var path = Path.Combine(workspace.Path, relativePath);
         DotnetWatchCoordinatorTests.CreateProjectFile(path);
         return builder.AddDotnetProject(name, path);
     }
