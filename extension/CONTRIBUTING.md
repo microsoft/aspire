@@ -176,6 +176,10 @@ The Windows shard launches VS Code with `__COMPAT_LAYER=DetectorsAppHealth` to c
 
 The browser debugger fixtures target the .NET version pinned by the repository's `global.json`. Their NuGet sources must include the matching daily feed because the standalone Blazor gateway is acquired as a .NET tool at run time.
 
+When release branding leaves `Aspire.Hosting.Blazor` prerelease, an exact AppHost SDK version match is preferred. Same-patch fallback is limited to the first local package directory containing that SDK version, with repository artifacts preceding cached hives.
+
+The E2E workflow and PR installer stage a build's packages together in a flat hive directory. Unrelated hives cannot supply the fallback; a missing companion retains the AppHost version pin so restore reports the failure.
+
 Both Azure Functions shards require Azure Functions Core Tools v4 (`func`) on `PATH`, plus the real .NET Install Tool and C# extensions because they debug the generated C# AppHost. The .NET Functions shard additionally installs Azure Resource Groups and Azure Functions into the isolated VS Code instance, generates a dedicated HTTPS certificate with shell-sensitive arguments, and activates the Azure Functions extension so it registers its `func` task definition and listeners. Aspire then creates and runs a registered `func: host start` task for the generated .NET isolated Functions resource; the shard probes its HTTPS endpoint and verifies that stopping the Aspire resource ends the same VS Code task.
 
 The separate `azure-functions-node` shard runs `azureFunctionsNode.e2e.test.ts`, which uses a dependency-free Node v3 HTTP Functions fixture and the source-built hosting integration to verify Core Tools startup, a real `pwa-node` inspector attachment, an HTTP-handler breakpoint with a matching source stack frame, and task/process/inspector cleanup. It does not install the Azure Resource Groups or Azure Functions extensions because the Node worker attaches directly through VS Code's built-in JavaScript debugger. With Core Tools on `PATH`, run that proof using:

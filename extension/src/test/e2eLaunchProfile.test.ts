@@ -1131,7 +1131,8 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
             csharpFileHeader: '',
             createBrowserDebuggerAppHostProject,
             selectCompanionPackageVersion,
-            getAvailablePackageVersions: (packageId: string) => {
+            getAvailableCompanionPackageVersions: (appHostSdkVersion: string, packageId: string) => {
+                assert.strictEqual(appHostSdkVersion, '13.6.0-test');
                 requestedPackageIds.push(packageId);
                 return ['13.6.0-test-ci'];
             },

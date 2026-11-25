@@ -29,7 +29,8 @@ function resolveAppHostSdkVersion(versionResult, getAvailablePackageVersions, ge
 //   Aspire.Hosting.AppHost.17.0.1.nupkg
 //   Aspire.Hosting.Blazor.17.0.1-ci.nupkg
 // Pinning such a package to the AppHost version fails restore with NU1103, so prefer the exact
-// version and otherwise use the locally built prerelease of the same major.minor.patch.
+// version and otherwise use a prerelease of the same major.minor.patch from the selected
+// SDK's local package source. The caller must exclude unrelated cached sources.
 function selectCompanionPackageVersion(appHostSdkVersion, availablePackageVersions) {
   if (availablePackageVersions.includes(appHostSdkVersion)) {
     return appHostSdkVersion;
