@@ -21,7 +21,7 @@ namespace Aspire.Hosting.Native.Dcp;
 internal sealed class DcpApiClient : IAsyncDisposable
 {
     private const string Api = "/apis/usvc-dev.developer.microsoft.com/v1/";
-    private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-native-dcp-");
+    private readonly DirectoryInfo _directory;
     private Process? _process;
     private Task? _output;
     private HttpClient? _client;
@@ -31,22 +31,15 @@ internal sealed class DcpApiClient : IAsyncDisposable
     private readonly Lock _cleanupGate = new();
     private Task? _cleanup;
 
-    public DcpApiClient() : this(new())
-    {
-    }
-
-    public DcpApiClient(NativeServerOptions options) : this(options, NullLogger.Instance)
-    {
-    }
-
-    public DcpApiClient(NativeServerOptions options, ILogger logger)
+    public DcpApiClient(NativeServerOptions options, ILogger logger, ITemporaryStorage temporaryStorage)
     {
         options.Validate();
         _options = options;
         _logger = logger;
+        _directory = temporaryStorage.CreateTempSubdirectory("aspire-native-dcp-");
     }
 
-    internal DcpApiClient(NativeServerOptions options, HttpClient client) : this(options)
+    internal DcpApiClient(NativeServerOptions options, HttpClient client, ITemporaryStorage temporaryStorage) : this(options, NullLogger.Instance, temporaryStorage)
     {
         client.Timeout = Timeout.InfiniteTimeSpan;
         _client = client;

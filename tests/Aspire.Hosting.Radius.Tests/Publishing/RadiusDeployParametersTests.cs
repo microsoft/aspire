@@ -7,6 +7,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Radius.ResourceMapping;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -118,22 +120,15 @@ public class RadiusDeployParametersTests
         var step = new RadiusDeploymentPipelineStep(environment.Resource);
         if (!configured)
         {
-            await Assert.ThrowsAsync<MissingParameterValueException>(() => step.WriteDeployParametersFileAsync(NullLogger.Instance, default));
+            await Assert.ThrowsAsync<MissingParameterValueException>(() => step.WriteDeployParametersFileAsync(new TestFileSystemService().TempDirectory, NullLogger.Instance, default));
             return;
         }
         builder.Configuration["Parameters:web-http-BrowserOrigins"] = "https://public.example,https://alias.example";
         builder.Configuration["Parameters:web-http-PrimaryBrowserOrigin"] = "https://public.example";
-        var path = await step.WriteDeployParametersFileAsync(NullLogger.Instance, default);
-        Assert.NotNull(path);
-        try
-        {
-            await Verify(BicepPostProcessor.CompileBicep(options, "myenv", NullLogger.Instance), "bicep")
-                .AppendContentAsFile(await File.ReadAllTextAsync(path), "json").UseParameters(configured);
-        }
-        finally
-        {
-            RadiusDeploymentPipelineStep.DeleteDeployParametersFile(path, NullLogger.Instance);
-        }
+        using var parametersFile = await step.WriteDeployParametersFileAsync(new TestFileSystemService().TempDirectory, NullLogger.Instance, default);
+        Assert.NotNull(parametersFile);
+        await Verify(BicepPostProcessor.CompileBicep(options, "myenv", NullLogger.Instance), "bicep")
+            .AppendContentAsFile(await File.ReadAllTextAsync(parametersFile.Path), "json").UseParameters(configured);
     }
 
     [Fact]
@@ -181,8 +176,10 @@ public class RadiusDeployParametersTests
         // on the command line (which would expose secrets); it writes an owner-only ARM JSON file and
         // passes `--parameters @<file>`. Assert that file contract rather than the obsolete flow.
         var step = new RadiusDeploymentPipelineStep(radiusEnv);
-        var path = await step.WriteDeployParametersFileAsync(NullLogger.Instance, default);
-        Assert.NotNull(path);
+        using var fileSystem = new TestFileSystemService();
+        var parametersFile = await step.WriteDeployParametersFileAsync(fileSystem.TempDirectory, NullLogger.Instance, default);
+        Assert.NotNull(parametersFile);
+        var path = parametersFile.Path;
 
         try
         {
@@ -205,17 +202,49 @@ public class RadiusDeployParametersTests
                 Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
             }
 
-            // Cleanup removes the file (the deploy step deletes it in a finally block).
-            RadiusDeploymentPipelineStep.DeleteDeployParametersFile(path, NullLogger.Instance);
+            // Disposing the handle removes the file (the deploy step disposes it in a finally block).
+            parametersFile.Dispose();
             Assert.False(File.Exists(path));
         }
         finally
         {
-            var directory = Path.GetDirectoryName(path);
-            if (directory is not null && Directory.Exists(directory))
-            {
-                Directory.Delete(directory, recursive: true);
-            }
+            parametersFile.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task WriteDeployParametersFile_DisposeHonorsPreserveTempFiles()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var secret = builder.AddParameter("recipeSecret", "FakeValue", secret: true);
+        builder.AddRadiusEnvironment("myenv")
+            .WithRecipeParameters(p => p["apiKey"] = secret);
+        builder.AddRedis("cache");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ASPIRE_PRESERVE_TEMP_FILES"] = "true" })
+            .Build();
+        using var fileSystem = new FileSystemService(configuration, new TemporaryStorage());
+
+        var step = new RadiusDeploymentPipelineStep(radiusEnv);
+        var parametersFile = await step.WriteDeployParametersFileAsync(fileSystem.TempDirectory, NullLogger.Instance, default);
+        Assert.NotNull(parametersFile);
+        var directory = Path.GetDirectoryName(parametersFile.Path)!;
+
+        try
+        {
+            parametersFile.Dispose();
+            Assert.True(File.Exists(parametersFile.Path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -233,9 +262,9 @@ public class RadiusDeployParametersTests
         _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
 
         var step = new RadiusDeploymentPipelineStep(radiusEnv);
-        var path = await step.WriteDeployParametersFileAsync(NullLogger.Instance, default);
+        var parametersFile = await step.WriteDeployParametersFileAsync(new TestFileSystemService().TempDirectory, NullLogger.Instance, default);
 
-        Assert.Null(path);
+        Assert.Null(parametersFile);
     }
 
     [Fact]
@@ -253,7 +282,7 @@ public class RadiusDeployParametersTests
 
         var step = new RadiusDeploymentPipelineStep(radius.Resource);
         var ex = await Assert.ThrowsAsync<RadiusBackingResourceProjectionException>(
-            () => step.WriteDeployParametersFileAsync(NullLogger.Instance, default));
+            () => step.WriteDeployParametersFileAsync(new TestFileSystemService().TempDirectory, NullLogger.Instance, default));
 
         Assert.Contains("ASPIRERADIUS082", ex.Message, StringComparison.Ordinal);
     }

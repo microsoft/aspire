@@ -52,7 +52,7 @@ public class SdkResponseFileTests(ITestOutputHelper outputHelper)
             options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(aspireHomeDirectory: aspireHome);
             options.InteractionServiceFactory = _ => interaction;
             options.DotNetCliExecutionFactoryFactory = provider =>
-                new ProcessExecutionFactory(new HostEnvironment(), provider.GetRequiredService<ILogger<ProcessExecutionFactory>>());
+                new ProcessExecutionFactory(new HostEnvironment(), new Aspire.Shared.TemporaryStorage(), provider.GetRequiredService<ILogger<ProcessExecutionFactory>>());
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([])

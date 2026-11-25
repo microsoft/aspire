@@ -6699,7 +6699,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     public async Task PersistentPlainExecutable_UsesStableCertificateOutputPath()
     {
         var builder = DistributedApplication.CreateBuilder();
-        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         using var aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store");
 
         using var certificate = CreateTestCertificate();
@@ -6741,7 +6741,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     public async Task PersistentPlainExecutable_WritesCustomBundleDirectoryOwnerOnly()
     {
         var builder = DistributedApplication.CreateBuilder();
-        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         using var aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store");
 
         using var certificate = CreateTestCertificate();
@@ -12967,7 +12967,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         });
         var ks = kubernetesService ?? new TestKubernetesService();
         var dcpEvts = events ?? new DcpExecutorEvents();
-        var fileSystemService = new FileSystemService(configuration);
+        var fileSystemService = new FileSystemService(configuration, new Aspire.Shared.TemporaryStorage());
         var locations = new Locations(fileSystemService);
         var aspireStoreDirectory = configuration[AspireStore.AspireStorePathKeyName];
         if (string.IsNullOrWhiteSpace(aspireStoreDirectory))

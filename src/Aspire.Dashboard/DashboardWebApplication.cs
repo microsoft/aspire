@@ -409,6 +409,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // OTLP services.
         builder.Services.AddGrpc();
+        builder.Services.TryAddSingleton<ITemporaryStorage, TemporaryStorage>();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
         // Tags, resource order and pinned metrics are kept in the browser's local storage, so each circuit loads its own.
