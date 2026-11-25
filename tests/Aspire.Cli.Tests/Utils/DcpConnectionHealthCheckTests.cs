@@ -206,10 +206,11 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             }
         };
         var checker = new DcpConnectionChecker(
-            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null),
+            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null, temporaryStorage: new Aspire.Shared.TemporaryStorage()),
             processExecutionFactory,
             CreateExecutionContext(workspace),
             new HostEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<DcpConnectionChecker>.Instance);
 
         var result = await checker.TestConnectionAsync(dcpDirectory.FullName, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
