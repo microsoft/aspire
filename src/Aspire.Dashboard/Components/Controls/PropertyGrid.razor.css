@@ -2,6 +2,10 @@
     cursor: default;
 }
 
+.property-grid-compact ::deep .button-container {
+    --aspire-grid-icon-button-size: 26px;
+}
+
 .property-grid ::deep .fluent-data-grid .nameColumn {
     padding-inline-end: var(--aspire-space-2) !important;
 }

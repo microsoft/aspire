@@ -51,7 +51,7 @@
 }
 
 ::deep .url-button-neutral {
-    line-height: inherit;
+    line-height: var(--resource-metadata-line-height, 18px);
 }
 
 ::deep.url-list {
@@ -70,12 +70,11 @@
     text-overflow: ellipsis;
 }
 
-/* Fluent sets the dialog insets inline; override them using the generated anchor to keep any +N button aligned. */
+/* Clear Fluent's inline insets so fallback placement can move the dialog across the anchor. */
 ::deep .url-overflow-popover::part(dialog) {
     position-anchor: var(--url-overflow-anchor);
-    top: anchor(bottom) !important;
-    right: anchor(right) !important;
-    bottom: auto !important;
-    left: auto !important;
+    inset: auto !important;
+    position-area: bottom span-left;
+    justify-self: end;
     position-try-fallbacks: flip-block;
 }

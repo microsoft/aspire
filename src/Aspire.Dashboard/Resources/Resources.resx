@@ -659,7 +659,10 @@
     <comment>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</comment>
   </data>
   <data name="HomeActivityBucketTraceHint" xml:space="preserve">
-    <value>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</value>
+    <value>View traces with spans that started in this interval.</value>
+  </data>
+  <data name="HomeActivityBucketTraceCaveat" xml:space="preserve">
+    <value>Some traces may not include a request counted in this bar.</value>
   </data>
   <data name="HomeActivityLoading" xml:space="preserve">
     <value>Loading activity…</value>

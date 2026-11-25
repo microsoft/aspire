@@ -313,9 +313,8 @@
     display: flex;
     align-items: center;
     gap: var(--aspire-space-1);
-    padding: 12px 12px 8px;
+    padding: 12px 12px var(--layout-top-padding);
     box-sizing: border-box;
-    height: 52px;
     flex-shrink: 0;
 }
 
@@ -358,11 +357,13 @@
 ::deep .resource-pane-search {
     flex: 1 1 auto;
     min-width: 0;
+    row-gap: 0;
 }
 
 ::deep .resource-pane-search > fluent-text-input,
 ::deep fluent-text-input.resource-pane-search {
     width: 100%;
+    height: 32px;
 }
 
 .state-dot {
@@ -447,6 +448,7 @@
     align-items: center;
     position: relative;
     margin-bottom: var(--resource-group-header-gap);
+    padding-inline-end: 2px;
     border-radius: var(--aspire-radius-medium);
 }
 
@@ -499,8 +501,8 @@
     margin-inline-end: 4px;
 }
 
-.resource-tag-actions ::deep .resource-tag-action,
-.resource-tag-actions ::deep .resource-tag-action::part(control) {
+.resource-tag-header ::deep .resource-tag-header-button,
+.resource-tag-header ::deep .resource-tag-header-button::part(control) {
     width: 28px;
     height: 28px;
     min-width: 28px;
@@ -767,6 +769,7 @@
     }
 }
 
+.resource-tag-header ::deep .resource-row-toggle.collapsed svg,
 .resource-row ::deep .resource-row-toggle-leading.collapsed svg {
     transform: rotate(-90deg);
 }
@@ -784,31 +787,6 @@
     line-height: 16px;
     text-align: center;
     font-variant-numeric: tabular-nums;
-}
-
-/* The expand toggle's own look; where it sits is above (.resource-row-toggle-leading). */
-.resource-row-toggle {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    margin-right: 6px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--aspire-radius-small);
-    background: transparent;
-    color: var(--colorNeutralForeground2);
-    cursor: pointer;
-}
-
-.resource-row-toggle:hover {
-    background: var(--colorNeutralBackground3);
-}
-
-.resource-row-toggle.collapsed ::deep svg {
-    transform: rotate(-90deg);
 }
 
 .resource-row-link {
@@ -1032,6 +1010,7 @@
 }
 
 .resource-selection-hint {
+    --resource-selection-hint-cycle: 20s;
     display: inline-grid;
     grid-column: 2;
     justify-self: end;
@@ -1047,16 +1026,15 @@
     grid-area: 1 / 1;
     align-items: center;
     gap: var(--aspire-space-1);
-    animation: resource-selection-hint 10s linear infinite;
+    animation: resource-selection-hint var(--resource-selection-hint-cycle) linear infinite;
 }
 
 .resource-selection-instruction + .resource-selection-instruction {
-    animation-delay: -5s;
+    animation-delay: calc(var(--resource-selection-hint-cycle) / -2);
 }
 
 /* Compositor-only rotation reserves both instructions' footprint without a timer,
-   DOM updates, or screen-reader announcements. Each instruction fades in, dwells for about 4.4s and fades out before the
-   other fades in (the second runs 5s behind), so the two never show on top of each other. */
+   DOM updates, or screen-reader announcements. The half-cycle offset lets each instruction fade out before the other fades in. */
 @keyframes resource-selection-hint {
     0%, 50%, 100% { opacity: 0; }
     3%, 47% { opacity: 1; }
@@ -1704,8 +1682,8 @@
     }
 
     .resource-pane-head {
-        height: 44px;
-        padding: 6px 8px;
+        padding-block-start: 6px;
+        padding-inline: 8px;
     }
 
     .resource-pane-list {
@@ -2082,10 +2060,6 @@
     .resource-row-endpoints ::deep .url-container {
         grid-column: endpoint;
     }
-}
-
-.density-compact .resource-row-toggle {
-    margin-right: 2px;
 }
 
 /* A resource's actions: labeled buttons in the overview, icons on the rows of the resource list. */
@@ -2549,10 +2523,10 @@
     /* At rest the rows' actions are hidden and their state dots form a column at the end of the list, so the group
        header's chevron is centered over that column instead of floating just past it. The compact row link ends 6px
        before the row and has 8px of end padding, so the 10px dot's center is 19px from the end; the header ends at the
-       same line, and the 20px chevron needs 9px after it to center there. The count badge before it moves with it.
+       same line, and the 28px button needs 5px after it to center there. The count badge before it moves with it.
        Touch screens keep the actions showing, so they have no dot column there and the chevron keeps its place. */
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-tag-header > .resource-row-toggle {
-        margin-inline-end: 9px;
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-tag-header {
+        padding-inline-end: 5px;
     }
 }
 

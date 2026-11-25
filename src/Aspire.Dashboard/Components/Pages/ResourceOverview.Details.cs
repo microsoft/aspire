@@ -190,8 +190,18 @@ public sealed partial class ResourceOverview
 
     private void OnEnvironmentVariableMaskedChanged(ResourceViewModel resource, EnvironmentVariableViewModel variable) => _environmentMask.OnItemChanged(resource.Environment, variable);
 
-    private static List<HealthReportViewModel> GetHealthReports(ResourceViewModel resource) =>
-        resource.HealthReports.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    private List<HealthCheckProperty> GetHealthReports(ResourceViewModel resource) =>
+        resource.HealthReports
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(CreateHealthCheckProperty)
+            .ToList();
+
+    private HealthCheckProperty CreateHealthCheckProperty(HealthReportViewModel report)
+    {
+        var status = HealthReportFormatter.GetStatusWithTime(report, Loc);
+        var value = report.DisplayedDescription is { } description ? $"{status} \u00B7 {description}" : status;
+        return new HealthCheckProperty(report, value, HealthReportFormatter.GetStatusTooltip(report, Loc, TimeProvider));
+    }
 
     private static List<VolumeViewModel> GetVolumes(ResourceViewModel resource) =>
         resource.Volumes.OrderBy(v => v.Source, StringComparer.OrdinalIgnoreCase).ToList();
@@ -202,6 +212,12 @@ public sealed partial class ResourceOverview
         {
             await ToastService.ShowErrorToastAsync(string.Format(CultureInfo.CurrentCulture, ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.VolumeRevealFailed)], volume.Source));
         }
+    }
+
+    private sealed record HealthCheckProperty(HealthReportViewModel Report, string Value, string? ValueTooltip) : IPropertyGridItem
+    {
+        public string Name => Report.Name;
+        public string? ValueToVisualize => ValueTooltip;
     }
 
     /// <summary>

@@ -678,28 +678,20 @@
                         <h2 id="overview-health-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]</h2>
                         <span class="aspire-count-badge overview-card-count">@healthReports.Count</span>
                     </div>
-                    <ul class="overview-list">
-                        @foreach (var report in healthReports)
-                        {
-                            <li @key="report.Name">
-                                @if (report.HealthStatus is null)
-                                {
-                                    <AspireProgressRing Width="16px"
-                                                        Style="display: inline-block;"
-                                                        AriaLabel="@Loc[nameof(Dashboard.Resources.Resources.WaitingForHealthDataMessage)]" />
-                                }
-                                else
-                                {
-                                    (Icon? healthIcon, Color healthColor) = ResourceIconHelpers.GetHealthStatusIcon(report.HealthStatus);
-                                    <FluentIcon Value="@healthIcon" Color="@healthColor" Width="16px" />
-                                }
-                                <span class="overview-list-label" data-tooltip="@report.Name">@report.Name</span>
-                                <span class="overview-list-value overview-muted" data-tooltip="@report.DisplayedDescription">@report.DisplayedDescription</span>
-                                <ExceptionDetails ExceptionText="@report.ExceptionText" />
-                                <span class="overview-list-time" data-tooltip="@HealthReportFormatter.GetLastRunTooltip(report, TimeProvider)">@HealthReportFormatter.GetStatusWithTime(report, Loc)</span>
-                            </li>
-                        }
-                    </ul>
+                    <PropertyGrid TItem="HealthCheckProperty"
+                                  Items="@healthReports"
+                                  GridTemplateColumns="minmax(0, 1fr) minmax(0, 2fr)"
+                                  GenerateHeader="DataGridGeneratedHeaderType.None"
+                                  RowSize="DataGridRowSize.Small"
+                                  Class="overview-property-grid">
+                        <ContentBeforeName Context="check">
+                            @{ var (healthIcon, healthColor) = ResourceIconHelpers.GetHealthStatusIcon(check.Report.HealthStatus); }
+                            <FluentIcon Value="@healthIcon" Color="@healthColor" Width="16px" Class="severity-icon" />
+                        </ContentBeforeName>
+                        <ContentInButtonArea Context="check">
+                            <ExceptionDetails ExceptionText="@check.Report.ExceptionText" />
+                        </ContentInButtonArea>
+                    </PropertyGrid>
                 </section>
             }
             else

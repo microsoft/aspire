@@ -138,7 +138,13 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
     public bool IsValueSortable { get; set; } = true;
 
     [Parameter]
+    public RenderFragment<TItem>? ContentBeforeName { get; set; }
+
+    [Parameter]
     public RenderFragment<TItem> ContentAfterValue { get; set; } = s_emptyChildContent;
+
+    [Parameter]
+    public RenderFragment<TItem>? ContentInButtonArea { get; set; }
 
     [Parameter]
     public string? HighlightText { get; set; }

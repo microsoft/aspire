@@ -905,12 +905,12 @@ fluent-dialog-body .fluent-message-box {
 }
 
 .fluent-data-grid fluent-button[icon-only] {
-    width: 32px;
-    min-width: 32px;
-    max-width: 32px;
-    height: 32px;
-    min-height: 32px;
-    max-height: 32px;
+    width: var(--aspire-grid-icon-button-size, 32px);
+    min-width: var(--aspire-grid-icon-button-size, 32px);
+    max-width: var(--aspire-grid-icon-button-size, 32px);
+    height: var(--aspire-grid-icon-button-size, 32px);
+    min-height: var(--aspire-grid-icon-button-size, 32px);
+    max-height: var(--aspire-grid-icon-button-size, 32px);
     padding: 0;
     flex-shrink: 0;
 }

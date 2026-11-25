@@ -2,7 +2,8 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: var(--layout-top-padding) var(--layout-right-padding) 24px var(--layout-left-padding);
+    margin-top: var(--layout-top-padding);
+    padding: 0 var(--layout-right-padding) 24px var(--layout-left-padding);
     container-type: inline-size;
     outline: none;
 }
@@ -10,6 +11,7 @@
 .resource-overview:has(> .home.graph-view) {
     /* The graph's menu otherwise adds a line box below the full-height canvas. */
     overflow: hidden;
+    margin-top: 0;
     padding: 0;
 }
 
@@ -764,6 +766,6 @@ a.overview-selection-card-title:hover {
 
 @media (max-width: 767px) {
     .resource-overview {
-        padding: 12px;
+        padding: 0 12px 12px;
     }
 }

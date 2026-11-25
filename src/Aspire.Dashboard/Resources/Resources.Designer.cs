@@ -133,7 +133,16 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to View traces with spans that started in this interval. Some traces may not include a request counted in this bar..
+        ///   Looks up a localized string similar to Some traces may not include a request counted in this bar..
+        /// </summary>
+        public static string HomeActivityBucketTraceCaveat {
+            get {
+                return ResourceManager.GetString("HomeActivityBucketTraceCaveat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to View traces with spans that started in this interval..
         /// </summary>
         public static string HomeActivityBucketTraceHint {
             get {

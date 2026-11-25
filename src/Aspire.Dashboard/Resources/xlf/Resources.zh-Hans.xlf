@@ -27,9 +27,14 @@
         <target state="translated">{0} · {1} 个请求，{2} 个失败</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceCaveat">
+        <source>Some traces may not include a request counted in this bar.</source>
+        <target state="new">Some traces may not include a request counted in this bar.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HomeActivityBucketTraceHint">
-        <source>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</source>
-        <target state="new">View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</target>
+        <source>View traces with spans that started in this interval.</source>
+        <target state="new">View traces with spans that started in this interval.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
