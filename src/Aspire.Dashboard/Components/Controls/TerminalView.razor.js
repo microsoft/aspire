@@ -1210,26 +1210,3 @@ export function refreshToolbarState(id) {
         flushToolbar(state);
     }
 }
-
-export function refreshLayout(id) {
-    const state = terminals.get(id);
-    if (!state || state.ended || !isVisible(state)) {
-        return;
-    }
-    // The activation interop can arrive after the user has started adjusting a footer control.
-    // Refit the terminal without moving keyboard focus or dismissing an open palette picker.
-    if (state.footer.contains(document.activeElement)) {
-        state.focusPending = false;
-    } else {
-        requestFocus(state);
-    }
-    if (state.waitingForVisibility) {
-        connectClient(state);
-    } else {
-        state.autoFitPending = state.autoFit;
-        applyAutoFit(state);
-        // The package observes this container; revealing a view must not reconnect or discard its history.
-        state.client?.refreshSelectionUI();
-        applyPendingFocus(state);
-    }
-}

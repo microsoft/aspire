@@ -141,9 +141,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
-    private bool IsLegacyTerminalLink => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
-        Resource is { } resource && CanShowTerminal(resource);
-
     // A recording's terminal endpoint would resolve through the live dashboard client, and recorded instance names can
     // still match a running AppHost after a dashboard-only restart. Showing it would open a writable connection to a
     // live process from a read-only run, so recordings show the console card instead, like the Terminals page.
@@ -175,17 +172,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     {
         _hideEmptyPanels = value;
         return InvokeAsync(StateHasChanged);
-    }
-
-    protected override void OnAfterRender(bool firstRender)
-    {
-        // Cascading layout parameters can update before the router replaces the outgoing page.
-        if (IsLegacyTerminalLink && Resource is { } resource &&
-            NavigationManager.ToBaseRelativePath(NavigationManager.Uri).StartsWith(
-                $"{DashboardUrls.ResourceOverviewBasePath}/", StringComparison.OrdinalIgnoreCase))
-        {
-            NavigationManager.NavigateTo(GetTerminalPageUrl(GetResourceName(resource)), replace: true);
-        }
     }
 
     protected override async Task OnInitializedAsync()

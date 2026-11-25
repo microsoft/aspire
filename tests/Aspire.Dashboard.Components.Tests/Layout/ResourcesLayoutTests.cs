@@ -2658,7 +2658,6 @@ public class ResourcesLayoutTests : DashboardTestContext
 
     [Theory]
     [InlineData("/resources/api", "/resources")]
-    [InlineData("/resources/api?terminal=true", "/terminals")]
     [InlineData("/terminals/resource/api", "/terminals")]
     public async Task AllResourcesRow_ClearsSelectionOnCurrentTab(string initialUrl, string allResourcesUrl)
     {

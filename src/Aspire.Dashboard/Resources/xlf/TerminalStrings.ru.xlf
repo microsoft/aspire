@@ -162,11 +162,6 @@
         <target state="translated">Интерактивный ввод в терминале</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalMinimize">
-        <source>Minimize terminal</source>
-        <target state="translated">Свернуть терминал</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
         <target state="translated">Терминалу не удалось подключиться или инициализировать обработчик отрисовки. Проверьте, запущен ли ресурс и поддерживает ли браузер WebGPU или WebGL2, затем повторно подключитесь и повторите попытку. Вы по-прежнему можете просматривать журналы консоли этого ресурса.</target>

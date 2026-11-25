@@ -145,11 +145,6 @@ internal static class DashboardUrls
     public const string ResourcePaneQueryName = "pane";
 
     /// <summary>
-    /// The legacy query string parameter for opening a terminal from the resource overview.
-    /// </summary>
-    public const string ResourceTerminalQueryName = "terminal";
-
-    /// <summary>
     /// The <see cref="ResourcePaneQueryName"/> value that lists resources.
     /// </summary>
     public const string ResourcePaneResourcesValue = "resources";

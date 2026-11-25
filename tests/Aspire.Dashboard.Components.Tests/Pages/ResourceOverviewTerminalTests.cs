@@ -31,7 +31,7 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
         Services.AddSingleton<ConsoleLogsManager>();
         TerminalsSetupHelpers.SetupResourcesPage(this, viewport, client);
-        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/shell?terminal=true");
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/shell");
 
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
@@ -46,9 +46,9 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task OpenTerminal_UsesDedicatedRouteAndPreservesViewState(bool initiallyFocused)
+    [InlineData("?pane=tags#output")]
+    [InlineData("?pane=tags&terminal=true#output")]
+    public async Task OpenTerminal_UsesDedicatedRouteAndPreservesViewState(string viewState)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var client = new TestDashboardClient(isEnabled: true,
@@ -59,10 +59,9 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         Services.AddSingleton<ConsoleLogsManager>();
         TerminalsSetupHelpers.SetupResourcesPage(this, viewport, client);
         var navigation = Services.GetRequiredService<NavigationManager>();
-        const string overview = "/resources/shell?pane=tags#output";
-        const string legacy = "/resources/shell?pane=tags&terminal=true#output";
-        const string terminalPage = "/terminals/resource/shell?pane=tags#output";
-        navigation.NavigateTo(initiallyFocused ? legacy : overview);
+        var overview = "/resources/shell" + viewState;
+        var terminalPage = "/terminals/resource/shell" + viewState;
+        navigation.NavigateTo(overview);
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
             builder.OpenComponent<ResourceOverview>(0);
@@ -70,23 +69,16 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
             builder.CloseComponent();
         }));
         var page = cut.FindComponent<ResourceOverview>();
-        if (initiallyFocused)
-        {
-            cut.WaitForAssertion(() => Assert.Equal("http://localhost" + terminalPage, navigation.Uri));
-            Assert.Empty(cut.FindComponents<TerminalView>());
-        }
-        else
-        {
-            cut.WaitForAssertion(() => Assert.True(cut.FindComponent<TerminalView>().Instance.Embedded));
-            Assert.Collection(page.FindAll(".overview-terminal-card .overview-card-actions .overview-card-action"),
-                documentation => Assert.Equal("https://aka.ms/aspire/dashboard-terminal", documentation.GetAttribute("href")),
-                window => Assert.Equal("Open in new window", window.GetAttribute("aria-label")),
-                openTerminal =>
-                {
-                    Assert.Equal("Expand terminal", openTerminal.GetAttribute("aria-label"));
-                    Assert.Equal(terminalPage, openTerminal.GetAttribute("href"));
-                });
-        }
+        cut.WaitForAssertion(() => Assert.True(cut.FindComponent<TerminalView>().Instance.Embedded));
+        Assert.Equal(navigation.ToAbsoluteUri(overview).AbsoluteUri, navigation.Uri);
+        Assert.Collection(page.FindAll(".overview-terminal-card .overview-card-actions .overview-card-action"),
+            documentation => Assert.Equal("https://aka.ms/aspire/dashboard-terminal", documentation.GetAttribute("href")),
+            window => Assert.Equal("Open in new window", window.GetAttribute("aria-label")),
+            openTerminal =>
+            {
+                Assert.Equal("Expand terminal", openTerminal.GetAttribute("aria-label"));
+                Assert.Equal(terminalPage, openTerminal.GetAttribute("href"));
+            });
         await cut.InvokeAsync(() => page.Instance.DisposeAsync().AsTask());
     }
 }

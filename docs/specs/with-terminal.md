@@ -501,8 +501,7 @@ See the
 In the modern experience, the resource overview's **Expand terminal** action
 opens `/terminals/resource/{resourceName}`. The full terminal fills the content
 area while keeping the resource list, header, and navigation tabs. Return to the
-compact terminal card through **Overview** or browser Back. Existing
-`/resources/{resourceName}?terminal=true` links redirect to the full terminal page.
+compact terminal card through **Overview** or browser Back.
 Terminal-backed sidebar rows also offer a compact **Open terminal for {resourceName}**
 shortcut beside the primary endpoint action. It selects that resource alone,
 preserves the remaining query and fragment state, and closes the mobile drawer.
@@ -536,8 +535,6 @@ terminal input and footer controls when the footer is visible. A neutral
 boundary remains visible when inactive, with a thin muted accent for pointer
 focus and a stronger keyboard focus indicator, without changing the terminal's
 layout.
-Late layout activation also preserves keyboard focus in footer controls and
-does not dismiss an open palette picker.
 
 The font-size control uses the renderer's displayed cell metrics, since
 a follower or fixed-grid view can scale independently of its requested font size.

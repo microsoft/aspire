@@ -93,7 +93,7 @@
         var showEndpoints = urls.Count > 0;
         var showTerminal = CanShowTerminal(resource);
         var showConsole = !showTerminal;
-        var showOverviewTerminal = showTerminal && !IsLegacyTerminalLink && !TerminalDockState.IsResourceOpen(resource.Name);
+        var showOverviewTerminal = showTerminal && !TerminalDockState.IsResourceOpen(resource.Name);
         var properties = GetVisibleProperties();
         var environmentVariables = GetVisibleEnvironmentVariables(resource);
         var healthReports = GetHealthReports(resource);

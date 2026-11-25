@@ -424,9 +424,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Requests a fresh state notification even if the state has not changed.</summary>
     public Task RefreshToolbarStateAsync() => InvokeTerminalAsync("refreshToolbarState");
 
-    /// <summary>Starts or refreshes a view that became visible and focuses its input without reconnecting.</summary>
-    public Task RefreshLayoutAsync() => InvokeTerminalAsync("refreshLayout");
-
     private async Task InvokeTerminalAsync(string method, params object?[] arguments)
     {
         if (_disposed || _jsModule is null || _terminalId == 0)

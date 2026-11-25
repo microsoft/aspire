@@ -142,7 +142,6 @@ beforeEach(() => {
             focusCalls: 0,
             selection: { status: "none" },
             selectionClears: 0,
-            selectionRefreshes: 0,
             disposed: false,
             dispose() { this.disposed = true; },
             requestPrimary() { this.primaryRequests++; },
@@ -170,7 +169,6 @@ beforeEach(() => {
                 this.selection = { status: "pending", ranges: [], canExtend: false };
                 options.onSelectionChange(this.selection);
             },
-            refreshSelectionUI() { this.selectionRefreshes++; },
         };
         const attempt = {
             element, options, client,
@@ -1178,34 +1176,19 @@ test("inactive dock panes wait for activation without stealing tab focus or remo
 test("hidden and read-only terminals do not take focus", async () => {
     const hidden = mount();
     hidden.element.visibility = "hidden";
-    const readOnly = mount({ options: { readOnly: true } });
+    mount({ options: { readOnly: true } });
     attempts[0].resolve();
     attempts[1].resolve();
     await settle();
     assert.equal(attempts[0].client.focusCalls, 0);
     assert.equal(attempts[1].client.focusCalls, 0);
-    terminal.refreshLayout(readOnly.id);
+    observers[1].callback();
     assert.equal(attempts[1].client.focusCalls, 0);
 
     hidden.element.visibility = "visible";
-    terminal.refreshLayout(hidden.id);
+    observers[0].callback();
     assert.equal(attempts[0].client.focusCalls, 1);
     assert.equal(attempts.length, 2);
-});
-
-test("returning to the terminal view restores focus without replacing its client", async () => {
-    const { id, element } = mount();
-    attempts[0].resolve();
-    await settle();
-    element.clientWidth = 0;
-    document.activeElement = { tagName: "BUTTON" };
-    terminal.refreshLayout(id);
-    assert.equal(attempts[0].client.focusCalls, 1);
-    element.clientWidth = 800;
-    terminal.refreshLayout(id);
-    assert.equal(document.activeElement, attempts[0].client.element);
-    assert.equal(attempts[0].client.focusCalls, 2);
-    assert.equal(attempts.length, 1);
 });
 
 test("missing WebGPU and ordinary HTTP leave renderer selection to the package", async () => {
@@ -1228,22 +1211,21 @@ test("missing WebGPU and ordinary HTTP leave renderer selection to the package",
 });
 
 test("hidden initial mounts wait for visibility without consuming the first-frame timeout", async () => {
-    const { id, element } = mount({ visible: false });
+    const { element } = mount({ visible: false });
     assert.equal(attempts.length, 0);
     element.clientWidth = 800;
     element.clientHeight = 600;
-    terminal.refreshLayout(id);
+    observers[0].callback();
     assert.equal(attempts.length, 1);
     observers[0].callback();
     assert.equal(attempts.length, 1);
     attempts[0].resolve();
     await settle();
     element.clientWidth = 0;
-    terminal.refreshLayout(id);
+    observers[0].callback();
     element.clientWidth = 800;
-    terminal.refreshLayout(id);
+    observers[0].callback();
     assert.equal(attempts.length, 1);
-    assert.equal(attempts[0].client.selectionRefreshes, 1);
     assert.equal(attempts[0].client.primaryRequests, 0);
     assert.deepEqual(attempts[0].client.sizingCalls, []);
 });
@@ -1795,8 +1777,8 @@ test("disposing unregisters the footer focus listener", async () => {
     assert.equal(attempts[0].client.focusCalls, 1);
 });
 
-test("late layout activation refits without stealing focus from footer controls", async () => {
-    const { id, footerControls } = mount({ options: { autoFit: true } });
+test("container resize does not steal focus from footer controls", async () => {
+    const { element, footerControls } = mount({ options: { autoFit: true } });
     const { client } = attempts[0];
     attempts[0].resolve();
     await settle();
@@ -1805,12 +1787,13 @@ test("late layout activation refits without stealing focus from footer controls"
     const sizingCalls = client.sizingCalls.length;
     for (const control of footerControls) {
         control.focus();
-        terminal.refreshLayout(id);
+        element.clientWidth += 10;
+        observers[0].callback();
         await settle();
         assert.equal(document.activeElement, control);
     }
     assert.equal(client.focusCalls, focusCalls);
-    assert.equal(client.sizingCalls.length, sizingCalls + footerControls.length);
+    assert.equal(client.sizingCalls.length, sizingCalls);
 });
 
 test("font preference follows its surface across remounts but not another surface", async () => {
@@ -1894,26 +1877,6 @@ test("the toolbar follows rendered font metrics when a follower is expanded or r
     }
     assert.equal(attempt.client.primaryRequests, 0, "Metric notifications must not take sizing ownership");
     assert.deepEqual(attempt.client.sizingCalls, []);
-});
-
-test("explicit card expansion reapplies automatic sizing once without reconnecting or fighting later resizes", async () => {
-    const { id, element } = mount({ options: { autoFit: true, sizeMemoryKey: "expansion" } });
-    const attempt = attempts[0];
-    attempt.resolve();
-    await settle();
-    attempt.role(true);
-    terminal.setFontSizeFromHost(id, 18);
-    attempt.role(false);
-    element.clientWidth = 1600;
-    element.clientHeight = 900;
-    terminal.refreshLayout(id);
-    assert.equal(attempt.client.primaryRequests, 2);
-    attempt.role(true);
-    assert.deepEqual(attempt.client.sizingCalls.at(-1), { mode: "auto", fontSize: 18 });
-    attempt.role(false);
-    observers[0].callback();
-    assert.equal(attempt.client.primaryRequests, 2);
-    assert.equal(attempts.length, 1);
 });
 
 test("container-sized surfaces retain the font stepper but reject fixed presets", async () => {
@@ -2136,7 +2099,7 @@ test("a quiet retained connection stays mounted until the user closes its view",
     const { id } = mount();
     attempts[0].resolve();
     await settle();
-    terminal.refreshLayout(id);
+    observers[0].callback();
     await settle();
     assert.equal(attempts[0].client.disposed, false);
     assert.equal(attempts[0].options.signal.aborted, false);
@@ -2179,7 +2142,7 @@ test("authoritative close before the first frame retains the view without retry 
     assert.equal(terminal.getTerminalSnapshot(element).ended, true);
     assert.equal(terminal.getToolbarState(id).error, null);
     assert.equal(timers.size, 0);
-    terminal.refreshLayout(id);
+    observers[0].callback();
     terminal.reconnectTerminal(id, attempts[0].options.url);
     assert.equal(attempts.length, 1);
     assert.notEqual(terminal.getTerminalSnapshot(element), null);

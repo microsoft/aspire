@@ -997,7 +997,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 parentUrl = GetTabUrl(CurrentTab == ResourceTab.Terminal ? ResourceTab.Overview : CurrentTab, []);
                 query.Remove(DashboardUrls.ResourceSelectionQueryName);
-                query.Remove(DashboardUrls.ResourceTerminalQueryName);
             }
             else
             {
@@ -1188,14 +1187,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (selectedResourceNames.Count == 0 && routeResourceName is not null)
         {
             selectedResourceNames.Add(routeResourceName);
-        }
-
-        if (tab == ResourceTab.Overview && routeResourceName is not null &&
-            selectedResourceNames.Count == 1 &&
-            queryParameters.TryGetValue(DashboardUrls.ResourceTerminalQueryName, out var terminalFocus) &&
-            string.Equals(terminalFocus, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            tab = ResourceTab.Terminal;
         }
 
         return new ResourceLocation(tab, routeResourceName, selectedResourceNames, KeepSelection: false);
@@ -2078,7 +2069,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var query = HttpUtility.ParseQueryString(location.Query);
         // The destination path already identifies a single resource. Keep the remaining view state.
         query.Remove(DashboardUrls.ResourceSelectionQueryName);
-        query.Remove(DashboardUrls.ResourceTerminalQueryName);
         return url + (query.Count > 0 ? $"?{query}" : string.Empty) + location.Fragment;
     }
 
