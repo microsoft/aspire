@@ -227,9 +227,10 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var enumerator = target.WatchResourceSnapshotsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
         try
         {
-            // The orchestrator allocates the endpoint during startup; the command uses that port.
+            // The orchestrator allocates the endpoint asynchronously after StartAsync returns, so wait for it
+            // rather than reading AllocatedEndpoint directly; the command uses that port.
             var endpoint = resource.Resource.Annotations.OfType<EndpointAnnotation>().Single();
-            var allocatedPort = endpoint.AllocatedEndpoint!.Port;
+            var allocatedPort = (await endpoint.AllAllocatedEndpoints.GetAllocatedEndpointAsync(KnownNetworkIdentifiers.LocalhostNetwork).DefaultTimeout()).Port;
             await notificationService.PublishUpdateAsync(resource.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
             var allocated = await ReadSnapshotAsync(enumerator, s => s.Name == "tool" && s.State == "Running").DefaultTimeout();
             Assert.Equal($"tool-cli --port {allocatedPort}", allocated.Connect?.Command);
