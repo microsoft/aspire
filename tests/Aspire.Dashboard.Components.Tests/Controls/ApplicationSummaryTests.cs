@@ -205,8 +205,9 @@ public class ApplicationSummaryTests : DashboardTestContext
                 new[] { loc[nameof(ResourceStrings.HomeFailedRequestCount), "1"].Value, loc[nameof(ResourceStrings.HomeErrorLogCount), "0"].Value },
                 insights[2].QuerySelectorAll(".home-event-meta > span:not([aria-hidden])").Select(element => element.TextContent));
             var bucketStart = new DateTime(now.Ticks / ApplicationSummary.s_activityBucketSize.Ticks * ApplicationSummary.s_activityBucketSize.Ticks, DateTimeKind.Utc);
-            Assert.Equal(loc[nameof(ResourceStrings.HomeActivityBucketTooltip),
-                FormatHelpers.FormatTimeWithOptionalDate(Services.GetRequiredService<BrowserTimeProvider>(), bucketStart), "1", "1"],
+            var bucketSummary = loc[nameof(ResourceStrings.HomeActivityBucketTooltip),
+                FormatHelpers.FormatTimeWithOptionalDate(Services.GetRequiredService<BrowserTimeProvider>(), bucketStart), "1", "1"];
+            Assert.Equal($"{bucketSummary}\n\n{loc[nameof(ResourceStrings.HomeActivityBucketTraceHint)]}",
                 cut.Find(".home-chart-bar").GetAttribute("data-tooltip"));
             Assert.Equal(loc[nameof(ResourceStrings.HomeSingleRequestCount), "1"], cut.Find(".home-chart-max").TextContent);
         });

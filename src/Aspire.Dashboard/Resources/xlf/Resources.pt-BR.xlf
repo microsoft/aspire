@@ -27,6 +27,11 @@
         <target state="translated">{0} · {1} solicitações, {2} com falha</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceHint">
+        <source>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</source>
+        <target state="new">View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
         <source>Requests per 30 seconds over the last 15 minutes</source>
         <target state="translated">Solicitações a cada 30 segundos nos últimos 15 minutos</target>

@@ -317,7 +317,8 @@
                                 var okHeight = ok * 92.0 / max;
                                 var errorHeight = errors * 92.0 / max;
                                 var bucketStart = activity.WindowStart + (s_activityBucketSize * i);
-                                var tooltip = Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), FormatCount(ok + errors), FormatCount(errors)];
+                                var bucketSummary = Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), FormatCount(ok + errors), FormatCount(errors)];
+                                var tooltip = $"{bucketSummary}\n\n{Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTraceHint)]}";
                                 <a class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" href="@GetActivityBucketTracesUrl(bucketStart)" aria-label="@tooltip" data-tooltip="@tooltip">
                                     <rect class="ok" x="@Svg(x)" y="@Svg(ChartHeight - okHeight)" width="@Svg(barWidth)" height="@Svg(okHeight)" />
                                     @if (errors > 0)

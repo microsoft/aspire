@@ -131,6 +131,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeActivityBucketTooltip", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to View traces with spans that started in this interval. Some traces may not include a request counted in this bar..
+        /// </summary>
+        public static string HomeActivityBucketTraceHint {
+            get {
+                return ResourceManager.GetString("HomeActivityBucketTraceHint", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Requests per 30 seconds over the last 15 minutes.

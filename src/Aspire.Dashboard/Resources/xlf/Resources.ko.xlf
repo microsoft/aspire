@@ -27,6 +27,11 @@
         <target state="translated">{0} · 요청 {1}개, {2}개 실패</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceHint">
+        <source>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</source>
+        <target state="new">View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
         <source>Requests per 30 seconds over the last 15 minutes</source>
         <target state="translated">지난 15분 동안 30초당 요청 수</target>
