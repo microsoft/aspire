@@ -13,18 +13,24 @@ public sealed class DefaultInstrumentUnitResolver(IStringLocalizer<ControlsStrin
 {
     public string ResolveDisplayedUnit(OtlpInstrumentSummary instrument, bool capitalize, bool pluralize)
     {
-        if (!string.IsNullOrEmpty(instrument.Unit))
+        if (instrument.Unit is { Length: > 0 } rawUnit)
         {
-            var (unit, isRateUnit) = OtlpUnits.GetUnit(instrument.Unit.TrimStart('{').TrimEnd('}'));
-            unit = unit.Replace('_', ' ').ToLowerInvariant();
+            // A standalone annotation like "{match_attempts}" is a count label, unlike "mV{peak}".
+            var isCountLabel = rawUnit.Length >= 2 && rawUnit[0] == '{' && rawUnit[^1] == '}' &&
+                rawUnit.AsSpan(1, rawUnit.Length - 2).IndexOfAny('{', '}') < 0;
+            var (unit, isRateUnit, startsWithExpandedUnit) = OtlpUnits.GetUnit(isCountLabel ? rawUnit[1..^1] : rawUnit);
+            if (isCountLabel)
+            {
+                unit = unit.Replace('_', ' ').ToLowerInvariant();
+            }
 
-            // Don't pluralize rate units, e.g. We want "Bytes per second", not "Bytes per seconds".
-            if (pluralize && !isRateUnit)
+            // Only inflect words, not symbols or whole rates (e.g. "Bytes per seconds").
+            if (pluralize && !isRateUnit && (isCountLabel || startsWithExpandedUnit))
             {
                 unit = unit.Pluralize();
             }
 
-            if (capitalize && unit.Length > 0)
+            if (capitalize && unit.Length > 0 && (isCountLabel || startsWithExpandedUnit))
             {
                 unit = char.ToUpperInvariant(unit[0]) + unit[1..];
             }

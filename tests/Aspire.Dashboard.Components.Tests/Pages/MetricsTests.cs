@@ -621,6 +621,79 @@ public partial class MetricsTests : DashboardTestContext
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResourcesLayout_AggregateMetricChart_ClearTargetsChartResourceOnly(bool multiSelection)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker")],
+            resourceChannelProvider: () => channel));
+        Render<FluentToastProvider>();
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        const string meter = "test-meter";
+        const string instrument = "test-instrument";
+        foreach (var name in new[] { "api", "worker" })
+        {
+            var resource = CreateResource(name: name);
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            await repository.AddMetricsAsync(new AddContext(), [new ResourceMetrics
+            {
+                Resource = resource,
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: meter),
+                        Metrics = { CreateSumMetric(metricName: instrument, startTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            }]);
+        }
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.AddResourceSelection("/metrics", multiSelection ? ["api", "worker"] : []));
+        var cut = Render<ResourcesLayout>(parameters => parameters
+            .AddCascadingValue(viewport)
+            .Add(layout => layout.Body, body =>
+            {
+                body.OpenComponent<Metrics>(0);
+                body.CloseComponent();
+            }));
+
+        var page = cut.FindComponent<Metrics>();
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".meter-card-link").Count));
+        Assert.Equal(multiSelection, cut.Instance.IsMultiSelection);
+        var chartUrl = page.FindAll(".meter-card-link")
+            .Single(link => link.QuerySelector(".meter-card-resource")?.GetAttribute("data-tooltip") == "api")
+            .GetAttribute("href")!;
+        navigationManager.NavigateTo(chartUrl);
+        Assert.Equal("api", page.WaitForComponent<ChartContainer>().Instance.ResourceKey.Name);
+
+        navigationManager.NavigateTo(page.Find(".metric-group-all").GetAttribute("href")!);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, page.FindAll(".meter-card-link").Count);
+            Assert.Null(cut.FindComponent<ClearSignalsButton>().Instance.SelectedResource.Id);
+        });
+
+        navigationManager.NavigateTo(chartUrl);
+        Assert.Equal("api", page.WaitForComponent<ChartContainer>().Instance.ResourceKey.Name);
+
+        await cut.Find(".clear-button").ClickAsync(new MouseEventArgs());
+        var clearItem = cut.WaitForElement("#clear-menu-resource");
+        Assert.False(clearItem.HasAttribute("disabled"));
+        await clearItem.TriggerEventAsync("onmenuitemchange", new MenuItemEventArgs { Id = clearItem.Id, Text = clearItem.TextContent });
+
+        Assert.Empty(repository.GetInstrumentSummaries(new ResourceKey("api", null)));
+        var remaining = Assert.Single(repository.GetInstrumentSummaries(new ResourceKey("worker", null)));
+        Assert.Equal(instrument, remaining.Name);
+    }
+
     [Fact]
     public async Task ResourcesLayout_MultiSelectionInstrumentChart_ReplicaArrivesWhileOpen_ChangingViewKeepsActiveResource()
     {
@@ -1969,7 +2042,7 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Equal("/metrics/test-instrument", tile.GetAttribute("href"));
             Assert.Equal("test-instrument", tile.QuerySelector(".overview-metric-name")!.TextContent);
             // The tile doesn't show the meter, to stay compact; its tooltip names it.
-            Assert.Equal("test-meter \u203A test-instrument \u2014 Test metric description", tile.GetAttribute("data-tooltip"));
+            Assert.Equal("test-meter \u203A test-instrument\nTest metric description", tile.GetAttribute("data-tooltip"));
             Assert.Equal("12.3K", tile.QuerySelector(".live-metric-tile-number")!.TextContent);
             // A counter's sparkline shows bars of the increase per interval.
             Assert.NotNull(tile.QuerySelector(".metric-sparkline-bars"));
