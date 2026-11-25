@@ -19,6 +19,7 @@ public sealed class CliE2EImageBuildTests(ITestOutputHelper output)
     [InlineData("external-cancel")]
     [InlineData("cleanup-cancel")]
     [InlineData("cleanup-kill")]
+    [InlineData("cleanup-plugin-kill")]
     [InlineData("all-images")]
     [InlineData("dotnet-only")]
     [RequiresTools(["node", "bash"])]
