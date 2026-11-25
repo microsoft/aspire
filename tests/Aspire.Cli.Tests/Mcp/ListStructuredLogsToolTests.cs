@@ -849,6 +849,71 @@ public class ListStructuredLogsToolTests
         Assert.Equal(["Api", $"{new string('s', 128)}...[TRUNCATED]"], logs.Select(log => log!["source"]!.GetValue<string>()));
     }
 
+    [Fact]
+    public async Task ListStructuredLogsTool_BoundsAttributeKeys_WhenNewestLogHasLongAttributeKey()
+    {
+        // One key larger than the attribute budget would otherwise use all of it and hide the attributes after it.
+        var resourceLogs = CreateResourceLogs("api", (0, "newest long key"));
+        var newestLog = resourceLogs.ScopeLogs![0].LogRecords![0];
+        newestLog.Attributes =
+        [
+            .. newestLog.Attributes!,
+            new OtlpKeyValueJson { Key = new string('k', 5000), Value = new OtlpAnyValueJson { StringValue = "long" } },
+            new OtlpKeyValueJson { Key = "short", Value = new OtlpAnyValueJson { StringValue = "value" } }
+        ];
+        using var handler = CreateHandler(CreateResourceLogsResponse(resourceLogs));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var log = Assert.Single(JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray())!;
+        Assert.True(log["attributesTruncated"]!.GetValue<bool>());
+        Assert.Equal(
+            [($"{new string('k', 128)}...[TRUNCATED]", "long"), ("short", "value")],
+            log["attributes"]!.AsObject().Select(a => (a.Key, a.Value!.GetValue<string>())));
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_BoundsDuplicateAttributeReferences_WhenKeyIsLong()
+    {
+        // A repeated value is written as a reference that embeds the key of the original attribute. Here each reference
+        // would be about 2.5 KB, far larger than the 256-character value it replaces, so the newest log would pass the
+        // attribute size check but exceed the whole list budget and the response would contain no logs at all.
+        var longKey = new string('k', 2500);
+        var value = new string('v', 256);
+        var resourceLogs = CreateResourceLogs("api", (0, "older small"), (1, "newest with references"));
+        var newestLog = resourceLogs.ScopeLogs![0].LogRecords![1];
+        newestLog.Body = new OtlpAnyValueJson { StringValue = new string('m', 2048) };
+        newestLog.Attributes =
+        [
+            .. newestLog.Attributes!,
+            new OtlpKeyValueJson { Key = longKey, Value = new OtlpAnyValueJson { StringValue = value } },
+            .. Enumerable.Range(0, 5).Select(index => new OtlpKeyValueJson
+            {
+                Key = $"d{index}",
+                Value = new OtlpAnyValueJson { StringValue = value }
+            })
+        ];
+        using var handler = CreateHandler(CreateResourceLogsResponse(resourceLogs));
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+        Assert.StartsWith("Returned 2 log entries.", text, StringComparison.Ordinal);
+        var logs = JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray();
+        Assert.Equal([0, 1], logs.Select(log => log!["logId"]!.GetValue<long>()));
+
+        var newest = logs[1]!;
+        Assert.Null(newest["attributesTruncated"]);
+        var reference = $"""Duplicate of attribute "{new string('k', 128)}...[TRUNCATED]" for log entry 1""";
+        Assert.Equal(
+            [(longKey, value), .. Enumerable.Range(0, 5).Select(index => ($"d{index}", reference))],
+            newest["attributes"]!.AsObject().Select(a => (a.Key, a.Value!.GetValue<string>())));
+    }
+
     [Theory]
     [InlineData("""{"severity":"Fatal"}""", "Argument 'severity' must be one of: Trace, Debug, Information, Warning, Error, Critical.")]
     [InlineData("""{"limit":801}""", "Argument 'limit' must be an integer from 1 through 800.")]

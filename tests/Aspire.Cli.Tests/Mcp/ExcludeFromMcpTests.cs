@@ -384,6 +384,86 @@ public class ExcludeFromMcpTests
         Assert.DoesNotContain(SecretServiceName, textContent.Text);
     }
 
+    [Theory]
+    [InlineData(ListTracesTool.SummaryFormat)]
+    [InlineData(ListTracesTool.FullFormat)]
+    public async Task ListTracesTool_FiltersExcludedResourceSpans_WhenResourceSpecified(string format)
+    {
+        // The dashboard returns whole traces that contain the requested resource, so a trace for the included
+        // resource can still carry a failing span, with exception details, from the excluded resource.
+        var resourceSpans = new[]
+        {
+            CreateResourceSpans(ApiServiceName, new OtlpSpanJson
+            {
+                Name = "GET /orders",
+                TraceId = "abc123def456",
+                SpanId = "api-span",
+                StartTimeUnixNano = 1706540400000000000,
+                EndTimeUnixNano = 1706540400100000000,
+                Kind = 2
+            }),
+            CreateResourceSpans(SecretServiceName, new OtlpSpanJson
+            {
+                Name = "GET /secret",
+                TraceId = "abc123def456",
+                SpanId = "secret-span",
+                ParentSpanId = "api-span",
+                StartTimeUnixNano = 1706540400010000000,
+                EndTimeUnixNano = 1706540400090000000,
+                Kind = 2,
+                Status = new OtlpSpanStatusJson { Code = 2, Message = "secret failure" },
+                Events =
+                [
+                    new OtlpSpanEventJson
+                    {
+                        Name = "exception",
+                        TimeUnixNano = 1706540400090000000,
+                        Attributes =
+                        [
+                            new OtlpKeyValueJson { Key = "exception.type", Value = new OtlpAnyValueJson { StringValue = "System.InvalidOperationException" } },
+                            new OtlpKeyValueJson { Key = "exception.message", Value = new OtlpAnyValueJson { StringValue = "connection string contains a secret" } }
+                        ]
+                    }
+                ]
+            })
+        };
+        var resources = new[] { ApiServiceName, SecretServiceName }
+            .Select(name => new ResourceInfoJson { Name = name, HasLogs = true, HasTraces = true, HasMetrics = true })
+            .ToArray();
+        var (mockHttpClientFactory, _) = CreateMockHttp(resources, new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans },
+            TotalCount = 1,
+            ReturnedCount = 1
+        });
+
+        var tool = CreateTracesTool(CreateMonitorWithDashboardAndExcludedResource(), mockHttpClientFactory);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement(ApiServiceName),
+            ["format"] = JsonSerializer.SerializeToElement(format)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var trace = Assert.Single(JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray())!;
+        if (format == ListTracesTool.SummaryFormat)
+        {
+            Assert.Equal(1, trace["spanCount"]!.GetValue<int>());
+            Assert.Equal([ApiServiceName], trace["resources"]!.AsArray().Select(resource => resource!.GetValue<string>()));
+            Assert.False(trace["hasError"]!.GetValue<bool>());
+            Assert.Equal("api-span", trace["rootSpan"]!["spanId"]!.GetValue<string>());
+            Assert.Null(trace["firstErrorSpan"]);
+        }
+        else
+        {
+            var span = Assert.Single(trace["spans"]!.AsArray())!;
+            Assert.Equal("api-span", span["spanId"]!.GetValue<string>());
+        }
+    }
+
     [Fact]
     public async Task ListTraceStructuredLogsTool_FiltersExcludedResourceLogs()
     {
@@ -580,6 +660,18 @@ public class ExcludeFromMcpTests
             TotalCount = resourceSpans.Length,
             ReturnedCount = resourceSpans.Length
         });
+    }
+
+    private static OtlpResourceSpansJson CreateResourceSpans(string serviceName, params OtlpSpanJson[] spans)
+    {
+        return new OtlpResourceSpansJson
+        {
+            Resource = new OtlpResourceJson
+            {
+                Attributes = [new OtlpKeyValueJson { Key = "service.name", Value = new OtlpAnyValueJson { StringValue = serviceName } }]
+            },
+            ScopeSpans = [new OtlpScopeSpansJson { Scope = new OtlpInstrumentationScopeJson { Name = "TestScope" }, Spans = spans }]
+        };
     }
 
     private static (MockHttpClientFactory factory, MockHttpMessageHandler handler) CreateMockHttp(

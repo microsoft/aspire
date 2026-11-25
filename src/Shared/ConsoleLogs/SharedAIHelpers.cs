@@ -82,6 +82,10 @@ internal static class SharedAIHelpers
     /// <param name="resourceLogs">The OTLP resource logs containing log records.</param>
     /// <param name="limit">The maximum number of log entries to return.</param>
     /// <param name="maximumTokenLength">The estimated token budget for the returned log entries.</param>
+    /// <param name="boundEntryFields">
+    /// Whether to bound the size of each entry's fields so that a single large entry always fits in the budget.
+    /// When <see langword="false"/>, entries are returned unchanged and an entry that doesn't fit ends the list.
+    /// </param>
     /// <param name="getResourceName">Optional function to resolve resource names.</param>
     /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     /// <returns>A tuple containing the JSON string and a limit message.</returns>
@@ -89,6 +93,7 @@ internal static class SharedAIHelpers
         IList<OtlpResourceLogsJson>? resourceLogs,
         int limit,
         int maximumTokenLength,
+        bool boundEntryFields,
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
@@ -107,7 +112,9 @@ internal static class SharedAIHelpers
         // bytes per token, so maximumTokenLength bytes is a quarter of it. The remaining quarter is left for the other
         // fields, which are identifiers or bounded to MaximumSummaryResourceNameLength bytes (severity, resource name
         // and source), so a bounded entry always fits.
-        var maximumFieldLength = maximumTokenLength;
+        // This is opt-in: detail tools such as list_trace_structured_logs return a small, focused set of entries, and
+        // bounding would drop attribute data they returned before even when the entry fits the budget.
+        int? maximumFieldLength = boundEntryFields ? maximumTokenLength : null;
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
             logRecords,
@@ -1066,18 +1073,35 @@ internal static class SharedAIHelpers
         {
             if (attributesTruncated)
             {
+                // Bound the key as well as the value: keys are producer-supplied, and one very long key would otherwise
+                // use the whole field budget and hide every attribute after it.
+                var boundedKey = LimitSerializedLength(key, MaximumSummaryResourceNameLength);
+                if (attributesObject.ContainsKey(boundedKey))
+                {
+                    // Two long keys with the same prefix; keep the first rather than overwrite it.
+                    continue;
+                }
+
                 var boundedValue = LimitSerializedLength(value, MaximumSummaryStringLength);
-                attributesLength += EstimateAttributeLength(key, boundedValue);
+                attributesLength += EstimateAttributeLength(boundedKey, boundedValue);
                 if (attributesLength > maximumFieldLength)
                 {
                     break;
                 }
 
-                attributesObject[key] = boundedValue;
+                attributesObject[boundedKey] = boundedValue;
             }
             else
             {
-                attributesObject[key] = context.AddValue(value, id => $@"Duplicate of attribute ""{id.Key}"" for log entry {id.LogId}", (LogId: logId, Key: key));
+                // The size check above measured the value, but a repeated value is written as a reference that embeds the
+                // key, so a long key could make the reference larger than the value and the entry exceed the budget.
+                // When bounding, shorten the key in the reference to MaximumSummaryResourceNameLength bytes. A reference is
+                // then at most about 204 serialized bytes (23 + 2 + 142 for the shortened key with its marker + 2 + 15 +
+                // 20 for the log id), and the prompt context only references values of at least 256 characters, so a
+                // reference is always smaller than the value it replaces. The shortened key is still a prefix of the
+                // referenced key, so the target remains identifiable.
+                var referenceKey = maximumFieldLength is null ? key : LimitSerializedLength(key, MaximumSummaryResourceNameLength);
+                attributesObject[key] = context.AddValue(value, id => $@"Duplicate of attribute ""{id.Key}"" for log entry {id.LogId}", (LogId: logId, Key: referenceKey));
             }
         }
 

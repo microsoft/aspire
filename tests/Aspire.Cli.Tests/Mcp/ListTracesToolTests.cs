@@ -878,7 +878,10 @@ public class ListTracesToolTests
         var arguments = new Dictionary<string, JsonElement>
         {
             ["traceId"] = JsonSerializer.SerializeToElement("trace1"),
-            ["search"] = JsonSerializer.SerializeToElement("ignored")
+            ["search"] = JsonSerializer.SerializeToElement("ignored"),
+            // List-only options are ignored in detail mode, so values that would be rejected for a list don't fail.
+            ["limit"] = JsonSerializer.SerializeToElement(0),
+            ["format"] = JsonSerializer.SerializeToElement("bogus")
         };
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
@@ -914,6 +917,8 @@ public class ListTracesToolTests
     [InlineData("""{"limit":0}""", "Argument 'limit' must be an integer from 1 through 800.")]
     [InlineData("""{"limit":"5"}""", "Argument 'limit' must be an integer from 1 through 800.")]
     [InlineData("""{"format":"compact"}""", "Argument 'format' must be one of: summary, full.")]
+    [InlineData("""{"traceId":"   "}""", "Argument 'traceId' must be a string containing a trace ID.")]
+    [InlineData("""{"traceId":123}""", "Argument 'traceId' must be a string containing a trace ID.")]
     public async Task ListTracesTool_RejectsInvalidArguments(string json, string expectedMessage)
     {
         using var arguments = JsonDocument.Parse(json);

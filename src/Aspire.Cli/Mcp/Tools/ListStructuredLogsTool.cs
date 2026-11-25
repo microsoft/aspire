@@ -131,6 +131,7 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
                 resourceLogs,
                 limit,
                 SharedAIHelpers.CompactListTokenLength,
+                boundEntryFields: true,
                 getResourceName: s => OtlpHelpers.GetResourceName(s, resources.Select(r => new SimpleOtlpResource(r.Name, r.InstanceId)).ToList()),
                 dashboardBaseUrl: dashboardBaseUrl);
 

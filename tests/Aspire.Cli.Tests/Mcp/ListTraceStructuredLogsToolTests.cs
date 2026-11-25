@@ -3,13 +3,16 @@
 
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
+using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Tests.Mcp;
 
@@ -79,5 +82,86 @@ public class ListTraceStructuredLogsToolTests
             Assert.DoesNotContain("exception-user", diagnostic, StringComparison.Ordinal);
             Assert.DoesNotContain("exception-password", diagnostic, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public async Task ListTraceStructuredLogsTool_ReturnsLargeAttributesUnbounded()
+    {
+        // These attributes total about 18 KB: more than the compact list_structured_logs field budget, but within this
+        // tool's token budget. This tool is the detail view for one trace, so it returns them in full.
+        var attributeValues = Enumerable.Range(0, 9).Select(index => new string((char)('a' + index), 2048)).ToArray();
+        var logsResponse = JsonSerializer.Serialize(
+            new TelemetryApiResponse
+            {
+                Data = new OtlpTelemetryDataJson
+                {
+                    ResourceLogs =
+                    [
+                        new OtlpResourceLogsJson
+                        {
+                            Resource = new OtlpResourceJson
+                            {
+                                Attributes = [new OtlpKeyValueJson { Key = "service.name", Value = new OtlpAnyValueJson { StringValue = "api" } }]
+                            },
+                            ScopeLogs =
+                            [
+                                new OtlpScopeLogsJson
+                                {
+                                    Scope = new OtlpInstrumentationScopeJson { Name = "Api" },
+                                    LogRecords =
+                                    [
+                                        new OtlpLogRecordJson
+                                        {
+                                            TimeUnixNano = 1706540400000000000,
+                                            SeverityText = "Information",
+                                            Body = new OtlpAnyValueJson { StringValue = "large attributes" },
+                                            Attributes =
+                                            [
+                                                new OtlpKeyValueJson { Key = "aspire.log_id", Value = new OtlpAnyValueJson { IntValue = 1 } },
+                                                .. attributeValues.Select((value, index) => new OtlpKeyValueJson
+                                                {
+                                                    Key = $"large.{index}",
+                                                    Value = new OtlpAnyValueJson { StringValue = value }
+                                                })
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        var resourcesResponse = JsonSerializer.Serialize(
+            [new ResourceInfoJson { Name = "api", HasLogs = true, HasTraces = true, HasMetrics = true }],
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+        using var handler = new MockHttpMessageHandler(request => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                request.RequestUri!.AbsolutePath.EndsWith("/resources", StringComparison.Ordinal) ? resourcesResponse : logsResponse,
+                System.Text.Encoding.UTF8,
+                "application/json")
+        });
+        var tool = new ListTraceStructuredLogsTool(
+            new StaticDashboardInfoProvider("http://localhost:5000", apiKey: "api-key"),
+            auxiliaryBackchannelMonitor: null,
+            new MockHttpClientFactory(handler),
+            NullLogger<ListTraceStructuredLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["traceId"] = JsonDocument.Parse("\"trace-id\"").RootElement
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var log = Assert.Single(JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray())!;
+        Assert.Equal(
+            ["logId", "message", "severity", "resourceName", "attributes", "source", "dashboardUrl"],
+            log.AsObject().Select(p => p.Key));
+        Assert.Equal(
+            attributeValues.Select((value, index) => ($"large.{index}", value)),
+            log["attributes"]!.AsObject().Select(a => (a.Key, a.Value!.GetValue<string>())));
     }
 }

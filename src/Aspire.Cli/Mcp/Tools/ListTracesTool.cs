@@ -75,11 +75,20 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
         var arguments = context.Arguments;
 
         // Validate arguments before contacting the dashboard so invalid input is reported as such.
-        var resourceName = McpToolHelpers.GetOptionalString(arguments, "resourceName");
-        var search = McpToolHelpers.GetOptionalString(arguments, "search");
-        var traceId = McpToolHelpers.GetOptionalString(arguments, "traceId");
-        var limit = McpToolHelpers.GetOptionalInt32(arguments, "limit", minimum: 1, maximum: SharedAIHelpers.TracesLimit, defaultValue: DefaultLimit);
-        var format = McpToolHelpers.GetOptionalChoice(arguments, "format", s_formats, defaultValue: SummaryFormat);
+        // traceId selects detail mode, and the schema documents the list-only options as ignored in
+        // that mode, so they are only parsed (and can only fail validation) for list requests.
+        var traceId = GetOptionalTraceId(arguments);
+        string? resourceName = null;
+        string? search = null;
+        var limit = DefaultLimit;
+        var format = SummaryFormat;
+        if (traceId is null)
+        {
+            resourceName = McpToolHelpers.GetOptionalString(arguments, "resourceName");
+            search = McpToolHelpers.GetOptionalString(arguments, "search");
+            limit = McpToolHelpers.GetOptionalInt32(arguments, "limit", minimum: 1, maximum: SharedAIHelpers.TracesLimit, defaultValue: DefaultLimit);
+            format = McpToolHelpers.GetOptionalChoice(arguments, "format", s_formats, defaultValue: SummaryFormat);
+        }
 
         var (apiToken, apiBaseUrl, dashboardBaseUrl) = await dashboardInfoProvider.GetDashboardInfoAsync(cancellationToken).ConfigureAwait(false);
 
@@ -91,7 +100,7 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken).ConfigureAwait(false);
             Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, resources.Select(r => new SimpleOtlpResource(r.Name, r.InstanceId)).ToList());
 
-            if (!string.IsNullOrEmpty(traceId))
+            if (traceId is not null)
             {
                 return await GetTraceAsync(client, apiBaseUrl, dashboardBaseUrl, traceId, getResourceName, cancellationToken).ConfigureAwait(false);
             }
@@ -130,11 +139,11 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
             IList<OtlpResourceSpansJson>? resourceSpans = apiResponse?.Data?.ResourceSpans;
 
-            // Filter out spans from resources that are excluded from MCP.
-            if (string.IsNullOrEmpty(resourceName))
-            {
-                resourceSpans = await FilterExcludedResourcesAsync(resourceSpans, cancellationToken).ConfigureAwait(false);
-            }
+            // Filter out spans from resources that are excluded from MCP, even when a resource was requested:
+            // the API selects whole traces that contain the resource, so they can still include spans (and
+            // their error and exception details) owned by excluded resources. A trace whose spans all belong
+            // to excluded resources drops out of the results.
+            resourceSpans = await FilterExcludedResourcesAsync(resourceSpans, cancellationToken).ConfigureAwait(false);
 
             string tracesData;
             string limitMessage;
@@ -182,6 +191,32 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
                 : "Failed to fetch traces from the Dashboard API.";
             throw new McpProtocolException(errorMessage, McpErrorCode.InternalError);
         }
+    }
+
+    /// <summary>
+    /// Reads the optional traceId argument. A missing, null or empty value selects list mode, matching how other
+    /// optional string arguments treat empty values. Any other value must identify a trace, so a non-string or
+    /// whitespace-only value is rejected instead of silently falling back to listing traces.
+    /// </summary>
+    private static string? GetOptionalTraceId(IReadOnlyDictionary<string, JsonElement>? arguments)
+    {
+        if (arguments?.TryGetValue("traceId", out var element) != true || element.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        var traceId = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+        if (traceId is "")
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(traceId))
+        {
+            throw new McpProtocolException("Argument 'traceId' must be a string containing a trace ID.", McpErrorCode.InvalidParams);
+        }
+
+        return traceId;
     }
 
     private async Task<CallToolResult> GetTraceAsync(
