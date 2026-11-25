@@ -410,7 +410,7 @@ public class DockerContainerRuntimeTests(ITestOutputHelper output)
         Assert.Equal(
             "Docker did not write an OCI image layout when saving 'myapp:latest'. Exporting a ContainerImageFormat.Oci archive " +
             "for container-file layering requires Docker Engine 25 or later. Upgrade Docker, use ContainerImageFormat.Docker " +
-            "for this archive, or run the publish with Podman.",
+            "for this archive, or run the publish with a container runtime that can save OCI archives, such as Podman.",
             exception.Message);
         Assert.Equal(4, processRunner.ProcessSpecs.Count);
     }
