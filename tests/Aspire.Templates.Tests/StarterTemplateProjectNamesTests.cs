@@ -35,6 +35,8 @@ public abstract class StarterTemplateProjectNamesTests : TemplateTestsBase
             BuildEnvironment.ForDefaultFramework,
             $"-t {_testType}");
 
+        AssertSolutionFile(project, "aspire-starter", includesTests: _testType != "none");
+
         await using var context = await CreateNewBrowserContextAsync();
         _testOutput.WriteLine($"Checking the starter template project");
         await AssertStarterTemplateRunAsync(context, project, config, _testOutput);
