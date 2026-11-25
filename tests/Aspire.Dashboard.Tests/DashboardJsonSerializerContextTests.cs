@@ -7,6 +7,7 @@ using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Serialization;
+using Aspire.Dashboard.Terminal;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests;
@@ -50,11 +51,39 @@ public class DashboardJsonSerializerContextTests
     [Theory]
     [InlineData(typeof(TerminalViewOptions))]
     [InlineData(typeof(TerminalToolbarState))]
+    [InlineData(typeof(TerminalProgramStatus))]
     [InlineData(typeof(TerminalSizePreset[]))]
     [InlineData(typeof(AspireKeyboardShortcut))]
     public void TerminalInteropType_UsesGeneratedMetadata(Type interopType)
     {
         Assert.NotNull(DashboardJsonSerializerContext.Default.GetTypeInfo(interopType));
+    }
+
+    [Fact]
+    public void TerminalProgramStatus_RoundTripsRecordCollection()
+    {
+        var value = new TerminalProgramStatus
+        {
+            TerminalId = 7, Generation = 3, StatusEpoch = 2, HasStatus = true,
+            Records =
+            [
+                new() { Id = "", State = "working", App = "builder", Title = "Build", Progress = 42 },
+                new()
+                {
+                    Id = "build/tests", State = "blocked", Kind = "question",
+                    EffectiveApp = "builder", Message = "Choose a suite"
+                }
+            ]
+        };
+        var metadata = DashboardJsonSerializerContext.Default.TerminalProgramStatus;
+        var result = JsonSerializer.Deserialize(JsonSerializer.Serialize(value, metadata), metadata);
+
+        Assert.NotNull(result);
+        Assert.Equal(value.TerminalId, result.TerminalId);
+        Assert.Equal(value.Generation, result.Generation);
+        Assert.Equal(value.StatusEpoch, result.StatusEpoch);
+        Assert.Equal(value.HasStatus, result.HasStatus);
+        Assert.Equal(value.Records, result.Records);
     }
 
     [Fact]

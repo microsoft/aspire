@@ -333,6 +333,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             options.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
 #pragma warning restore ASPNETCORE9004
 #pragma warning restore FLUENTUI0001
+        }).AddHubOptions(options =>
+        {
+            // OSC 7501 carries at most 256 records with 2 KiB messages and bounded titles/IDs.
+            // Allow the complete inventory plus JSON escaping and interop framing, but keep a finite cap.
+            // https://learn.microsoft.com/aspnet/core/blazor/fundamentals/signalr#maximum-receive-message-size
+            options.MaximumReceiveMessageSize = 4 * 1024 * 1024;
         });
         // Browser storage reads return protected dashboard customizations over the Blazor hub.
         builder.Services.AddServerSideBlazor().AddHubOptions(options => options.MaximumReceiveMessageSize = 64 * 1024);

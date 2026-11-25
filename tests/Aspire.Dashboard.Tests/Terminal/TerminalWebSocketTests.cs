@@ -17,6 +17,54 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task BrowserView_RestoresAndUpdatesProgramStatusAcrossReattachment(bool useGrpc)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        // OSC 7501 reports colon-separated key/value fields; title/msg use base64 UTF-8.
+        // Empty/omitted id addresses the root, and clear removes an addressed subtree.
+        // https://github.com/mitchdenny/hex1b/blob/e84f086/docs/program-status.md
+        host.Workload.Write("\u001b]7501;state=working:app=demo:title=QnVpbGQ=:progress=0\u0007");
+        host.Workload.Write("\u001b]7501;state=blocked:id=build/tests:kind=question:msg=Q2hvb3NlIGEgc3VpdGU=\u0007ready");
+        await host.WaitForProducerTextAsync("ready", timeout.Token);
+
+        for (var attachment = 0; attachment < 2; attachment++)
+        {
+            using var browser = await host.ConnectBrowserAsync(timeout.Token);
+            var initial = await ReadUntilAsync(browser, frame =>
+                frame.GetProperty("programStatus").GetProperty("records").GetArrayLength() == 2, timeout.Token);
+            var records = initial.GetProperty("programStatus").GetProperty("records").EnumerateArray().ToArray();
+            Assert.Equal(["", "build/tests"], records.Select(record => record.GetProperty("id").GetString()));
+            Assert.Equal("working", records[0].GetProperty("state").GetString());
+            Assert.Equal("Build", records[0].GetProperty("title").GetString());
+            Assert.Equal(0, records[0].GetProperty("progress").GetInt32());
+            Assert.Equal("question", records[1].GetProperty("kind").GetString());
+            Assert.Equal("Choose a suite", records[1].GetProperty("message").GetString());
+            Assert.Equal("demo", records[1].GetProperty("effectiveApp").GetString());
+            await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "Detach", timeout.Token);
+        }
+
+        using var live = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(live, _ => true, timeout.Token);
+        host.Workload.Write("\u001b]7501;state=done:id=build/tests\u0007");
+        var changed = await ReadUntilAsync(live, frame =>
+            frame.GetProperty("programStatus").GetProperty("records").EnumerateArray()
+                .Any(record => record.GetProperty("id").GetString() == "build/tests" &&
+                    record.GetProperty("state").GetString() == "done"), timeout.Token);
+        Assert.Equal("working", changed.GetProperty("programStatus").GetProperty("records")[0].GetProperty("state").GetString());
+        host.Workload.Write("\u001b]7501;state=clear:id=build\u0007");
+        var cleared = await ReadUntilAsync(live, frame =>
+            frame.GetProperty("programStatus").GetProperty("records").GetArrayLength() == 1, timeout.Token);
+        Assert.Equal("", cleared.GetProperty("programStatus").GetProperty("records")[0].GetProperty("id").GetString());
+        host.Workload.Write("\u001b]7501;state=clear\u0007");
+        await ReadUntilAsync(live, frame => frame.GetProperty("programStatus").GetProperty("records").GetArrayLength() == 0, timeout.Token);
+        await live.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task BrowserView_RestoresHistoryProducedBeforeAttachment(bool useGrpc)
     {
         await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
