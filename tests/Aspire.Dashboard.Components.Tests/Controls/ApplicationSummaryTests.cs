@@ -147,9 +147,14 @@ public class ApplicationSummaryTests : DashboardTestContext
         Services.AddSingleton<IStringLocalizer<ResourceStrings>>(loc);
         var cut = RenderSummary();
 
-        Assert.Equal(loc[nameof(ResourceStrings.HomeLiveActivity)], cut.Find("#home-activity-title").TextContent);
-        Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWindow)], cut.Find(".home-activity-window").TextContent);
-        await cut.WaitForAssertionAsync(() => Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWaiting)], cut.Find(".home-chart-empty").TextContent));
+        // Parse the DOM on the renderer dispatcher so the initial telemetry render cannot
+        // invalidate bUnit's node cache while the title and window assertions populate it.
+        await cut.WaitForAssertionAsync(() =>
+        {
+            Assert.Equal(loc[nameof(ResourceStrings.HomeLiveActivity)], cut.Find("#home-activity-title").TextContent);
+            Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWindow)], cut.Find(".home-activity-window").TextContent);
+            Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWaiting)], cut.Find(".home-chart-empty").TextContent);
+        });
         Assert.Equal(
             new[] { nameof(ResourceStrings.HomeLogsLabel), nameof(ResourceStrings.HomeTracesLabel), nameof(ResourceStrings.HomeMetricsLabel) }
                 .Select(key => $"0 {loc[key]}"),
