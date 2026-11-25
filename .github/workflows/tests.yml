@@ -498,7 +498,8 @@ jobs:
       resourceReadyTimeoutSeconds: 120
       prNumber: ${{ github.event.pull_request.number }}
       workflowRunId: ${{ github.run_id }}
-      checkoutRef: ${{ github.event.pull_request.head.sha }}
+      # Match the workflow definition and built CLI artifacts, not the unmerged PR head.
+      checkoutRef: ${{ github.sha }}
 
   cli_starter_validation_linux_arm64:
     name: Aspire CLI Starter Validation (Ubuntu ARM64)
@@ -512,7 +513,7 @@ jobs:
       resourceReadyTimeoutSeconds: 180
       prNumber: ${{ github.event.pull_request.number }}
       workflowRunId: ${{ github.run_id }}
-      checkoutRef: ${{ github.event.pull_request.head.sha }}
+      checkoutRef: ${{ github.sha }}
 
   cli_starter_validation_windows_x64:
     name: Aspire CLI Starter Validation (Windows x64)
@@ -526,7 +527,7 @@ jobs:
       resourceReadyTimeoutSeconds: 120
       prNumber: ${{ github.event.pull_request.number }}
       workflowRunId: ${{ github.run_id }}
-      checkoutRef: ${{ github.event.pull_request.head.sha }}
+      checkoutRef: ${{ github.sha }}
 
   cli_starter_validation_windows_arm64:
     name: Aspire CLI Starter Validation (Windows ARM64)
@@ -540,7 +541,7 @@ jobs:
       resourceReadyTimeoutSeconds: 300
       prNumber: ${{ github.event.pull_request.number }}
       workflowRunId: ${{ github.run_id }}
-      checkoutRef: ${{ github.event.pull_request.head.sha }}
+      checkoutRef: ${{ github.sha }}
 
   cli_starter_validation_macos_x64:
     name: Aspire CLI Starter Validation (macOS x64)
@@ -554,7 +555,7 @@ jobs:
       resourceReadyTimeoutSeconds: 180
       prNumber: ${{ github.event.pull_request.number }}
       workflowRunId: ${{ github.run_id }}
-      checkoutRef: ${{ github.event.pull_request.head.sha }}
+      checkoutRef: ${{ github.sha }}
 
   cli_starter_validation_macos_arm64:
     name: Aspire CLI Starter Validation (macOS ARM64)
@@ -568,7 +569,7 @@ jobs:
       resourceReadyTimeoutSeconds: 120
       prNumber: ${{ github.event.pull_request.number }}
       workflowRunId: ${{ github.run_id }}
-      checkoutRef: ${{ github.event.pull_request.head.sha }}
+      checkoutRef: ${{ github.sha }}
 
   native_dashboard_validation_linux_x64:
     name: Native AOT Dashboard Validation (Ubuntu x64)
