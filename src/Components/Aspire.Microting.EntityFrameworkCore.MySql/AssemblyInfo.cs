@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire;
-using Aspire.Pomelo.EntityFrameworkCore.MySql;
+using Aspire.Microting.EntityFrameworkCore.MySql;
 
-[assembly: ConfigurationSchema("Aspire:Pomelo:EntityFrameworkCore:MySql", typeof(PomeloEntityFrameworkCoreMySqlSettings))]
+[assembly: ConfigurationSchema("Aspire:Microting:EntityFrameworkCore:MySql", typeof(MicrotingEntityFrameworkCoreMySqlSettings))]
 
 [assembly: LoggingCategories(
     "Microsoft.EntityFrameworkCore",

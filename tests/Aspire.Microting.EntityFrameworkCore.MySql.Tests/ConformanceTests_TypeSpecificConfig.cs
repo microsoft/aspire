@@ -6,7 +6,7 @@ using Aspire.MySqlConnector.Tests;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
-namespace Aspire.Pomelo.EntityFrameworkCore.MySql.Tests;
+namespace Aspire.Microting.EntityFrameworkCore.MySql.Tests;
 
 public class ConformanceTests_TypeSpecificConfig : ConformanceTests
 {
@@ -17,7 +17,7 @@ public class ConformanceTests_TypeSpecificConfig : ConformanceTests
     protected override void PopulateConfiguration(ConfigurationManager configuration, string? key = null)
         => configuration.AddInMemoryCollection(new KeyValuePair<string, string?>[2]
         {
-            new($"Aspire:Pomelo:EntityFrameworkCore:MySql:{typeof(TestDbContext).Name}:ConnectionString", ConnectionString),
-            new($"Aspire:Pomelo:EntityFrameworkCore:MySql:{typeof(TestDbContext).Name}:ServerVersion", ServerVersion)
+            new($"Aspire:Microting:EntityFrameworkCore:MySql:{typeof(TestDbContext).Name}:ConnectionString", ConnectionString),
+            new($"Aspire:Microting:EntityFrameworkCore:MySql:{typeof(TestDbContext).Name}:ServerVersion", ServerVersion)
         });
 }

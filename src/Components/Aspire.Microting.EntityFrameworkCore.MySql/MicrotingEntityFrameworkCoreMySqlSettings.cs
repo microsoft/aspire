@@ -1,12 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Pomelo.EntityFrameworkCore.MySql;
+namespace Aspire.Microting.EntityFrameworkCore.MySql;
 
 /// <summary>
 /// Provides the client configuration settings for connecting to a MySQL database using EntityFrameworkCore.
 /// </summary>
-public sealed class PomeloEntityFrameworkCoreMySqlSettings
+public sealed class MicrotingEntityFrameworkCoreMySqlSettings
 {
     /// <summary>
     /// Gets or sets the connection string of the MySQL database to connect to.

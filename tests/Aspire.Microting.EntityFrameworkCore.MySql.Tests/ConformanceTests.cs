@@ -11,9 +11,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
-namespace Aspire.Pomelo.EntityFrameworkCore.MySql.Tests;
+namespace Aspire.Microting.EntityFrameworkCore.MySql.Tests;
 
-public class ConformanceTests : ConformanceTests<TestDbContext, PomeloEntityFrameworkCoreMySqlSettings>, IClassFixture<MySqlContainerFixture>
+public class ConformanceTests : ConformanceTests<TestDbContext, MicrotingEntityFrameworkCoreMySqlSettings>, IClassFixture<MySqlContainerFixture>
 {
     private readonly MySqlContainerFixture? _containerFixture;
     protected string ConnectionString { get; private set; }
@@ -49,7 +49,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, PomeloEntityFram
     protected override string ValidJsonConfig => """
         {
           "Aspire": {
-            "Pomelo": {
+            "Microting": {
               "EntityFrameworkCore": {
                 "MySql": {
                   "ConnectionString": "YOUR_CONNECTION_STRING",
@@ -65,10 +65,10 @@ public class ConformanceTests : ConformanceTests<TestDbContext, PomeloEntityFram
 
     protected override (string json, string error)[] InvalidJsonToErrorMessage => new[]
         {
-            ("""{"Aspire": { "Pomelo": { "EntityFrameworkCore":{ "MySql": { "DisableRetry": "true"}}}}}""", "Value is \"string\" but should be \"boolean\""),
-            ("""{"Aspire": { "Pomelo": { "EntityFrameworkCore":{ "MySql": { "DisableHealthChecks": "true"}}}}}""", "Value is \"string\" but should be \"boolean\""),
-            ("""{"Aspire": { "Pomelo": { "EntityFrameworkCore":{ "MySql": { "DisableTracing": "true"}}}}}""", "Value is \"string\" but should be \"boolean\""),
-            ("""{"Aspire": { "Pomelo": { "EntityFrameworkCore":{ "MySql": { "DisableMetrics": "true"}}}}}""", "Value is \"string\" but should be \"boolean\""),
+            ("""{"Aspire": { "Microting": { "EntityFrameworkCore":{ "MySql": { "DisableRetry": "true"}}}}}""", "Value is \"string\" but should be \"boolean\""),
+            ("""{"Aspire": { "Microting": { "EntityFrameworkCore":{ "MySql": { "DisableHealthChecks": "true"}}}}}""", "Value is \"string\" but should be \"boolean\""),
+            ("""{"Aspire": { "Microting": { "EntityFrameworkCore":{ "MySql": { "DisableTracing": "true"}}}}}""", "Value is \"string\" but should be \"boolean\""),
+            ("""{"Aspire": { "Microting": { "EntityFrameworkCore":{ "MySql": { "DisableMetrics": "true"}}}}}""", "Value is \"string\" but should be \"boolean\""),
         };
 
     public ConformanceTests(MySqlContainerFixture? containerFixture, ITestOutputHelper? output = null) : base(output)
@@ -82,20 +82,20 @@ public class ConformanceTests : ConformanceTests<TestDbContext, PomeloEntityFram
     protected override void PopulateConfiguration(ConfigurationManager configuration, string? key = null)
         => configuration.AddInMemoryCollection(new KeyValuePair<string, string?>[2]
         {
-            new("Aspire:Pomelo:EntityFrameworkCore:MySql:ConnectionString", ConnectionString),
-            new("Aspire:Pomelo:EntityFrameworkCore:MySql:ServerVersion", ServerVersion)
+            new("Aspire:Microting:EntityFrameworkCore:MySql:ConnectionString", ConnectionString),
+            new("Aspire:Microting:EntityFrameworkCore:MySql:ServerVersion", ServerVersion)
         });
 
-    protected override void RegisterComponent(HostApplicationBuilder builder, Action<PomeloEntityFrameworkCoreMySqlSettings>? configure = null, string? key = null)
+    protected override void RegisterComponent(HostApplicationBuilder builder, Action<MicrotingEntityFrameworkCoreMySqlSettings>? configure = null, string? key = null)
         => builder.AddMySqlDbContext<TestDbContext>(key ?? "mysql", configure);
 
-    protected override void SetHealthCheck(PomeloEntityFrameworkCoreMySqlSettings options, bool enabled)
+    protected override void SetHealthCheck(MicrotingEntityFrameworkCoreMySqlSettings options, bool enabled)
         => options.DisableHealthChecks = !enabled;
 
-    protected override void SetTracing(PomeloEntityFrameworkCoreMySqlSettings options, bool enabled)
+    protected override void SetTracing(MicrotingEntityFrameworkCoreMySqlSettings options, bool enabled)
         => options.DisableTracing = !enabled;
 
-    protected override void SetMetrics(PomeloEntityFrameworkCoreMySqlSettings options, bool enabled)
+    protected override void SetMetrics(MicrotingEntityFrameworkCoreMySqlSettings options, bool enabled)
         => options.DisableMetrics = !enabled;
 
     protected override void TriggerActivity(TestDbContext service)

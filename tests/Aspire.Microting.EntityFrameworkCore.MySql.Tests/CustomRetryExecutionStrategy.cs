@@ -4,7 +4,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Aspire.Pomelo.EntityFrameworkCore.MySql.Tests;
+namespace Aspire.Microting.EntityFrameworkCore.MySql.Tests;
 
 #pragma warning disable EF1001 // Internal EF Core API usage.
 public class CustomRetryExecutionStrategy : MySqlRetryingExecutionStrategy
