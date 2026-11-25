@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "aspire agent init now shows configured source URLs, installed Playwright and static skills, and groups locations with the agents that use them.",
+  "docsPrs": [
+    2060
+  ],
+  "docsRequired": false,
+  "emoji": "\ud83e\udde0",
+  "firstMergedAt": "2026-11-07T22:57:56Z",
+  "lastMergedAt": "2026-11-07T22:57:56Z",
+  "name": "Clearer source and skill summaries in aspire agent init",
+  "owner": "ellahathaway",
+  "prs": [
+    21883
+  ]
+}

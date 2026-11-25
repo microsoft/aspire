@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Unrecognized AspireCliInvocationMode values such as typos now produce a suppressible ASPIRE014 warning instead of silently falling back to Path resolution.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\u26a0\ufe0f",
+  "firstMergedAt": "2026-11-07T00:08:19Z",
+  "lastMergedAt": "2026-11-07T00:08:19Z",
+  "name": "Warn on unsupported AspireCliInvocationMode values",
+  "owner": "davidfowl",
+  "prs": [
+    21545
+  ]
+}

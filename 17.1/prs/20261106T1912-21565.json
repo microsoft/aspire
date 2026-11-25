@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "VS Code E2E test-only change",
+  "mergedAt": "2026-11-06T19:12:41Z",
+  "number": 21565,
+  "runDate": "2026-11-25T06:10:00Z",
+  "status": "excluded",
+  "title": "Dismiss VS Code E2E notifications without depending on hover"
+}

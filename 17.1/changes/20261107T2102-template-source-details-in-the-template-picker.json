@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Template picker headings in aspire new now show each source\u2019s repository and ref (or path), making it clear where a template comes from.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\uddc2\ufe0f",
+  "firstMergedAt": "2026-11-07T21:02:44Z",
+  "lastMergedAt": "2026-11-07T21:02:44Z",
+  "name": "Template source details in the template picker",
+  "owner": "mitchdenny",
+  "prs": [
+    21831
+  ]
+}

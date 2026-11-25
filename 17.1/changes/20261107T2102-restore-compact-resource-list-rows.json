@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Compact density in the resource list once again shows a single line per resource, restoring the documented compact, comfortable and spacious densities.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udccf",
+  "firstMergedAt": "2026-11-07T21:02:28Z",
+  "lastMergedAt": "2026-11-07T21:02:28Z",
+  "name": "Restore compact resource list rows",
+  "owner": "sebastienros",
+  "prs": [
+    21880
+  ]
+}

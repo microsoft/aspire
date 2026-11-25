@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The JavaScript existing-Dockerfile run-script validator no longer fails publish for resources excluded from the manifest and no longer crashes with PublishAsDockerFile, matching Go and Python behavior.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc33",
+  "firstMergedAt": "2026-11-06T12:56:19Z",
+  "lastMergedAt": "2026-11-06T12:56:19Z",
+  "name": "JavaScript Dockerfile run-script validation fixes",
+  "owner": "davidfowl",
+  "prs": [
+    21461
+  ]
+}

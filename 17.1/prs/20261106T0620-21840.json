@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Included: Dashboard settings stored in browser local storage",
+  "mergedAt": "2026-11-06T06:20:33Z",
+  "number": 21840,
+  "runDate": "2026-11-25T06:10:00Z",
+  "status": "included",
+  "title": "Store dashboard tags, resource order and metric pins in browser local storage"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-08T10:45:06Z",
+  "number": 21918,
+  "runDate": "2026-11-25T06:10:00Z",
+  "status": "excluded",
+  "title": "Keep the debugger install hint E2E fixture under the run root to fix Windows EBUSY teardown"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "No matching changelog entry found / data or site maintenance",
+  "mergedAt": "2026-11-05T13:48:26Z",
+  "number": 2033,
+  "runDate": "2026-11-25T06:10:00Z",
+  "status": "excluded",
+  "title": "Align markdown-remark with Astro and test incremental rebuilds"
+}

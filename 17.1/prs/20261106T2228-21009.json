@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Included: Initial WSLc publish and deploy support",
+  "mergedAt": "2026-11-06T22:28:43Z",
+  "number": 21009,
+  "runDate": "2026-11-25T06:10:00Z",
+  "status": "included",
+  "title": "Add initial WSLc publish/deploy support with explicit capability limits"
+}

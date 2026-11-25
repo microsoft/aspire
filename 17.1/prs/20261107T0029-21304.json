@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal build/packaging engineering change",
+  "mergedAt": "2026-11-07T00:29:17Z",
+  "number": 21304,
+  "runDate": "2026-11-25T06:10:00Z",
+  "status": "excluded",
+  "title": "build: unify bundle build, publish and packaging in MSBuild"
+}

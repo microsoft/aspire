@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The reserved trait used by WithTags is renamed from Aspire_Dashboard_Tag to Aspire_Tag, so tools reading resource snapshots (such as aspire describe) see a non-dashboard-specific name.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udff7\ufe0f",
+  "firstMergedAt": "2026-11-06T23:10:21Z",
+  "lastMergedAt": "2026-11-06T23:10:21Z",
+  "name": "WithTags trait renamed to Aspire_Tag",
+  "owner": "sebastienros",
+  "prs": [
+    21881
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Restores withContainerImage on .NET project resources in generated TypeScript AppHosts for the Radius integration.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddec",
+  "firstMergedAt": "2026-11-06T23:20:54Z",
+  "lastMergedAt": "2026-11-06T23:20:54Z",
+  "name": "Radius container image exports for TypeScript",
+  "owner": "karolz-ms",
+  "prs": [
+    21830
+  ]
+}

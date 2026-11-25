@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Publishing can now use the WSLc container runtime on Windows for supported image operations, with unsupported operations failing clearly rather than falling back.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udc27",
+  "firstMergedAt": "2026-11-06T22:28:43Z",
+  "lastMergedAt": "2026-11-06T22:28:43Z",
+  "name": "Initial WSLc publish and deploy support",
+  "owner": "danegsta",
+  "prs": [
+    21009
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "A searchable resource-selector dropdown lets you switch resources while the dashboard sidebar is collapsed, with multi-select via Ctrl/Cmd/Shift.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd3d",
+  "firstMergedAt": "2026-11-06T16:34:49Z",
+  "lastMergedAt": "2026-11-06T16:34:49Z",
+  "name": "Resource selector dropdown",
+  "owner": "JamesNK",
+  "prs": [
+    21861
+  ]
+}

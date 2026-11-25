@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flake fix",
+  "mergedAt": "2026-11-07T02:53:15Z",
+  "number": 21530,
+  "runDate": "2026-11-25T06:10:00Z",
+  "status": "excluded",
+  "title": "Use TimeProvider for SealedSecret sync-wait budget to fix SealedSecretApplyStepTests flake"
+}
