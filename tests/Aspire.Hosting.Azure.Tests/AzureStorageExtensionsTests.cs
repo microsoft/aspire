@@ -45,6 +45,17 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
         Assert.Empty(storage.Resource.Annotations.OfType<ConnectCommandAnnotation>());
     }
 
+    [Fact]
+    public void AzureStorageEmulatorKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage")
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"))
+            .RunAsEmulator();
+
+        Assert.Equal("my-client", Assert.Single(storage.Resource.Annotations.OfType<ConnectCommandAnnotation>()).Tool);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(true)]

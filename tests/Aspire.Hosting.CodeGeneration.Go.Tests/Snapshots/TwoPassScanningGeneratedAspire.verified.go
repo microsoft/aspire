@@ -2793,9 +2793,9 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -7190,9 +7190,9 @@ type CSharpAppResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -12351,9 +12351,9 @@ type ContainerRegistryResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -14552,9 +14552,9 @@ type ContainerResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -21050,9 +21050,9 @@ type DotnetToolResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -26305,9 +26305,9 @@ type ExecutableResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -30146,9 +30146,9 @@ type ExternalServiceResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -34816,9 +34816,9 @@ type ParameterResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -38112,9 +38112,9 @@ type ProjectResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -44030,9 +44030,9 @@ type TestDatabaseResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.
@@ -48551,9 +48551,9 @@ type TestRedisResource interface {
 	//     script that runs in the resource's container. For Host, it is a host
 	//     command line.
 	//   - command: The command, ending where the client's own arguments go. It is
-	//     displayed by tooling, so it can reference only literal text and endpoint
-	//     values, never secrets. Read credentials from the container's environment
-	//     variables instead.
+	//     displayed by tooling, so it can reference only literal text and the
+	//     resource's own endpoint values, never secrets. Read credentials from the
+	//     container's environment variables instead.
 	//   - options: Optional parameters; see [WithConnectCommandOption].
 	//
 	// Returns: The resource builder.

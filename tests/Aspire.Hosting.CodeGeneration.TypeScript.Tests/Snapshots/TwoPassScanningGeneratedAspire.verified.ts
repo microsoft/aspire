@@ -13121,7 +13121,7 @@ export interface ContainerRegistryResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -13509,7 +13509,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -13917,7 +13917,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -15415,7 +15415,7 @@ export interface ContainerResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -16302,7 +16302,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -17210,7 +17210,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -20264,7 +20264,7 @@ export interface CSharpAppResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -20991,7 +20991,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -21738,7 +21738,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -24376,7 +24376,7 @@ export interface DotnetToolResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -25139,7 +25139,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -25922,7 +25922,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -28674,7 +28674,7 @@ export interface ExecutableResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -29398,7 +29398,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -30149,7 +30149,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -32771,7 +32771,7 @@ export interface ExternalServiceResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -33164,7 +33164,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -33577,7 +33577,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -35100,7 +35100,7 @@ export interface ParameterResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -35536,7 +35536,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -35993,7 +35993,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -37617,7 +37617,7 @@ export interface ProjectResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -38344,7 +38344,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -39092,7 +39092,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -41730,7 +41730,7 @@ export interface TestDatabaseResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -42617,7 +42617,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -43524,7 +43524,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -46578,7 +46578,7 @@ export interface TestRedisResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -47549,7 +47549,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -48540,7 +48540,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -51923,7 +51923,7 @@ export interface TestVaultResource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -52812,7 +52812,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -53721,7 +53721,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -57075,7 +57075,7 @@ export interface Resource {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -57463,7 +57463,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -57872,7 +57872,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
-     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental

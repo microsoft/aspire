@@ -220,7 +220,7 @@ public static class AzureCosmosExtensions
 
             // The emulator image has no client. Its gateway serves HTTPS on the documented HTTP port once Aspire
             // provides a certificate, so the command uses the endpoint URL, which reflects the current scheme.
-            builder.WithConnectCommand(
+            builder.WithDefaultConnectCommand(
                 "curl",
                 ConnectCommandLocation.Host,
                 ReferenceExpression.Create($"curl -sS {builder.Resource.GetEndpoint("emulator")}/"),

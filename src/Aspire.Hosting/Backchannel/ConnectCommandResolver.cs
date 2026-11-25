@@ -47,7 +47,7 @@ internal static class ConnectCommandResolver
         // The command is displayed by tooling. Only endpoint values and literals are allowed so that a parameter,
         // connection string, or other value provider can never put a secret into it. Endpoint values must already be
         // allocated: resolving an unallocated endpoint waits for allocation, which would stall snapshot streaming.
-        if (!CanResolveWithoutSecrets(annotation.Command, out var reason))
+        if (!CanResolveWithoutSecrets(annotation.Command, resource, out var reason))
         {
             logger.LogDebug("Connect command for resource '{ResourceName}' is not shown: {Reason}", resource.Name, reason);
             return null;
@@ -122,19 +122,19 @@ internal static class ConnectCommandResolver
         return $"{runtime} exec {containerName} sh -c '{quotedScript} \"$@\"' sh";
     }
 
-    internal static bool CanResolveWithoutSecrets(object? valueProvider, out string? reason)
+    internal static bool CanResolveWithoutSecrets(object? valueProvider, IResource owner, out string? reason)
     {
         switch (valueProvider)
         {
             case ReferenceExpression { IsConditional: true } conditional:
-                return CanResolveWithoutSecrets(conditional.Condition, out reason) &&
-                    CanResolveWithoutSecrets(conditional.WhenTrue, out reason) &&
-                    CanResolveWithoutSecrets(conditional.WhenFalse, out reason);
+                return CanResolveWithoutSecrets(conditional.Condition, owner, out reason) &&
+                    CanResolveWithoutSecrets(conditional.WhenTrue, owner, out reason) &&
+                    CanResolveWithoutSecrets(conditional.WhenFalse, owner, out reason);
 
             case ReferenceExpression expression:
                 foreach (var provider in expression.ValueProviders)
                 {
-                    if (!CanResolveWithoutSecrets(provider, out reason))
+                    if (!CanResolveWithoutSecrets(provider, owner, out reason))
                     {
                         return false;
                     }
@@ -144,14 +144,32 @@ internal static class ConnectCommandResolver
                 return true;
 
             case EndpointReference endpoint:
-                return IsAllocated(endpoint, out reason);
+                return IsOwnEndpoint(endpoint, owner, out reason) && IsAllocated(endpoint, out reason);
 
             case EndpointReferenceExpression endpointExpression:
-                return IsResolvableProperty(endpointExpression, out reason) && IsAllocated(endpointExpression.Endpoint, out reason);
+                return IsOwnEndpoint(endpointExpression.Endpoint, owner, out reason) &&
+                    IsResolvableProperty(endpointExpression, out reason) &&
+                    IsAllocated(endpointExpression.Endpoint, out reason);
 
             default:
                 reason = $"the command references a value of type '{valueProvider?.GetType().Name}'. Connect commands can reference only endpoint values.";
                 return false;
+        }
+
+        static bool IsOwnEndpoint(EndpointReference endpoint, IResource owner, out string? reason)
+        {
+            // The command is re-resolved only when its own resource publishes a snapshot. Another resource's endpoint
+            // can be allocated or reallocated without that happening, which would leave the command missing or stale
+            // in watch streams. Compare names because surrogate builders (e.g. Azure emulator containers) wrap the
+            // model resource with a different object of the same name.
+            if (!string.Equals(endpoint.Resource.Name, owner.Name, StringComparisons.ResourceName))
+            {
+                reason = $"the command references endpoint '{endpoint.EndpointName}' of resource '{endpoint.Resource.Name}'. Connect commands can reference only the resource's own endpoints.";
+                return false;
+            }
+
+            reason = null;
+            return true;
         }
 
         static bool IsResolvableProperty(EndpointReferenceExpression endpointExpression, out string? reason)

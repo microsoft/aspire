@@ -200,6 +200,55 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WatchResourceSnapshotsAsync_RefreshesConnectCommandWhenOwnEndpointIsReallocated()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var resource = builder.AddResource(new CustomResourceWithEndpoints("tool"))
+            .WithEndpoint(targetPort: 4222, name: "tcp");
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        resource.WithConnectCommand(
+            "tool-cli",
+            ConnectCommandLocation.Host,
+            ReferenceExpression.Create($"tool-cli --port {resource.GetEndpoint("tcp").Property(EndpointProperty.Port)}"));
+#pragma warning restore ASPIRECONNECT001
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        using var cts = new CancellationTokenSource();
+        var enumerator = target.WatchResourceSnapshotsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        try
+        {
+            // The orchestrator allocates the endpoint during startup; the command uses that port.
+            var endpoint = resource.Resource.Annotations.OfType<EndpointAnnotation>().Single();
+            var allocatedPort = endpoint.AllocatedEndpoint!.Port;
+            await notificationService.PublishUpdateAsync(resource.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+            var allocated = await ReadSnapshotAsync(enumerator, s => s.Name == "tool" && s.State == "Running").DefaultTimeout();
+            Assert.Equal($"tool-cli --port {allocatedPort}", allocated.Connect?.Command);
+
+            endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.LocalhostNetwork, new AllocatedEndpoint(endpoint, "localhost", allocatedPort + 1));
+            await notificationService.PublishUpdateAsync(resource.Resource, s => s with { State = new ResourceStateSnapshot("Restarted", null) }).DefaultTimeout();
+            var reallocated = await ReadSnapshotAsync(enumerator, s => s.Name == "tool" && s.State == "Restarted").DefaultTimeout();
+            Assert.Equal($"tool-cli --port {allocatedPort + 1}", reallocated.Connect?.Command);
+        }
+        finally
+        {
+            cts.Cancel();
+            await enumerator.DisposeAsync();
+        }
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_MapsSnapshotData()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

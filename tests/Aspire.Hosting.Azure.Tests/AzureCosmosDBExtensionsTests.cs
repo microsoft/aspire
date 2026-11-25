@@ -36,6 +36,17 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         Assert.Equal("<curl options>, for example -i", connect.Append);
     }
 
+    [Fact]
+    public void CosmosDBEmulatorKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"))
+            .RunAsEmulator();
+
+        Assert.Equal("my-client", Assert.Single(cosmos.Resource.Annotations.OfType<ConnectCommandAnnotation>()).Tool);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(8081)]

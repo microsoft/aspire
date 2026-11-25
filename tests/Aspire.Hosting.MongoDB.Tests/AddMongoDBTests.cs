@@ -48,7 +48,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
 
         Assert.True(mongo.Resource.TlsEnabled);
         var connect = Assert.Single(mongo.Resource.Annotations.OfType<ConnectCommandAnnotation>());
-        Assert.Equal("""exec mongosh --quiet "mongodb://localhost:27017/admin?directConnection=true" --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --tls ${ASPIRE_MONGODB_REPL_CA_FILE:+--tlsCAFile $ASPIRE_MONGODB_REPL_CA_FILE}""",
+        Assert.Equal("""exec mongosh --quiet "mongodb://localhost:27017/admin?directConnection=true" --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --tls ${ASPIRE_MONGODB_REPL_CA_FILE:+--tlsCAFile "$ASPIRE_MONGODB_REPL_CA_FILE"}""",
             await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
     }
 

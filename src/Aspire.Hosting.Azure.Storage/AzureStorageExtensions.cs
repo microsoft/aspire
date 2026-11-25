@@ -213,7 +213,7 @@ public static class AzureStorageExtensions
                // account key, so it is safe to show. az storage reads it from AZURE_STORAGE_CONNECTION_STRING, which
                // lets the caller append the command group, e.g. "container list".
                // See https://learn.microsoft.com/azure/storage/common/storage-use-azurite#connection-strings.
-               .WithConnectCommand(
+               .WithDefaultConnectCommand(
                    "az",
                    ConnectCommandLocation.Host,
                    ReferenceExpression.Create($"env AZURE_STORAGE_CONNECTION_STRING='{builder.Resource.GetEmulatorConnectionString()}' az storage"),

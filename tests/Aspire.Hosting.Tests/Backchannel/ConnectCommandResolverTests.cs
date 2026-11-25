@@ -134,6 +134,23 @@ public class ConnectCommandResolverTests
     }
 
     [Fact]
+    public async Task OmitsCommandThatReferencesAnotherResourcesEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var other = builder.AddContainer("other", "image")
+            .WithEndpoint(targetPort: 4222, name: "tcp")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new(e, "localhost", 14222));
+        var container = builder.AddContainer("client", "image")
+            .WithConnectCommand(
+                "nats",
+                ConnectCommandLocation.Host,
+                ReferenceExpression.Create($"nats --server nats://localhost:{other.GetEndpoint("tcp").Property(EndpointProperty.Port)}"));
+
+        // Only the owner's snapshots re-resolve the command, so another resource's endpoint could go stale.
+        Assert.Null(await ResolveAsync(container.Resource, "client-abcdefgh", "docker"));
+    }
+
+    [Fact]
     public async Task OmitsCommandThatReferencesUndefinedEndpoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

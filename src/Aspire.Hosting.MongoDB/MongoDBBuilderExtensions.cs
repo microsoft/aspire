@@ -213,9 +213,10 @@ public static class MongoDBBuilderExtensions
         // whose advertised addresses can refer to host-side proxies; localhost also matches the developer
         // certificate's subject alternative name. With TLS, mongosh needs an explicit CA bundle because Node.js does
         // not use the OpenSSL certificate directories configured by Aspire; the bundle path is passed when the
-        // certificate trust configuration provides one.
+        // certificate trust configuration provides one. The inner quotes keep a destination with spaces as one
+        // argument, e.g. ${CA:+--tlsCAFile "$CA"} with CA='/custom certs/cert.pem' yields two arguments.
         var port = builder.Resource.PrimaryEndpoint.Property(EndpointProperty.TargetPort);
-        var tlsOptions = tls ? $" --tls ${{{ReplCaFileEnvVarName}:+--tlsCAFile ${ReplCaFileEnvVarName}}}" : string.Empty;
+        var tlsOptions = tls ? $" --tls ${{{ReplCaFileEnvVarName}:+--tlsCAFile \"${ReplCaFileEnvVarName}\"}}" : string.Empty;
         return builder.WithDefaultConnectCommand(
             "mongosh",
             ConnectCommandLocation.Container,

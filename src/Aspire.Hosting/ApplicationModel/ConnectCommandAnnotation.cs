@@ -45,8 +45,8 @@ public enum ConnectCommandLocation
 /// <para>
 /// The command is displayed in tooling output, so it must not contain secret values. It can reference only endpoint
 /// values, such as <see cref="EndpointReference"/> or <see cref="EndpointReferenceExpression"/>, and literal text; a
-/// command that references other values, such as parameters or connection strings, is not shown. Endpoint target
-/// ports must be fixed, and browser origins are not supported.
+/// command that references other values, such as parameters or connection strings, is not shown. Endpoints must belong
+/// to the resource itself, target ports must be fixed, and browser origins are not supported.
 /// </para>
 /// </remarks>
 [Experimental("ASPIRECONNECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]

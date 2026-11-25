@@ -24,7 +24,8 @@ public static class ConnectCommandBuilderExtensions
     /// </param>
     /// <param name="command">
     /// The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only
-    /// literal text and endpoint values, never secrets. Read credentials from the container's environment variables instead.
+    /// literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment
+    /// variables instead.
     /// </param>
     /// <param name="append">A description of what to append to the command, such as <c>-c '&lt;sql&gt;'</c>.</param>
     /// <param name="note">An optional note about using the command.</param>
