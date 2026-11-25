@@ -681,6 +681,10 @@ export function azureCliEnvironment(environment = process.env) {
   // client_session parameter and rejects otherwise valid Azure CLI token requests.
   // https://github.com/ianphil/chamber/issues/419
   delete env.COPILOT_AGENT_SESSION_ID;
+  // Use only installed extensions: dynamic installation can block a read-only refresh
+  // while Azure CLI tries to download packages or prompt for confirmation.
+  // https://learn.microsoft.com/cli/azure/azure-cli-extensions-overview#install-extensions-automatically
+  env.AZURE_EXTENSION_USE_DYNAMIC_INSTALL = "no";
   return env;
 }
 
@@ -747,7 +751,7 @@ async function invokeAz(runAz, args) {
   }
 }
 
-function classifyCommandError(error) {
+export function classifyCommandError(error) {
   if (error?.code === "az_cli_missing" || error?.code === "az_cli_lookup_failed") {
     return new AzureDevOpsError(error.code, error.message);
   }
@@ -757,10 +761,15 @@ function classifyCommandError(error) {
   if (error?.code === "AZ_CLI_BATCH_ONLY") {
     return new AzureDevOpsError("az_cli_unsupported", "This Azure CLI installation does not expose a safe executable entry point.");
   }
+  // Node's execFile reports a timeout as a killed process with no error code;
+  // its message only says "Command failed" and otherwise hides the actual cause.
+  if (error?.killed && error?.signal === "SIGTERM" && error?.code == null) {
+    return new AzureDevOpsError("azdo_timeout", "The Azure DevOps query timed out.");
+  }
 
   const detail = compactDetail([error?.stderr, error?.stdout, error?.message].filter(Boolean).join("\n"));
-  if (/azure-devops extension|az extension add --name azure-devops|pipelines.*misspelled/i.test(detail)) {
-    return new AzureDevOpsError("azdo_extension_missing", "The Azure CLI azure-devops extension is not installed.");
+  if (/azure-devops extension|az extension add --name azure-devops|(?:devops|pipelines|repos).*misspelled/i.test(detail)) {
+    return new AzureDevOpsError("azdo_extension_missing", "The Azure CLI azure-devops extension is not installed. Run az extension add --name azure-devops.");
   }
   if (/az login|not logged|authentication|TF400813|401\b/i.test(detail)) {
     return new AzureDevOpsError("azdo_auth_required", "Azure DevOps authentication is required. Run az login or set AZURE_DEVOPS_EXT_PAT.");
