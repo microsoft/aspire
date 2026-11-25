@@ -77,7 +77,11 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(page.Locator(".resource-pane")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true })).ToHaveCountAsync(0);
-            await Assertions.Expect(page.Locator("#resource-tab-home")).ToHaveAttributeAsync("aria-selected", "true");
+            // Home is current in the navigation menu, which lists the views a narrow layout has no room for.
+            var menu = await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            await Assertions.Expect(ResourcePaneNavigation.NavMenuItem(menu, Resources.Layout.ResourceTabHome)).ToHaveAttributeAsync("aria-current", "page");
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(menu).ToBeHiddenAsync();
             await page.SetViewportSizeAsync(1440, 900);
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".drawer-open")).ToHaveCountAsync(0);
@@ -90,7 +94,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
     [InlineData(390, 844)]
     [InlineData(768, 1024)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task NarrowHomeTab_GoesHomeAndOverviewOpensTheOverview(int width, int height)
+    public async Task NarrowNavMenu_HomeGoesHomeAndOverviewOpensTheOverview(int width, int height)
     {
         await RunTestAsync(async page =>
         {
@@ -98,28 +102,35 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             await page.GotoAsync("/resources/tag-a");
             var layout = page.Locator(".resources-layout");
-            var home = page.Locator("#resource-tab-home");
-            var overview = page.Locator("#tab-Overview");
-            await Assertions.Expect(home).ToHaveAttributeAsync("aria-selected", "false");
+            await Assertions.Expect(layout).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
+            // A narrow layout has no tab strip. Home and the views are listed in the navigation menu instead.
+            await Assertions.Expect(page.Locator(".resources-tab-header")).ToHaveCountAsync(0);
 
-            await home.ClickAsync();
+            var menu = await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            await Assertions.Expect(Home()).Not.ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(Overview()).ToHaveAttributeAsync("aria-current", "page");
+            await Home().ClickAsync();
+            await Assertions.Expect(menu).ToBeHiddenAsync();
             await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
             await Assertions.Expect(layout).ToHaveClassAsync(new Regex("drawer-open"));
-            await Assertions.Expect(page.Locator("#resource-tab-home")).ToHaveAttributeAsync("aria-selected", "true");
-            await Assertions.Expect(page.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "false");
 
-            await overview.ClickAsync();
+            await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            await Assertions.Expect(Home()).ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(Overview()).Not.ToHaveAttributeAsync("aria-current", "page");
+            await Overview().ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(layout).Not.ToHaveClassAsync(new Regex("drawer-open"));
-            await Assertions.Expect(page.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "true");
 
-            // The strip is re-created at home, and keyboard focus moves to its Home tab.
-            await home.FocusAsync();
+            await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            await Assertions.Expect(Overview()).ToHaveAttributeAsync("aria-current", "page");
+            await Home().FocusAsync();
             await page.Keyboard.PressAsync("Enter");
             await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
             await Assertions.Expect(layout).ToHaveClassAsync(new Regex("drawer-open"));
-            await Assertions.Expect(page.Locator("#resource-tab-home")).ToBeFocusedAsync();
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+
+            ILocator Home() => ResourcePaneNavigation.NavMenuItem(menu, Resources.Layout.ResourceTabHome);
+            ILocator Overview() => ResourcePaneNavigation.NavMenuItem(menu, Resources.Layout.ResourceTabOverview);
         });
     }
 
@@ -133,7 +144,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
         {
             await page.SetViewportSizeAsync(width, height);
             await page.GotoAsync("/resources/tag-a");
-            await Assertions.Expect(page.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(page.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-current", "page");
             if (width <= 768)
             {
                 await page.Locator(".resource-picker").ClickAsync();
@@ -141,7 +152,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             var pane = page.Locator(".resource-pane");
             var navigation = page.Locator(".resource-tabs-nav");
             await Assertions.Expect(navigation).ToBeVisibleAsync();
-            var navigationControls = await navigation.Locator("fluent-tab:visible, .resource-tabs-compact-button:visible, .resource-tabs-overflow-button:visible").AllTextContentsAsync();
+            var navigationControls = await navigation.Locator("a.resource-tab:visible, .resource-tabs-compact-button:visible, .resource-tabs-overflow-button:visible").AllTextContentsAsync();
             Assert.NotEmpty(navigationControls);
             var row = pane.Locator("[data-resource-name='tag-b'] .resource-row-link");
             await Assertions.Expect(row).ToBeVisibleAsync();
@@ -157,7 +168,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(page.Locator(".resource-content")).Not.ToBeVisibleAsync();
             await Assertions.Expect(navigation).ToBeVisibleAsync();
             // At home no view is shown selected. The overview is kept for the next selection.
-            await Assertions.Expect(navigation.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "false");
+            await Assertions.Expect(navigation.Locator("#tab-Overview")).Not.ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(filter).ToHaveValueAsync("tag-");
             Assert.True(await originalPane.EvaluateAsync<bool>("pane => pane === document.querySelector('.resource-pane')"));
             var paneBox = await pane.BoundingBoxAsync();
@@ -170,7 +181,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await pane.Locator(".resource-row-all .resource-row-link").ClickAsync();
             await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
             await Assertions.Expect(navigation).ToBeVisibleAsync();
-            await Assertions.Expect(navigation.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(navigation.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-current", "page");
             await ResourcePaneNavigation.GoHomeAsync(page);
             await row.ClickAsync();
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("tag-b");
@@ -268,9 +279,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
 
             // Choose the tab right after going home, while home may still be loading (a click doesn't wait for
             // navigation). The tab must open for all resources, not for the resource that was selected, whether the
-            // choice waits for home or lands on the outgoing tab strip. In the latter case only a real pointer or
-            // keyboard activation is honored, never the change events the strip raises as it's torn down. Which case
-            // a run hits depends on timing.
+            // choice waits for home or lands on the outgoing tab strip. Which case a run hits depends on timing.
             await ResourcePaneNavigation.HomeLink(page).ClickAsync();
             if (useKeyboard)
             {
@@ -283,10 +292,10 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             }
 
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
-            await Assertions.Expect(navigation.Locator("#tab-Console")).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(navigation.Locator("#tab-Console")).ToHaveAttributeAsync("aria-current", "page");
 
-            // A stale event that slipped through would navigate again shortly after, back to the resource that was
-            // selected or to the home table. Give it time to show up, then check the page stayed put.
+            // A stray second navigation would go back to the resource that was selected or to the home table. Give it
+            // time to show up, then check the page stayed put.
             await page.WaitForTimeoutAsync(1500);
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
@@ -311,10 +320,10 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await AssertNoTabSelectedAsync(page);
 
             // The overview is the view kept for a selection, and choosing it opens it for all resources.
-            var overview = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
+            var overview = page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
             await overview.ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
-            await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(overview).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
         });
     }
@@ -329,7 +338,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.GotoAsync("/resources/tag-a");
             var fullCanvas = page.Locator(".resources-layout.pane-full-canvas");
             var row = page.Locator(".resource-row[data-resource-name='tag-a'] .resource-row-link");
-            var overview = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
+            var overview = page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
             await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
             await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-escape-home", "true");
 
@@ -376,14 +385,14 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
             await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
-            // Give the strip's focus restore, which runs as the strip is re-created and again on the next frame, time
-            // to act before checking it didn't.
+            // Give the strip's focus restore, which runs as the strip is re-rendered, time to act before checking it
+            // didn't.
             await page.WaitForTimeoutAsync(500);
-            await Assertions.Expect(page.Locator(".resources-tab-header fluent-tab:focus")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".resources-tab-header a.resource-tab:focus")).ToHaveCountAsync(0);
         });
     }
 
-    // At home the active tab is a hidden placeholder, so no visible tab is selected.
+    // At home no tab is the current page.
     private static Task AssertNoTabSelectedAsync(IPage page) =>
-        Assertions.Expect(page.Locator(".resources-tab-header fluent-tab[aria-selected='true']:visible")).ToHaveCountAsync(0);
+        Assertions.Expect(page.Locator(".resources-tab-header a.resource-tab[aria-current='page']:visible")).ToHaveCountAsync(0);
 }

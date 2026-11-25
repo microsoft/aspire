@@ -13,6 +13,7 @@
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared/BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared/HeldFileLease.cs" />
     <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Shared/DirectoryHelper.cs" />
+    <Compile Include="$(SharedDir)TemporaryStorage.cs" Link="Shared/TemporaryStorage.cs" />
   </ItemGroup>
 
   <Target Name="ValidateTrayPublish" BeforeTargets="PrepareForPublish">

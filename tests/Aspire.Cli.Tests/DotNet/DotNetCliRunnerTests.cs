@@ -106,7 +106,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
-                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+                new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         }).BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
 
@@ -170,7 +170,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
-                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+                new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         }).BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1174,7 +1174,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
-                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+                new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         }).BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
         var options = new ProcessInvocationOptions { NoAutoResponse = noAutoResponse };

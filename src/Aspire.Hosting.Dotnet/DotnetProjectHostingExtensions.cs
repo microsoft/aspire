@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental
@@ -438,6 +439,7 @@ public static partial class DotnetProjectHostingExtensions
                             projectMetadata.BuildConfiguration,
                             projectMetadata.BuildEnvironment,
                             buildWorkingDirectory,
+                            ctx.ExecutionContext.Services.GetRequiredService<IFileSystemService>().TempDirectory,
                             ctx.Logger,
                             cancellationToken),
                         ctx.CancellationToken).ConfigureAwait(false);

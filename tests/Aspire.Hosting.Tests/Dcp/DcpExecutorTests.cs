@@ -846,6 +846,35 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(null, null)]
+    [InlineData(false, null)]
+    [InlineData(true, null)]
+    [InlineData(null, "/bin/sh")]
+    [InlineData(false, "/bin/sh")]
+    [InlineData(true, "/bin/sh")]
+    public async Task CreateContainer_ShellExecutionPreservesEntrypointAndControlsArgumentWrapping(bool? shellExecution, string? entrypoint)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddContainer("shell", "image")
+            .WithArgs("echo", "'two words'", "$VALUE");
+        resource.Resource.Entrypoint = entrypoint;
+        resource.Resource.ShellExecution = shellExecution;
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "shell");
+        Assert.Equal(entrypoint, container.Spec.Command);
+        Assert.Equal(
+            shellExecution is true ? ["-c", "echo 'two words' $VALUE"] : new[] { "echo", "'two words'", "$VALUE" },
+            container.Spec.Args);
+    }
+
+    [Theory]
     [InlineData("aspire")]
     [InlineData("ASPIRE")]
     public async Task RunApplicationAsync_ThrowsWhenContainerResourceNameConflictsWithContainerTunnelName(string containerName)
@@ -7240,7 +7269,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     public async Task PersistentPlainExecutable_UsesStableCertificateOutputPath()
     {
         var builder = DistributedApplication.CreateBuilder();
-        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         using var aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store");
 
         using var certificate = CreateTestCertificate();
@@ -7282,7 +7311,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     public async Task PersistentPlainExecutable_WritesCustomBundleDirectoryOwnerOnly()
     {
         var builder = DistributedApplication.CreateBuilder();
-        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         using var aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store");
 
         using var certificate = CreateTestCertificate();
@@ -12597,6 +12626,60 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncWaitsForDcpResourceCleanup()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.True(resourcesCleanedUp);
+        Assert.Equal(1, kubernetesService.CleanupResourcesCallCount);
+    }
+
+    [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncCannotConfirmCleanupAfterARegularStop()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        await appExecutor.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(resourcesCleanedUp);
+        Assert.Equal(0, kubernetesService.CleanupResourcesCallCount);
+    }
+
+    [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncReportsCanceledCleanupAsUnconfirmed()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var resourcesCleanedUp = await appExecutor.StopAndWaitForResourceCleanupAsync(new CancellationToken(canceled: true)).DefaultTimeout();
+
+        Assert.False(resourcesCleanedUp);
+    }
+
+    [Fact]
     public async Task ContainerAndExecutableShareContainerNetworkAllocationFailure()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -13454,7 +13537,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         });
         var ks = kubernetesService ?? new TestKubernetesService();
         var dcpEvts = events ?? new DcpExecutorEvents();
-        var fileSystemService = new FileSystemService(configuration);
+        var fileSystemService = new FileSystemService(configuration, new Aspire.Shared.TemporaryStorage());
         var locations = new Locations(fileSystemService);
         var aspireStoreDirectory = configuration[AspireStore.AspireStorePathKeyName];
         if (string.IsNullOrWhiteSpace(aspireStoreDirectory))

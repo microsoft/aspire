@@ -604,7 +604,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
         };
 
-        return new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance)
+        return new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance)
             .CreateExecution(startInfo, options);
     }
 
@@ -696,7 +696,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         var nugetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
             new FakeNuGetClient(),
-            new TestConfigurationService());
+            new TestConfigurationService(), new Aspire.Shared.TemporaryStorage());
 
         return new AppHostServerProjectFactory(
             new TestDotNetCliRunner(),
@@ -707,6 +707,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             executionContext,
             new TestEnvironment(),
             new TestProcessExecutionFactory(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLoggerFactory.Instance);
     }
 

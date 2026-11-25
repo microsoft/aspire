@@ -399,7 +399,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         // Core things
         // Create and register the directory service (first, so it can be used by other services)
-        _directoryService = new FileSystemService(_innerBuilder.Configuration);
+        // The builder allocates temporary storage before the service provider exists, so it creates the
+        // shared instance here and registers the same instance for later consumers.
+        var temporaryStorage = new TemporaryStorage();
+        _innerBuilder.Services.AddSingleton<ITemporaryStorage>(temporaryStorage);
+        _directoryService = new FileSystemService(_innerBuilder.Configuration, temporaryStorage);
         _innerBuilder.Services.AddSingleton<IFileSystemService>(sp =>
         {
             _directoryService.SetLogger(sp.GetRequiredService<ILogger<FileSystemService>>());

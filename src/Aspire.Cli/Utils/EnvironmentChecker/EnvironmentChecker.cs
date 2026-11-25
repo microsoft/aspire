@@ -17,6 +17,11 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
     internal static readonly TimeSpan s_defaultCheckTimeout = TimeSpan.FromSeconds(30);
     internal static readonly TimeSpan s_defaultTotalTimeout = TimeSpan.FromMinutes(2);
 
+    // When the caller cancels, a check may still be releasing external resources (for example the DCP
+    // connection check killing the DCP process tree it started). Exiting before that finishes can leave
+    // those processes orphaned, so give the cancelled check a short, bounded window to clean up.
+    internal static readonly TimeSpan s_cancelledCheckCleanupTimeout = TimeSpan.FromSeconds(5);
+
     private readonly IEnvironmentCheck[] _checks;
     private readonly ILogger<EnvironmentChecker> _logger;
     private readonly TimeSpan _checkTimeout;
@@ -56,6 +61,7 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
             using var checkTimerCts = new CancellationTokenSource(_checkTimeout, _timeProvider);
             using var checkTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(totalTimeoutCts.Token, checkTimerCts.Token);
             var stopwatch = Stopwatch.StartNew();
+            Task<IReadOnlyList<EnvironmentCheckResult>>? checkTask = null;
 
             _logger.LogDebug("Starting environment check {CheckType}.", checkType.Name);
 
@@ -63,7 +69,7 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
             {
                 // Some checks call synchronous platform APIs before returning their task. Scheduling the
                 // invocation keeps those APIs from preventing the timeout token from being observed here.
-                var checkTask = Task.Run(() => check.CheckAsync(checkTimeoutCts.Token), CancellationToken.None);
+                checkTask = Task.Run(() => check.CheckAsync(checkTimeoutCts.Token), CancellationToken.None);
                 // WaitAsync can time out while a non-cooperative check keeps running. Observe any
                 // exception it produces later because it can no longer reach the catch block below.
                 _ = checkTask.ContinueWith(
@@ -82,7 +88,12 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                // User requested cancellation, stop all checks
+                // User requested cancellation, stop all checks once the cancelled check has released its resources.
+                if (checkTask is not null)
+                {
+                    await WaitForCancelledCheckCleanupAsync(checkTask, checkType).ConfigureAwait(false);
+                }
+
                 throw;
             }
             catch (OperationCanceledException) when (totalTimeoutCts.IsCancellationRequested)
@@ -120,6 +131,26 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
         }
 
         return results;
+    }
+
+    private async Task WaitForCancelledCheckCleanupAsync(Task checkTask, Type checkType)
+    {
+        try
+        {
+            await checkTask.WaitAsync(s_cancelledCheckCleanupTimeout, _timeProvider).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogDebug(
+                "Environment check {CheckType} did not finish cleaning up within {TimeoutSeconds} seconds of cancellation.",
+                checkType.Name,
+                s_cancelledCheckCleanupTimeout.TotalSeconds);
+        }
+        catch (Exception ex)
+        {
+            // The check is expected to end with cancellation; any other failure is already superseded by it.
+            _logger.LogDebug(ex, "Environment check {CheckType} ended after cancellation.", checkType.Name);
+        }
     }
 
     private static EnvironmentCheckResult CreateTimeoutResult(string name, string message, Type checkType, TimeSpan timeout)

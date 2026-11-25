@@ -94,7 +94,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
         var nugetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
             new FakeNuGetClient(),
-            new TestConfigurationService { SettingsFilePath = Path.Combine(appPath, "global.json") });
+            new TestConfigurationService { SettingsFilePath = Path.Combine(appPath, "global.json") }, new Aspire.Shared.TemporaryStorage());
 
         return new PrebuiltAppHostServer(
             appPath,

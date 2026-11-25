@@ -60,7 +60,15 @@ void main() throws Exception {
         bingTool3.withReference(bingParam);
         var sharepoint = project.addSharePointTool("sharepoint-tool", new String[] { "https://contoso.sharepoint.com", "MySite" });
         var fabric = project.addFabricTool("fabric-tool", new String[] { "workspace-id" });
-        var azFunc = project.addAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q");
+        var azFuncOptions = new AzureFunctionToolOptions();
+        azFuncOptions.setFunctionName("myFunction");
+        azFuncOptions.setDescription("Does something");
+        azFuncOptions.setParametersJson("{}");
+        azFuncOptions.setInputQueueEndpoint("https://queue.core.windows.net");
+        azFuncOptions.setInputQueueName("input-q");
+        azFuncOptions.setOutputQueueEndpoint("https://queue.core.windows.net");
+        azFuncOptions.setOutputQueueName("output-q");
+        var azFunc = project.addAzureFunctionTool("az-func-tool", azFuncOptions);
         var funcTool = project.addFunctionTool("func-tool", "myFunc", "{}");
 
         // Prompt Agent

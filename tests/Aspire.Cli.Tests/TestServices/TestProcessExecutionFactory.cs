@@ -20,7 +20,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 
     internal static IProcessExecutionFactory CreateForCliGuardian(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
     {
-        var factory = new ProcessExecutionFactory(environment, logger);
+        var factory = new ProcessExecutionFactory(environment, new Aspire.Shared.TemporaryStorage(), logger);
         static void ConfigureGuardian(ProcessInvocationOptions options)
         {
             // MTP cannot re-enter guardian mode. Only replace the executable and argv:

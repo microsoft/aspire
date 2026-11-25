@@ -19,7 +19,7 @@ namespace Aspire.Dashboard.Model;
 /// share them and they stay valid when replicas get new instance names.
 /// </para>
 /// <para>
-/// Pins describe the application rather than a single run, so they're kept in the browser's local storage under a key
+/// Pins describe the application rather than a single run, so they're kept in protected browser local storage under a key
 /// scoped to the application name. The store is scoped to a circuit. Reads are synchronous and return nothing until
 /// <see cref="EnsureLoadedAsync"/> has read the stored pins, which raises <see cref="Changed"/>. Changes are merged
 /// with pins saved by other tabs of the same browser rather than replacing them.
@@ -27,11 +27,15 @@ namespace Aspire.Dashboard.Model;
 /// </remarks>
 public sealed class MetricPinStore
 {
-    private readonly LocalStorageSetting<List<MetricPin>> _setting;
+    internal const int MaxSavedPins = 50;
 
-    public MetricPinStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
+    private readonly LocalStorageSetting<List<MetricPin>> _setting;
+    private readonly ILogger<MetricPinStore> _logger;
+
+    public MetricPinStore(ILocalStorage localStorage, LocalStorageLocks locks, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
-        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger,
+        _logger = logger;
+        _setting = new(localStorage, locks, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
             NormalizePins, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
     }
 
@@ -73,12 +77,12 @@ public sealed class MetricPinStore
         _setting.Read(pins => pins.Any(pin => resourceNames.Any(name => pin.Matches(name, key))));
 
     /// <summary>
-    /// Pins or unpins an instrument for each of <paramref name="resourceNames"/>. Pinning an instrument again for a
-    /// resource lists it last.
+    /// Pins or unpins an instrument for each of <paramref name="resourceNames"/>. A pin operation is rejected if
+    /// the new pins would exceed the saved pin limit.
     /// </summary>
-    public void SetPinned(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
+    internal Task<SettingUpdateResult> SetPinnedAsync(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
     {
-        _setting.Update(pins =>
+        return _setting.UpdateAsync(pins =>
         {
             var changed = false;
             foreach (var name in resourceNames)
@@ -86,9 +90,17 @@ public sealed class MetricPinStore
                 changed |= pinned
                     ? AddPin(pins, new MetricPin(name, key.MeterName, key.InstrumentName))
                     : pins.RemoveAll(pin => pin.Matches(name, key)) > 0;
+                if (pinned && pins.Count > MaxSavedPins)
+                {
+                    // TODO: If users hit this limit, let them remove saved pins without matching telemetry.
+                    // Those pins count toward the limit but can't be removed in the dashboard.
+                    // The candidate value is discarded, so none of the pins in this selection are saved.
+                    _logger.LogWarning("Cannot pin the instrument for the selection because it would exceed the limit of {Limit} saved metric pins.", MaxSavedPins);
+                    return SettingUpdateResult.LimitReached;
+                }
             }
 
-            return changed;
+            return changed ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged;
         });
     }
 
@@ -103,14 +115,17 @@ public sealed class MetricPinStore
         return true;
     }
 
-    // Stored pins can be edited in the browser, so drop incomplete and repeated ones. Pins saved before they were
-    // scoped to resources, such as [{"meterName":"System.Runtime","instrumentName":"dotnet.gc.heap.total_allocated"}],
-    // have no resource name and are dropped too: they can't be attributed to the resources they were meant for.
+    // Drop incomplete and repeated pins. A pin without a resource name can't be attributed to a resource.
     private static List<MetricPin> NormalizePins(List<MetricPin>? stored)
     {
         var pins = new List<MetricPin>();
         foreach (var pin in stored ?? [])
         {
+            if (pins.Count == MaxSavedPins)
+            {
+                break;
+            }
+
             if (!string.IsNullOrEmpty(pin.ResourceName) && !string.IsNullOrEmpty(pin.MeterName) && !string.IsNullOrEmpty(pin.InstrumentName))
             {
                 AddPin(pins, pin);

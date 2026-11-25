@@ -48,6 +48,8 @@ internal sealed class TestDcpExecutor : IDcpExecutor
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
+    public Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+
     /// <summary>DCP resource names passed to <see cref="StopResourceAsync"/>, in the order they were requested.</summary>
     public IReadOnlyCollection<string> StoppedResources => _stoppedResources;
 

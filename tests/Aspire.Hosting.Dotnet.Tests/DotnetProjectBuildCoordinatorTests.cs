@@ -2647,7 +2647,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             .WithEnvironment(context => context.EnvironmentVariables["RUNTIME_ONLY"] = "runtime");
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
         var resolverBuildEnvironment = string.Empty;
-        metadata.RunPropertiesResolver = (_, _, buildEnvironment, _, _, _) =>
+        metadata.RunPropertiesResolver = (_, _, buildEnvironment, _, _, _, _) =>
         {
             resolverBuildEnvironment = buildEnvironment["BUILD_FLAVOR"];
             return Task.FromResult(new DotnetProjectRunProperties(
@@ -3052,7 +3052,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithWorkingDirectory(runtimeWorkingDirectory);
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
-        metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
+        metadata.RunPropertiesResolver = (_, _, _, _, _, _, _) =>
             Task.FromResult(new DotnetProjectRunProperties(
                 "resolved-command",
                 "--from-resolver",
@@ -3106,7 +3106,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var sdkWorkingDirectory = firstSdkWorkingDirectory;
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
-        metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
+        metadata.RunPropertiesResolver = (_, _, _, _, _, _, _) =>
             Task.FromResult(new DotnetProjectRunProperties(
                 "resolved-command",
                 "--from-resolver",
@@ -4263,7 +4263,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 #pragma warning restore ASPIREPERSISTENCE001
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
         var resolverCallCount = 0;
-        metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
+        metadata.RunPropertiesResolver = (_, _, _, _, _, _, _) =>
         {
             Interlocked.Increment(ref resolverCallCount);
             Assert.True(File.Exists(sentinelPath));

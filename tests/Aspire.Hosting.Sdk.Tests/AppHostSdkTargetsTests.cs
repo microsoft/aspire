@@ -431,6 +431,128 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, true, false, true)]
+    public async Task RepoTestingTargetsResolveHostingTasksForRunHook(bool overrideTasksAssembly, bool buildMissingTasks, bool disableTaskHostFactory, bool designTimeBuild)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceRepoRoot = GetRepoRoot();
+        var repoRoot = Path.Combine(workspace.Path, "repo");
+        var tasksAssembly = GetAspireHostingTasksAssemblyPath();
+        var configurationDirectory = Directory.GetParent(tasksAssembly)!.Parent!;
+        var repoTestingTargets = SecurityElement.Escape(Path.Combine(sourceRepoRoot, "tests", "Shared", "RepoTesting", "Aspire.RepoTesting.targets"));
+        var artifactsPath = Path.Combine(workspace.Path, "artifacts");
+        var expectedAssembly = Path.Combine(workspace.Path, "custom-tasks-output", "Aspire.Hosting.Tasks.dll");
+        var overrideAssembly = Path.Combine(workspace.Path, "override", "Aspire.Hosting.Tasks.dll");
+        var tasksAssemblyOverride = overrideTasksAssembly
+            ? $"<_AspireTasksAssembly>{SecurityElement.Escape(overrideAssembly)}</_AspireTasksAssembly>"
+            : string.Empty;
+        var taskHostFactoryOverride = disableTaskHostFactory
+            ? "<_AspireUseTaskHostFactory>false</_AspireUseTaskHostFactory>"
+            : string.Empty;
+
+        foreach (var target in new[]
+        {
+            Path.Combine("src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets"),
+            Path.Combine("src", "Aspire.AppHost.Sdk", "SDK", "Sdk.in.targets")
+        })
+        {
+            var destination = Path.Combine(repoRoot, target);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(Path.Combine(sourceRepoRoot, target), destination);
+        }
+
+        var taskProject = Path.Combine(repoRoot, "src", "Aspire.Hosting.Tasks", "Aspire.Hosting.Tasks.csproj");
+        Directory.CreateDirectory(Path.GetDirectoryName(taskProject)!);
+        await File.WriteAllTextAsync(taskProject, $$"""
+            <Project>
+              <Target Name="Build" Returns="{{SecurityElement.Escape(expectedAssembly)}}">
+                <Error Condition="'$(DesignTimeBuild)' == 'true' or '$(BuildingProject)' == 'false' or '$(SkipCompilerExecution)' == 'true'"
+                       Text="The tasks project requires a full build." />
+                <MakeDir Directories="{{SecurityElement.Escape(Path.GetDirectoryName(expectedAssembly))}}" />
+                <Copy SourceFiles="{{SecurityElement.Escape(tasksAssembly)}}" DestinationFiles="{{SecurityElement.Escape(expectedAssembly)}}" />
+              </Target>
+            </Project>
+            """);
+
+        if (overrideTasksAssembly)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(overrideAssembly)!);
+            File.Copy(tasksAssembly, overrideAssembly);
+        }
+        else if (!buildMissingTasks)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(expectedAssembly)!);
+            File.Copy(tasksAssembly, expectedAssembly);
+        }
+        else
+        {
+            Assert.False(File.Exists(expectedAssembly));
+        }
+
+        // A later project-reference build must be able to replace the source assembly
+        // after the run hook has loaded its copy.
+        var checkUnlockedSource = overrideTasksAssembly ? string.Empty : $$"""
+              <Target Name="VerifySourceTasksAreNotLocked" AfterTargets="_ResolveAspireCliInvocation">
+                <Copy SourceFiles="{{SecurityElement.Escape(tasksAssembly)}}" DestinationFiles="{{SecurityElement.Escape(expectedAssembly)}}" Retries="0" />
+              </Target>
+            """;
+        var projectFile = Path.Combine(workspace.Path, "AppHost.csproj");
+        await File.WriteAllTextAsync(projectFile, $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+                <RepoRoot>{{SecurityElement.Escape(Path.TrimEndingDirectorySeparator(repoRoot) + Path.DirectorySeparatorChar)}}</RepoRoot>
+                <ArtifactsBinDir>{{SecurityElement.Escape(Path.TrimEndingDirectorySeparator(artifactsPath) + Path.DirectorySeparatorChar)}}</ArtifactsBinDir>
+                <Configuration>{{configurationDirectory.Name}}</Configuration>
+                <AspireUseCliBundle>true</AspireUseCliBundle>
+                <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+                {{tasksAssemblyOverride}}
+                {{taskHostFactoryOverride}}
+              </PropertyGroup>
+              <Import Project="{{repoTestingTargets}}" />
+              {{checkUnlockedSource}}
+            </Project>
+            """);
+
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var environment = CreatePathEnvironment(fakeCliDirectory.FullName);
+        environment["AspireCliPath"] = string.Empty;
+        environment["_AspireTasksAssembly"] = string.Empty;
+        environment["_AspireUseTaskHostFactory"] = string.Empty;
+        environment["ASPIRE_SUPPRESS_CLI_RUN_HOOK"] = string.Empty;
+
+        var project = new RunHookProject(workspace.Path, projectFile);
+        var properties = await GetTargetPropertiesAsync(
+            project,
+            "ComputeRunArguments",
+            "RunCommand,RunArguments,_AspireResolvedCliInvocationMode,_AspireTasksAssembly,_AspireUseTaskHostFactory",
+            extraArguments: designTimeBuild ? ["-p:DesignTimeBuild=true", "-p:BuildingProject=false", "-p:SkipCompilerExecution=true"] : null,
+            environment: environment);
+
+        if (overrideTasksAssembly)
+        {
+            Assert.Equal(overrideAssembly, properties["_AspireTasksAssembly"]);
+            Assert.False(File.Exists(expectedAssembly));
+        }
+        else
+        {
+            Assert.True(File.Exists(expectedAssembly));
+            Assert.True(File.Exists(Path.GetFullPath(properties["_AspireTasksAssembly"], workspace.Path)));
+        }
+        Assert.Equal(disableTaskHostFactory ? "false" : "true", properties["_AspireUseTaskHostFactory"]);
+        Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Equal(GetExpectedAspireRunCommand(aspireCliPath), properties["RunCommand"]);
+        Assert.Equal(GetExpectedAspireRunArguments(aspireCliPath, project), properties["RunArguments"]);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("DnxPinned")]
     [InlineData("dNxPiNnEd")]

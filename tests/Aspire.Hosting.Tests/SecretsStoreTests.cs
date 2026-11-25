@@ -19,7 +19,7 @@ public class SecretsStoreTests
     {
         return new UserSecretsManagerFactory(
             new FileSystemService(
-                new ConfigurationBuilder().Build()));
+                new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage()));
     }
 
     [Fact]

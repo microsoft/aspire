@@ -396,7 +396,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         FileInfo scriptFile,
         ProcessInvocationOptions options)
     {
-        var factory = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         var startInfo = CreateStartInfo(scriptFile);
 
         return factory.CreateExecution(

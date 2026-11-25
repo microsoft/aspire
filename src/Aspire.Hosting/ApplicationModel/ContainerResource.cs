@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -23,9 +22,24 @@ public class ContainerResource(string name, string? entrypoint = null)
     public string? Entrypoint { get; set; } = entrypoint;
 
     /// <summary>
-    /// Should any custom arguments be wrapped in -c "&gt;values&lt;"?
+    /// Gets or sets whether to pass custom arguments to the container entrypoint as shell command text.
     /// </summary>
-    [Experimental("ASPIRECONTAINERSHELLEXECUTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    /// <remarks>
+    /// When <see langword="true"/>, custom arguments are joined with spaces and passed as a single command
+    /// following <c>-c</c>. Arguments are not quoted or escaped; callers must supply trusted shell command text
+    /// with any necessary quoting. This property does not select a shell: <see cref="Entrypoint"/> or the image's
+    /// default entrypoint must be a shell that supports <c>-c</c>, such as <c>/bin/sh</c>.
+    /// When <see langword="false"/> or <see langword="null"/> (the default), arguments are passed individually
+    /// without shell wrapping. This property controls local container orchestration, not published deployment output.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var container = builder.AddContainer("hello", "alpine")
+    ///     .WithEntrypoint("/bin/sh")
+    ///     .WithArgs("echo", "'hello world'");
+    /// container.Resource.ShellExecution = true;
+    /// </code>
+    /// </example>
     public bool? ShellExecution { get; set; }
 
     private string DebuggerToString()

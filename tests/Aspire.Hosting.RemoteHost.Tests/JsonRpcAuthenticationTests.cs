@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Shared;
+using Aspire.Shared.Tests;
 using Aspire.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -140,7 +141,8 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             configuration,
             services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<JsonRpcServer>.Instance,
-            new RemoteHostProfilingTelemetry(configuration));
+            new RemoteHostProfilingTelemetry(configuration),
+            TestTemporaryStorage.Create());
 
         await server.StartAsync(CancellationToken.None);
         await Assert.ThrowsAsync<IOException>(() => server.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(10)));
@@ -167,7 +169,8 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             configuration,
             services.GetRequiredService<IServiceScopeFactory>(),
             logger,
-            new RemoteHostProfilingTelemetry(configuration));
+            new RemoteHostProfilingTelemetry(configuration),
+            TestTemporaryStorage.Create());
 
         await server.StartAsync(TestContext.Current.CancellationToken);
         await server.Listening.DefaultTimeout();
@@ -530,7 +533,8 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             configuration,
             services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<JsonRpcServer>.Instance,
-            new RemoteHostProfilingTelemetry(configuration));
+            new RemoteHostProfilingTelemetry(configuration),
+            TestTemporaryStorage.Create());
 
         await server.StartAsync(TestContext.Current.CancellationToken);
 
@@ -553,7 +557,8 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             configuration,
             services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<JsonRpcServer>.Instance,
-            new RemoteHostProfilingTelemetry(configuration));
+            new RemoteHostProfilingTelemetry(configuration),
+            TestTemporaryStorage.Create());
 
         using var stopped = new CancellationTokenSource();
         stopped.Cancel();
@@ -676,6 +681,7 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             services.AddSingleton<Language.IntegrationHostLauncher>();
             services.AddSingleton(sp => new Language.IntegrationHostConfiguration(sp.GetRequiredService<IConfiguration>()));
             services.AddSingleton<Language.IntegrationHostProcessLauncher>();
+            services.AddSingleton(TestTemporaryStorage.Create());
             services.AddSingleton<IChildProcessFactory, ChildProcessFactory>();
             services.AddSingleton(TimeProvider.System);
 

@@ -1341,7 +1341,7 @@ internal static partial class DotnetProjectBuildCoordinator
 
                 var responseFile = await DotnetProjectBuildEnvironment.CreateResponseFileAsync(
                     evaluation,
-                    context.Logger,
+                    context.ExecutionContext.Services.GetRequiredService<IFileSystemService>().TempDirectory,
                     context.CancellationToken).ConfigureAwait(false);
                 if (responseFile is null)
                 {

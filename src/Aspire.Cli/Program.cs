@@ -398,6 +398,7 @@ public class Program
         // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
         builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
+        builder.Services.AddSingleton<Aspire.Shared.ITemporaryStorage, Aspire.Shared.TemporaryStorage>();
         builder.Services.AddSingleton<IWindowsRegistryReader>(sp =>
         {
             var environment = sp.GetRequiredService<IEnvironment>();
@@ -514,6 +515,7 @@ public class Program
             return CertificateManager.Create(
                 sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(),
                 environment,
+                sp.GetRequiredService<Aspire.Shared.ITemporaryStorage>(),
                 nssDbOverride);
         });
         builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();

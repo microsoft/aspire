@@ -33,7 +33,7 @@ public sealed class DcpHostNotificationTests
 {
     private static Locations CreateTestLocations()
     {
-        var directoryService = new FileSystemService(new ConfigurationBuilder().Build());
+        var directoryService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         return new Locations(directoryService);
     }
 
@@ -733,7 +733,7 @@ public sealed class DcpHostNotificationTests
         // Disposing the managed file system service must therefore not delete the folder once DCP has been launched,
         // but the folder must still be deleted when the DCP launcher reports that startup failed.
         var launcherDir = Directory.CreateTempSubdirectory("aspire-dcp-launcher");
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         var locations = new Locations(fileSystemService);
         var dcpOptions = new DcpOptions { CliPath = CreateFakeDcpLauncher(launcherDir.FullName, launcherExitCode) };
         var dcpHost = new DcpHost(
@@ -962,7 +962,7 @@ public sealed class DcpHostNotificationTests
     [Fact]
     public void DcpSessionFolder_IsDeletedOnDisposeWhenDcpWasNotStarted()
     {
-        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build(), new Aspire.Shared.TemporaryStorage());
         var locations = new Locations(fileSystemService);
         var sessionDir = locations.DcpSessionDir;
         File.WriteAllText(locations.DcpKubeconfigPath, "kubeconfig");

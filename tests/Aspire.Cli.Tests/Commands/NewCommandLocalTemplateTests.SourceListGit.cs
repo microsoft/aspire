@@ -244,7 +244,7 @@ public partial class NewCommandLocalTemplateTests
         };
         var services = CreateRealGitTemplateSourceServices(workspace, interaction, git, source);
         services.AddSingleton<IProcessExecutionFactory>(
-            new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
+            new ProcessExecutionFactory(new HostEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance));
         using var provider = services.BuildServiceProvider();
         _ = provider.GetRequiredService<IGitCommandRunner>();
         var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(git.RunCallback);

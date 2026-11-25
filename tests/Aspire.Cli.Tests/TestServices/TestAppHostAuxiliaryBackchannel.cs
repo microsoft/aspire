@@ -40,6 +40,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public bool SupportsV3 { get; set; }
     public bool SupportsTerminalsV1 { get; set; } = true;
     public bool SupportsResourceSnapshotVersionsV1 { get; set; }
+    public bool SupportsStopResourceCleanupV1 { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the resource snapshots to return from GetResourceSnapshotsAsync and WatchResourceSnapshotsAsync.
@@ -74,6 +75,14 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     private int _stopAppHostCallCount;
     public int StopAppHostCallCount => Volatile.Read(ref _stopAppHostCallCount);
     public Func<CancellationToken, Task<bool>>? StopAppHostHandler { get; set; }
+
+    private int _stopAppHostAndWaitForResourceCleanupCallCount;
+    public int StopAppHostAndWaitForResourceCleanupCallCount => Volatile.Read(ref _stopAppHostAndWaitForResourceCleanupCallCount);
+
+    /// <summary>
+    /// Gets or sets the handler for StopAppHostAndWaitForResourceCleanupAsync. By default the teardown is confirmed.
+    /// </summary>
+    public Func<CancellationToken, Task<bool>>? StopAppHostAndWaitForResourceCleanupHandler { get; set; }
 
     /// <summary>
     /// Gets or sets the function to call when CallResourceMcpToolAsync is invoked.
@@ -297,6 +306,12 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     {
         Interlocked.Increment(ref _stopAppHostCallCount);
         return StopAppHostHandler?.Invoke(cancellationToken) ?? Task.FromResult(StopAppHostResult);
+    }
+
+    public Task<bool> StopAppHostAndWaitForResourceCleanupAsync(CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _stopAppHostAndWaitForResourceCleanupCallCount);
+        return StopAppHostAndWaitForResourceCleanupHandler?.Invoke(cancellationToken) ?? Task.FromResult(true);
     }
 
     /// <summary>
