@@ -1067,6 +1067,8 @@ const app = document.getElementById("app");
 const loadbar = document.getElementById("loadbar");
 let state = null;
 let prefs = null;
+let settingsPrefsRequest = null;
+let settingsPrefsError = null;
 let view = "queue";       // queue | settings | accounts | notifications | filters
 let keysBound = false;
 let cbMenuBound = false;
@@ -1249,6 +1251,29 @@ async function readJson(res) {
   return data;
 }
 
+function loadSettingsPrefs() {
+  if (settingsPrefsRequest) return settingsPrefsRequest;
+  if (prefs) return Promise.resolve();
+  settingsPrefsError = null;
+  const request = (async () => {
+    try {
+      const data = await readJson(await fetch("api/prefs"));
+      if (!data.prefs || typeof data.prefs !== "object") throw new Error("Invalid settings response");
+      if (!prefs) {
+        prefs = data.prefs;
+        if (view === "settings") render();
+      }
+    } catch (e) {
+      if (!prefs) {
+        settingsPrefsError = String((e && e.message) || e);
+        if (view === "settings") render();
+      }
+    }
+  })();
+  settingsPrefsRequest = request.finally(() => { settingsPrefsRequest = null; });
+  return settingsPrefsRequest;
+}
+
 async function load() {
   // Capture the applied revision at request start. GET /api/state may be served stale-while-
   // revalidate and can still be in flight when an SSE 'state' event (applyPushedState) applies a
@@ -1266,15 +1291,18 @@ async function load() {
     // state/lastAppliedSeq backward. Mirrors the withRefresh/applyPushedState gate.
     const seq = data.dashboard && data.dashboard.seq;
     if (typeof seq !== "number" || seq > lastAppliedSeq) {
-      adoptState(data);
-      changed = true;
+      if (view !== "queue" && (state || (view === "settings" && prefs))) stashPendingState(data);
+      else {
+        adoptState(data);
+        changed = true;
+      }
     }
   } catch (e) {
     // Only publish this failure if no newer revision was applied while the GET was pending. A late
     // failure from a superseded request must not clobber the newer valid state (or its banner).
     if (lastAppliedSeq === startSeq) {
       loadError = String((e && e.message) || e);
-      changed = true;
+      changed = !(view === "settings" && prefs);
     }
   }
   if (changed) render(); else updateRefreshControls();
@@ -1294,7 +1322,7 @@ async function withRefresh(fn, deferWhileEditing = false) {
       // (which would show stale data and corrupt later seq gates). Mirrors applyPushedState's gate.
       const seq = data.dashboard.seq;
       if (typeof seq !== "number" || seq > lastAppliedSeq) {
-        if (deferWhileEditing && view !== "queue" && state) stashPendingState(data);
+        if (deferWhileEditing && view !== "queue" && (state || (view === "settings" && prefs))) stashPendingState(data);
         else {
           adoptState(data);
           changed = true;
@@ -1402,7 +1430,7 @@ function endProgress() {
 function applyPushedState(payload) {
   if (!payload || !payload.dashboard) return;
   if (view !== "queue") {
-    if (!state) { adoptState(payload); render(); }
+    if (!state && !(view === "settings" && prefs)) { adoptState(payload); render(); }
     else stashPendingState(payload);
     return;
   }
@@ -1470,8 +1498,10 @@ function onUpdateAvailable(payload) {
 
 function onPreferences(nextPrefs) {
   if (!nextPrefs || typeof nextPrefs !== "object") return;
+  const showSettings = view === "settings" && !prefs;
   const wasEnabled = autoApplyEnabled();
   prefs = nextPrefs;
+  if (showSettings) render();
   updateRefreshControls();
   if (!wasEnabled && autoApplyEnabled() && updateAvailable) {
     applyAvailableUpdate();
@@ -1481,10 +1511,14 @@ function onPreferences(nextPrefs) {
 function onSnapshot(payload) {
   onPollSchedule(payload);
   if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
+  const showSettings = view === "settings" && !prefs;
   if (payload.prefs && typeof payload.prefs === "object") prefs = payload.prefs;
   // Initial load already reads the complete cache. On reconnect, replay either applies the missed
   // state automatically or restores the pending-update affordance without touching the board.
-  if (!state) return;
+  if (!state) {
+    if (showSettings && prefs) render();
+    return;
+  }
   if (autoApplyEnabled()) load(); else onUpdateAvailable(payload);
 }
 
@@ -2156,6 +2190,7 @@ function goView(next, forward) {
   if (view === "accounts" && next !== "accounts") { for (const k in editingByAcct) editingByAcct[k] = -1; }
   prevRank = RANK[view] || 0;
   view = next;
+  if (next === "settings" && !prefs) loadSettingsPrefs();
   // Returning to the queue is the moment to fold in any dashboard that streamed in while
   // the user was editing a form on another view.
   if (next === "queue" && pendingState) {
@@ -3454,28 +3489,33 @@ function render(forward) {
   // Drop any split-button menu we portaled to <body> before rebuilding the subtree, so an
   // open menu never survives a re-render as a detached orphan carrying stale click handlers.
   document.querySelectorAll("body > .cb-menu").forEach((m) => m.remove());
-  if (!state) {
-    const loading = '<div class="state" role="status"><h2>Loading ' +
-      esc(({ review: "Review", issues: "Issues", ship: "Ship", health: "Health" })[requestedMode || "review"]) +
-      '</h2><p>Checking watched repositories. You can switch tabs while this loads.</p></div>';
-    const error = '<div class="state"><div class="ico">' + ICONS.alert + '</div><h2>Could not load</h2><p>' + esc(loadError) +
+  if (!state && !(view === "settings" && prefs)) {
+    const settings = view === "settings";
+    const errorMessage = settings ? settingsPrefsError : loadError;
+    const loading = settings
+      ? '<div class="state" role="status"><h2>Loading settings</h2></div>'
+      : '<div class="state" role="status"><h2>Loading ' +
+        esc(({ review: "Review", issues: "Issues", ship: "Ship", health: "Health" })[requestedMode || "review"]) +
+        '</h2><p>Checking watched repositories. You can switch tabs while this loads.</p></div>';
+    const error = '<div class="state"><div class="ico">' + ICONS.alert + '</div><h2>Could not load</h2><p>' + esc(errorMessage) +
       '</p><div class="state-cta"><button class="btn" id="retry-btn">Try again</button></div></div>';
-    app.innerHTML = topbarHtml() + (loadError ? error : loading);
+    app.innerHTML = topbarHtml() + (errorMessage ? error : loading);
     wire();
-    const rt = document.getElementById("retry-btn"); if (rt) rt.addEventListener("click", load);
+    const rt = document.getElementById("retry-btn");
+    if (rt) rt.addEventListener("click", settings ? () => { loadSettingsPrefs(); render(); } : load);
     updateRefreshControls();
     return;
   }
   app.removeAttribute("aria-busy");
 
   let inner;
-  if (view === "queue" && requestedMode && requestedMode !== state.mode) {
+  if (view === "settings") inner = settingsView();
+  else if (view === "queue" && requestedMode && requestedMode !== state.mode) {
     const label = { review: "Review", issues: "Issues", ship: "Ship", health: "Health" }[requestedMode];
     inner = '<div class="state" role="status"><h2>Loading ' + esc(label) +
       '</h2><p>Checking watched repositories. You can switch tabs or open Settings while this loads.</p></div>';
   }
   else if (!state.authenticated && view === "queue" && state.mode !== "health") inner = authPicker();
-  else if (view === "settings") inner = settingsView();
   else if (view === "filters") inner = filtersView();
   else if (view === "accounts") inner = accountsView();
   else if (view === "notifications") inner = notificationsView();

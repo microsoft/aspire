@@ -576,6 +576,31 @@ test("identity and repository probes run concurrently and still select the stron
   assert.equal(accounts[0].accessible, 1);
 });
 
+test("a failed repository probe does not discard another usable credential", async () => {
+  resetAccountEnv({
+    GH_TOKEN: "failed-token",
+    COPILOT_GH_ACCOUNT_github_2E_com_octo: "working-token",
+  });
+  const base = accountFetch();
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("r0: repository") && options.headers?.Authorization === "bearer failed-token") {
+      throw new Error("Repository probe timed out");
+    }
+    return base(url, options);
+  };
+  const { resolveAccounts } = await import(`./accounts.mjs?test=failed-repository-probe-${Date.now()}`);
+
+  const { accounts, tokenById } = await resolveAccounts(() => ["microsoft/aspire"], () => true);
+
+  assert.equal(accounts.length, 1);
+  assert.equal(accounts[0].status, "ok");
+  assert.equal(tokenById.get(accounts[0].id), "working-token");
+  const failed = accounts[0].sources.find((source) => source.source === "env");
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.reason, "Repository probe timed out");
+});
+
 test("account discovery settles and reports a stalled identity response body", { timeout: 5000 }, async (t) => {
   resetAccountEnv({
     COPILOT_GH_ACCOUNT_github_2E_com_octo: "token-dotcom",

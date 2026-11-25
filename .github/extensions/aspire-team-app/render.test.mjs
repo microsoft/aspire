@@ -294,6 +294,84 @@ test("navigation is available before the first dashboard and a completed tab ren
   assert.match(app.innerHTML, /No health sources configured/);
 });
 
+test("settings load independently and keep edits while the first dashboard arrives", async () => {
+  const stateRequests = [];
+  const app = countingApp();
+  const { api } = createRendererHarness({
+    app,
+    fetch: (url) => {
+      if (String(url) === "api/prefs") return Promise.resolve(jsonResponse({ prefs: rendererPrefs() }));
+      assert.equal(String(url), "api/state");
+      return new Promise((resolve) => stateRequests.push(resolve));
+    },
+  });
+
+  api.goView("settings");
+  await api.loadSettingsPrefs();
+  assert.match(app.innerHTML, /<h2>Settings<\/h2>/);
+  assert.match(app.innerHTML, /id="release-input" value="13\.1"/);
+  const settings = app.innerHTML;
+  const renders = app.renders;
+
+  const loading = api.load();
+  stateRequests[1](jsonResponse({ dashboard: { ...reviewDashboard(1), seq: 1 }, prefs: rendererPrefs() }));
+  await loading;
+  assert.equal(app.renders, renders);
+  assert.equal(app.innerHTML, settings);
+  assert.equal(api.getState(), null);
+  api.applyPushedState({ dashboard: { ...reviewDashboard(2), seq: 2 }, prefs: rendererPrefs() });
+  assert.equal(app.renders, renders);
+  assert.equal(app.innerHTML, settings);
+
+  api.goView("queue");
+  assert.equal(api.getState().seq, 2);
+  assert.match(app.innerHTML, /PR 2/);
+});
+
+test("settings use pushed preferences without repainting when the initial read finishes", async () => {
+  for (const source of ["preferences", "snapshot"]) {
+    let resolvePrefs;
+    const app = countingApp();
+    const { api } = createRendererHarness({
+      app,
+      fetch: (url) => String(url) === "api/prefs"
+        ? new Promise((resolve) => { resolvePrefs = resolve; })
+        : new Promise(() => {}),
+    });
+
+    api.goView("settings");
+    assert.match(app.innerHTML, /Loading settings/);
+    if (source === "preferences") api.onPreferences(rendererPrefs());
+    else api.onSnapshot({ seq: 1, prefs: rendererPrefs() });
+    assert.match(app.innerHTML, /<h2>Settings<\/h2>/);
+    const renders = app.renders;
+    const reading = api.loadSettingsPrefs();
+    resolvePrefs(jsonResponse({ prefs: rendererPrefs() }));
+    await reading;
+    assert.equal(app.renders, renders);
+  }
+});
+
+test("initial settings report a preference read failure and allow retry", async () => {
+  let attempts = 0;
+  const { app, api } = createRendererHarness({
+    fetch: (url) => {
+      if (String(url) !== "api/prefs") return new Promise(() => {});
+      attempts++;
+      return Promise.resolve(attempts === 1
+        ? jsonResponse({ error: "Preferences unavailable" }, { ok: false, status: 500 })
+        : jsonResponse({ prefs: rendererPrefs() }));
+    },
+  });
+
+  api.goView("settings");
+  await api.loadSettingsPrefs();
+  assert.match(app.innerHTML, /Preferences unavailable/);
+  assert.match(app.innerHTML, /id="retry-btn"/);
+  await api.loadSettingsPrefs();
+  assert.match(app.innerHTML, /<h2>Settings<\/h2>/);
+});
+
 test("partial updates keep a useful board stable until the complete result arrives", () => {
   const app = countingApp();
   const { api } = createRendererHarness({ app, fetch: () => new Promise(() => {}) });
@@ -2158,7 +2236,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  loadSettingsPrefs,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
   Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill, setMode, goView })", sandbox));

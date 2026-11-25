@@ -59,6 +59,7 @@ let nextPollAt = null;
 // Monotonic semantic revision. It advances only when dashboard content changes, so a no-op poll
 // cannot manufacture an update on reconnect merely because fetchedAt changed.
 let stateSeq = 0;
+let loadGeneration = 0;
 let prefsRevision = 0;
 let prefsWrites = 0;
 // Logger captured from the most recent startInstance so background (non-request) work —
@@ -128,8 +129,7 @@ function accountsKey(prefs) {
 async function resolveAuth(prefs, { reprobe = false } = {}) {
   const key = accountsKey(prefs);
   if (reprobe) {
-    authEpoch++;
-    authCache = null;
+    invalidateAuth();
   } else {
     const fresh = authCache && Date.now() - authCache.at < AUTH_TTL && authCache.key === key;
     if (fresh) return authCache;
@@ -200,13 +200,14 @@ async function probeAuth(prefs, key, epoch) {
 
   // An explicit rescan or account edit may have superseded this probe.
   if (epoch !== authEpoch) return resolveAuth(currentPrefs ?? prefs);
-  authCache = { key: accountsKey(prefs), accounts, tokenById, at: Date.now() };
+  authCache = { key: accountsKey(prefs), accounts, tokenById, at: Date.now(), epoch };
   return authCache;
 }
 
 function invalidateAuth() {
   authEpoch++;
   authCache = null;
+  modeCaches.clear();
 }
 
 // Decorate a loaded dashboard with the account context the canvas actions in extension.mjs
@@ -271,7 +272,16 @@ function dashboardInputKey(prefs) {
 
 function cachedMode(prefs) {
   const saved = modeCaches.get(prefs.mode);
-  return saved?.inputKey === dashboardInputKey(prefs) ? saved : null;
+  return saved?.authEpoch === authEpoch && saved.inputKey === dashboardInputKey(prefs) ? saved : null;
+}
+
+function saveModeCache(snapshot) {
+  const saved = modeCaches.get(snapshot.dashboard.mode);
+  // Review and Ship can finish out of order while sharing the same PR data.
+  if (saved?.authEpoch === snapshot.authEpoch && saved.inputKey === snapshot.inputKey &&
+      saved.generation > snapshot.generation) return saved;
+  modeCaches.set(snapshot.dashboard.mode, snapshot);
+  return snapshot;
 }
 
 function activateCachedMode(prefs) {
@@ -301,13 +311,15 @@ async function computeDashboard({ progress = true, background = false } = {}, ta
   const prefsReadDuringWrite = prefsWrites > 0;
   const prefs = await loadPrefs();
   if (startingPrefsRevision === prefsRevision && prefsWrites === 0) currentPrefs = prefs;
+  task.authEpoch = authEpoch;
   const inputKey = dashboardInputKey(prefs);
   if (task.inputKey && task.inputKey !== inputKey) {
     if (modeTasks.get(task.inputKey) === task) modeTasks.delete(task.inputKey);
     task.partial = null;
   }
   const existing = modeTasks.get(inputKey);
-  if (task.parallelMode && existing && existing !== task && !existing.waitingFor && !isWaitingFor(existing, task)) {
+  if (task.parallelMode && existing && existing !== task && existing.authEpoch === authEpoch &&
+      !existing.waitingFor && !isWaitingFor(existing, task)) {
     task.waitingFor = existing;
     try {
       return await existing.promise;
@@ -329,9 +341,12 @@ async function computeDashboard({ progress = true, background = false } = {}, ta
     // Discovery failures must leave navigation available so Azure-only users can
     // reach Health and Settings. Preserve the diagnostic without claiming GitHub access.
     githubDiscoveryError = error.message;
-    auth = { accounts: [], tokenById: new Map() };
+    auth = { accounts: [], tokenById: new Map(), epoch: authEpoch };
   }
-  const loadAuthEpoch = authEpoch;
+  const loadAuthEpoch = auth.epoch;
+  if (loadAuthEpoch !== authEpoch) return computeDashboard({ progress, background }, task);
+  task.authEpoch = loadAuthEpoch;
+  const generation = ++loadGeneration;
   const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
   const accountsForLoad = active
     .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
@@ -341,7 +356,8 @@ async function computeDashboard({ progress = true, background = false } = {}, ta
   let relatedDashboard = null;
   const canStreamPartial = !background && !prefsReadDuringWrite && prefsWrites === 0
     && startingPrefsRevision === prefsRevision && cache?.dashboard?.mode !== prefs.mode && !cachedMode(prefs);
-  const isSelected = () => prefsWrites === 0 && currentPrefs && dashboardInputKey(currentPrefs) === inputKey;
+  const isSelected = () => loadAuthEpoch === authEpoch && prefsWrites === 0 && currentPrefs &&
+    dashboardInputKey(currentPrefs) === inputKey && (cachedMode(currentPrefs)?.generation ?? 0) <= generation;
   const publishProgress = (update) => {
     if (isSelected()) broadcastProgress(update);
   };
@@ -406,29 +422,45 @@ async function computeDashboard({ progress = true, background = false } = {}, ta
   // prior complete cache exists; the forced mutation compute queued behind it will publish the
   // correctly-shaped replacement.
   const latestPrefs = await loadPrefs();
-  if (relatedDashboard && loadAuthEpoch === authEpoch) {
+  if (loadAuthEpoch !== authEpoch) {
+    const saved = activateCachedMode(latestPrefs);
+    if (saved) return saved;
+    const latestTask = modeTasks.get(dashboardInputKey(latestPrefs));
+    if (latestTask && latestTask !== task && latestTask.authEpoch === authEpoch && !isWaitingFor(latestTask, task)) {
+      task.waitingFor = latestTask;
+      try {
+        return await latestTask.promise;
+      } finally {
+        task.waitingFor = null;
+      }
+    }
+    return computeDashboard({ progress, background }, task);
+  }
+  if (relatedDashboard) {
     const relatedPrefs = { ...latestPrefs, mode: relatedDashboard.mode };
     if (dashboardInputKey({ ...prefs, mode: relatedDashboard.mode }) === dashboardInputKey(relatedPrefs)) {
       relatedDashboard.githubDiscoveryError = githubDiscoveryError;
       if (githubDiscoveryError) relatedDashboard.errors.push(`GitHub account discovery: ${githubDiscoveryError}`);
       decorateDashboard(relatedDashboard, auth, active, relatedPrefs);
-      modeCaches.set(relatedDashboard.mode, {
+      saveModeCache({
         dashboard: relatedDashboard, prefs: relatedPrefs, at: Date.now(), inputKey: dashboardInputKey(relatedPrefs),
+        authEpoch: loadAuthEpoch, generation,
       });
     }
   }
   if (dashboardInputKey(prefs) !== dashboardInputKey(latestPrefs)) {
     const completedPrefs = { ...latestPrefs, mode: prefs.mode };
-    if (loadAuthEpoch === authEpoch && dashboardInputKey(prefs) === dashboardInputKey(completedPrefs)) {
+    if (dashboardInputKey(prefs) === dashboardInputKey(completedPrefs)) {
       // Keep a finished cold tab even when the user switched away while it was loading.
       decorateDashboard(dashboard, auth, active, completedPrefs);
-      modeCaches.set(prefs.mode, {
+      saveModeCache({
         dashboard, prefs: completedPrefs, at: Date.now(), inputKey: dashboardInputKey(completedPrefs),
+        authEpoch: loadAuthEpoch, generation,
       });
     }
     const saved = activateCachedMode(latestPrefs);
     if (saved) return saved;
-    if (cache) return cache;
+    if (cache?.authEpoch === authEpoch) return cache;
     // A cold tab can load independently of the superseded one. Join it instead of
     // repeating its requests, unless it is itself queued behind this computation.
     const latestTask = inflightTask;
@@ -443,11 +475,16 @@ async function computeDashboard({ progress = true, background = false } = {}, ta
     return computeDashboard({ progress, background }, task);
   }
 
+  const newer = cachedMode(latestPrefs);
+  if (newer && newer.generation > generation) return activateCachedMode(latestPrefs);
   decorateDashboard(dashboard, auth, active, latestPrefs);
   const previous = cache?.dashboard ?? null;
   const changed = dashboardChanged(previous, dashboard);
   dashboard.seq = !previous || changed ? ++stateSeq : previous.seq;
-  cache = { dashboard, prefs: latestPrefs, at: Date.now(), inputKey: dashboardInputKey(latestPrefs) };
+  cache = {
+    dashboard, prefs: latestPrefs, at: Date.now(), inputKey: dashboardInputKey(latestPrefs),
+    authEpoch: loadAuthEpoch, generation,
+  };
   modeCaches.set(dashboard.mode, cache);
   resolveSnapshot = dashboard;
 
@@ -475,9 +512,10 @@ function isWaitingFor(task, target) {
 }
 
 function startCompute(opts, force = false, reuseMode = false, parallelMode = false, requestedPrefs = null) {
-  if (inflight && !force) return inflight;
-  const prior = parallelMode ? null : inflightTask;
-  const task = { waitingFor: prior, promise: null, inputKey: null, partial: null, parallelMode };
+  const currentInflight = inflightTask?.authEpoch === authEpoch;
+  if (inflight && !force && currentInflight) return inflight;
+  const prior = parallelMode || !currentInflight ? null : inflightTask;
+  const task = { waitingFor: prior, promise: null, inputKey: null, partial: null, parallelMode, authEpoch };
   if (requestedPrefs) {
     task.inputKey = dashboardInputKey(requestedPrefs);
     modeTasks.set(task.inputKey, task);
@@ -528,7 +566,7 @@ function backgroundRefresh() {
 }
 
 async function getDashboard(force = false) {
-  if (!force && cache) {
+  if (!force && cache?.authEpoch === authEpoch) {
     // Stale-while-revalidate: hand back the cached dashboard immediately so (re)opening the
     // canvas is instant, and kick a silent background refresh once it's aged past the TTL.
     // progress:false so this passive revalidation doesn't flash the top bar — only the very
@@ -858,6 +896,9 @@ async function handle(req, res, log, instanceId) {
       recordDisplayedSnapshot(instanceId, next.dashboard);
       return send(res, 200, next);
     }
+    if (req.method === "GET" && path === "/api/prefs") {
+      return send(res, 200, { prefs: await loadPrefs() });
+    }
     if (req.method === "POST" && path === "/api/refresh") {
       const next = await getDashboard(true);
       recordDisplayedSnapshot(instanceId, next.dashboard);
@@ -1077,12 +1118,9 @@ async function handle(req, res, log, instanceId) {
       return send(res, 200, next);
     }
     if (req.method === "GET" && path === "/api/accounts") {
-      // Re-probe every detected credential against its account's watched repos.
-      const prefs = await loadPrefs();
-      const auth = await resolveAuth(prefs, { reprobe: true });
-      const next = await getDashboard(true);
+      const next = await rescanAccounts();
       recordDisplayedSnapshot(instanceId, next.dashboard);
-      return send(res, 200, { accounts: auth.accounts, ...next });
+      return send(res, 200, next);
     }
     if (req.method === "GET" && path === "/events") {
       res.writeHead(200, {
@@ -1174,10 +1212,8 @@ export async function refreshInBackground() {
 export async function rescanAccounts() {
   const prefs = await loadPrefs();
   const auth = await resolveAuth(prefs, { reprobe: true });
-  // Credentials or repository access can change without altering saved preferences.
-  modeCaches.clear();
-  const next = await getDashboard(true);
-  return { accounts: auth.accounts, activeAccounts: next.dashboard.activeAccounts ?? [], dashboard: next.dashboard };
+  const next = await startCompute(undefined, true, false, true);
+  return { accounts: auth.accounts, activeAccounts: next.dashboard.activeAccounts ?? [], ...next };
 }
 
 export async function toggleAccount(id, active) {
@@ -1205,7 +1241,7 @@ export async function setDashboardMode(mode) {
   const saved = activateCachedMode(prefs);
   if (saved) return saved;
   const task = modeTasks.get(dashboardInputKey(prefs));
-  if (task && !task.waitingFor) {
+  if (task && task.authEpoch === authEpoch && !task.waitingFor) {
     inflightTask = task;
     inflight = task.promise;
     if (task.partial && sseClients.size > 0) {

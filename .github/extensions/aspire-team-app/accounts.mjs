@@ -308,7 +308,12 @@ async function probeRepoAccess(token, repos, host) {
       return `${aliasFor(i)}: repository(owner:${JSON.stringify(owner)}, name:${JSON.stringify(name)}) { nameWithOwner }`;
     })
     .join("\n");
-  const res = await gql(token, `query { ${selections} }`, host);
+  let res;
+  try {
+    res = await gql(token, `query { ${selections} }`, host);
+  } catch (error) {
+    return { accessible: 0, total: repos.length, status: "failed", reason: String(error?.message ?? error) };
+  }
   let accessible = 0;
   if (res.data) {
     for (let i = 0; i < repos.length; i++) {
@@ -460,6 +465,7 @@ export async function resolveAccounts(reposForId, isActive) {
       p.accessible = acc.accessible;
       p.total = acc.total;
       p.status = acc.status;
+      p.reason = acc.reason ?? p.reason;
       p.hasReadOrg = (p.scopes || []).includes("read:org");
     } else {
       p.accessible = 0;
