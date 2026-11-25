@@ -161,7 +161,7 @@
                 }
                 else if (PageViewModel.Instruments == null)
                 {
-                    <div class="aspire-empty-content metrics-empty-content">
+                    <div class="aspire-empty-content aspire-page-empty-content">
                         <TelemetryEmptyContent>
                             <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />
                             @if (ViewportInformation.IsDesktop)
@@ -177,7 +177,7 @@
                 }
                 else
                 {
-                    <div class="aspire-empty-content metrics-empty-content">
+                    <div class="aspire-empty-content aspire-page-empty-content">
                         <TelemetryEmptyContent>
                             <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />
                             @Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)]

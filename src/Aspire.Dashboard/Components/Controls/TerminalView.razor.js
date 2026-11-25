@@ -306,10 +306,6 @@ function configureTerminalChrome(client, embedded) {
                 0 0 0 ${TERMINAL_PADDING - 0.5}px var(--terminal-background),
                 0 0 0 ${TERMINAL_PADDING}px color-mix(in srgb, var(--terminal-foreground) 10%, var(--terminal-background));
         }
-        :host([data-aspire-embedded]) .viewport {
-            background-color: var(--terminal-background);
-            background-image: none;
-        }
         :host([data-aspire-embedded]) .surface {
             box-shadow: none;
         }
@@ -594,6 +590,9 @@ function focusControls(state, reverse) {
         previous?.focus();
         return !!previous;
     }
+    if (state.footer.getClientRects().length === 0) {
+        return false;
+    }
     const controls = Array.from(state.footer.querySelectorAll("fluent-button, fluent-select, fluent-dropdown button[role='combobox']"))
         .filter(element => !element.disabled && element.tabIndex >= 0);
     controls[0]?.focus();
@@ -764,6 +763,7 @@ async function mountClient(state, generation, controller) {
             onLayoutChange(layout) {
                 if (current()) {
                     state.layout = layout;
+                    applyAutoFit(state);
                     notifyToolbar(state);
                 }
             },
@@ -868,6 +868,10 @@ function changeSizing(state, sizing) {
 
 function applyAutoFit(state) {
     if (!state.autoFitPending || state.readOnly || state.ended || !state.client?.connected || !isVisible(state)) {
+        return;
+    }
+    // The first frame can arrive before Hex1b measures its container. Taking primary needs a measured viewport.
+    if (!(state.layout?.content.width > 0 && state.layout.content.height > 0)) {
         return;
     }
     // Request once on opening/activation, not on role notifications: another

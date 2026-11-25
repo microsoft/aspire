@@ -63,9 +63,16 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private OverviewTelemetry? _telemetry;
     private ResourcesLayout? _subscribedLayout;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
-    private TerminalView? _terminalView;
-    private bool? _renderedTerminalFocus;
+    private int? _terminalFontSize;
+    private readonly EventCallback<TerminalToolbarState> _terminalToolbarStateChanged;
     private bool _hideEmptyPanels = true;
+
+    public ResourceOverview()
+    {
+        // The terminal reports toolbar state on every resize and connection change. A null receiver stops Blazor
+        // from re-rendering this whole page for each report; only a font change affects the window button.
+        _terminalToolbarStateChanged = new EventCallback<TerminalToolbarState>(null, (Func<TerminalToolbarState, Task>)OnTerminalToolbarStateChangedAsync);
+    }
 
     [Parameter]
     public string? ResourceName { get; set; }
@@ -134,7 +141,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
-    private bool IsTerminalFocused => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
+    private bool IsLegacyTerminalLink => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
         Resource is { } resource && CanShowTerminal(resource);
 
     // A recording's terminal endpoint would resolve through the live dashboard client, and recorded instance names can
@@ -143,8 +150,20 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private bool CanShowTerminal(ResourceViewModel resource) =>
         !DashboardClient.IsReadOnly && ResourceSelectHelpers.HasUsableTerminal(resource);
 
-    private void ToggleTerminalFocus() =>
-        NavigationManager.NavigateTo(DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, !IsTerminalFocused));
+    private string GetTerminalPageUrl(string resourceName) =>
+        ResourcesLayout!.WithCurrentResourceViewState(DashboardUrls.TerminalsUrl(resourceName));
+
+    private Task OnTerminalToolbarStateChangedAsync(TerminalToolbarState state)
+    {
+        int? fontSize = state.FontPx > 0 ? state.FontPx : null;
+        if (fontSize == _terminalFontSize)
+        {
+            return Task.CompletedTask;
+        }
+
+        _terminalFontSize = fontSize;
+        return InvokeAsync(StateHasChanged);
+    }
 
     private IReadOnlyList<IconToggleOption<bool>> PanelOptions =>
     [
@@ -158,18 +177,14 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         return InvokeAsync(StateHasChanged);
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override void OnAfterRender(bool firstRender)
     {
-        if (_renderedTerminalFocus != IsTerminalFocused)
+        // Cascading layout parameters can update before the router replaces the outgoing page.
+        if (IsLegacyTerminalLink && Resource is { } resource &&
+            NavigationManager.ToBaseRelativePath(NavigationManager.Uri).StartsWith(
+                $"{DashboardUrls.ResourceOverviewBasePath}/", StringComparison.OrdinalIgnoreCase))
         {
-            var wasRendered = _renderedTerminalFocus is not null;
-            _renderedTerminalFocus = IsTerminalFocused;
-            if (wasRendered && _terminalView is not null)
-            {
-                // Focus changes the existing card's size, not its connection. Explicit activation
-                // reapplies its sizing policy once; ordinary resizes must not fight other viewers.
-                await _terminalView.RefreshLayoutAsync();
-            }
+            NavigationManager.NavigateTo(GetTerminalPageUrl(GetResourceName(resource)), replace: true);
         }
     }
 

@@ -928,12 +928,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     internal string GetTabUrl(ResourceTab tab)
     {
-        if (!IsMultiSelection && tab is ResourceTab.Overview or ResourceTab.Terminal &&
-            CurrentTab is ResourceTab.Overview or ResourceTab.Terminal &&
-            NavigationManager.ToBaseRelativePath(NavigationManager.Uri).StartsWith(
-                $"{DashboardUrls.ResourceOverviewBasePath}/", StringComparison.OrdinalIgnoreCase))
+        if (tab == ResourceTab.Terminal && !IsTabAvailable(tab))
         {
-            return DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, focused: tab == ResourceTab.Terminal);
+            // The selection has no terminal, so open the Terminals page to choose one.
+            return DashboardUrls.TerminalsUrl();
+        }
+
+        if (_selectedResourceNames.Count == 1 && tab is ResourceTab.Overview or ResourceTab.Terminal &&
+            CurrentTab is ResourceTab.Overview or ResourceTab.Terminal)
+        {
+            return WithCurrentResourceViewState(GetTabUrl(tab, _selectedResourceNames, RouteResourceName));
         }
 
         if (tab == ResourceTab.Metrics && _selectedResourceNames.Count == 0 && !DashboardClient.IsEnabled &&
@@ -2063,16 +2067,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool CanViewResourceTerminal(ResourceViewModel resource) =>
         DashboardClient.IsEnabled && !DashboardClient.IsReadOnly && ResourceSelectHelpers.HasUsableTerminal(resource);
 
-    private string GetResourceTerminalUrl(ResourceViewModel resource)
+    private bool HasViewableResourceTerminal => !IsTelemetryPane && _resourceByName.Values.Any(CanViewResourceTerminal);
+
+    private string GetResourceTerminalUrl(ResourceViewModel resource) =>
+        WithCurrentResourceViewState(DashboardUrls.TerminalsUrl(GetResourceName(resource)));
+
+    internal string WithCurrentResourceViewState(string url)
     {
         var location = new Uri(NavigationManager.Uri);
         var query = HttpUtility.ParseQueryString(location.Query);
-        // A row shortcut selects this resource alone, even from an aggregate page such as
-        // /resources?resource=api&resource=worker&pane=tags#output. Keep the remaining view state.
+        // The destination path already identifies a single resource. Keep the remaining view state.
         query.Remove(DashboardUrls.ResourceSelectionQueryName);
-        var url = DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)) +
-            (query.Count > 0 ? $"?{query}" : string.Empty) + location.Fragment;
-        return DashboardUrls.SetResourceTerminalFocus(url, focused: true);
+        query.Remove(DashboardUrls.ResourceTerminalQueryName);
+        return url + (query.Count > 0 ? $"?{query}" : string.Empty) + location.Fragment;
     }
 
     private void NavigateToResourceTerminal(ResourceViewModel resource)
@@ -2605,8 +2612,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? DashboardUrls.ParametersUrl()
                 : DashboardUrls.AddResourceSelection(DashboardUrls.ParametersUrl(), [resourceName]),
             ResourceTab.Console => DashboardUrls.ConsoleLogsUrl(resourceName),
-            ResourceTab.Terminal => resourceName is null ? DashboardUrls.TerminalsUrl() :
-                DashboardUrls.SetResourceTerminalFocus(DashboardUrls.ResourceOverviewUrl(resourceName), focused: true),
+            ResourceTab.Terminal => DashboardUrls.TerminalsUrl(resourceName),
             ResourceTab.StructuredLogs => DashboardUrls.StructuredLogsUrl(resourceName),
             ResourceTab.Traces => DashboardUrls.TracesUrl(resourceName),
             ResourceTab.Metrics => DashboardUrls.MetricsUrl(resourceName),
@@ -2616,8 +2622,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     /// <summary>
     /// Gets the URL that selects the given resources on the current tab, falling back to the overview when none of
-    /// the resources support the current tab. Telemetry pages are kept for any selection but a single parameter,
-    /// and the current page can supply URLs that preserve its view.
+    /// the resources support the current tab. Terminals stays open when clearing the selection.
+    /// Telemetry pages are kept for any selection but a single parameter, and the current page can supply URLs that preserve its view.
     /// </summary>
     private string GetSelectionUrl(IReadOnlyList<string> resourceNames)
     {
@@ -2632,7 +2638,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }).ToList();
 
         ResourceTab tab;
-        if (IsTabAvailable(CurrentTab, selection))
+        if (IsTabAvailable(CurrentTab, selection) || (CurrentTab == ResourceTab.Terminal && selection.Count == 0))
         {
             tab = CurrentTab;
         }
@@ -2958,8 +2964,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
-        yield return CreateTab(ResourceTab.Terminal, TerminalLoc[nameof(TerminalStrings.TerminalTitle)], new Icons.Regular.Size20.WindowConsole(),
-            isVisible: IsTabAvailable(ResourceTab.Terminal) || CurrentTab == ResourceTab.Terminal);
+        // Shown whenever any resource has a terminal, not only when the selection does, so the navigation doesn't
+        // shift as the selection changes. Without a terminal in the selection it opens the Terminals page instead.
+        yield return CreateTab(ResourceTab.Terminal, Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], new Icons.Regular.Size20.WindowConsole(),
+            isVisible: HasViewableResourceTerminal || CurrentTab == ResourceTab.Terminal);
         yield return CreateTab(ResourceTab.StructuredLogs, StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)], new Icons.Regular.Size24.SlideTextSparkle(),
             isVisible: true, errorCount);
         yield return CreateTab(ResourceTab.Traces, Loc[nameof(Resources.Layout.NavMenuTracesTab)], new Icons.Regular.Size24.GanttChart(),

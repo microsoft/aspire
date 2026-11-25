@@ -43,13 +43,12 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("#overview-console-title")));
         Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Empty(cut.FindAll(".overview-terminal-card"));
-        Assert.Empty(cut.FindAll(".resource-overview.terminal-focused"));
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task FocusAndMinimize_PreserveResourcePaneCardsAndTerminalConnection(bool initiallyFocused)
+    public async Task OpenTerminal_UsesDedicatedRouteAndPreservesViewState(bool initiallyFocused)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var client = new TestDashboardClient(isEnabled: true,
@@ -61,64 +60,33 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         TerminalsSetupHelpers.SetupResourcesPage(this, viewport, client);
         var navigation = Services.GetRequiredService<NavigationManager>();
         const string overview = "/resources/shell?pane=tags#output";
-        const string focused = "/resources/shell?pane=tags&terminal=true#output";
-        navigation.NavigateTo(initiallyFocused ? focused : overview);
+        const string legacy = "/resources/shell?pane=tags&terminal=true#output";
+        const string terminalPage = "/terminals/resource/shell?pane=tags#output";
+        navigation.NavigateTo(initiallyFocused ? legacy : overview);
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
             builder.OpenComponent<ResourceOverview>(0);
             builder.AddAttribute(1, nameof(ResourceOverview.ResourceName), "shell");
             builder.CloseComponent();
         }));
-        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
         var page = cut.FindComponent<ResourceOverview>();
-        var viewer = cut.FindComponent<TerminalView>().Instance;
-        var cards = page.FindAll(".overview-card").Count;
-        Assert.True(cards > 1);
-        Assert.Equal(initiallyFocused, page.Find(".resource-overview").ClassList.Contains("terminal-focused"));
-        var documentation = page.Find(".overview-terminal-card a.overview-card-action");
-        Assert.Equal("https://aka.ms/aspire/dashboard-terminal", documentation.GetAttribute("href"));
-        Assert.Equal("_blank", documentation.GetAttribute("target"));
-        Assert.Equal("noopener noreferrer", documentation.GetAttribute("rel"));
-        Assert.Equal("More information", documentation.GetAttribute("aria-label"));
-        Assert.Equal("More information", documentation.GetAttribute("data-tooltip"));
-        var terminalActionLabel = initiallyFocused ? "Minimize terminal" : "Expand terminal";
-        var terminalAction = page.Find(".overview-terminal-card .overview-card-action:not([href])");
-        Assert.Equal(terminalActionLabel, terminalAction.GetAttribute("aria-label"));
-        Assert.Equal(terminalActionLabel, terminalAction.GetAttribute("data-tooltip"));
-
-        if (!initiallyFocused)
+        if (initiallyFocused)
         {
-            page.Find(".overview-terminal-card .overview-card-action:not([href])").Click();
-            Assert.Equal("http://localhost" + focused, navigation.Uri);
-            cut.Render();
+            cut.WaitForAssertion(() => Assert.Equal("http://localhost" + terminalPage, navigation.Uri));
+            Assert.Empty(cut.FindComponents<TerminalView>());
         }
-
-        Assert.Contains("terminal-focused", page.Find(".resource-overview").ClassList);
-        Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
-        var minimize = page.Find(".overview-terminal-card .overview-card-action:not([href])");
-        Assert.Equal("Minimize terminal", minimize.GetAttribute("aria-label"));
-        Assert.Equal("Minimize terminal", minimize.GetAttribute("data-tooltip"));
-        Assert.Equal(2, page.FindAll(".overview-terminal-card .overview-card-actions .overview-card-action").Count);
-        minimize.Click();
-        Assert.Equal("http://localhost" + overview, navigation.Uri);
-        cut.Render();
-
-        Assert.False(page.Find(".resource-overview").ClassList.Contains("terminal-focused"));
-        Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
-        Assert.Equal(["shell"], cut.Instance.SelectedResourceNames);
-        Assert.Equal(cards, page.FindAll(".overview-card").Count);
-        Assert.Equal("https://aka.ms/aspire/dashboard-terminal",
-            page.Find(".overview-terminal-card .overview-card-actions [href]").GetAttribute("href"));
-        Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
-        Assert.Single(JSInterop.Invocations, i => i.Identifier == "initTerminal");
-        Assert.Empty(client.ClosedTerminals);
-        Assert.Contains(JSInterop.Invocations, i => i.Identifier == "refreshLayout");
-
-        // Router parameter updates on browser Back/Forward restore focus without replacing the viewer.
-        navigation.NavigateTo(focused);
-        cut.Render();
-        Assert.Contains("terminal-focused", page.Find(".resource-overview").ClassList);
-        Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
+        else
+        {
+            cut.WaitForAssertion(() => Assert.True(cut.FindComponent<TerminalView>().Instance.Embedded));
+            Assert.Collection(page.FindAll(".overview-terminal-card .overview-card-actions .overview-card-action"),
+                documentation => Assert.Equal("https://aka.ms/aspire/dashboard-terminal", documentation.GetAttribute("href")),
+                window => Assert.Equal("Open in new window", window.GetAttribute("aria-label")),
+                openTerminal =>
+                {
+                    Assert.Equal("Expand terminal", openTerminal.GetAttribute("aria-label"));
+                    Assert.Equal(terminalPage, openTerminal.GetAttribute("href"));
+                });
+        }
         await cut.InvokeAsync(() => page.Instance.DisposeAsync().AsTask());
     }
 }

@@ -396,9 +396,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         _ => throw new ArgumentException("Unknown terminal palette.", nameof(palette))
     }];
 
+    // FluentSelect renders options by position. Keep the fixed presets in the same slots so the
+    // browser doesn't transfer its live selection to another preset when the current grid entry disappears.
     private IReadOnlyList<TerminalSizePreset> DisplayedSizePresets => _state.Cols > 0 && _state.Rows > 0 &&
         !_sizePresets.Any(p => p.Value == _state.SizeKey)
-        ? [new(_state.SizeKey, $"{_state.Cols}\u00d7{_state.Rows}", _state.Cols, _state.Rows), .. _sizePresets]
+        ? [.. _sizePresets, new(_state.SizeKey, $"{_state.Cols}\u00d7{_state.Rows}", _state.Cols, _state.Rows)]
         : _sizePresets;
 
     /// <summary>Gets the supported grid presets from the JS adapter.</summary>

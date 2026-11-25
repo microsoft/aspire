@@ -235,15 +235,11 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
 
     public string GetUrlFromSerializableViewModel(TerminalsPageState serializable)
     {
-        var resource = FindResource(serializable.SelectedResource);
-        if (ResourcesLayout is not null && GetResourceName(resource) is { } resourceName)
-        {
-            var location = new Uri(NavigationManager.Uri);
-            return DashboardUrls.SetResourceTerminalFocus(
-                DashboardUrls.ResourceOverviewUrl(resourceName) + location.Query + location.Fragment, focused: true);
-        }
-
-        return DashboardUrls.TerminalsUrl(GetResourceName(resource));
+        var resourceName = GetResourceName(FindResource(serializable.SelectedResource));
+        var url = DashboardUrls.TerminalsUrl(resourceName);
+        return ResourcesLayout is not null && resourceName is not null
+            ? ResourcesLayout.WithCurrentResourceViewState(url)
+            : url;
     }
 
     public TerminalsPageState ConvertViewModelToSerializable()

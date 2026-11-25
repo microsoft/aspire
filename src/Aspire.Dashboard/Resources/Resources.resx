@@ -440,7 +440,7 @@
     <value>Console</value>
   </data>
   <data name="ResourceOverviewOpenConsole" xml:space="preserve">
-    <value>Open console</value>
+    <value>Expand console logs</value>
   </data>
   <data name="ResourceOverviewNoConsoleLogs" xml:space="preserve">
     <value>No console output</value>

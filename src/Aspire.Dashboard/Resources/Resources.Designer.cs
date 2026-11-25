@@ -1222,7 +1222,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Open console.
+        ///   Looks up a localized string similar to Expand console logs.
         /// </summary>
         public static string ResourceOverviewOpenConsole {
             get {

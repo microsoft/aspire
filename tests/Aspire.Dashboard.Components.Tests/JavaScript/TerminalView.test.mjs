@@ -129,6 +129,7 @@ beforeEach(() => {
             connected: true,
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },
+            layout: { content: { width: 800, height: 600 } },
             sizing: { ...options.sizing },
             readOnly: options.readOnly,
             readOnlyCalls: [],
@@ -271,6 +272,7 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         focus() { document.activeElement = this; },
     }));
     const footer = Object.assign(new EventTarget(), {
+        getClientRects: () => [{}],
         querySelector: () => null,
         querySelectorAll: () => footerControls,
         contains: element => element === footer || footerControls.includes(element),
@@ -1770,6 +1772,18 @@ test("F6 focuses the footer and Shift+F6 focuses the preceding dashboard control
     assert.equal(document.activeElement, footer, "The footer itself remains reachable before controls enable");
 });
 
+test("F6 leaves focus to the browser when the footer is hidden", async () => {
+    const { footer } = mount();
+    footer.getClientRects = () => [];
+    attempts[0].resolve();
+    await settle();
+    const { client, options } = attempts[0];
+
+    client.focus();
+    assert.equal(options.onInput({ type: "key", key: "F6" }), "browser");
+    assert.equal(document.activeElement, client.element);
+});
+
 test("disposing unregisters the footer focus listener", async () => {
     const { id, footer } = mount();
     attempts[0].resolve();
@@ -1943,6 +1957,23 @@ test("opening an auto-fit surface takes primary once and preserves font size acr
         { mode: "auto", fontSize: 18 },
     ]);
     assert.equal(attempts.length, 1);
+});
+
+test("auto-fit waits for Hex1b to measure the terminal after the first frame", async () => {
+    const { id } = mount({ options: { autoFit: true } });
+    const attempt = attempts[0];
+    attempt.client.layout = { content: { width: 0, height: 0 } };
+    attempt.resolve();
+    await settle();
+    assert.equal(attempt.client.primaryRequests, 0);
+
+    attempt.client.layout = { content: { width: 800, height: 600 } };
+    attempt.options.onLayoutChange(attempt.client.layout);
+    attempt.options.onLayoutChange(attempt.client.layout);
+    assert.equal(attempt.client.primaryRequests, 1);
+    attempt.role(true);
+    assert.deepEqual(attempt.client.sizingCalls, [{ mode: "auto", fontSize: 13 }]);
+    assert.equal(terminal.getToolbarState(id).isPrimary, true);
 });
 
 test("endpoint rebinding applies fixed sizing before mount even without a later policy update", async () => {
