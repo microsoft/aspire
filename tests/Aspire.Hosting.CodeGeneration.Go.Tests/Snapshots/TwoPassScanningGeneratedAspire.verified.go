@@ -3464,11 +3464,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithReference adds a reference to another resource
@@ -7594,11 +7589,6 @@ type CSharpAppResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) CSharpAppResource
 
 	// WithReference adds a reference to another resource
@@ -12434,11 +12424,6 @@ type ContainerRegistryResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerRegistryResource
 
 	// WithRelationship adds a relationship to another resource using its builder.
@@ -15025,11 +15010,6 @@ type ContainerResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerResource
 
 	// WithReference adds a reference to another resource
@@ -21268,11 +21248,6 @@ type DotnetToolResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) DotnetToolResource
 
 	// WithReference adds a reference to another resource
@@ -26457,11 +26432,6 @@ type ExecutableResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExecutableResource
 
 	// WithReference adds a reference to another resource
@@ -29972,11 +29942,6 @@ type ExternalServiceResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExternalServiceResource
 
 	// WithRelationship adds a relationship to another resource using its builder.
@@ -34587,11 +34552,6 @@ type ParameterResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource
 
 	// WithRelationship adds a relationship to another resource using its builder.
@@ -38054,11 +38014,6 @@ type ProjectResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ProjectResource
 
 	// WithReference adds a reference to another resource
@@ -44107,11 +44062,6 @@ type TestDatabaseResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestDatabaseResource
 
 	// WithReference adds a reference to another resource
@@ -48610,11 +48560,6 @@ type TestRedisResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestRedisResource
 
 	// WithPromiseCollisionResources configures a Redis resource with parameter-only

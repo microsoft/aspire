@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using Aspire.Hosting.Utils;
@@ -131,25 +132,54 @@ internal static partial class ProcessUtil
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            // Write standard input after output reads are active so processes can write before reading input.
-            if (processSpec.StandardInputContent != null)
-            {
-                var writer = process.StandardInput;
-                writer.WriteLine(processSpec.StandardInputContent);
-                writer.Flush();
-                writer.Close();
-            }
-
             _ = Task.Run(async () =>
             {
                 startupComplete.Wait();
 
                 try
                 {
-                    await process.WaitForExitAsync().ConfigureAwait(false);
+                    // Return process ownership before writing input: a child may never read stdin,
+                    // so a full pipe must not prevent the caller from disposing/killing the process.
+                    var exitTask = process.WaitForExitAsync();
+                    IOException? inputError = null;
+                    var inputShutdownRequested = false;
+                    try
+                    {
+                        await WriteStandardInputAsync().ConfigureAwait(false);
+                    }
+                    catch (IOException ex)
+                    {
+                        inputError = ex;
+                        // A child can reject input before emitting diagnostics and exiting. Give it
+                        // the normal exit grace period, but do not wait indefinitely if it stays alive.
+                        try
+                        {
+                            await exitTask.WaitAsync(s_processExitTimeout).ConfigureAwait(false);
+                        }
+                        catch (TimeoutException)
+                        {
+                            if (!process.HasExited)
+                            {
+                                // Once the grace period expires with a live root, the input error
+                                // owns the result even if natural exit races the shutdown attempt.
+                                inputShutdownRequested = true;
+                                Kill(process, processSpec.KillEntireProcessTree);
+                            }
+                        }
+                    }
+
+                    await exitTask.ConfigureAwait(false);
                     await Task.WhenAll(stdoutComplete.Task, stderrComplete.Task).ConfigureAwait(false);
 
                     processSpec.OnStop?.Invoke(process.ExitCode);
+
+                    // Like text capture, preserve a natural nonzero result for caller-defined result
+                    // handling. A zero exit cannot hide incomplete input, nor can an exit after
+                    // we committed to shutting down a child that outlived its input-error grace.
+                    if (inputError is not null && (inputShutdownRequested || process.ExitCode == 0))
+                    {
+                        ExceptionDispatchInfo.Capture(inputError).Throw();
+                    }
 
                     if (processSpec.ThrowOnNonZeroReturnCode && process.ExitCode != 0)
                     {
@@ -179,6 +209,25 @@ internal static partial class ProcessUtil
         }
 
         return (processLifetimeTcs.Task, new ProcessDisposable(process, processLifetimeTcs.Task, processSpec.KillEntireProcessTree));
+
+        async Task WriteStandardInputAsync()
+        {
+            if (processSpec.StandardInputContent is not null)
+            {
+                var writer = process.StandardInput;
+                try
+                {
+                    await writer.WriteLineAsync(processSpec.StandardInputContent).ConfigureAwait(false);
+                    await writer.FlushAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    // Flush only on success; closing the writer could retry a failed write and
+                    // replace the original exception. Closing its stream still delivers EOF.
+                    writer.BaseStream.Close();
+                }
+            }
+        }
     }
 
     private static string FormatProcessArgumentsForDisplay(ProcessSpec processSpec)
@@ -239,6 +288,18 @@ internal static partial class ProcessUtil
         return new ProcessResult(exitCode, outputCapture.ToArray(), outputCapture.TotalLineCount);
     }
 
+    private static void Kill(System.Diagnostics.Process process, bool entireProcessTree)
+    {
+        try
+        {
+            process.Kill(entireProcessTree);
+        }
+        catch (Exception ex) when ((ex is InvalidOperationException or System.ComponentModel.Win32Exception) && process.HasExited)
+        {
+            // Natural exit can race the shutdown attempt.
+        }
+    }
+
     private sealed class ProcessDisposable : IAsyncDisposable
     {
         private readonly System.Diagnostics.Process _process;
@@ -275,6 +336,11 @@ internal static partial class ProcessUtil
             {
                 await _processLifetimeTask.WaitAsync(s_processExitTimeout).ConfigureAwait(false);
             }
+            catch (IOException) when (_process.HasExited)
+            {
+                // Stopping a child that is not reading stdin breaks its pending input write.
+                // The lifetime task still reports the error to callers awaiting execution.
+            }
             catch (TimeoutException)
             {
                 if (!_process.HasExited)
@@ -285,6 +351,10 @@ internal static partial class ProcessUtil
                 try
                 {
                     await _processLifetimeTask.WaitAsync(s_processExitTimeout).ConfigureAwait(false);
+                }
+                catch (IOException) when (_process.HasExited)
+                {
+                    // Killing the child can break a pending stdin write as well.
                 }
                 catch (TimeoutException)
                 {
@@ -297,17 +367,6 @@ internal static partial class ProcessUtil
             {
                 // Always try to kill the entire process tree here if all of the above has failed.
                 Kill(_process, entireProcessTree: true);
-            }
-        }
-
-        private static void Kill(System.Diagnostics.Process process, bool entireProcessTree)
-        {
-            try
-            {
-                process.Kill(entireProcessTree);
-            }
-            catch (InvalidOperationException) when (process.HasExited)
-            {
             }
         }
     }

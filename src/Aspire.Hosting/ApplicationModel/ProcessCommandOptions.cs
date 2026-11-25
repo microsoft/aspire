@@ -1,14 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Optional configuration for resource process commands added with <see cref="ResourceBuilderExtensions.WithProcessCommand{TResource}(IResourceBuilder{TResource}, string, string, Func{ExecuteCommandContext, ValueTask{ProcessCommandSpec}}, ProcessCommandOptions?)"/>.
 /// </summary>
-[Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class ProcessCommandOptions : CommandOptions
 {
     private int _maxOutputLineCount = 50;
@@ -25,7 +22,8 @@ public class ProcessCommandOptions : CommandOptions
     /// command result contains the retained tail of the combined output as plain text.
     /// </para>
     /// <para>
-    /// This option is not applied by default result handling when <see cref="GetCommandResult"/> is specified.
+    /// This limit also bounds the output retained for <see cref="GetCommandResult"/>. It limits the number of lines,
+    /// not the length of individual lines.
     /// </para>
     /// </remarks>
     public int MaxOutputLineCount
@@ -77,9 +75,9 @@ public class ProcessCommandOptions : CommandOptions
     /// Gets or sets a callback to be invoked after the process exits to determine the result of the command invocation.
     /// </summary>
     /// <remarks>
-    /// When specified, <see cref="SuccessExitCodes"/>, <see cref="MaxOutputLineCount"/>, and <see cref="DisplayImmediately"/>
-    /// are not applied by the default result handling. The callback can use <see cref="ProcessCommandResultContext.GetFormattedOutput"/>
-    /// to format retained process output.
+    /// When specified, <see cref="SuccessExitCodes"/> and <see cref="DisplayImmediately"/> are not applied by the default
+    /// result handling. Output retention is still bounded by <see cref="MaxOutputLineCount"/>. The callback can use
+    /// <see cref="ProcessCommandResultContext.GetFormattedOutput"/> to format retained process output.
     /// </remarks>
     public Func<ProcessCommandResultContext, Task<ExecuteCommandResult>>? GetCommandResult { get; set; }
 }

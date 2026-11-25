@@ -13237,10 +13237,7 @@ export interface ContainerRegistryResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerRegistryResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -13611,10 +13608,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerRegistryResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -14315,10 +14309,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         return new ContainerRegistryResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -15803,10 +15794,7 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -16676,10 +16664,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -18588,10 +18573,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -20431,10 +20413,7 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -21144,10 +21123,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -22644,10 +22620,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         return new CSharpAppResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -24517,10 +24490,7 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -25266,10 +25236,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -26864,10 +26831,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -28716,10 +28680,7 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -29426,10 +29387,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -30914,10 +30872,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -32592,10 +32547,7 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExternalServiceResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -32971,10 +32923,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExternalServiceResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -33699,10 +33648,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         return new ExternalServiceResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -34885,10 +34831,7 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -35307,10 +35250,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -36114,10 +36054,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         return new ParameterResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -37484,10 +37421,7 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -38197,10 +38131,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -39698,10 +39629,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         return new ProjectResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -41698,10 +41626,7 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -42571,10 +42496,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -44482,10 +44404,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -46502,10 +46421,7 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -47459,10 +47375,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -49474,10 +49387,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -51771,10 +51681,7 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -52646,10 +52553,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -54559,10 +54463,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -56531,10 +56432,7 @@ export interface Resource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -56905,10 +56803,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ResourcePromise;
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
@@ -57610,10 +57505,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /**
-     * Adds a command to the resource that starts a local process when invoked.
-     * @experimental
-     */
+    /** Adds a command to the resource that starts a local process when invoked. */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
