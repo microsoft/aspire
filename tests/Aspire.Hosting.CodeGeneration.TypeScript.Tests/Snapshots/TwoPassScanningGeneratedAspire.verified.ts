@@ -9890,6 +9890,7 @@ export interface DistributedApplicationBuilder {
      * @param packageId The package id of the tool.
      * @returns The resource builder.
      * @experimental
+     * @deprecated Use AddDotnetCliTool from the Aspire.Hosting.Dotnet package instead.
      */
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;
     /**
@@ -10114,6 +10115,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @param packageId The package id of the tool.
      * @returns The resource builder.
      * @experimental
+     * @deprecated Use AddDotnetCliTool from the Aspire.Hosting.Dotnet package instead.
      */
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;
     /**
@@ -10494,6 +10496,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
      * @param packageId The package id of the tool.
      * @returns The resource builder.
      * @experimental
+     * @deprecated Use AddDotnetCliTool from the Aspire.Hosting.Dotnet package instead.
      */
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._addDotnetToolInternal(name, packageId), this._client);

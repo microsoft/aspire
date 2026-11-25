@@ -17,6 +17,8 @@
   
   <ItemGroup>
     <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
+    <Compile Include="$(SharedDir)DotnetSdkVersionProbe.cs" Link="Utils\DotnetSdkVersionProbe.cs" />
+    <Compile Include="$(SharedDir)DotnetToolHelpers.cs" Link="Utils\DotnetToolHelpers.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Dcp\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="CircularBuffer.cs" />

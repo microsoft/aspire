@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 extern alias HostingDotnet;
+extern alias HostingCore;
 
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
@@ -28,6 +29,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PathNormalizer = HostingDotnet::Aspire.Hosting.Utils.PathNormalizer;
+using ProcessResult = HostingCore::Aspire.Hosting.Dcp.Process.ProcessResult;
+using ProcessSpec = HostingCore::Aspire.Hosting.Dcp.Process.ProcessSpec;
+using ProcessUtil = HostingCore::Aspire.Hosting.Dcp.Process.ProcessUtil;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 

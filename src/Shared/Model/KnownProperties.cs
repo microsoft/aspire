@@ -8,7 +8,8 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 /// <remarks>
 /// Used as keys in the "properties" dictionary on resource snapshots and view models.
-/// Should be compared using <see cref="StringComparers.ResourcePropertyName"/>.
+/// Should be compared using <c>StringComparers.ResourcePropertyName</c>.
+/// The comparer is source-shared, so an assembly-specific documentation link can be ambiguous.
 /// </remarks>
 internal static class KnownProperties
 {

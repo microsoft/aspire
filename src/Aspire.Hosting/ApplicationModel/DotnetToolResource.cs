@@ -3,8 +3,6 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using Aspire.Dashboard.Model;
-using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -14,8 +12,10 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// This class is used to define and manage resources for .NET CLI tools. It associates a tool's name and
 /// command with its package ID, and ensures that the required metadata is properly annotated.
+/// For new code, use <c>DotnetCliToolResource</c> from <c>Aspire.Hosting.Dotnet</c>.
 /// </remarks>
 [Experimental("ASPIREDOTNETTOOL", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Obsolete("Use DotnetCliToolResource from the Aspire.Hosting.Dotnet package instead.")]
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Tool = {ToolConfiguration?.PackageId}")]
 public class DotnetToolResource : ExecutableResource
 {
@@ -48,18 +48,9 @@ public class DotnetToolResource : ExecutableResource
             yield break;
         }
 
-        yield return CreateHighlightedProperty(KnownProperties.Tool.Package, toolConfig.PackageId, ResourcePropertyToolPackageDisplayName, sortOrder: 0);
-        yield return CreateHighlightedProperty(KnownProperties.Tool.Version, toolConfig.Version, ResourcePropertyToolVersionDisplayName, sortOrder: 1);
-        yield return new(KnownProperties.Resource.Source, toolConfig.PackageId);
-    }
-
-    private static ResourcePropertySnapshot CreateHighlightedProperty(string name, object? value, string displayName, int sortOrder)
-    {
-        return new(name, value)
+        foreach (var property in DotnetToolHelpers.CreateSnapshotProperties(toolConfig.PackageId, toolConfig.Version))
         {
-            DisplayName = displayName,
-            IsHighlighted = true,
-            SortOrder = sortOrder
-        };
+            yield return property;
+        }
     }
 }

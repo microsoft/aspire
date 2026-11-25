@@ -5,7 +5,7 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-#pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREDOTNETCLITOOL001
 #pragma warning disable ASPIRERESOURCETRAITS001 // Resource tag APIs are experimental.
 #pragma warning disable ASPIRETERMINAL001
 
@@ -39,7 +39,7 @@ builder.AddContainer("manual-container-args", "alpine")
     .WithArgs("3600", "--dashboard-port")
     .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
 
-builder.AddDotnetTool("manual-dotnet-tool-args", "dotnet-dump")
+builder.AddDotnetCliTool("manual-dotnet-tool-args", "dotnet-dump")
     .WithTags("Command-line fixtures", "Diagnostics")
     .WithArgs("--version", "--dashboard-port")
     .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)))
