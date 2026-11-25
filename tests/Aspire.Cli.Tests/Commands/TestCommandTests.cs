@@ -14,6 +14,8 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -582,7 +584,9 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         }
         else
         {
-            Assert.Empty(interaction.DisplayedRenderables);
+            Assert.Collection(interaction.DisplayedRenderables,
+                rendered => Assert.IsType<Markup>(rendered),
+                rendered => Assert.IsType<Markup>(rendered));
             Assert.Single(interaction.DisplayedMessages, message => message.Message.StartsWith("Test run ", StringComparison.Ordinal));
         }
         cancellation.Cancel();
@@ -656,7 +660,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
     }
 
     private static ConsoleInteractionService CreateConsoleInteraction(TemporaryWorkspace workspace, StringBuilder stdout, StringBuilder stderr,
-        AnsiSupport ansi = AnsiSupport.No)
+        AnsiSupport ansi = AnsiSupport.No, ILoggerFactory? loggerFactory = null)
     {
         IAnsiConsole CreateConsole(StringBuilder output)
         {
@@ -671,7 +675,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         }
         return new ConsoleInteractionService(new ConsoleEnvironment(CreateConsole(stdout), CreateConsole(stderr), TextReader.Null),
             workspace.CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(),
-            new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+            new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
     }
 
     [Theory]
@@ -789,7 +793,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         var dashboard = missingDashboard ? null : "http://localhost:1234/login?t=test";
         var codespaces = missingDashboard ? null : "https://example.app.github.dev/login?t=test";
 
-        TestCommand.RenderAppHostInformation(interaction, "AppHost [test].csproj", dashboard, codespaces, logPath, extension);
+        TestCommand.RenderAppHostInformation(interaction, "AppHost [test].csproj", dashboard, codespaces, logPath, extension, interactive: true);
 
         var expected = $"{TestCommandStrings.AppHost}: AppHost [test].csproj{Environment.NewLine}";
         if (!extension)
@@ -815,10 +819,38 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         var logPath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [test].log");
         const string dashboard = "http://localhost:1234/login?t=test";
 
-        TestCommand.RenderAppHostInformation(interaction, "AppHost.csproj", dashboard, null, logPath, false);
+        TestCommand.RenderAppHostInformation(interaction, "AppHost.csproj", dashboard, null, logPath, false, interactive: true);
 
         TerminalLinkAssert.ContainsLink(stdout.ToString(), new Uri(Path.GetFullPath(logPath)).AbsoluteUri, logPath);
         TerminalLinkAssert.ContainsLink(stdout.ToString(), dashboard, dashboard);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AppHostInformationNeverLogsLoginLinksAndOnlyDisplaysTokensInteractively(bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var sink = new TestSink();
+        using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        var interaction = CreateConsoleInteraction(workspace, stdout, stderr, loggerFactory: loggerFactory);
+        var logPath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.log");
+        const string dashboard = "http://localhost:1234/login?t=local-secret";
+        const string codespaces = "https://example.app.github.dev/login?t=remote-secret";
+
+        TestCommand.RenderAppHostInformation(interaction, "AppHost.csproj", dashboard, codespaces, logPath, false, interactive);
+
+        Assert.Equal(
+            $"{TestCommandStrings.AppHost}: AppHost.csproj{Environment.NewLine}" +
+            $"{TestCommandStrings.Dashboard}: {(interactive ? dashboard : "http://localhost:1234/login")}{Environment.NewLine}" +
+            $"{TestCommandStrings.Dashboard}: {(interactive ? codespaces : "https://example.app.github.dev/login")}{Environment.NewLine}" +
+            $"{TestCommandStrings.Logs}: {logPath}{Environment.NewLine}", stdout.ToString());
+        Assert.Equal(
+            [$"{TestCommandStrings.AppHost}: AppHost.csproj", $"{TestCommandStrings.Logs}: {MarkupHelpers.SafeFileLink(interaction, logPath)}"],
+            sink.Writes.Select(write => write.Message));
+        Assert.Equal("", stderr.ToString());
     }
 
     [Theory]

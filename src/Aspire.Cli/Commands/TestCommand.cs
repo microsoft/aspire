@@ -13,6 +13,7 @@ using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Testing;
 using Aspire.Cli.Utils;
+using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -455,7 +456,7 @@ internal sealed class TestCommand : BaseCommand
         {
             RenderAppHostInformation(InteractionService, session.AppHostRelativePath,
                 session.DashboardUrls.BaseUrlWithLoginToken, session.DashboardUrls.CodespacesUrlWithLoginToken,
-                session.LogFilePath, session.IsExtensionHost);
+                session.LogFilePath, session.IsExtensionHost, _services.HostEnvironment.SupportsInteractiveOutput);
         }
         if (ExtensionHelper.IsExtensionHost(InteractionService, out var extension, out _))
         {
@@ -569,16 +570,23 @@ internal sealed class TestCommand : BaseCommand
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
     internal static void RenderAppHostInformation(IInteractionService console, string appHostRelativePath,
-        string? dashboardUrl, string? codespacesUrl, string logFilePath, bool isExtensionHost)
+        string? dashboardUrl, string? codespacesUrl, string logFilePath, bool isExtensionHost, bool interactive)
     {
         console.DisplaySubtleMessage($"{TestCommandStrings.AppHost.EscapeMarkup()}: {appHostRelativePath.EscapeMarkup()}", allowMarkup: true);
         if (!isExtensionHost)
         {
-            console.DisplaySubtleMessage($"{TestCommandStrings.Dashboard.EscapeMarkup()}: " +
-                (string.IsNullOrEmpty(dashboardUrl) ? "N/A" : MarkupHelpers.SafeLink(console, dashboardUrl)), allowMarkup: true);
+            // Login links contain credentials. Render without message logging and strip tokens
+            // when output may be captured by non-interactive callers.
+            if (!interactive)
+            {
+                dashboardUrl = DashboardUrls.RemoveDashboardLoginToken(dashboardUrl);
+                codespacesUrl = DashboardUrls.RemoveDashboardLoginToken(codespacesUrl);
+            }
+            console.DisplayRenderable(new Markup($"[dim]{TestCommandStrings.Dashboard.EscapeMarkup()}: " +
+                (string.IsNullOrEmpty(dashboardUrl) ? "N/A" : MarkupHelpers.SafeLink(console, dashboardUrl)) + $"[/]{Environment.NewLine}"));
             if (!string.IsNullOrEmpty(codespacesUrl))
             {
-                console.DisplaySubtleMessage($"{TestCommandStrings.Dashboard.EscapeMarkup()}: {MarkupHelpers.SafeLink(console, codespacesUrl)}", allowMarkup: true);
+                console.DisplayRenderable(new Markup($"[dim]{TestCommandStrings.Dashboard.EscapeMarkup()}: {MarkupHelpers.SafeLink(console, codespacesUrl)}[/]{Environment.NewLine}"));
             }
         }
         console.DisplaySubtleMessage($"{TestCommandStrings.Logs.EscapeMarkup()}: {MarkupHelpers.SafeFileLink(console, logFilePath)}", allowMarkup: true);
