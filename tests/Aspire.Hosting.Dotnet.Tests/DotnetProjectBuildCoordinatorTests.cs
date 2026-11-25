@@ -638,7 +638,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             _ => "CAFE\u0301.cs",
         });
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspaceRoot,
+            options =>
+            {
+                options.ProjectDirectory = workspaceRoot;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         var file = builder.AddDotnetProject("worker", suppliedPath, options => options.ExcludeLaunchProfile = true);
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
@@ -693,7 +697,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         }
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspaceRoot,
+            options =>
+            {
+                options.ProjectDirectory = workspaceRoot;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         UseDotnetSdkVersion(builder, sdkVersion);
 
@@ -765,7 +773,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         // AddDotnetProject don't use it, so the rebuild must keep writing to the same output.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper);
         UseDotnetSdkVersion(builder, "11.0.100-rc.2.26504.105");
         var filePath = Path.Combine(workspace.Path, "worker.cs");
@@ -3767,7 +3779,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var workerSentinel = Path.Combine(workspace.Path, "worker-ran.txt");
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper).WithResourceCleanUp(true);
         builder.Configuration["Aspire:Dotnet:RestoreProjectsIndividually"] = restoreProjectsIndividually.ToString();
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
@@ -3829,7 +3845,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             """);
         var sentinels = Directory.CreateDirectory(Path.Combine(workspace.Path, "instances")).FullName;
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper).WithResourceCleanUp(true);
         var resource = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithReplicas(2)
@@ -3886,7 +3906,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectPath = CreateBrokenProject(workspace.Path, "REPLICAS_BUILD_FAILED");
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper).WithResourceCleanUp(true);
         var resource = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithReplicas(2);
@@ -3933,7 +3957,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var secondSentinel = Path.Combine(workspace.Path, "second-ran.txt");
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper).WithResourceCleanUp(true);
         builder.AddDotnetProject("first", firstProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(firstSentinel);
@@ -4698,7 +4726,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             """);
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options =>
+            {
+                options.ProjectDirectory = workspace.Path;
+                options.DefaultResourceWatchEnabled = false;
+            },
             outputHelper).WithResourceCleanUp(true);
         builder.AddDotnetProject("broken", brokenProject, options => options.ExcludeLaunchProfile = true);
         builder.AddDotnetProject("worker", fileApp, options => options.ExcludeLaunchProfile = true)
