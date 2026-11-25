@@ -194,6 +194,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
             var telemetryStatus = await ResourceTelemetryStatus.TryGetAsync(
                 connection,
                 pageSnapshots,
+                allSnapshots,
                 httpClientFactory,
                 logger,
                 cancellationToken).ConfigureAwait(false);

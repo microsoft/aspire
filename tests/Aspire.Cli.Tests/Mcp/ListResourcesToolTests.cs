@@ -1229,6 +1229,58 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ListResourcesTool_LeavesTelemetryUnknownForReplicaWhenNameOnlySourceIsAmbiguousAcrossPages()
+    {
+        var resourcesJson = JsonSerializer.Serialize(
+            new ResourceInfoJson[] { new() { Name = "worker", HasTraces = true } },
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+        using var handler = new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(resourcesJson, System.Text.Encoding.UTF8, "application/json")
+        });
+        var connection = CreateConnectionWithDashboardApi(
+            new ResourceSnapshot
+            {
+                Name = "worker-1",
+                DisplayName = "worker",
+                ResourceType = "Executable",
+                State = "Running",
+                EnvironmentVariables =
+                [
+                    new() { Name = "OTEL_EXPORTER_OTLP_ENDPOINT", Value = "http://localhost:4318", IsFromSpec = true },
+                    new() { Name = "OTEL_SERVICE_NAME", Value = "worker", IsFromSpec = true }
+                ]
+            },
+            new ResourceSnapshot
+            {
+                Name = "worker-2",
+                DisplayName = "worker",
+                ResourceType = "Executable",
+                State = "Running",
+                EnvironmentVariables =
+                [
+                    new() { Name = "OTEL_EXPORTER_OTLP_ENDPOINT", Value = "http://localhost:4318", IsFromSpec = true },
+                    new() { Name = "OTEL_SERVICE_NAME", Value = "worker", IsFromSpec = true }
+                ]
+            });
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+        var tool = new ListResourcesTool(monitor, new MockHttpClientFactory(handler), NullLogger<ListResourcesTool>.Instance);
+        var context = CallToolContextTestHelper.Create(new Dictionary<string, JsonElement>
+        {
+            ["offset"] = JsonSerializer.SerializeToElement(0),
+            ["limit"] = JsonSerializer.SerializeToElement(1)
+        });
+
+        var result = await tool.CallToolAsync(context, CancellationToken.None).DefaultTimeout();
+
+        using var json = GetResourceData(result);
+        var resource = Assert.Single(json.RootElement.EnumerateArray());
+        Assert.Equal("worker-1", resource.GetProperty("name").GetString());
+        Assert.False(resource.TryGetProperty("telemetry_received", out _));
+    }
+
+    [Fact]
     public async Task ListResourcesTool_OmitsTelemetryStatusWhenDashboardApiFails()
     {
         using var handler = new MockHttpMessageHandler(new HttpRequestException("Connection refused"));

@@ -267,7 +267,13 @@ internal sealed class DescribeCommand : BaseCommand
         else if (format == ResourceOutputFormat.Json)
         {
             // The telemetry status is a point-in-time read, so it is reported for snapshots only, not --follow.
-            var telemetryStatus = await ResourceTelemetryStatus.TryGetAsync(connection, snapshots, _httpClientFactory, _logger, cancellationToken).ConfigureAwait(false);
+            var telemetryStatus = await ResourceTelemetryStatus.TryGetAsync(
+                connection,
+                snapshots,
+                allSnapshots,
+                _httpClientFactory,
+                _logger,
+                cancellationToken).ConfigureAwait(false);
             var resourceList = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardBaseUrl, includeDisabledCommands: includeDisabledCommands);
             if (telemetryStatus is not null)
             {
@@ -286,7 +292,7 @@ internal sealed class DescribeCommand : BaseCommand
         else
         {
             DisplayResourcesTable(snapshots, dashboardBaseUrl);
-            await DisplayNoTelemetryReceivedHintAsync(connection, snapshots, cancellationToken).ConfigureAwait(false);
+            await DisplayNoTelemetryReceivedHintAsync(connection, snapshots, allSnapshots, cancellationToken).ConfigureAwait(false);
         }
 
         return CliExitCodes.Success;
@@ -440,14 +446,24 @@ internal sealed class DescribeCommand : BaseCommand
         InteractionService.DisplayRenderable(table);
     }
 
-    private async Task DisplayNoTelemetryReceivedHintAsync(IAppHostAuxiliaryBackchannel connection, IReadOnlyList<ResourceSnapshot> snapshots, CancellationToken cancellationToken)
+    private async Task DisplayNoTelemetryReceivedHintAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        IReadOnlyList<ResourceSnapshot> snapshots,
+        IReadOnlyList<ResourceSnapshot> allSnapshots,
+        CancellationToken cancellationToken)
     {
         // Only running resources are flagged: a resource that hasn't started yet or has stopped is not
         // expected to be exporting telemetry right now.
         var runningSnapshots = snapshots
             .Where(s => string.Equals(s.State, KnownResourceStates.Running, StringComparison.OrdinalIgnoreCase))
             .ToList();
-        var telemetryStatus = await ResourceTelemetryStatus.TryGetAsync(connection, runningSnapshots, _httpClientFactory, _logger, cancellationToken).ConfigureAwait(false);
+        var telemetryStatus = await ResourceTelemetryStatus.TryGetAsync(
+            connection,
+            runningSnapshots,
+            allSnapshots,
+            _httpClientFactory,
+            _logger,
+            cancellationToken).ConfigureAwait(false);
         if (telemetryStatus is null)
         {
             return;

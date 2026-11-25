@@ -2220,14 +2220,18 @@ public static partial class JavaScriptHostingExtensions
     /// The resource receives the standard OpenTelemetry environment variables, such as <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>
     /// and <c>OTEL_SERVICE_NAME</c>. They only take effect when the app registers an OpenTelemetry SDK: without one, the
     /// app sends no traces, metrics, or logs to the dashboard. Next.js apps register it in their <c>instrumentation</c>
-    /// file; see <see href="https://nextjs.org/docs/app/guides/open-telemetry"/>.
+    /// file; see <see href="https://nextjs.org/docs/app/guides/open-telemetry"/>. For OTLP/HTTP-only SDKs such as
+    /// <c>@vercel/otel</c>, select <see cref="OtlpProtocol.HttpProtobuf"/> so Aspire sets
+    /// <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> to the dashboard's HTTP endpoint and <c>OTEL_EXPORTER_OTLP_PROTOCOL</c> to
+    /// <c>http/protobuf</c>.
     /// </para>
     /// <example>
-    /// The following example creates a Next.js app.
+    /// The following example creates a Next.js app configured to use the dashboard's OTLP/HTTP endpoint.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddNextJsApp("frontend", "./frontend");
+    /// builder.AddNextJsApp("frontend", "./frontend")
+    ///     .WithOtlpExporter(OtlpProtocol.HttpProtobuf);
     ///
     /// builder.Build().Run();
     /// </code>

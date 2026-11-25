@@ -316,7 +316,7 @@ internal static class TelemetryCommandHelpers
     /// <summary>
     /// Creates an HTTP client configured for Dashboard API access.
     /// </summary>
-    public static HttpClient CreateApiClient(IHttpClientFactory factory, string apiToken)
+    public static HttpClient CreateApiClient(IHttpClientFactory factory, string? apiToken)
     {
         var client = factory.CreateClient();
         if (!string.IsNullOrEmpty(apiToken))

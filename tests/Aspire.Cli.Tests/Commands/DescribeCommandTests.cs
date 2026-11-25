@@ -1395,6 +1395,107 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DescribeCommand_JsonFormat_DoesNotMatchCollidingCompositeTelemetryIdentity()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var handler = CreateTelemetryResourcesHandler(
+            new ResourceInfoJson { Name = "worker-batch", InstanceId = "blue", HasTraces = true });
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            CreateOtlpResource("worker-batch-blue", "worker-batch-blue", serviceName: "worker", resourceAttributes: "service.instance.id=batch-blue")
+        ], configureConnection: ConfigureDashboardApi, httpClientFactory: new MockHttpClientFactory(handler));
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var output = JsonSerializer.Deserialize(string.Join("", outputWriter.Logs), ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+        Assert.NotNull(output);
+        Assert.False(Assert.Single(output.Resources).TelemetryReceived);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_JsonFormat_LeavesTelemetryUnknownWhenFilteredReplicaHasAmbiguousNameOnlyTelemetry()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var handler = CreateTelemetryResourcesHandler(new ResourceInfoJson { Name = "worker", HasTraces = true });
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            CreateOtlpResource("worker-1", "worker", serviceName: "worker", resourceAttributes: "service.instance.id=worker-1"),
+            CreateOtlpResource("worker-2", "worker", serviceName: "worker", resourceAttributes: "service.instance.id=worker-2")
+        ], configureConnection: ConfigureDashboardApi, httpClientFactory: new MockHttpClientFactory(handler));
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe worker-1 --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var output = JsonSerializer.Deserialize(string.Join("", outputWriter.Logs), ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+        Assert.NotNull(output);
+        var resource = Assert.Single(output.Resources);
+        Assert.Null(resource.TelemetryReceived);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_JsonFormat_MatchesNameOnlyTelemetryForSingleWorkloadWithConfiguredInstanceId()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var handler = CreateTelemetryResourcesHandler(new ResourceInfoJson { Name = "worker", HasTraces = true });
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            CreateOtlpResource("worker-1", "worker", serviceName: "worker", resourceAttributes: "service.instance.id=worker-1")
+        ], configureConnection: ConfigureDashboardApi, httpClientFactory: new MockHttpClientFactory(handler));
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var output = JsonSerializer.Deserialize(string.Join("", outputWriter.Logs), ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+        Assert.NotNull(output);
+        Assert.True(Assert.Single(output.Resources).TelemetryReceived);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_JsonFormat_ReadsTelemetryApiWithoutApiToken()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var requestValidated = false;
+        using var handler = new MockHttpMessageHandler(
+            request =>
+            {
+                Assert.Equal("/api/telemetry/resources", request.RequestUri?.AbsolutePath);
+                Assert.False(request.Headers.Contains(TelemetryCommandHelpers.ApiKeyHeaderName));
+                requestValidated = true;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        JsonSerializer.Serialize(
+                            new[] { new ResourceInfoJson { Name = "api", HasTraces = true } },
+                            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray),
+                        System.Text.Encoding.UTF8,
+                        "application/json")
+                };
+            });
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            CreateOtlpResource("api", "api")
+        ], configureConnection: connection => connection.DashboardInfoResponse = new GetDashboardInfoResponse
+        {
+            ApiBaseUrl = "http://localhost:5000",
+            ApiToken = null,
+            DashboardUrls = ["http://localhost:18888"]
+        }, httpClientFactory: new MockHttpClientFactory(handler));
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(requestValidated);
+        var output = JsonSerializer.Deserialize(string.Join("", outputWriter.Logs), ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+        Assert.NotNull(output);
+        Assert.True(Assert.Single(output.Resources).TelemetryReceived);
+    }
+
+    [Fact]
     public async Task DescribeCommand_DefaultTable_ListsRunningResourcesThatSentNoTelemetry()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

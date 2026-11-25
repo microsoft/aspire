@@ -26,18 +26,45 @@ internal sealed class ResourceTelemetryStatus
     // unresponsive dashboard degrades to "status unknown" instead of delaying the resource listing.
     private static readonly TimeSpan s_queryTimeout = TimeSpan.FromSeconds(5);
 
-    // Composite names ("{service.name}-{service.instance.id}", or "{service.name}") of telemetry sources.
-    private readonly HashSet<string> _compositeNames = new(StringComparers.ResourceName);
+    // Keep service.name and service.instance.id separate: joining them can collide when either contains a hyphen.
+    private readonly Dictionary<string, HashSet<string>> _instancesByServiceName = new(StringComparers.ResourceName);
+    private readonly HashSet<string> _serviceNamesWithTelemetry = new(StringComparers.ResourceName);
     private readonly HashSet<string> _namesWithoutInstanceId = new(StringComparers.ResourceName);
+    private readonly HashSet<string> _runtimeNames = new(StringComparers.ResourceName);
+    private readonly Dictionary<string, int> _workloadCountsByServiceName = new(StringComparers.ResourceName);
 
-    private ResourceTelemetryStatus(IEnumerable<ResourceInfoJson> telemetryResources)
+    private ResourceTelemetryStatus(
+        IEnumerable<ResourceInfoJson> telemetryResources,
+        IEnumerable<ResourceSnapshot> appHostSnapshots)
     {
         foreach (var resource in telemetryResources)
         {
-            _compositeNames.Add(GetCompositeName(resource.Name, resource.InstanceId));
+            _serviceNamesWithTelemetry.Add(resource.Name);
             if (resource.InstanceId is null)
             {
                 _namesWithoutInstanceId.Add(resource.Name);
+            }
+            else
+            {
+                if (!_instancesByServiceName.TryGetValue(resource.Name, out var instanceIds))
+                {
+                    instanceIds = new HashSet<string>(StringComparers.ResourceName);
+                    _instancesByServiceName.Add(resource.Name, instanceIds);
+                }
+
+                instanceIds.Add(resource.InstanceId);
+            }
+
+            _runtimeNames.Add(GetCompositeName(resource.Name, resource.InstanceId));
+        }
+
+        foreach (var snapshot in appHostSnapshots)
+        {
+            var serviceName = GetResolvedEnvironmentValue(snapshot, KnownOtelConfigNames.ServiceName) ?? snapshot.DisplayName;
+            if (serviceName is not null)
+            {
+                _workloadCountsByServiceName.TryGetValue(serviceName, out var count);
+                _workloadCountsByServiceName[serviceName] = count + 1;
             }
         }
     }
@@ -56,8 +83,8 @@ internal sealed class ResourceTelemetryStatus
     /// Gets whether the dashboard has received telemetry from the resource.
     /// </summary>
     /// <returns>
-    /// <see langword="null"/> when the AppHost didn't configure OTLP export for the resource, so receiving
-    /// nothing is expected; otherwise whether any telemetry from the resource reached the dashboard.
+    /// <see langword="null"/> when the AppHost didn't configure OTLP export for the resource or telemetry
+    /// couldn't be matched to it unambiguously; otherwise whether telemetry from the resource reached the dashboard.
     /// </returns>
     internal bool? GetTelemetryReceived(ResourceSnapshot snapshot)
     {
@@ -71,15 +98,52 @@ internal sealed class ResourceTelemetryStatus
         // resources (whose instance ID is the full runtime name) and when the app overrides them.
         var serviceName = GetResolvedEnvironmentValue(snapshot, KnownOtelConfigNames.ServiceName);
         var instanceId = GetServiceInstanceId(snapshot);
-        if (serviceName is not null && instanceId is not null && _compositeNames.Contains(GetCompositeName(serviceName, instanceId)))
+        var fallbackServiceName = serviceName ?? snapshot.DisplayName;
+        var workloadCount = fallbackServiceName is null ? 0 : _workloadCountsByServiceName.GetValueOrDefault(fallbackServiceName);
+
+        if (serviceName is not null && instanceId is not null)
+        {
+            if (_instancesByServiceName.TryGetValue(serviceName, out var instanceIds) && instanceIds.Contains(instanceId))
+            {
+                return true;
+            }
+
+            if (_namesWithoutInstanceId.Contains(serviceName))
+            {
+                return workloadCount == 1 ? true : null;
+            }
+
+            return false;
+        }
+
+        if (fallbackServiceName is not null && _namesWithoutInstanceId.Contains(fallbackServiceName))
+        {
+            if (workloadCount == 1)
+            {
+                return true;
+            }
+
+            if (workloadCount > 1)
+            {
+                return null;
+            }
+        }
+
+        // Use the runtime name only when the configured identity is incomplete. A name-only telemetry
+        // source cannot identify one replica when multiple AppHost resources share its service name.
+        if (_runtimeNames.Contains(snapshot.Name))
         {
             return true;
         }
 
-        // Fall back to the runtime name, which is the composite name for session-lifetime resources. An app that
-        // keeps service.name but drops service.instance.id is reported without an instance ID.
-        return _compositeNames.Contains(snapshot.Name) ||
-            ((serviceName ?? snapshot.DisplayName) is { } name && _namesWithoutInstanceId.Contains(name));
+        if (fallbackServiceName is not null &&
+            _serviceNamesWithTelemetry.Contains(fallbackServiceName) &&
+            workloadCount > 1)
+        {
+            return null;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -92,6 +156,7 @@ internal sealed class ResourceTelemetryStatus
     internal static async Task<ResourceTelemetryStatus?> TryGetAsync(
         IAppHostAuxiliaryBackchannel connection,
         IEnumerable<ResourceSnapshot> snapshots,
+        IEnumerable<ResourceSnapshot> appHostSnapshots,
         IHttpClientFactory httpClientFactory,
         ILogger logger,
         CancellationToken cancellationToken)
@@ -107,15 +172,16 @@ internal sealed class ResourceTelemetryStatus
         try
         {
             var dashboardInfo = await connection.GetDashboardInfoV2Async(timeoutCts.Token).ConfigureAwait(false);
-            if (dashboardInfo?.ApiToken is not { } apiToken ||
+            if (dashboardInfo is null ||
                 DashboardUrls.NormalizeDashboardRequestUrl(dashboardInfo.ApiBaseUrl, stripLoginPath: false) is not { } apiBaseUrl)
             {
                 logger.LogDebug("Dashboard telemetry API is not available; resource telemetry status is unknown.");
                 return null;
             }
 
-            using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, apiToken);
-            return new ResourceTelemetryStatus(await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, timeoutCts.Token).ConfigureAwait(false));
+            using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, dashboardInfo.ApiToken);
+            var telemetryResources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, timeoutCts.Token).ConfigureAwait(false);
+            return new ResourceTelemetryStatus(telemetryResources, appHostSnapshots);
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
