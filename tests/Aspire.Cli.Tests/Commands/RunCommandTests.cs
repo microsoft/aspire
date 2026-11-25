@@ -12,6 +12,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Profiling;
@@ -25,6 +26,9 @@ using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
+using Aspire.Cli.Watch;
+using Aspire.Shared;
+using Aspire.Shared.DotnetWatch;
 using Aspire.Shared.UserSecrets;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -1470,6 +1474,338 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(fixture.CapturedActivity);
         var tags = fixture.CapturedActivity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
         Assert.Equal("build_failed", tags[TelemetryConstants.Tags.ErrorType]);
+        Assert.DoesNotContain(tags.Keys, key => key.StartsWith("aspire.cli.run.reload.", StringComparison.Ordinal));
+        Assert.Empty(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReloadSummary));
+    }
+
+    [Theory]
+    [InlineData("success", TelemetryConstants.RunReloadOutcomes.Succeeded)]
+    [InlineData("groups-failed", TelemetryConstants.RunReloadOutcomes.GroupFailed)]
+    [InlineData("rpc-failed", TelemetryConstants.RunReloadOutcomes.RpcFailed)]
+    [InlineData("empty", TelemetryConstants.RunReloadOutcomes.NoWatchedServices)]
+    public async Task RunCommand_RecordsServiceReloadTelemetryAndPrintsGroupResults(string scenario, string outcome)
+    {
+        using var fixture = new TelemetryFixture();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        var input = new TestConsoleInput();
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        const string successMessage = "Rebuilt 'api' with a fresh watcher for watch group 'dotnet-watch'.";
+        const string failureMessage = "The fresh build of watch group 'dotnet-watch-other' failed. Fix the errors and save; run 'aspire logs dotnet-watch-other --tail 50'.";
+        var renderables = 0;
+        var interaction = new TestInteractionService
+        {
+            DisplayRenderableCallback = _ =>
+            {
+                if (Interlocked.Increment(ref renderables) == 2)
+                {
+                    ready.TrySetResult();
+                }
+            },
+            DisplayMessageCallback = (_, message, _) =>
+            {
+                if (message == RunCommandStrings.NoWatchedServicesToRebuild)
+                {
+                    finished.TrySetResult();
+                }
+            },
+            DisplaySuccessCallback = _ =>
+            {
+                if (scenario == "success")
+                {
+                    finished.TrySetResult();
+                }
+            },
+            DisplayErrorCallback = _ => finished.TrySetResult()
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetDashboardUrlsAsyncCallback = _ => Task.FromResult(new DashboardUrlsState
+            {
+                DashboardHealthy = true,
+                BaseUrlWithLoginToken = "http://localhost:5000",
+                CodespacesUrlWithLoginToken = null
+            }),
+            GetCapabilitiesAsyncCallback = _ => Task.FromResult(new[] { ResourceWatch.ReloadCapability }),
+            WatchResourceWatchStatusAsyncCallback = _ => new ResourceWatchStatus?[]
+            {
+                new()
+                {
+                    GenerationId = Guid.NewGuid(),
+                    DefaultEnabled = true,
+                    Resources = [new() { Resource = "api", State = "pending", LogResource = "dotnet-watch" }]
+                }
+            }.ToAsyncEnumerable(),
+            ReloadWatchedResourcesAsyncCallback = _ =>
+            {
+                if (scenario == "rpc-failed")
+                {
+                    throw new ConnectionLostException("RAW RPC DETAILS");
+                }
+                if (scenario == "empty")
+                {
+                    return Task.FromResult(new ResourceWatchReloadResult { Groups = [] });
+                }
+
+                var groups = new List<ResourceWatchReloadGroupResult>
+                {
+                    new() { LogResource = "dotnet-watch", Resources = ["api"], Success = true, Message = successMessage, State = ResourceWatch.Watching }
+                };
+                if (scenario == "groups-failed")
+                {
+                    // A failed group outweighs a failed build in another group.
+                    groups.Add(new() { LogResource = "dotnet-watch-other", Resources = ["other"], Success = false, Message = failureMessage, State = ResourceWatch.BuildFailed });
+                    groups.Add(new() { LogResource = "dotnet-watch-third", Resources = ["third"], Success = false, Message = failureMessage, State = ResourceWatch.Failed });
+                }
+                return Task.FromResult(new ResourceWatchReloadResult { Groups = [.. groups] });
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.TelemetryFactory = _ => fixture.Telemetry;
+            options.ConsoleInputFactory = _ => input;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                RunAsyncCallback = async (context, token) =>
+                {
+                    context.BuildCompletionSource!.TrySetResult(true);
+                    context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                    return 0;
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var run = provider.GetRequiredService<RootCommand>().Parse("run --watch false").InvokeAsync(cancellationToken: cancellation.Token);
+        try
+        {
+            await ready.Task.DefaultTimeout();
+            input.PressReload();
+            await finished.Task.DefaultTimeout();
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+        }
+
+        Assert.Equal(scenario == "empty"
+            ? [RunCommandStrings.RebuildingWatchedServices, RunCommandStrings.NoWatchedServicesToRebuild]
+            : new[] { RunCommandStrings.RebuildingWatchedServices }, interaction.DisplayedMessages.Select(message => message.Message));
+        Assert.Equal(scenario is "success" or "groups-failed" ? new[] { successMessage } : [], interaction.DisplayedSuccess);
+        Assert.Equal(scenario switch
+        {
+            "rpc-failed" => new[] { RunCommandStrings.CouldNotReloadWatchedServices },
+            "groups-failed" => [failureMessage, failureMessage],
+            _ => []
+        }, interaction.DisplayedErrors);
+        var runActivity = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHost));
+        Assert.DoesNotContain(runActivity.TagObjects, tag => tag.Key.StartsWith("aspire.cli.run.reload.", StringComparison.Ordinal));
+        var summary = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReloadSummary));
+        Assert.Equal(runActivity.SpanId, summary.ParentSpanId);
+        Assert.Equal("services", summary.GetTagItem(TelemetryConstants.Tags.RunReloadMode));
+        Assert.Equal(1, summary.GetTagItem(TelemetryConstants.Tags.RunReloadCount));
+        var reload = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReload));
+        Assert.Equal(summary.SpanId, reload.ParentSpanId);
+        Assert.Equal("services", reload.GetTagItem(TelemetryConstants.Tags.RunReloadMode));
+        Assert.Equal(outcome, reload.GetTagItem(TelemetryConstants.Tags.RunReloadOutcome));
+        Assert.Equal(scenario is "success" or "empty", reload.GetTagItem(TelemetryConstants.Tags.RunReloadSuccess));
+    }
+
+    [Theory]
+    [InlineData(true, "build")]
+    [InlineData(false, "build")]
+    [InlineData(true, "start")]
+    [InlineData(false, "start")]
+    [InlineData(true, "exit")]
+    [InlineData(false, "exit")]
+    [InlineData(true, "rpc")]
+    [InlineData(false, "rpc")]
+    [InlineData(true, "disconnect")]
+    [InlineData(false, "disconnect")]
+    public async Task RunCommand_AppHostReloadFailureBelongsToTheReplacementActivity(bool manual, string failure)
+    {
+        using var fixture = new TelemetryFixture();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var firstDirectory = new DotnetWatchTestDirectory();
+        using var secondDirectory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        using var firstCancellation = new CancellationTokenSource();
+        using var secondCancellation = new CancellationTokenSource();
+        await using var firstGeneration = new DotnetWatchAppHostGeneration(
+            shutdown, TimeSpan.FromSeconds(5), firstDirectory.RelativePath, NullLogger.Instance);
+        var input = new TestConsoleInput();
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interaction = new TestInteractionService
+        {
+            DisplayErrorCallback = _ => failed.TrySetResult(),
+            ShowStatusCallback = text =>
+            {
+                if (text == RunCommandStrings.AppHostConnectionLostWaitingForExit)
+                {
+                    failed.TrySetResult();
+                }
+            }
+        };
+        var attempts = 0;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.TelemetryFactory = _ => fixture.Telemetry;
+            options.ConsoleInputFactory = _ => input;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                RunAsyncCallback = async (context, token) =>
+                {
+                    var number = Interlocked.Increment(ref attempts);
+                    var generation = context.WatchGeneration!;
+                    if (number == 2 && failure == "build")
+                    {
+                        context.BuildCompletionSource!.TrySetResult(false);
+                        return CliExitCodes.FailedToBuildArtifacts;
+                    }
+                    if (number == 2 && failure == "exit")
+                    {
+                        context.BuildCompletionSource!.TrySetResult(true);
+                        return 17;
+                    }
+                    generation.ApplyEnvironment(new Dictionary<string, string>());
+                    await DotnetWatchAppHostTestChannel.SendAsync(generation.Endpoint, new()
+                    {
+                        Version = DotnetWatchAppHostProtocol.Version,
+                        Session = generation.Session,
+                        Kind = DotnetWatchAppHostProtocol.HostStarted,
+                        Instance = "123:456"
+                    }, token);
+                    context.BuildCompletionSource!.TrySetResult(true);
+                    if (number == 1)
+                    {
+                        context.BackchannelCompletionSource!.TrySetResult(new TestAppHostBackchannel { NotifyAppHostReadyAsyncCalled = ready });
+                    }
+                    else
+                    {
+                        if (failure is "rpc" or "disconnect")
+                        {
+                            context.OutputCollector = new OutputCollector();
+                            context.OutputCollector.MarkWatcherOutput();
+                            context.BackchannelCompletionSource!.TrySetResult(new TestAppHostBackchannel
+                            {
+                                GetDashboardUrlsAsyncCallback = _ =>
+                                    Task.FromException<DashboardUrlsState>(failure == "disconnect"
+                                        ? new ConnectionLostException("Startup connection lost.")
+                                        : new InvalidOperationException("Dashboard startup failed."))
+                            });
+                        }
+                        else
+                        {
+                            generation.MarkStartupFailed();
+                        }
+                    }
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                    return 0;
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RunCommand>();
+        var parsed = provider.GetRequiredService<RootCommand>().Parse("run --watch");
+        var firstRun = command.ExecuteGenerationAsync(parsed, true, true, firstGeneration, firstCancellation.Token);
+        try
+        {
+            await ready.Task.DefaultTimeout();
+            if (manual)
+            {
+                input.PressReload();
+            }
+            else
+            {
+                await DotnetWatchAppHostTestChannel.SendAsync(firstGeneration.Endpoint, new()
+                {
+                    Version = DotnetWatchAppHostProtocol.Version,
+                    Session = firstGeneration.Session,
+                    Kind = DotnetWatchAppHostProtocol.ModelInvalidated,
+                    Instance = "123:456"
+                }, TestContext.Current.CancellationToken);
+            }
+            await firstGeneration.Invalidated.DefaultTimeout();
+        }
+        finally
+        {
+            await firstCancellation.CancelAsync();
+            Assert.Equal(CliExitCodes.Success, (await firstRun.DefaultTimeout()).ExitCode);
+        }
+        var initiatingSummary = Assert.Single(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReloadSummary));
+        Assert.Equal("apphost", initiatingSummary.GetTagItem(TelemetryConstants.Tags.RunReloadMode));
+        Assert.Equal(manual ? 1 : 0, initiatingSummary.GetTagItem(TelemetryConstants.Tags.RunReloadCount));
+        Assert.Equal(manual, firstGeneration.RequestedReload is not null);
+        // The reload stays open until the replacement knows its outcome.
+        Assert.Empty(fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReload));
+        await using var replacement = new DotnetWatchAppHostGeneration(
+            shutdown, TimeSpan.FromSeconds(5), secondDirectory.RelativePath, NullLogger.Instance)
+        {
+            IsReplacement = true,
+            StartedByReload = firstGeneration.ReloadRequested,
+            PendingReload = firstGeneration.RequestedReload
+        };
+        var replacementRun = command.ExecuteGenerationAsync(parsed, true, true, replacement, secondCancellation.Token);
+        try
+        {
+            if (failure is "exit" or "rpc")
+            {
+                Assert.Equal(failure == "exit" ? 17 : CliExitCodes.FailedToDotnetRunAppHost,
+                    (await replacementRun.DefaultTimeout()).ExitCode);
+            }
+            else
+            {
+                await failed.Task.DefaultTimeout();
+                Assert.False(replacementRun.IsCompleted);
+            }
+        }
+        finally
+        {
+            await secondCancellation.CancelAsync();
+            var result = await replacementRun.DefaultTimeout();
+            if (failure is not "exit" and not "rpc")
+            {
+                Assert.Equal(CliExitCodes.Success, result.ExitCode);
+            }
+        }
+
+        var runActivities = fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHost);
+        Assert.Equal(2, runActivities.Count);
+        Assert.All(runActivities, activity =>
+            Assert.DoesNotContain(activity.TagObjects, tag => tag.Key.StartsWith("aspire.cli.run.reload.", StringComparison.Ordinal)));
+        var reloads = fixture.GetStoppedActivities(TelemetryConstants.Activities.RunAppHostReload);
+        if (manual)
+        {
+            var reload = Assert.Single(reloads);
+            Assert.Equal(initiatingSummary.SpanId, reload.ParentSpanId);
+            Assert.Equal("apphost", reload.GetTagItem(TelemetryConstants.Tags.RunReloadMode));
+            Assert.Equal(failure switch
+            {
+                "build" => TelemetryConstants.RunReloadOutcomes.BuildFailed,
+                "start" or "exit" => TelemetryConstants.RunReloadOutcomes.StartFailed,
+                _ => TelemetryConstants.RunReloadOutcomes.RpcFailed
+            }, reload.GetTagItem(TelemetryConstants.Tags.RunReloadOutcome));
+            Assert.False((bool?)reload.GetTagItem(TelemetryConstants.Tags.RunReloadSuccess));
+        }
+        else
+        {
+            // Automatic restarts aren't Ctrl+R reloads.
+            Assert.Empty(reloads);
+        }
+        if (failure is "build" or "start")
+        {
+            Assert.Equal(failure == "build" ? "build_failed" : "backchannel_connection_failed",
+                runActivities[1].GetTagItem(TelemetryConstants.Tags.ErrorType));
+        }
     }
 
     [Fact]
@@ -3608,46 +3944,32 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WhenSingleFileAppHostAndDefaultWatchEnabled_DoesNotUseWatchMode()
+    public async Task RunCommand_WhenSingleFileAppHostAndDefaultWatchEnabled_WatchesServicesWithoutDotnetWatch()
     {
-        var watchModeUsed = false;
+        var dotnetWatchUsed = true;
+        IDictionary<string, string>? appHostEnvironment = null;
 
         var runnerFactory = (IServiceProvider sp) =>
         {
             var runner = new TestDotNetCliRunner();
-            // Fake the build command to always succeed.
             runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
-
-            // Fake apphost information to return a compatible app host.
             runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
-
             runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
             {
-                watchModeUsed = watch;
-                // Make a backchannel and return it
-                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
-                backchannelCompletionSource!.SetResult(backchannel);
-
-                // Don't run indefinitely for the test
+                dotnetWatchUsed = watch;
+                appHostEnvironment = env;
+                backchannelCompletionSource!.SetResult(sp.GetRequiredService<IAppHostCliBackchannel>());
                 await Task.Delay(100, ct);
                 return 0;
             };
-
             return runner;
-        };
-
-        var backchannelFactory = (IServiceProvider sp) =>
-        {
-            var backchannel = new TestAppHostBackchannel();
-            backchannel.GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync;
-            return backchannel;
         };
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = _ => new SingleFileAppHostProjectLocator();
-            options.AppHostBackchannelFactory = backchannelFactory;
+            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel { GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync };
             options.DotNetCliRunnerFactory = runnerFactory;
             options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled];
         });
@@ -3658,69 +3980,194 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         using var cts = new CancellationTokenSource();
         cts.CancelAfter(TimeSpan.FromSeconds(2));
+        await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
 
-        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+        Assert.False(dotnetWatchUsed, "A file-based AppHost runs normally; only its C# services are watched.");
+        Assert.NotNull(appHostEnvironment);
+        Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+    }
 
-        Assert.False(watchModeUsed, "Expected watch mode to be disabled for single file apps even when DefaultWatchEnabled feature flag is true");
+    [Theory]
+    [InlineData("run", null, false)]
+    [InlineData("run", true, true)]
+    [InlineData("run", false, false)]
+    [InlineData("run --watch", null, true)]
+    [InlineData("run --watch", false, true)]
+    [InlineData("run --watch true", false, true)]
+    [InlineData("run --watch false", true, false)]
+    [InlineData("run --watch=false", true, false)]
+    [InlineData("run -- --watch", false, false)]
+    [InlineData("run -- --watch=false", true, true)]
+    public async Task RunCommand_ExplicitWatchOptionWinsOverDefaultWatchEnabled(string commandLine, bool? defaultWatchEnabled, bool expectWatch)
+    {
+        var context = await RunWithTestAppHostProjectAsync(commandLine, "csharp", defaultWatchEnabled);
+
+        Assert.Equal(expectWatch, context.Watch);
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("typescript/nodejs")]
+    [InlineData("python")]
+    public async Task RunCommand_WatchOption_EnablesServiceWatchForEveryAppHostLanguage(string languageId)
+    {
+        var messages = new List<string>();
+        var context = await RunWithTestAppHostProjectAsync(
+            "run --watch",
+            languageId,
+            defaultWatchEnabled: null,
+            configureInteraction: interaction => interaction.DisplayMessageCallback = (_, message, _) => messages.Add(message));
+
+        Assert.True(context.Watch);
+        Assert.DoesNotContain(messages, m => m.Contains("--watch", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task RunCommand_WhenDefaultWatchEnabledFeatureFlagIsTrue_UsesWatchMode()
+    public async Task RunCommand_ExplicitWatchInIdeOwnedRun_FailsBeforeLaunching()
     {
-        var watchModeUsed = false;
-
-        var runnerFactory = (IServiceProvider sp) =>
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var launched = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            var runner = new TestDotNetCliRunner();
-            // Fake the build command to always succeed.
-            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
-
-            // Fake apphost information to return a compatible app host.
-            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
-
-            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            options.ConfigurationCallback += configuration => configuration["DEBUG_SESSION_PORT"] = "12345";
+            options.InteractionServiceFactory = _ => interaction;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
             {
-                watchModeUsed = watch;
-                // Make a backchannel and return it
-                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
-                backchannelCompletionSource!.SetResult(backchannel);
-
-                // Don't run indefinitely for the test
-                await Task.Delay(100, ct);
-                return 0;
+                RunAsyncCallback = (_, _) =>
+                {
+                    launched = true;
+                    return Task.FromResult(0);
+                }
             };
+        });
+        using var provider = services.BuildServiceProvider();
 
-            return runner;
-        };
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("run --watch").InvokeAsync().DefaultTimeout();
 
-        var backchannelFactory = (IServiceProvider sp) =>
-        {
-            var backchannel = new TestAppHostBackchannel();
-            backchannel.GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync;
-            return backchannel;
-        };
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(launched);
+        Assert.Contains(RunCommandStrings.WatchNotSupportedWithDebugger, interaction.DisplayedErrors);
+    }
 
-        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
+    [Fact]
+    public async Task RunCommand_DefaultWatchInIdeOwnedRun_AllowsNoBuild()
+    {
+        var context = await RunWithTestAppHostProjectAsync(
+            "run --no-build",
+            "csharp",
+            defaultWatchEnabled: true,
+            configuration: config => config["DEBUG_SESSION_PORT"] = "12345");
+
+        Assert.False(context.Watch);
+        Assert.True(context.NoBuild);
+    }
+
+    private async Task<AppHostProjectContext> RunWithTestAppHostProjectAsync(
+        string commandLine,
+        string languageId,
+        bool? defaultWatchEnabled,
+        Action<TestInteractionService>? configureInteraction = null,
+        Action<Dictionary<string, string?>>? configuration = null)
+    {
+        AppHostProjectContext? captured = null;
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.ProjectLocatorFactory = projectLocatorFactory;
-            options.AppHostBackchannelFactory = backchannelFactory;
-            options.DotNetCliRunnerFactory = runnerFactory;
-            options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled];
+            if (configuration is not null)
+            {
+                options.ConfigurationCallback += configuration;
+            }
+            if (configureInteraction is not null)
+            {
+                options.InteractionServiceFactory = sp =>
+                {
+                    var interaction = new TestInteractionService();
+                    configureInteraction(interaction);
+                    return interaction;
+                };
+            }
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel { GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync };
+            options.AppHostProjectFactory = sp => new TestAppHostProjectFactory
+            {
+                LanguageId = languageId,
+                RunAsyncCallback = async (context, ct) =>
+                {
+                    captured = context;
+                    context.BuildCompletionSource?.TrySetResult(true);
+                    context.BackchannelCompletionSource!.SetResult(sp.GetRequiredService<IAppHostCliBackchannel>());
+                    await Task.Delay(100, ct);
+                    return 0;
+                }
+            };
+            if (defaultWatchEnabled is { } enabled)
+            {
+                options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.DefaultWatchEnabled, enabled);
+            }
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run");
+        var result = command.Parse(commandLine);
+        Assert.Empty(result.Errors);
 
         using var cts = new CancellationTokenSource();
         cts.CancelAfter(TimeSpan.FromSeconds(2));
+        await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
 
-        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+        Assert.NotNull(captured);
+        return captured;
+    }
 
-        Assert.True(watchModeUsed, "Expected watch mode to be enabled when defaultWatchEnabled feature flag is true");
+    [Theory]
+    [InlineData("run", true)]
+    [InlineData("run --watch", false)]
+    public async Task RunCommand_WhenAppHostResolveTargetIsUnavailable_KeepsOrdinaryAppHostAndServiceWatch(string commandLine, bool defaultWatchEnabled)
+    {
+        var dotnetWatchUsed = true;
+        var appHostNoBuild = false;
+        IDictionary<string, string>? appHostEnvironment = null;
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                dotnetWatchUsed = watch;
+                appHostNoBuild = noBuild;
+                appHostEnvironment = env;
+                backchannelCompletionSource!.SetResult(sp.GetRequiredService<IAppHostCliBackchannel>());
+                await Task.Delay(100, ct);
+                return 0;
+            };
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel { GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync };
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.DefaultWatchEnabled, defaultWatchEnabled);
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.False(dotnetWatchUsed, "Unavailable AppHost coverage must not start a competing legacy dotnet watcher.");
+        Assert.True(appHostNoBuild, "The AppHost was already built by the CLI.");
+        Assert.NotNull(appHostEnvironment);
+        Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
     }
 
     [Fact]
@@ -3780,6 +4227,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     public async Task RunCommand_WhenDefaultWatchEnabledFeatureFlagIsFalse_DoesNotUseWatchMode()
     {
         var watchModeUsed = false;
+        IDictionary<string, string>? appHostEnvironment = null;
 
         var runnerFactory = (IServiceProvider sp) =>
         {
@@ -3793,6 +4241,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
             {
                 watchModeUsed = watch;
+                appHostEnvironment = env;
                 // Make a backchannel and return it
                 var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
                 backchannelCompletionSource!.SetResult(backchannel);
@@ -3833,12 +4282,15 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
 
         Assert.False(watchModeUsed, "Expected watch mode to be disabled when defaultWatchEnabled feature flag is false");
+        Assert.NotNull(appHostEnvironment);
+        Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
     }
 
     [Fact]
     public async Task RunCommand_WhenDefaultWatchEnabledFeatureFlagNotSet_DefaultsToFalse()
     {
         var watchModeUsed = false;
+        IDictionary<string, string>? appHostEnvironment = null;
 
         var runnerFactory = (IServiceProvider sp) =>
         {
@@ -3852,6 +4304,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
             {
                 watchModeUsed = watch;
+                appHostEnvironment = env;
                 // Make a backchannel and return it
                 var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
                 backchannelCompletionSource!.SetResult(backchannel);
@@ -3892,6 +4345,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
 
         Assert.False(watchModeUsed, "Expected watch mode to be disabled by default when defaultWatchEnabled feature flag is not set");
+        Assert.NotNull(appHostEnvironment);
+        Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
     }
 
     [Fact]
@@ -4411,34 +4866,59 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task RunCommand_WithNoBuildAndWatchModeEnabled_ReturnsInvalidCommandError()
+    [Theory]
+    [InlineData("run --no-build --watch", false, nameof(RunCommandStrings.NoBuildNotSupportedWithWatchOption))]
+    [InlineData("run --watch --no-build", true, nameof(RunCommandStrings.NoBuildNotSupportedWithWatchOption))]
+    [InlineData("run --no-build --detach --watch", false, nameof(RunCommandStrings.NoBuildNotSupportedWithWatchOption))]
+    public async Task RunCommand_WithNoBuildAndWatch_ReturnsClearError(string commandLine, bool defaultWatchEnabled, string expectedMessageName)
     {
-        // This test verifies that when --no-build is specified and watch mode is enabled
-        // (via feature flag), the CLI returns an error because this combination is not supported
-        // (dotnet watch doesn't support --no-build)
-
-        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
-
-        // Create a features factory that enables DefaultWatchEnabled
-        var featuresFactory = (IServiceProvider sp) => new TestFeatures()
-            .SetFeature(KnownFeatures.DefaultWatchEnabled, true);
+        var interactionService = new TestInteractionService();
+        var runCalled = false;
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.ProjectLocatorFactory = projectLocatorFactory;
-            options.FeatureFlagsFactory = featuresFactory;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.DefaultWatchEnabled, defaultWatchEnabled);
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                RunAsyncCallback = (_, _) =>
+                {
+                    runCalled = true;
+                    return Task.FromResult(0);
+                }
+            };
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run --no-build");
+        var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        // Should return InvalidCommand error because --no-build is not supported with watch mode enabled
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(runCalled);
+        var expectedMessage = RunCommandStrings.ResourceManager.GetString(expectedMessageName, RunCommandStrings.Culture);
+        Assert.NotNull(expectedMessage);
+        Assert.Contains(interactionService.DisplayedErrors, e => e.Contains(expectedMessage, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunCommand_WithNoBuildAndExplicitWatchFalse_RunsWithoutWatchEvenWhenDefaultWatchEnabled()
+    {
+        var context = await RunWithTestAppHostProjectAsync("run --no-build --watch false", "csharp", defaultWatchEnabled: true);
+
+        Assert.False(context.Watch);
+        Assert.True(context.NoBuild);
+    }
+
+    [Fact]
+    public async Task RunCommand_WithNoBuildSuppressesTheImplicitAppHostDefault()
+    {
+        var context = await RunWithTestAppHostProjectAsync("run --no-build", "csharp", defaultWatchEnabled: true);
+
+        Assert.False(context.Watch);
+        Assert.Null(context.WatchGeneration);
+        Assert.True(context.NoBuild);
     }
 
     [Fact]
@@ -5092,6 +5572,67 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedOrigin, options.AppHostSelectionOrigin);
     }
 
+    [Theory]
+    [InlineData("run --watch false", true)]
+    [InlineData("run", false)]
+    public async Task RunCommand_WhenDelegatingToExtension_LeavesWatchToTheIde(string commandLine, bool defaultWatchEnabled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        DebugSessionOptions? options = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.DefaultWatchEnabled, defaultWatchEnabled);
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                var service = new TestExtensionInteractionService(sp);
+                service.StartDebugSessionCallback = (_, _, _, debugSessionOptions) => options = debugSessionOptions;
+                return service;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        // The VS Code run session owns service launch (and its own watch); the CLI's --watch is not forwarded.
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.DoesNotContain(options.Args!, a => a.StartsWith("--watch", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("run --no-build", nameof(RunCommandStrings.NoBuildNotSupportedWithWatchMode))]
+    [InlineData("run --no-build --watch", nameof(RunCommandStrings.NoBuildNotSupportedWithWatchOption))]
+    public async Task RunCommand_InAspireTerminal_RejectsNoBuildForTheEffectiveWatchOwner(string commandLine, string errorName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var startDebugSessionCalled = false;
+        TestExtensionInteractionService? interaction = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                interaction = new TestExtensionInteractionService(sp);
+                interaction.StartDebugSessionCallback = (_, _, _, _) => startDebugSessionCalled = true;
+                return interaction;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(startDebugSessionCalled);
+        Assert.NotNull(interaction);
+        Assert.Contains(interaction.DisplayedErrors, error => error.Contains(
+            RunCommandStrings.ResourceManager.GetString(errorName, CultureInfo.CurrentCulture)!, StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task RunCommand_WhenRunningInExtension_ForwardsExplicitArgumentsInSemanticOrder()
     {
@@ -5519,7 +6060,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
         Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
         Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
-        Assert.Equal(["--no-build", $"--launch-profile={expectedLaunchProfile}", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.Equal(["--no-build", "--watch=false", $"--launch-profile={expectedLaunchProfile}", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
         Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
         var childParseResult = command.Parse(forwardedArguments);
 

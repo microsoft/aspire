@@ -8610,6 +8610,7 @@ public class CreateBuilderOptions implements JsonSerializable {
     private String dashboardApplicationName;
     private boolean allowUnsecuredTransport;
     private boolean enableResourceLogging;
+    private Boolean defaultResourceWatchEnabled;
 
     public String[] getArgs() { return args; }
     public void setArgs(String[] value) { this.args = value; }
@@ -8627,6 +8628,8 @@ public class CreateBuilderOptions implements JsonSerializable {
     public void setAllowUnsecuredTransport(boolean value) { this.allowUnsecuredTransport = value; }
     public boolean getEnableResourceLogging() { return enableResourceLogging; }
     public void setEnableResourceLogging(boolean value) { this.enableResourceLogging = value; }
+    public Boolean getDefaultResourceWatchEnabled() { return defaultResourceWatchEnabled; }
+    public void setDefaultResourceWatchEnabled(Boolean value) { this.defaultResourceWatchEnabled = value; }
 
     @SuppressWarnings("unchecked")
     public static CreateBuilderOptions fromMap(Map<String, Object> map) {
@@ -8647,6 +8650,8 @@ public class CreateBuilderOptions implements JsonSerializable {
         value.setAllowUnsecuredTransport((Boolean) allowUnsecuredTransportValue);
         var enableResourceLoggingValue = map.get("enableResourceLogging");
         value.setEnableResourceLogging((Boolean) enableResourceLoggingValue);
+        var defaultResourceWatchEnabledValue = map.get("defaultResourceWatchEnabled");
+        value.setDefaultResourceWatchEnabled(defaultResourceWatchEnabledValue == null ? null : (Boolean) defaultResourceWatchEnabledValue);
         return value;
     }
 
@@ -8660,6 +8665,7 @@ public class CreateBuilderOptions implements JsonSerializable {
         map.put("dashboardApplicationName", AspireClient.serializeValue(dashboardApplicationName));
         map.put("allowUnsecuredTransport", AspireClient.serializeValue(allowUnsecuredTransport));
         map.put("enableResourceLogging", AspireClient.serializeValue(enableResourceLogging));
+        map.put("defaultResourceWatchEnabled", AspireClient.serializeValue(defaultResourceWatchEnabled));
         return map;
     }
 }

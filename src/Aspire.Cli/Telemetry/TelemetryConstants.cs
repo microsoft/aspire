@@ -245,6 +245,33 @@ internal static class TelemetryConstants
         public const string AppHostIsolated = "aspire.cli.apphost.isolated";
 
         /// <summary>
+        /// Tag for the reload that Ctrl+R performs during <c>aspire run</c>: <c>apphost</c> restarts the AppHost and all
+        /// of its resources, and <c>services</c> rebuilds the watched services with fresh watchers. Set on
+        /// <see cref="Activities.RunAppHostReloadSummary"/> (the last mode offered) and on each
+        /// <see cref="Activities.RunAppHostReload"/>.
+        /// </summary>
+        public const string RunReloadMode = "aspire.cli.run.reload.mode";
+
+        /// <summary>
+        /// Tag for the number of Ctrl+R reloads accepted while one AppHost ran. Presses made while a reload is in progress
+        /// coalesce into one queued reload and count once.
+        /// </summary>
+        public const string RunReloadCount = "aspire.cli.run.reload.count";
+
+        /// <summary>
+        /// Tag indicating whether a Ctrl+R reload ended without a problem: <see langword="true"/> when its
+        /// <see cref="RunReloadOutcome"/> is <see cref="RunReloadOutcomes.Succeeded"/>, <see cref="RunReloadOutcomes.Canceled"/>,
+        /// <see cref="RunReloadOutcomes.Superseded"/>, <see cref="RunReloadOutcomes.SupersededByReload"/>, or
+        /// <see cref="RunReloadOutcomes.NoWatchedServices"/>.
+        /// </summary>
+        public const string RunReloadSuccess = "aspire.cli.run.reload.success";
+
+        /// <summary>
+        /// Tag for how a Ctrl+R reload ended. One of the <see cref="RunReloadOutcomes"/> values.
+        /// </summary>
+        public const string RunReloadOutcome = "aspire.cli.run.reload.outcome";
+
+        /// <summary>
         /// Tag for the error type when the operation fails.
         /// Set to the exception type name or a descriptive error category.
         /// Absence of this tag indicates success.
@@ -313,6 +340,17 @@ internal static class TelemetryConstants
         public const string RunAppHost = "aspire/cli/run_apphost";
 
         /// <summary>
+        /// Activity name for the Ctrl+R reloads offered while one AppHost ran. It starts when Ctrl+R is first offered and
+        /// ends with that AppHost; runs that never offer Ctrl+R don't record it.
+        /// </summary>
+        public const string RunAppHostReloadSummary = "aspire/cli/run_apphost.reload_summary";
+
+        /// <summary>
+        /// Activity name for one accepted Ctrl+R reload, from the key press until its outcome is known.
+        /// </summary>
+        public const string RunAppHostReload = "aspire/cli/run_apphost.reload";
+
+        /// <summary>
         /// Activity name for an AI agent skill/tool/reference telemetry event forwarded by the
         /// agent telemetry hook scripts.
         /// </summary>
@@ -338,5 +376,66 @@ internal static class TelemetryConstants
         /// Event name for a single Microsoft-internal detector probe.
         /// </summary>
         public const string InternalMicrosoftProbe = "aspire/cli/internal_microsoft_probe";
+    }
+
+    /// <summary>
+    /// Values of <see cref="Tags.RunReloadOutcome"/>.
+    /// </summary>
+    internal static class RunReloadOutcomes
+    {
+        /// <summary>The services were rebuilt and restarted, or the replacement AppHost started.</summary>
+        public const string Succeeded = "succeeded";
+
+        /// <summary>
+        /// Ctrl+C, or the end of the run without an error, stopped the reload before it finished. For example, the AppHost
+        /// that accepted the reload exited on its own before its replacement was created.
+        /// </summary>
+        public const string Canceled = "canceled";
+
+        /// <summary>An automatic restart replaced the reloaded AppHost before it finished starting.</summary>
+        public const string Superseded = "superseded";
+
+        /// <summary>
+        /// Another Ctrl+R replaced the reloaded AppHost before it finished starting. Ctrl+R stays available while a
+        /// replacement starts so that a replacement that hangs can be recovered, so this is how a slow or hung replacement
+        /// startup shows.
+        /// </summary>
+        public const string SupersededByReload = "superseded_by_reload";
+
+        /// <summary>The services stopped being watched before the reload ran, so there was nothing to rebuild.</summary>
+        public const string NoWatchedServices = "no_watched_services";
+
+        /// <summary>
+        /// The replacement AppHost didn't build, or a watch group's fresh build failed (the group's watch state is
+        /// <c>build-failed</c>).
+        /// </summary>
+        public const string BuildFailed = "build_failed";
+
+        /// <summary>
+        /// What the reload started didn't start. The replacement AppHost exited, or couldn't connect, during startup; or a
+        /// watch group was rebuilt, but one of its services didn't start: it exited, its start failed, or it didn't start in
+        /// time. For services, inferred when a group's Rebuild failed while its watch state is neither <c>build-failed</c>
+        /// nor <c>failed</c>. The reload's mode tells the two apart.
+        /// </summary>
+        public const string StartFailed = "start_failed";
+
+        /// <summary>
+        /// <c>aspire run</c> ended with an error before the replacement AppHost was created: the AppHost that accepted the
+        /// reload failed to shut down, its watch notification channel failed, or its run ended with an error.
+        /// </summary>
+        public const string RunFailed = "run_failed";
+
+        /// <summary>A watch group failed (its watch state is <c>failed</c>), so its fresh watcher couldn't run.</summary>
+        public const string GroupFailed = "group_failed";
+
+        /// <summary>
+        /// The call that rebuilds the watched services failed, or a call to the replacement AppHost failed or lost its
+        /// connection during startup.
+        /// </summary>
+        public const string RpcFailed = "rpc_failed";
+
+        /// <summary>Whether <paramref name="outcome"/> means the reload ended without a problem.</summary>
+        public static bool IsSuccess(string outcome) =>
+            outcome is Succeeded or Canceled or Superseded or SupersededByReload or NoWatchedServices;
     }
 }

@@ -18,6 +18,13 @@ internal sealed class OutputCollector
     private readonly object _lock = new object();
     private readonly FileLoggerProvider? _fileLogger;
     private readonly string _category;
+    private volatile bool _containsWatcherOutput;
+
+    internal bool ContainsWatcherOutput => _containsWatcherOutput;
+
+    // Set before launching the watcher. Failure paths inspect the collector when displaying output,
+    // not the requested watch flag, which can also describe an ordinary fallback AppHost.
+    internal void MarkWatcherOutput() => _containsWatcherOutput = true;
 
     /// <summary>
     /// Creates an OutputCollector that only buffers output in memory.

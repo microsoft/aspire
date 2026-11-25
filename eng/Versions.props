@@ -35,6 +35,11 @@
     <MicrosoftDeveloperControlPlanelinuxmuslamd64Version>0.27.5</MicrosoftDeveloperControlPlanelinuxmuslamd64Version>
     <MicrosoftDeveloperControlPlanewindowsamd64Version>0.27.5</MicrosoftDeveloperControlPlanewindowsamd64Version>
     <MicrosoftDeveloperControlPlanewindowsarm64Version>0.27.5</MicrosoftDeveloperControlPlanewindowsarm64Version>
+    <!-- Hot reload watch servers repacked into Aspire.Hosting.Dotnet, one per supported SDK major. Each watcher loads
+         MSBuild from the selected SDK, so an SDK major needs a watcher built for it
+         (DotnetWatchToolResolver.SupportedSdkMajors). -->
+    <MicrosoftDotNetHotReloadWatchAspireSdk10Version>10.0.403</MicrosoftDotNetHotReloadWatchAspireSdk10Version>
+    <MicrosoftDotNetHotReloadWatchAspireSdk11Version>11.0.100</MicrosoftDotNetHotReloadWatchAspireSdk11Version>
     <!-- Other -->
     <MicrosoftDotNetRemoteExecutorVersion>10.0.0-beta.26528.9</MicrosoftDotNetRemoteExecutorVersion>
     <MicrosoftDotNetXUnitV3ExtensionsVersion>10.0.0-beta.26528.9</MicrosoftDotNetXUnitV3ExtensionsVersion>

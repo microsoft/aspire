@@ -53,6 +53,7 @@
     <Project Path="src/Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.csproj" />
     <Project Path="src/Aspire.Hosting.Docker/Aspire.Hosting.Docker.csproj" />
     <Project Path="src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj" />
+    <Project Path="src/Aspire.Hosting.Dotnet.WatchHost/Aspire.Hosting.Dotnet.WatchHost.csproj" />
     <Project Path="src/Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.csproj" />
     <Project Path="src/Aspire.Hosting.Garnet/Aspire.Hosting.Garnet.csproj" />
     <Project Path="src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj" />

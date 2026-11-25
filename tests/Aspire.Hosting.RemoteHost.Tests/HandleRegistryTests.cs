@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
+using Microsoft.AspNetCore.InternalTesting;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -211,6 +212,65 @@ public class HandleRegistryTests
         await registry.DisposeAsync();
 
         Assert.True(asyncDisposable.Disposed);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DisposeAsync_StopsOwnedApplicationBeforeDisposingServices(bool duplicateHandle)
+    {
+        var service = new BlockingHostedService();
+        await using var application = RemoteHostShutdownTestServices.CreateApplication(service);
+        await application.StartAsync(TestContext.Current.CancellationToken);
+        var registry = new HandleRegistry();
+        registry.Register(application, "test/Application");
+        if (duplicateHandle)
+        {
+            registry.Register(application, "test/ApplicationAlias");
+        }
+
+        var disposal = registry.DisposeAsync().AsTask();
+        try
+        {
+            await service.Stopping.Task.DefaultTimeout();
+            Assert.False(disposal.IsCompleted);
+            Assert.False(service.Disposed.Task.IsCompleted);
+        }
+        finally
+        {
+            service.ReleaseStopping.TrySetResult();
+            await disposal.DefaultTimeout();
+        }
+
+        Assert.Equal(["started", "stopping", "stopped", "disposed"], service.Events.ToArray());
+        Assert.Equal(0, registry.Count);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_PreservesStopAndDisposalFailuresAndCleansOtherHandles()
+    {
+        var stoppingException = new InvalidOperationException("Application stopping failed.");
+        var disposalException = new IOException("Application disposal failed.");
+        var service = new BlockingHostedService
+        {
+            StoppingException = stoppingException,
+            DisposalException = disposalException
+        };
+        service.ReleaseStopping.TrySetResult();
+        var application = RemoteHostShutdownTestServices.CreateApplication(service);
+        await application.StartAsync(TestContext.Current.CancellationToken);
+        using var otherHandle = new CancellationTokenSource();
+        var registry = new HandleRegistry();
+        registry.Register(application, "test/Application");
+        registry.Register(otherHandle, "test/Disposable");
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(
+            () => registry.DisposeAsync().AsTask().DefaultTimeout());
+
+        Assert.Equal([stoppingException, disposalException], exception.InnerExceptions);
+        Assert.True(service.Disposed.Task.IsCompletedSuccessfully);
+        Assert.Throws<ObjectDisposedException>(() => otherHandle.Token);
+        Assert.Equal(0, registry.Count);
     }
 
     private sealed class TestObject

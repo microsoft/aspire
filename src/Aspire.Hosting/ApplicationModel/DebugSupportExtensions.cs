@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -98,6 +99,9 @@ public static class DebugSupportExtensions
         // IDE launch is unavailable without an active debug session. Force-process and persistent resources always
         // stay on the DCP process path, and debug-only producers are inactive during a no-debug session.
         if (string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
+            // Upstream host injects an execution-service endpoint even without a real IDE.
+            // CLI ownership keeps builds and executable launches on Aspire's process path.
+            || DotnetWatchOwnership.IsCliOwned(configuration[DotnetWatchOwnership.OwnerEnvironmentVariable])
             || resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
             || resource.HasPersistentLifetime()
             || (declaredAnnotation?.RequiresDebugMode is true &&

@@ -5470,6 +5470,547 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal($"Failed to stop resource '{dcpExe.Metadata.Name}'.", ex.Message);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task StartResourceAsync_CanceledBeforeReachingDcp_LeavesResourceNotStarted(bool canceledByStop)
+    {
+        // A start waits for its BeforeResourceStartedEvent handlers (for example, WaitFor dependencies) before DCP creates
+        // the resource's object. Until then a Stop, or the start's caller, can cancel it. Nothing was launched, so the
+        // resource is NotStarted rather than FailedToStart.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var holdStarts = false;
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            if (holdStarts)
+            {
+                waiting.TrySetResult();
+                await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            }
+        });
+        var states = new ConcurrentQueue<string?>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (holdStarts)
+            {
+                states.Enqueue(context.Status.State);
+            }
+            return Task.CompletedTask;
+        });
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        var reference = appExecutor.GetResource(Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "app")).Metadata.Name);
+
+        holdStarts = true;
+        using var caller = new CancellationTokenSource();
+        var starting = appExecutor.StartResourceAsync(reference, caller.Token);
+        await waiting.Task.DefaultTimeout();
+        if (canceledByStop)
+        {
+            Assert.Equal(PendingStartCancellation.Canceled,
+                await appExecutor.CancelPendingStartAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout());
+        }
+        else
+        {
+            caller.Cancel();
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => starting).DefaultTimeout();
+        Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "app"));
+        Assert.Contains(KnownResourceStates.NotStarted, states);
+        Assert.Empty(failures);
+        Assert.False(appExecutor.HasDcpObject(reference));
+        Assert.True(appExecutor.IsStartCanceled(reference.DcpResourceName));
+        Assert.Equal(PendingStartCancellation.None,
+            await appExecutor.CancelPendingStartAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task StartupWaitCanceledByStop_LeavesResourceNotStartedWithoutCreatingIt()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            waiting.TrySetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+        });
+        var states = new ConcurrentQueue<string?>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            states.Enqueue(context.Status.State);
+            return Task.CompletedTask;
+        });
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService, events: events);
+
+        var running = appExecutor.RunApplicationAsync();
+        await waiting.Task.DefaultTimeout();
+        var reference = appExecutor.GetResource(Assert.Single(resource.Resource.GetResolvedResourceNames()));
+
+        Assert.Equal(PendingStartCancellation.Canceled,
+            await appExecutor.CancelPendingStartAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout());
+        await running.DefaultTimeout();
+
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "app"));
+        Assert.Contains(KnownResourceStates.NotStarted, states);
+        Assert.Empty(failures);
+        Assert.False(appExecutor.HasDcpObject(reference));
+    }
+
+    [Fact]
+    public async Task StartupWaitOfReplicas_StopCancelsOnlyThatReplica()
+    {
+        // The replicas that a resource creates at startup share one wait. Stopping one of them during the wait takes it
+        // out of the start without ending the wait; the others start once it ends.
+        var builder = DistributedApplication.CreateBuilder();
+        AddExecutableWithPrecomputedReplicas(builder);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waitCanceled = false;
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            waiting.TrySetResult();
+            try
+            {
+                await release.Task.WaitAsync(context.CancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                waitCanceled = true;
+                throw;
+            }
+        });
+        var notStarted = new ConcurrentQueue<string>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Status.State == KnownResourceStates.NotStarted)
+            {
+                notStarted.Enqueue(context.DcpResourceName);
+            }
+            return Task.CompletedTask;
+        });
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService, events: events);
+
+        var running = appExecutor.RunApplicationAsync();
+        await waiting.Task.DefaultTimeout();
+
+        Assert.Equal(PendingStartCancellation.Canceled,
+            await appExecutor.CancelPendingStartAsync(appExecutor.GetResource("program-first"), TestContext.Current.CancellationToken).DefaultTimeout());
+        Assert.Equal(["program-first"], notStarted);
+
+        release.SetResult();
+        await running.DefaultTimeout();
+
+        Assert.Equal("program-second", Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "program")).Metadata.Name);
+        Assert.All(notStarted, name => Assert.Equal("program-first", name));
+        Assert.False(waitCanceled);
+        Assert.Empty(failures);
+    }
+
+    [Fact]
+    public async Task StartupWaitOfReplicas_StartAfterAStopLeavesTheReplicasStateToThatStart()
+    {
+        // A Stop takes a replica out of the startup wait that it shares with its siblings, and a Start of the replica
+        // begins before the wait ends. That Start determines the replica's state, so the startup doesn't report again,
+        // when the wait ends, that the replica didn't start.
+        var builder = DistributedApplication.CreateBuilder();
+        AddExecutableWithPrecomputedReplicas(builder);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            waiting.TrySetResult();
+            await release.Task.WaitAsync(context.CancellationToken);
+        });
+        var notStarted = new ConcurrentQueue<string>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Status.State == KnownResourceStates.NotStarted)
+            {
+                notStarted.Enqueue(context.DcpResourceName);
+            }
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService, events: events);
+
+        var running = appExecutor.RunApplicationAsync();
+        await waiting.Task.DefaultTimeout();
+        var first = appExecutor.GetResource("program-first");
+        Assert.Equal(PendingStartCancellation.Canceled,
+            await appExecutor.CancelPendingStartAsync(first, TestContext.Current.CancellationToken).DefaultTimeout());
+        // The Start begins at once and then waits for the startup of the replica.
+        var starting = appExecutor.StartResourceAsync(first, TestContext.Current.CancellationToken);
+        release.SetResult();
+        await running.DefaultTimeout();
+        await starting.DefaultTimeout();
+
+        Assert.Equal(["program-first"], notStarted);
+        Assert.Equal(["program-second", "program-first"],
+            GetCreatedExecutablesForResource(kubernetesService, "program").Select(e => e.Metadata.Name));
+    }
+
+    [Fact]
+    public async Task StopDuringFirstStartOfAPersistentResourceThatDcpFoundRunningCancelsTheStartAndStopsTheResource()
+    {
+        // The AppHost creates the object of an explicit-start persistent resource without starting it, and DCP can find
+        // the resource already running. The first start keeps that object, so a Stop during the start's wait cancels
+        // the start and then has to stop the running resource; the instance doesn't become NotStarted.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".").WithPersistentLifetime().WithExplicitStart();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        }).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var holdStarts = false;
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            if (holdStarts)
+            {
+                waiting.TrySetResult();
+                await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            }
+        });
+        var reportedRunning = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var states = new ConcurrentQueue<string?>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Status.State == ExecutableState.Running)
+            {
+                reportedRunning.TrySetResult();
+            }
+            if (holdStarts)
+            {
+                states.Enqueue(context.Status.State);
+            }
+            return Task.CompletedTask;
+        });
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), configuration: configuration, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        var dcpExe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "app"));
+        Assert.False(dcpExe.Spec.Start);
+        dcpExe.Status = new ExecutableStatus { State = ExecutableState.Running };
+        kubernetesService.PushResourceModified(dcpExe);
+        await reportedRunning.Task.DefaultTimeout();
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+
+        holdStarts = true;
+        var starting = appExecutor.StartResourceAsync(reference, TestContext.Current.CancellationToken);
+        await waiting.Task.DefaultTimeout();
+
+        Assert.Equal(PendingStartCancellation.Committed,
+            await appExecutor.CancelPendingStartAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => starting).DefaultTimeout();
+        Assert.Empty(states);
+        Assert.Empty(failures);
+        Assert.False(dcpExe.Spec.Start);
+        Assert.False(appExecutor.IsStartCanceled(reference.DcpResourceName));
+
+        await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.True(dcpExe.Spec.Stop);
+    }
+
+    [Fact]
+    public async Task StartWhoseCallerGivesUpBehindAnotherStartLeavesTheStateToThatStart()
+    {
+        // A Start command that waits behind another start of the same instance can be canceled by its caller. The other
+        // start is still in progress and determines the instance's state, so the canceled one doesn't report NotStarted.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var holdStarts = false;
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            if (holdStarts)
+            {
+                waiting.TrySetResult();
+                await release.Task.WaitAsync(context.CancellationToken);
+            }
+        });
+        var notStarted = new ConcurrentQueue<string>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (holdStarts && context.Status.State == KnownResourceStates.NotStarted)
+            {
+                notStarted.Enqueue(context.DcpResourceName);
+            }
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        var reference = appExecutor.GetResource(Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "app")).Metadata.Name);
+
+        holdStarts = true;
+        var first = appExecutor.StartResourceAsync(reference, TestContext.Current.CancellationToken);
+        await waiting.Task.DefaultTimeout();
+        using var caller = new CancellationTokenSource();
+        var second = appExecutor.StartResourceAsync(reference, caller.Token);
+        caller.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => second).DefaultTimeout();
+        Assert.Empty(notStarted);
+        Assert.False(appExecutor.IsStartCanceled(reference.DcpResourceName));
+
+        release.SetResult();
+        await first.DefaultTimeout();
+        Assert.Empty(notStarted);
+        Assert.True(appExecutor.HasDcpObject(reference));
+    }
+
+    [Fact]
+    public async Task StopWhileARestartFailsToDeleteTheObjectItReplacesStopsThatObject()
+    {
+        // A Start of a running resource deletes its object to re-create it. A Stop during the deletion cancels the start
+        // without interrupting the deletion. If the deletion then fails, the object may still run, so the Stop stops it
+        // rather than report that the resource didn't start.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService(ignoreDeletes: true);
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var notStarted = new ConcurrentQueue<string>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Status.State == KnownResourceStates.NotStarted)
+            {
+                notStarted.Enqueue(context.DcpResourceName);
+            }
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        var dcpExe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "app"));
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+        var deleting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failDeletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>()
+            .AddRetry(new RetryStrategyOptions<bool>
+            {
+                MaxRetryAttempts = 1,
+                ShouldHandle = args => ValueTask.FromResult(!args.Outcome.Result),
+                DelayGenerator = async _ =>
+                {
+                    deleting.TrySetResult();
+                    await failDeletion.Task;
+                    return TimeSpan.Zero;
+                }
+            })
+            .Build();
+
+        var starting = appExecutor.StartResourceAsync(reference, TestContext.Current.CancellationToken);
+        await deleting.Task.DefaultTimeout();
+        var canceling = appExecutor.CancelPendingStartAsync(reference, TestContext.Current.CancellationToken);
+        failDeletion.SetResult();
+
+        Assert.Equal(PendingStartCancellation.Committed, await canceling.DefaultTimeout());
+        await Assert.ThrowsAsync<DistributedApplicationException>(() => starting).DefaultTimeout();
+        Assert.Empty(notStarted);
+        Assert.True(await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout());
+        Assert.True(dcpExe.Spec.Stop);
+    }
+
+    [Fact]
+    public async Task StopDuringARestartsDeletionLeavesTheStateToAStartThatBeganMeanwhile()
+    {
+        // A Stop cancels a restart while the restart deletes the resource's object, and a Start begins before the deletion
+        // completes. That Start determines the resource's state, so nothing reports that the resource didn't start: it
+        // would replace the states that the Start publishes, and leaving Waiting would release its dependency wait.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService(ignoreDeletes: true);
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var notStarted = new ConcurrentQueue<string>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Status.State == KnownResourceStates.NotStarted)
+            {
+                notStarted.Enqueue(context.DcpResourceName);
+            }
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        var dcpExe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "app"));
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+        var deleting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishDeletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>()
+            .AddRetry(new RetryStrategyOptions<bool>
+            {
+                MaxRetryAttempts = 1,
+                ShouldHandle = args => ValueTask.FromResult(!args.Outcome.Result),
+                DelayGenerator = async _ =>
+                {
+                    deleting.TrySetResult();
+                    await finishDeletion.Task;
+                    return TimeSpan.Zero;
+                }
+            })
+            .Build();
+
+        var restarting = appExecutor.StartResourceAsync(reference, TestContext.Current.CancellationToken);
+        await deleting.Task.DefaultTimeout();
+        var canceling = appExecutor.CancelPendingStartAsync(reference, TestContext.Current.CancellationToken);
+        // The Start begins at once and then waits for the restart.
+        var starting = appExecutor.StartResourceAsync(reference, TestContext.Current.CancellationToken);
+        // DCP deletes the object, so the restart's deletion completes.
+        kubernetesService.DeletedResources.Enqueue(dcpExe.Metadata.Name);
+        finishDeletion.SetResult();
+
+        Assert.Equal(PendingStartCancellation.Canceled, await canceling.DefaultTimeout());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => restarting).DefaultTimeout();
+        await starting.DefaultTimeout();
+        Assert.Empty(notStarted);
+        Assert.Equal(2, GetCreatedExecutablesForResource(kubernetesService, "app").Count);
+        Assert.False(appExecutor.IsStartCanceled(reference.DcpResourceName));
+    }
+
+    [Fact]
+    public async Task StopOfAStartThatReplacedWhatTheStartupLaunchedReportsThatTheResourceDidNotStart()
+    {
+        // A Start began during the AppHost's startup of the resource and waited for it. The startup created the resource's
+        // object, the Start then deleted it to re-create it, and a Stop canceled the Start during the deletion. Nothing
+        // runs, so the canceled Start reports that the resource didn't start.
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService(ignoreDeletes: true);
+        using var app = builder.Build();
+        var events = new DcpExecutorEvents();
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            waiting.TrySetResult();
+            await release.Task.WaitAsync(context.CancellationToken);
+        });
+        var notStarted = new ConcurrentQueue<string>();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Status.State == KnownResourceStates.NotStarted)
+            {
+                notStarted.Enqueue(context.DcpResourceName);
+            }
+            return Task.CompletedTask;
+        });
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService, events: events);
+        var deleting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishDeletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>()
+            .AddRetry(new RetryStrategyOptions<bool>
+            {
+                MaxRetryAttempts = 1,
+                ShouldHandle = args => ValueTask.FromResult(!args.Outcome.Result),
+                DelayGenerator = async _ =>
+                {
+                    deleting.TrySetResult();
+                    await finishDeletion.Task;
+                    return TimeSpan.Zero;
+                }
+            })
+            .Build();
+
+        var running = appExecutor.RunApplicationAsync();
+        await waiting.Task.DefaultTimeout();
+        var reference = appExecutor.GetResource(Assert.Single(resource.Resource.GetResolvedResourceNames()));
+        var starting = appExecutor.StartResourceAsync(reference, TestContext.Current.CancellationToken);
+        release.SetResult();
+        await running.DefaultTimeout();
+        await deleting.Task.DefaultTimeout();
+        var canceling = appExecutor.CancelPendingStartAsync(reference, TestContext.Current.CancellationToken);
+        // DCP deletes the object, so the Start's deletion completes.
+        kubernetesService.DeletedResources.Enqueue(reference.DcpResourceName);
+        finishDeletion.SetResult();
+
+        Assert.Equal(PendingStartCancellation.Canceled, await canceling.DefaultTimeout());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => starting).DefaultTimeout();
+        Assert.Equal([reference.DcpResourceName], notStarted);
+        Assert.True(appExecutor.IsStartCanceled(reference.DcpResourceName));
+    }
+
+    [Fact]
+    public async Task StopOfAResourceWhoseRecreationFailedAfterItsStartReachedDcpFindsNothingToStop()
+    {
+        // The restart deleted the resource's object and reached DCP, but creating the new object failed, so there's no
+        // object left. Stopping the resource then has nothing to stop.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var failCreation = false;
+        var kubernetesService = new TestKubernetesService(beforeCreate: resource =>
+        {
+            if (failCreation && resource is Executable)
+            {
+                throw new InvalidOperationException("The executable couldn't be created.");
+            }
+        });
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        var reference = appExecutor.GetResource(Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "app")).Metadata.Name);
+        failCreation = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.StartResourceAsync(reference, TestContext.Current.CancellationToken)).DefaultTimeout();
+
+        Assert.False(await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout());
+        Assert.False(appExecutor.HasDcpObject(reference));
+    }
+
     [Fact]
     public async Task ErrorIfResourceNotDeletedBeforeRestart()
     {

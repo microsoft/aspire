@@ -1,0 +1,44 @@
+🔐 Trusting certificates...
+🚨 Developer certificates may not be fully trusted (trust exit code was:
+   PartiallyFailedToTrustTheCertificate).
+🛠️ Building AppHost... DotnetProjectWatch.AppHost.csproj
+Connecting to AppHost...
+Starting dashboard...
+
+     AppHost:  DotnetProjectWatch.AppHost.csproj
+
+   Dashboard:  http://localhost:15850/login?t=<redacted>
+
+        Logs:  /root/.aspire/logs/cli_20261105T214814_5609f01a.log
+
+       Watch:  🔥 Hot reload is on for C# services (preview). Save a file to
+               apply changes.
+
+               Press CTRL+C to stop the AppHost and exit.
+21:48:33 👀 Watching api, worker for changes. Edits are hot reloaded; changes
+that need a restart restart only the affected service.
+21:49:24 🔥 Hot reload applied to api, worker in 2114 ms (Greeter.cs).
+21:49:50 📦 WatchDemo.Api.csproj changed. New package or project references
+aren't hot reloaded; use Rebuild on api (dashboard, or 'aspire resource <name>
+rebuild') to apply them.
+21:50:03 🔥 Hot reload applied to api in 396 ms (Program.cs).
+21:50:21 🔥 Hot reload applied to api in 175 ms (Program.cs).
+21:50:31 📝 appsettings.json changed; no code to update in api.
+21:50:39 💥 api exited with code 3. Save a change or use Restart to relaunch it.
+21:50:46 ▶️ api is running again.
+21:51:00 ❌ Build error in worker: Program.cs(2,1): CS1529: A using clause must
+precede all other elements defined in the namespace except extern alias
+declarations. The app keeps running the last good code; fix it and save.
+21:51:32 ⌚ Rebuilding worker…
+21:51:38 ✅ Build succeeded; worker resumed.
+21:51:38 🔄 Restarting worker to apply changes that can't be hot reloaded.
+21:52:12 ⌚ Rebuilding api…
+21:52:18 🔄 Restarting api to apply changes that can't be hot reloaded.
+21:52:20 📝 hello.html changed; no code to update in api.
+
+🛑 Stopping Aspire.
+
+A new version of Aspire is available: 17.0.0-preview.1.26555.3
+To update, run: aspire update
+For more information, see: https://aka.ms/aspire/update
+

@@ -136,6 +136,7 @@ internal static class CliTestHelper
         services.AddMemoryCache();
 
         services.AddSingleton<ConsoleLogBufferContext>();
+        services.AddSingleton(options.ConsoleInputFactory);
         services.AddSingleton(options.ConsoleEnvironmentFactory);
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
         services.AddSingleton(options.TimeProvider);
@@ -415,6 +416,8 @@ internal sealed class CliServiceCollectionTestOptions
     public StringWriter? ErrorTextWriter { get; set; }
     public bool DisableAnsi { get; set; }
     public TimeProvider TimeProvider { get; set; } = TimeProvider.System;
+    public Func<IServiceProvider, IConsoleInput> ConsoleInputFactory { get; set; } =
+        _ => new TestConsoleInput { IsInputRedirected = true };
 
     public Func<IServiceProvider, ConsoleEnvironment> ConsoleEnvironmentFactory => (IServiceProvider serviceProvider) =>
     {

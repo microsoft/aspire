@@ -13,6 +13,10 @@ public class DcpEnvironmentTests
     [InlineData("ASPNETCORE_ENVIRONMENT")]
     [InlineData("DOTNET_ENVIRONMENT")]
     [InlineData("ASPIRE_LOGLEVEL")]
+    [InlineData("ASPIRE_DOTNET_WATCH_OWNER")]
+    [InlineData("ASPIRE_DOTNET_WATCH_HOST_CONTROL")]
+    [InlineData("ASPIRE_DOTNET_WATCH_HOST_SESSION")]
+    [InlineData("ASPIRE_RESOURCE_WATCH_SUPPRESS")]
     public void ExcludesOnlyExactHostRuntimeNamesUsingHostingComparisonRules(string name)
     {
         Assert.True(DcpEnvironmentVariables.IsExcluded(name));

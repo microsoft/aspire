@@ -1,0 +1,1 @@
+﻿Press CTRL+R to reload the AppHost and all resources · CTRL+C to stop the AppHost and exit.

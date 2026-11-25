@@ -219,7 +219,7 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
                 ansiPassThru.Equals("1", StringComparison.Ordinal));
     }
 
-    private static bool IsCI(IConfiguration configuration)
+    internal static bool IsCI(IConfiguration configuration)
     {
         foreach (var envVar in s_ciEnvironmentVariables)
         {

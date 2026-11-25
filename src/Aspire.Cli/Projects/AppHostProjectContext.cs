@@ -4,6 +4,7 @@
 using System.CommandLine;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Watch;
 
 namespace Aspire.Cli.Projects;
 
@@ -18,9 +19,14 @@ internal sealed class AppHostProjectContext
     public required FileInfo AppHostFile { get; init; }
 
     /// <summary>
-    /// Gets whether to run in watch mode (hot reload).
+    /// Gets the resolved AppHost-edit watch selection. Resource defaults are resolved by Hosting,
+    /// independently of this flag. Real IDE-owned runs retain IDE policy.
     /// </summary>
     public bool Watch { get; init; }
+
+    internal bool WatchExplicitlySet { get; init; }
+
+    internal DotnetWatchAppHostGeneration? WatchGeneration { get; init; }
 
     /// <summary>
     /// Gets whether to run in debug mode.

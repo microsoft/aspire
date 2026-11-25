@@ -16,6 +16,60 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 
+/// <summary>
+/// A generation-scoped snapshot of resource-watch policy and logical-resource coverage.
+/// </summary>
+internal sealed class ResourceWatchStatus
+{
+    public required Guid GenerationId { get; init; }
+    public required bool DefaultEnabled { get; init; }
+    public required ResourceWatchResourceStatus[] Resources { get; init; }
+}
+
+/// <summary>
+/// Watch participation, independent of application health, replica identity, and hot-reload outcome.
+/// </summary>
+internal sealed class ResourceWatchResourceStatus
+{
+    public required string Resource { get; init; }
+    public required string State { get; init; }
+    public string? Reason { get; init; }
+    public string? LogResource { get; init; }
+}
+
+/// <summary>
+/// The outcome of reloading every watch group: each group's watcher was replaced with a fresh one that builds from source.
+/// </summary>
+internal sealed class ResourceWatchReloadResult
+{
+    /// <summary>One entry per watch group, ordered by <see cref="ResourceWatchReloadGroupResult.LogResource"/>. Empty when nothing is watched.</summary>
+    public required ResourceWatchReloadGroupResult[] Groups { get; init; }
+}
+
+/// <summary>
+/// The outcome of the Rebuild command that reloaded one watch group.
+/// </summary>
+internal sealed class ResourceWatchReloadGroupResult
+{
+    /// <summary>The group's hidden watcher resource; its console logs hold the group's build output.</summary>
+    public required string LogResource { get; init; }
+
+    /// <summary>The watched resources of the group, in model order.</summary>
+    public required string[] Resources { get; init; }
+
+    public required bool Success { get; init; }
+
+    /// <summary>The Rebuild command's result message, which names what happened and the next step on failure.</summary>
+    public string? Message { get; init; }
+
+    /// <summary>
+    /// The most severe watch state of the group's services right after the Rebuild command returned: <c>failed</c> when
+    /// the group failed, <c>build-failed</c> when its fresh build failed, and otherwise another watch state such as
+    /// <c>watching</c>. Tells why a failed Rebuild failed. <see langword="null"/> when no service reports a watch state.
+    /// </summary>
+    public string? State { get; init; }
+}
+
 // =============================================================================
 // Auxiliary Backchannel Contract Rules:
 //

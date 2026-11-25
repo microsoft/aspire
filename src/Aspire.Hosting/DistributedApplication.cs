@@ -244,6 +244,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
             DisableDashboard = options.DisableDashboard,
             AllowUnsecuredTransport = options.AllowUnsecuredTransport,
             EnableResourceLogging = options.EnableResourceLogging,
+#pragma warning disable ASPIREWATCH001 // Project the experimental run default into the real builder.
+            DefaultResourceWatchEnabled = options.DefaultResourceWatchEnabled,
+#pragma warning restore ASPIREWATCH001
             ContainerRegistryOverride = options.ContainerRegistryOverride,
             DashboardApplicationName = options.DashboardApplicationName,
             IsGuestAppHost = true,

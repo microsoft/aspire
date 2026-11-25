@@ -1,0 +1,19 @@
+﻿[
+  exec,
+  watch.dll,
+  host,
+  --sdk,
+  selected-sdk,
+  --entrypoint,
+  AppHost.csproj,
+  --launch-profile=--profile-shaped,
+  --,
+  --,
+  --environment,
+  two words,
+  ,
+  --project,
+  app-input,
+  --,
+  --watch
+]

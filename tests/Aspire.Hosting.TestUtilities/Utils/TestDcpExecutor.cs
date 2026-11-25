@@ -10,6 +10,7 @@ internal sealed class TestDcpExecutor : IDcpExecutor
 {
     private readonly Dictionary<string, IResourceReference> _resources = new(StringComparers.ResourceName);
     private readonly ConcurrentQueue<string> _startedResources = new();
+    private readonly ConcurrentQueue<string> _stoppedResources = new();
 
     /// <summary>
     /// DCP resource names passed to <see cref="StartResourceAsync"/>, in the order they were requested.
@@ -49,7 +50,36 @@ internal sealed class TestDcpExecutor : IDcpExecutor
 
     public Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken) => Task.FromResult(true);
 
-    public Task StopResourceAsync(IResourceReference resource, CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <summary>DCP resource names passed to <see cref="StopResourceAsync"/>, in the order they were requested.</summary>
+    public IReadOnlyCollection<string> StoppedResources => _stoppedResources;
+
+    public Task<bool> StopResourceAsync(IResourceReference resource, CancellationToken cancellationToken)
+    {
+        _stoppedResources.Enqueue(resource.DcpResourceName);
+        return Task.FromResult(true);
+    }
+
+    /// <summary>
+    /// What <see cref="CancelPendingStartAsync"/> reports for an instance. By default no start is pending. A test that
+    /// reports a canceled start also publishes the state that the real executor would.
+    /// </summary>
+    public Func<IResourceReference, Task<PendingStartCancellation>> OnCancelPendingStart { get; set; } = _ => Task.FromResult(PendingStartCancellation.None);
+
+    /// <summary>
+    /// What <see cref="HasDcpObject"/> reports for an instance. By default every registered resource stands for a DCP
+    /// object, so a Stop reaches <see cref="StopResourceAsync"/>.
+    /// </summary>
+    public Func<IResourceReference, bool> OnHasDcpObject { get; set; } = _ => true;
+
+    public Task<PendingStartCancellation> CancelPendingStartAsync(IResourceReference resourceReference, CancellationToken cancellationToken) =>
+        OnCancelPendingStart(resourceReference);
+
+    public bool HasDcpObject(IResourceReference resourceReference) => OnHasDcpObject(resourceReference);
+
+    /// <summary>What <see cref="IsStartCanceled"/> reports for an instance. By default no start was canceled.</summary>
+    public Func<string, bool> OnIsStartCanceled { get; set; } = _ => false;
+
+    public bool IsStartCanceled(string dcpResourceName) => OnIsStartCanceled(dcpResourceName);
 
     private sealed class TestResourceReference(IResource modelResource, string dcpResourceName) : IResourceReference
     {

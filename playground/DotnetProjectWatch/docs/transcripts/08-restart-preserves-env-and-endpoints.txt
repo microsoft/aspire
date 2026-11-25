@@ -1,0 +1,32 @@
+Script started on 2026-11-05 22:35:22+00:00 [COMMAND="../../../dotnet.sh ../../../artifacts/bin/Aspire.Cli/Debug/net11.0/aspire.dll run --watch" <not executed on terminal>]
+🔐 Trusting certificates...
+🚨 Developer certificates may not be fully trusted (trust exit code was:        
+   PartiallyFailedToTrustTheCertificate).                                       
+🛠️ Building AppHost... DotnetProjectWatch.AppHost.csproj
+Connecting to AppHost...
+Starting dashboard...
+22:37:18 'ticker' is a file-based C# app (ticker.cs); hot reload doesn't support
+those yet, so it runs without watch. Restart it to pick up changes.
+
+     AppHost:  DotnetProjectWatch.AppHost.csproj                                
+                                                                                
+   Dashboard:  http://localhost:15850/login?t=<redacted>   
+               1                                                                
+                                                                                
+        Logs:  /root/.aspire/logs/cli_20261105T223522_ed43098b.log              
+                                                                                
+       Watch:  🔥 Hot reload is on for C# services (preview). Save a file to    
+               apply changes.                                                   
+                                                            
+               Press CTRL+C to stop the AppHost and exit.   
+22:37:32 👀 Watching api, worker for changes. Edits are hot reloaded; changes 
+that need a restart restart only the affected service.
+22:38:20 ⌚ Rebuilding api…
+22:38:25 🔄 Restarting api to apply changes that can't be hot reloaded.
+
+# Verification after adding a route (rude edit → restart), 11.0 s edit→served:
+# aspire logs api:
+#   api started (GREETING_SOURCE=apphost)   Now listening on: http://localhost:11762   (before)
+#   api started (GREETING_SOURCE=apphost)   Now listening on: http://localhost:11762   (after restart)
+# aspire logs worker (after restart):
+#   worker sees: "Hello from Shared v1" | api says: "api v1 | Hello from Shared v1"

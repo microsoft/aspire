@@ -1,0 +1,42 @@
+﻿{
+  "Initial": {
+    "CompileItems": [
+      {
+        "Identity": "{fixture}/app.cs",
+        "FullPath": "{fixture}/app.cs"
+      },
+      {
+        "Identity": "{fixture}/first.cs",
+        "FullPath": "{fixture}/first.cs"
+      }
+    ],
+    "PackageReferences": [
+      {
+        "Identity": "Example.Package",
+        "Version": "1.0.0",
+        "VersionOverride": "",
+        "CentralVersions": []
+      }
+    ]
+  },
+  "Changed": {
+    "CompileItems": [
+      {
+        "Identity": "{fixture}/app.cs",
+        "FullPath": "{fixture}/app.cs"
+      },
+      {
+        "Identity": "{fixture}/second.cs",
+        "FullPath": "{fixture}/second.cs"
+      }
+    ],
+    "PackageReferences": [
+      {
+        "Identity": "Example.Package",
+        "Version": "2.0.0",
+        "VersionOverride": "",
+        "CentralVersions": []
+      }
+    ]
+  }
+}

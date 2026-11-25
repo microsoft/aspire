@@ -459,6 +459,7 @@ public class Program
             BuildAnsiConsole(s, Console.Error),
             Console.In));
         builder.Services.AddSingleton(s => s.GetRequiredService<ConsoleEnvironment>().Out);
+        builder.Services.AddSingleton<IConsoleInput, ConsoleInput>();
         builder.Services.AddSingleton<ICliHostEnvironment>(provider =>
         {
             var configuration = provider.GetRequiredService<IConfiguration>();

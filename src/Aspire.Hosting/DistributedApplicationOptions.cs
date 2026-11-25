@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Aspire.Hosting;
@@ -48,6 +49,27 @@ public sealed class DistributedApplicationOptions
     /// Enables resource logging. Logs will be written to the logger category (ApplicationName.Resources.{resourceName}).
     /// </summary>
     public bool EnableResourceLogging { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether compatible resources are watched by default in run mode.
+    /// </summary>
+    /// <remarks>
+    /// An explicit value overrides <c>AppHost:Run:WatchEnabled</c>. When omitted, that configuration key
+    /// supplies the default, or watching is enabled if the key is absent. Individual resources can override
+    /// the default. This option does not control AppHost edits or override IDE and launcher constraints.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+    /// {
+    ///     Args = args,
+    ///     DefaultResourceWatchEnabled = false
+    /// });
+    /// builder.AddDotnetProject("api", "../Api/Api.csproj").WithWatch(true);
+    /// </code>
+    /// </example>
+    [Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public bool? DefaultResourceWatchEnabled { get; set; }
 
     /// <summary>
     /// The command line arguments.

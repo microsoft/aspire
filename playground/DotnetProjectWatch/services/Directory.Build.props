@@ -1,0 +1,6 @@
+<Project>
+  <!-- Stops MSBuild from importing the repo's Arcade-based Directory.Build.props. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

@@ -20,19 +20,23 @@ namespace Aspire.Hosting;
 public sealed class RunConfiguration
 {
     /// <summary>
-    /// A configuration where every aspect of the run holds its default value.
+    /// The neutral configuration used outside run mode.
     /// </summary>
     /// <remarks>
     /// Shared rather than allocated per context because the instance is immutable.
     /// </remarks>
     internal static RunConfiguration Default { get; } = new();
 
+    internal static RunConfiguration RunDefault { get; } = new() { WatchEnabled = true };
+
     /// <summary>
-    /// Indicates that resources should start in watch mode if able.
+    /// Indicates that resources should start in watch mode by default if able.
     /// </summary>
     /// <remarks>
     /// Integrations that support watch can launch their resources so that source changes are hot-reloaded.
-    /// This is a hint: integrations that cannot watch their resources should start them in normal fashion.
+    /// This is a default, not a prohibition: an integration can allow explicit resource choices to override it.
+    /// Integrations that cannot watch their resources should start them in normal fashion unless watch is required.
+    /// AppHost edit watching is configured separately by the launcher.
     /// </remarks>
     public bool WatchEnabled { get; init; }
 }

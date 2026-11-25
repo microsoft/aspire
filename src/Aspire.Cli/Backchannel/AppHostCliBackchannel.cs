@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
 
@@ -19,6 +20,8 @@ internal interface IAppHostCliBackchannel
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
+    IAsyncEnumerable<ResourceWatchStatus?> WatchResourceWatchStatusAsync(CancellationToken cancellationToken);
+    Task<ResourceWatchReloadResult> ReloadWatchedResourcesAsync(CancellationToken cancellationToken);
     Task WaitForDisconnectAsync(CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken);
@@ -154,6 +157,41 @@ internal sealed class AppHostCliBackchannel(
                 profilingTelemetry, "apphost", "GetResourceStatesAsync", [], ct),
             "resource states",
             cancellationToken);
+    }
+
+    public IAsyncEnumerable<ResourceWatchStatus?> WatchResourceWatchStatusAsync(CancellationToken cancellationToken) =>
+        InvokeStreamingRpcAsync<ResourceWatchStatus?>(
+            async (rpc, ct) =>
+            {
+                // Re-negotiate on every connection, including AppHost-generation replacement.
+                var capabilities = await rpc.InvokeWithProfilingAsync<string[]>(
+                    profilingTelemetry, "apphost", "GetCapabilitiesAsync", [], ct).ConfigureAwait(false);
+                if (!capabilities.Contains(ResourceWatch.Capability, StringComparer.Ordinal))
+                {
+                    logger.LogDebug("The AppHost does not expose resource-watch coverage.");
+                    return new ResourceWatchStatus?[] { null }.ToAsyncEnumerable();
+                }
+
+                return await rpc.InvokeStreamingWithProfilingAsync<ResourceWatchStatus?>(
+                    profilingTelemetry, "apphost", "WatchResourceWatchStatusAsync", [], ct).ConfigureAwait(false);
+            },
+            "resource-watch coverage",
+            cancellationToken);
+
+    public async Task<ResourceWatchReloadResult> ReloadWatchedResourcesAsync(CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+        var capabilities = await rpc.InvokeWithProfilingAsync<string[]>(
+            profilingTelemetry, "apphost", "GetCapabilitiesAsync", [], cancellationToken).ConfigureAwait(false);
+        if (!capabilities.Contains(ResourceWatch.ReloadCapability, StringComparer.Ordinal))
+        {
+            logger.LogDebug("The AppHost does not expose watched-service reload.");
+            return new ResourceWatchReloadResult { Groups = [] };
+        }
+
+        return await rpc.InvokeWithProfilingAsync<ResourceWatchReloadResult>(
+            profilingTelemetry, "apphost", "ReloadWatchedResourcesAsync", [], cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

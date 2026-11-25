@@ -27,6 +27,11 @@
         <target state="translated">已成功刪除參數 '{0}'。</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
+      <trans-unit id="ResourceNotRunning">
+        <source>'{0}' isn't running.</source>
+        <target state="new">'{0}' isn't running.</target>
+        <note>{0} is the resource name. Returned by Stop when there's nothing to stop.</note>
+      </trans-unit>
       <trans-unit id="ResourceRebuilt">
         <source>Successfully rebuilt '{0}'.</source>
         <target state="translated">已成功重建 '{0}'。</target>
@@ -41,6 +46,11 @@
         <source>Successfully set parameter '{0}'.</source>
         <target state="translated">已成功設定參數 '{0}'。</target>
         <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceStartCanceled">
+        <source>Stopped '{0}' before it started.</source>
+        <target state="new">Stopped '{0}' before it started.</target>
+        <note>{0} is the resource name. The resource's start was canceled before it was launched, for example while it waited for its dependencies.</note>
       </trans-unit>
       <trans-unit id="ResourceStarted">
         <source>Successfully started '{0}'.</source>

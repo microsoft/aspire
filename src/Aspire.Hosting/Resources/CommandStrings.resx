@@ -183,4 +183,12 @@
     <value>Successfully stopped '{0}'.</value>
     <comment>{0} is the resource name.</comment>
   </data>
+  <data name="ResourceStartCanceled" xml:space="preserve">
+    <value>Stopped '{0}' before it started.</value>
+    <comment>{0} is the resource name. The resource's start was canceled before it was launched, for example while it waited for its dependencies.</comment>
+  </data>
+  <data name="ResourceNotRunning" xml:space="preserve">
+    <value>'{0}' isn't running.</value>
+    <comment>{0} is the resource name. Returned by Stop when there's nothing to stop.</comment>
+  </data>
 </root>

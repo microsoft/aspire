@@ -43,6 +43,7 @@
          The aspireify-eval projects are intentionally un-aspirified sample apps used
          as eval inputs for the aspireify skill — they do not import the repo's
          Directory.Build.props/targets and are not meant to be built by CI.
+         DotnetProjectWatch/services are likewise isolated user-style apps (SPIKE) that dotnet-watch builds at run time.
          `.aspire/` holds throwaway projects the CLI scaffolds while running a polyglot
          AppHost (for example integration-restore/IntegrationRestore.csproj). They pin the
          released Aspire.Hosting version, so building them against the repo's -dev version
@@ -52,6 +53,7 @@
     <ProjectToBuild Include="$(RepoRoot)playground\**\*.csproj"
                     Exclude="$(RepoRoot)playground\AspireWithMaui\AspireWithMaui.MauiClient\*.csproj;
                              $(RepoRoot)playground\aspireify-eval\**\*.csproj;
+                             $(RepoRoot)playground\DotnetProjectWatch\services\**\*.csproj;
                              $(RepoRoot)playground\**\.aspire\**\*.csproj"
                     Condition="'$(SkipPlaygroundProjects)' != 'true'"/>
   </ItemGroup>

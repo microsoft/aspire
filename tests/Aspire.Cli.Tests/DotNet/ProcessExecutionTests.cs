@@ -21,6 +21,52 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task WaitForExitAsync_ResolvesAnnouncedShutdownIdentityAtCancellation(bool announced)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
+        using var shutdown = new TestGracefulShutdownWindow();
+        var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var signaler = new RecordingGracefulSignaler(_ =>
+        {
+            signaled.TrySetResult();
+            return Task.FromResult(true);
+        });
+        (int ProcessId, DateTimeOffset StartedAt)? target = null;
+        var options = new ProcessInvocationOptions
+        {
+            GracefulShutdownSignaler = signaler,
+            GracefulShutdownTarget = () => target,
+            ShutdownService = shutdown
+        };
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(() => CreateExecution(scriptFile, options.Clone()));
+        var execution = lifetime.Instance;
+        Assert.True(await execution.StartAsync(TestContext.Current.CancellationToken));
+        if (announced)
+        {
+            target = (Environment.ProcessId, DateTimeOffset.FromUnixTimeMilliseconds(123456));
+        }
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var wait = Assert.ThrowsAnyAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cancellation.Token));
+        try
+        {
+            await signaled.Task.DefaultTimeout();
+            var expected = (target?.ProcessId ?? execution.ProcessId, target?.StartedAt, false);
+            Assert.Equal([expected], signaler.Requests);
+        }
+        finally
+        {
+            shutdown.Expire();
+        }
+
+        await wait.DefaultTimeout();
+        Assert.True(execution.HasExited);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task WaitForExitAsync_UsesGracefulPolicyAtShutdown(bool enabled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

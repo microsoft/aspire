@@ -11,11 +11,12 @@ internal sealed class DotnetProjectContractFactory(ITestOutputHelper output) : I
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(output);
 
+    // The shared contracts cover the ordinary run of a project resource, so these projects aren't watched.
     public IResourceBuilder<DotnetProjectResource> AddProject<TProject>(
         IDistributedApplicationBuilder builder, string name)
         where TProject : IProjectMetadata, new()
     {
-        return builder.AddDotnetProject(name, GetProjectPath<TProject>(name));
+        return builder.AddDotnetProject(name, GetProjectPath<TProject>(name)).WithWatch(false);
     }
 
     public IResourceBuilder<DotnetProjectResource> AddProject<TProject>(
@@ -26,7 +27,7 @@ internal sealed class DotnetProjectContractFactory(ITestOutputHelper output) : I
         {
             options.ExcludeLaunchProfile = launchProfileName is null;
             options.LaunchProfileName = launchProfileName;
-        });
+        }).WithWatch(false);
     }
 
     public void Dispose()

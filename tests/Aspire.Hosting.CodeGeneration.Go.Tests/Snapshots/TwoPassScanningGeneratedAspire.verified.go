@@ -508,11 +508,15 @@ func (d *InteractionInput) ToMap() map[string]any {
 // the core hosting behavior. In Publish mode every property holds its default
 // value.
 type RunConfiguration struct {
-	// WatchEnabled indicates that resources should start in watch mode if able.
+	// WatchEnabled indicates that resources should start in watch mode by default
+	// if able.
 	//
 	// Integrations that support watch can launch their resources so that source
-	// changes are hot-reloaded. This is a hint: integrations that cannot watch
-	// their resources should start them in normal fashion.
+	// changes are hot-reloaded. This is a default, not a prohibition: an
+	// integration can allow explicit resource choices to override it. Integrations
+	// that cannot watch their resources should start them in normal fashion unless
+	// watch is required. AppHost edit watching is configured separately by the
+	// launcher.
 	WatchEnabled *bool `json:"watchEnabled,omitempty"`
 }
 
@@ -597,6 +601,11 @@ type CreateBuilderOptions struct {
 	AllowUnsecuredTransport bool `json:"allowUnsecuredTransport,omitempty"`
 	// EnableResourceLogging enables resource logging.
 	EnableResourceLogging bool `json:"enableResourceLogging,omitempty"`
+	// DefaultResourceWatchEnabled indicates whether compatible resources are
+	// watched by default. An explicit value overrides AppHost configuration;
+	// individual resources can override the default. AppHost edits and IDE
+	// ownership are configured separately.
+	DefaultResourceWatchEnabled *bool `json:"defaultResourceWatchEnabled,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -620,6 +629,9 @@ func (d *CreateBuilderOptions) ToMap() map[string]any {
 	}
 	m["allowUnsecuredTransport"] = serializeValue(d.AllowUnsecuredTransport)
 	m["enableResourceLogging"] = serializeValue(d.EnableResourceLogging)
+	if d.DefaultResourceWatchEnabled != nil {
+		m["defaultResourceWatchEnabled"] = serializeValue(d.DefaultResourceWatchEnabled)
+	}
 	return m
 }
 
@@ -57584,6 +57596,13 @@ type CreateBuilderEnableResourceLogging bool
 
 func (value CreateBuilderEnableResourceLogging) apply(options *CreateBuilderOptions) {
 	options.EnableResourceLogging = (bool)(value)
+}
+
+// CreateBuilderDefaultResourceWatchEnabled sets DefaultResourceWatchEnabled for CreateBuilder.
+type CreateBuilderDefaultResourceWatchEnabled bool
+
+func (value CreateBuilderDefaultResourceWatchEnabled) apply(options *CreateBuilderOptions) {
+	options.DefaultResourceWatchEnabled = (*bool)(&value)
 }
 
 // ============================================================================

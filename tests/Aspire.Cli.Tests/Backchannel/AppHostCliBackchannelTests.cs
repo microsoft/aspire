@@ -15,6 +15,119 @@ namespace Aspire.Cli.Tests.Backchannel;
 
 public class AppHostCliBackchannelTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReloadWatchedResourcesNegotiatesCapabilityAndPreservesGroupResults(bool supported)
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        var socketPath = Path.Combine(directory.RelativePath, "apphost.sock");
+        using var server = new ClosingOnStopAppHostServer(socketPath)
+        {
+            ReloadResult = supported ? new ResourceWatchReloadResult
+            {
+                Groups =
+                [
+                    new()
+                    {
+                        LogResource = "dotnet-watch",
+                        Resources = ["api", "worker"],
+                        Success = true,
+                        Message = "Rebuilt 'api' and 'worker' with a fresh watcher."
+                    },
+                    new()
+                    {
+                        LogResource = "dotnet-watch-other",
+                        Resources = ["other"],
+                        Success = false,
+                        Message = "Fix the errors and save; run 'aspire logs dotnet-watch-other --tail 50'."
+                    }
+                ]
+            } : null
+        };
+        using var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
+        using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+        var backchannel = new AppHostCliBackchannel(
+            NullLogger<AppHostCliBackchannel>.Instance, new TestEnvironment(), telemetry, profiling);
+        var accept = server.AcceptAsync(TestContext.Current.CancellationToken);
+        await backchannel.ConnectAsync(socketPath, retryCount: 0, TestContext.Current.CancellationToken);
+        await accept;
+
+        var result = await backchannel.ReloadWatchedResourcesAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(supported ? 1 : 0, server.ReloadRequests);
+        if (supported)
+        {
+            Assert.Collection(result.Groups,
+                group =>
+                {
+                    Assert.Equal("dotnet-watch", group.LogResource);
+                    Assert.Equal(["api", "worker"], group.Resources);
+                    Assert.True(group.Success);
+                    Assert.Equal(server.ReloadResult!.Groups[0].Message, group.Message);
+                },
+                group =>
+                {
+                    Assert.Equal("dotnet-watch-other", group.LogResource);
+                    Assert.Equal(["other"], group.Resources);
+                    Assert.False(group.Success);
+                    Assert.Equal(server.ReloadResult!.Groups[1].Message, group.Message);
+                });
+        }
+        else
+        {
+            Assert.Empty(result.Groups);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResourceWatchStatusNegotiatesCapabilityBeforeCallingTheAdditiveRpc(bool supported)
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-bch-");
+        try
+        {
+            var socketPath = Path.Combine(directory.FullName, "apphost.sock");
+            using var server = new ClosingOnStopAppHostServer(socketPath)
+            {
+                Coverage = supported ? new ResourceWatchStatus
+                {
+                    GenerationId = Guid.NewGuid(),
+                    DefaultEnabled = false,
+                    Resources = [new() { Resource = "explicit", State = "watching", LogResource = "dotnet-watch-explicit" }]
+                } : null
+            };
+            var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var backchannel = new AppHostCliBackchannel(
+                NullLogger<AppHostCliBackchannel>.Instance, new TestEnvironment(), telemetry, profiling);
+            var accept = server.AcceptAsync(TestContext.Current.CancellationToken);
+            await backchannel.ConnectAsync(socketPath, retryCount: 0, TestContext.Current.CancellationToken);
+            await accept;
+            await using var stream = backchannel.WatchResourceWatchStatusAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator();
+
+            Assert.True(await stream.MoveNextAsync());
+            if (supported)
+            {
+                Assert.NotNull(stream.Current);
+                Assert.Equal(server.Coverage!.GenerationId, stream.Current.GenerationId);
+                Assert.False(stream.Current.DefaultEnabled);
+                Assert.Equal("watching", Assert.Single(stream.Current.Resources).State);
+                Assert.Equal(1, server.CoverageRequests);
+            }
+            else
+            {
+                Assert.Null(stream.Current);
+                Assert.Equal(0, server.CoverageRequests);
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public async Task UploadFileAsync_ExceedsConfiguredLimit_ThrowsWithConfigHint()
     {
@@ -172,6 +285,10 @@ public class AppHostCliBackchannelTests
         }
 
         public TaskCompletionSource StopRequested { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ResourceWatchStatus? Coverage { get; init; }
+        public int CoverageRequests { get; private set; }
+        public ResourceWatchReloadResult? ReloadResult { get; init; }
+        public int ReloadRequests { get; private set; }
 
         public async Task AcceptAsync(CancellationToken cancellationToken)
         {
@@ -192,7 +309,27 @@ public class AppHostCliBackchannelTests
         {
             private readonly string[] _capabilities = ["baseline.v2"];
 
-            public Task<string[]> GetCapabilitiesAsync() => Task.FromResult(_capabilities);
+            public Task<string[]> GetCapabilitiesAsync() => Task.FromResult<string[]>(
+            [
+                .. _capabilities,
+                .. server.Coverage is null ? Array.Empty<string>() : ["resource-watch-status.v1"],
+                .. server.ReloadResult is null ? Array.Empty<string>() : ["resource-watch-reload.v1"]
+            ]);
+
+            public Task<ResourceWatchReloadResult> ReloadWatchedResourcesAsync()
+            {
+                server.ReloadRequests++;
+                return Task.FromResult(server.ReloadResult ?? throw new InvalidOperationException("An unsupported reload RPC was called."));
+            }
+
+            public IAsyncEnumerable<ResourceWatchStatus> WatchResourceWatchStatusAsync()
+            {
+                server.CoverageRequests++;
+                return new[]
+                {
+                    server.Coverage ?? throw new InvalidOperationException("An unsupported RPC was called.")
+                }.ToAsyncEnumerable();
+            }
 
             public Task RequestStopAsync(CancellationToken cancellationToken)
             {

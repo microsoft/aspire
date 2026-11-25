@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Hosting;
 
 namespace Aspire.Hosting.RemoteHost.Ats;
 
@@ -151,23 +153,58 @@ internal sealed class HandleRegistry : IAsyncDisposable
     public int Count => _handles.Count;
 
     /// <summary>
-    /// Disposes all disposable objects in the registry and clears it.
+    /// Stops owned hosts, disposes registered objects, and clears the registry.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
         var entries = _handles.Values.ToList();
         _handles.Clear();
+        List<Exception>? exceptions = null;
+
+        // DistributedApplication implements IHost, but disposal alone does not run its
+        // hosted-service shutdown hooks. Stop every owned host before disposing any handles,
+        // so watch cleanup runs while the application's services and DCP are still alive.
+        // The application's own HostOptions shutdown timeout bounds its normal stop.
+        foreach (var host in entries.Select(entry => entry.Object).OfType<IHost>().Distinct<IHost>(ReferenceEqualityComparer.Instance))
+        {
+            try
+            {
+                await host.StopAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                (exceptions ??= []).Add(ex);
+            }
+        }
 
         foreach (var entry in entries)
         {
-            if (entry.Object is IAsyncDisposable asyncDisposable)
+            try
             {
-                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                if (entry.Object is IAsyncDisposable asyncDisposable)
+                {
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                }
+                else if (entry.Object is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
             }
-            else if (entry.Object is IDisposable disposable)
+            catch (Exception ex)
             {
-                disposable.Dispose();
+                (exceptions ??= []).Add(ex);
             }
+        }
+
+        // Still release the other owned objects after a stop/dispose failure, without
+        // losing either failure or changing the exception for a single failing object.
+        if (exceptions is { Count: 1 })
+        {
+            ExceptionDispatchInfo.Capture(exceptions[0]).Throw();
+        }
+        else if (exceptions is { Count: > 1 })
+        {
+            throw new AggregateException(exceptions);
         }
     }
 

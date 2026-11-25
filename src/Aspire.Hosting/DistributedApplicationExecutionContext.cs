@@ -34,6 +34,9 @@ public class DistributedApplicationExecutionContext
     {
         Operation = operation;
         PublisherName = publisherName;
+#pragma warning disable ASPIREWATCH001 // Core supplies the run-mode default.
+        RunConfiguration = operation == DistributedApplicationOperation.Run ? RunConfiguration.RunDefault : RunConfiguration.Default;
+#pragma warning restore ASPIREWATCH001
     }
 
     /// <summary>

@@ -58,6 +58,12 @@ The server reads the list of assemblies to scan from `appsettings.json`:
 }
 ```
 
+During normal shutdown, the server stops accepting connections and waits for accepted
+client scopes to finish cleanup. Registered application hosts are stopped before any
+handle-owned objects are disposed, allowing hosted-service shutdown hooks to finish
+while the application's services are still available. The host's shutdown deadline
+still bounds the wait; unfinished cleanup and cleanup failures are reported in the logs.
+
 Alternatively, you can pass assemblies explicitly:
 
 ```csharp

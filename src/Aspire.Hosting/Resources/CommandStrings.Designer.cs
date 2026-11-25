@@ -160,6 +160,24 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Stopped &apos;{0}&apos; before it started..
+        /// </summary>
+        internal static string ResourceStartCanceled {
+            get {
+                return ResourceManager.GetString("ResourceStartCanceled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to &apos;{0}&apos; isn&apos;t running..
+        /// </summary>
+        internal static string ResourceNotRunning {
+            get {
+                return ResourceManager.GetString("ResourceNotRunning", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Restart resource.
         /// </summary>
         internal static string RestartDescription {

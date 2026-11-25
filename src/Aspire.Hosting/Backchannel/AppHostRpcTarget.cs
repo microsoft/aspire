@@ -7,6 +7,7 @@ using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -28,6 +29,7 @@ internal class AppHostRpcTarget(
     IConfiguration configuration)
 {
     private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly Guid _watchGenerationId = Guid.NewGuid();
 
     public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -168,6 +170,217 @@ internal class AppHostRpcTarget(
         return Task.CompletedTask;
     }
 
+    public async IAsyncEnumerable<ResourceWatchStatus> WatchResourceWatchStatusAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
+        var events = resourceNotificationService.WatchAsync(linkedCts.Token);
+        var observedResources = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
+        yield return CreateResourceWatchStatus(observedResources);
+
+        await foreach (var resourceEvent in AsyncEnumerableUtils.ReadUntilCancelledAsync(events, linkedCts.Token).ConfigureAwait(false))
+        {
+            observedResources.Add(resourceEvent.Resource);
+            if (resourceEvent.Snapshot.Properties.Any(property => property.Name == ResourceWatch.StateProperty))
+            {
+                // Send an authoritative full snapshot, never a delta that could survive a departed generation.
+                yield return CreateResourceWatchStatus(observedResources);
+            }
+        }
+    }
+
+#pragma warning disable ASPIREWATCH001 // Aggregate generic snapshot metadata, without a dependency on watcher mechanics.
+    private ResourceWatchStatus CreateResourceWatchStatus(IEnumerable<IResource> observedResources)
+    {
+        var resources = new List<ResourceWatchResourceStatus>();
+        // Notification replay discovers resources without enumerating a model that BeforeStart may still mutate
+        // (for example, when the dashboard is disabled). Current-instance reads discard retired replica snapshots.
+        foreach (var resource in observedResources)
+        {
+            // Watch observations are project/group-level. Replicas therefore contribute one logical resource,
+            // with the most restrictive observed coverage until all of its current snapshots agree.
+            var snapshots = resourceNotificationService.GetCurrentStates(resource).Select(item => item.Snapshot).ToArray();
+            if (snapshots.Length == 0 && resource.Annotations.OfType<ResourceSnapshotAnnotation>().LastOrDefault() is { } initial)
+            {
+                snapshots = [initial.InitialSnapshot];
+            }
+            var coverage = snapshots
+                .Select(snapshot => new
+                {
+                    State = snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.StateProperty)?.Value as string,
+                    Reason = snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.ReasonProperty)?.Value as string,
+                    LogResource = snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.LogResourceProperty)?.Value as string
+                })
+                .Where(item => item.State is not null)
+                .OrderBy(item => item.State switch
+                {
+                    ResourceWatch.Failed => 1,
+                    ResourceWatch.BuildFailed => 2,
+                    ResourceWatch.Excluded => 3,
+                    ResourceWatch.Pending => 4,
+                    ResourceWatch.Watching => 5,
+                    _ => 0
+                })
+                .FirstOrDefault();
+            if (coverage is not null)
+            {
+                resources.Add(new()
+                {
+                    Resource = resource.Name,
+                    State = coverage.State!,
+                    Reason = coverage.Reason,
+                    LogResource = coverage.LogResource
+                });
+            }
+        }
+
+        return new()
+        {
+            GenerationId = _watchGenerationId,
+            DefaultEnabled = executionContext.RunConfiguration.WatchEnabled,
+            Resources = [.. resources.OrderBy(resource => resource.Resource, StringComparer.Ordinal)]
+        };
+    }
+
+    /// <summary>
+    /// Reloads every watch group by running the Rebuild command of one resource per group. A resource joins a group by
+    /// reporting <see cref="ResourceWatch.LogResourceProperty"/>; Rebuild on it replaces the group's watcher with a fresh
+    /// one that builds from source and restarts the group's services. Resources outside watch groups are untouched.
+    /// </summary>
+    /// <remarks>
+    /// The command runs on one instance rather than on the logical resource: the group reload is the same either way,
+    /// and the aggregate result of a command that runs on every replica drops the success message that names what the
+    /// reload restarted.
+    /// </remarks>
+    public async Task<ResourceWatchReloadResult> ReloadWatchedResourcesAsync(CancellationToken cancellationToken)
+    {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(ReloadWatchedResourcesAsync), streaming: false);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
+        var commands = serviceProvider.GetRequiredService<ResourceCommandService>();
+        var groups = GetWatchGroups();
+        var results = await Task.WhenAll(groups.Select(ReloadGroupAsync)).ConfigureAwait(false);
+        return new() { Groups = results };
+
+        async Task<ResourceWatchReloadGroupResult> ReloadGroupAsync(WatchGroup group)
+        {
+            ExecuteCommandResult result;
+            try
+            {
+                result = await commands.ExecuteCommandAsync(group.InstanceId, KnownResourceCommands.RebuildCommand, linkedCts.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Reloading watch group {Group} failed.", group.LogResource);
+                result = CommandResults.Failure(ex);
+            }
+
+            return new()
+            {
+                LogResource = group.LogResource,
+                Resources = [.. group.Resources],
+                Success = result.Success,
+                Message = result.Message,
+                // Rebuild publishes its services' state before it returns, so the state read now tells why it failed.
+                State = GetGroupWatchState(group.Resources)
+            };
+        }
+    }
+
+#pragma warning disable ASPIREWATCH001 // Group by generic snapshot metadata, without a dependency on watcher mechanics.
+    private List<WatchGroup> GetWatchGroups()
+    {
+        var groups = new List<WatchGroup>();
+        foreach (var resource in serviceProvider.GetRequiredService<DistributedApplicationModel>().Resources)
+        {
+            if (!resource.Annotations.OfType<ResourceCommandAnnotation>().Any(command =>
+                string.Equals(command.Name, KnownResourceCommands.RebuildCommand, StringComparisons.CommandName)))
+            {
+                continue;
+            }
+
+            var instances = resourceNotificationService.GetCurrentStates(resource)
+                .OrderBy(instance => instance.ResourceId, StringComparer.Ordinal).ToArray();
+            var logResource = instances.Select(instance => GetReloadableLogResource(instance.Snapshot)).FirstOrDefault(name => name is not null);
+            if (logResource is null)
+            {
+                continue;
+            }
+
+            // The reload restarts the whole group from any of its instances, but its result describes that instance.
+            // Prefer a running one, so a stopped or never-started first instance doesn't make the result read as if
+            // the group stayed down.
+            var running = instances.FirstOrDefault(instance => instance.Snapshot.State?.Text == KnownResourceStates.Running);
+            var index = groups.FindIndex(group => group.LogResource == logResource);
+            if (index < 0)
+            {
+                groups.Add(new(logResource, [resource.Name], (running ?? instances[0]).ResourceId, running is not null));
+            }
+            else
+            {
+                groups[index].Resources.Add(resource.Name);
+                if (!groups[index].Running && running is not null)
+                {
+                    groups[index] = groups[index] with { InstanceId = running.ResourceId, Running = true };
+                }
+            }
+        }
+
+        groups.Sort((left, right) => StringComparer.Ordinal.Compare(left.LogResource, right.LogResource));
+        return groups;
+    }
+#pragma warning restore ASPIREWATCH001
+
+    private static string? GetReloadableLogResource(CustomResourceSnapshot snapshot)
+    {
+        var state = snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.StateProperty)?.Value as string;
+        var logResource = snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.LogResourceProperty)?.Value as string;
+        // Excluded resources name themselves as their log resource; they aren't part of a watch group.
+        return state is ResourceWatch.Watching or ResourceWatch.Pending or ResourceWatch.BuildFailed or ResourceWatch.Failed &&
+            !string.IsNullOrEmpty(logResource) ? logResource : null;
+    }
+
+    /// <summary>
+    /// The most severe watch state among the instances of <paramref name="resources"/>: <c>failed</c>, then
+    /// <c>build-failed</c>, then any other. A failed build is reported only on the services whose projects failed to
+    /// build, so the group's other services can still be watching.
+    /// </summary>
+#pragma warning disable ASPIREWATCH001 // Read generic snapshot metadata, without a dependency on watcher mechanics.
+    private string? GetGroupWatchState(List<string> resources)
+    {
+        string? state = null;
+        foreach (var resource in serviceProvider.GetRequiredService<DistributedApplicationModel>().Resources
+            .Where(resource => resources.Contains(resource.Name)))
+        {
+            foreach (var instance in resourceNotificationService.GetCurrentStates(resource))
+            {
+                var current = instance.Snapshot.Properties.FirstOrDefault(property => property.Name == ResourceWatch.StateProperty)?.Value as string;
+                if (Severity(current) > Severity(state))
+                {
+                    state = current;
+                }
+            }
+        }
+
+        return state;
+
+        static int Severity(string? state) => state switch
+        {
+            null => 0,
+            ResourceWatch.Failed => 3,
+            ResourceWatch.BuildFailed => 2,
+            _ => 1
+        };
+    }
+#pragma warning restore ASPIREWATCH001
+
+    // Running records whether InstanceId was running when the group was collected.
+    private sealed record WatchGroup(string LogResource, List<string> Resources, string InstanceId, bool Running);
+#pragma warning restore ASPIREWATCH001
+
     /// <summary>
     /// Cancels inflight streaming RPC calls to allow graceful shutdown.
     /// This should be called before stopping the application to prevent JSON-RPC errors on clients.
@@ -239,7 +452,9 @@ internal class AppHostRpcTarget(
         return Task.FromResult(new string[] {
             "baseline.v2",
             "pipeline-steps.v1",
-            "pipeline-steps.v2"
+            "pipeline-steps.v2",
+            ResourceWatch.Capability,
+            ResourceWatch.ReloadCapability
             });
     }
 #pragma warning restore CA1822

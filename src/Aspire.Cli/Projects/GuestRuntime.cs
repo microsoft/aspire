@@ -81,6 +81,8 @@ internal sealed class GuestRuntime
     /// </summary>
     public string? ExtensionLaunchCapability => _spec.ExtensionLaunchCapability;
 
+    internal bool SupportsWatching => _spec.WatchExecute is not null;
+
     /// <summary>
     /// Gets the environment variable used by the runtime for an additional certificate bundle in run mode.
     /// </summary>
