@@ -47,15 +47,17 @@ internal static class ConnectCommandResolver
         // The command is displayed by tooling. Only endpoint values and literals are allowed so that a parameter,
         // connection string, or other value provider can never put a secret into it. Endpoint values must already be
         // allocated: resolving an unallocated endpoint waits for allocation, which would stall snapshot streaming.
-        if (!CanResolveWithoutSecrets(annotation.Command, resource, out var reason))
-        {
-            logger.LogDebug("Connect command for resource '{ResourceName}' is not shown: {Reason}", resource.Name, reason);
-            return null;
-        }
-
+        // Validation runs inside the exception boundary because a faulted allocation rethrows when it is inspected;
+        // the optional entry is omitted rather than failing the whole snapshot.
         string? command;
         try
         {
+            if (!CanResolveWithoutSecrets(annotation.Command, resource, out var reason))
+            {
+                logger.LogDebug("Connect command for resource '{ResourceName}' is not shown: {Reason}", resource.Name, reason);
+                return null;
+            }
+
             command = await annotation.Command.GetValueAsync(
                 new ValueProviderContext { Network = KnownNetworkIdentifiers.LocalhostNetwork },
                 cancellationToken).ConfigureAwait(false);

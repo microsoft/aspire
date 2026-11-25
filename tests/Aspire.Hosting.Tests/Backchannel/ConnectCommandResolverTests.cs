@@ -107,6 +107,21 @@ public class ConnectCommandResolverTests
     }
 
     [Fact]
+    public async Task OmitsCommandWhenEndpointAllocationFaulted()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("nats", "nats")
+            .WithEndpoint(targetPort: 4222, name: "tcp")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = null);
+        container.WithConnectCommand(
+            "nats",
+            ConnectCommandLocation.Host,
+            ReferenceExpression.Create($"nats --server nats://localhost:{container.GetEndpoint("tcp").Property(EndpointProperty.Port)}"));
+
+        Assert.Null(await ResolveAsync(container.Resource, "nats-abcdefgh", "docker").DefaultTimeout());
+    }
+
+    [Fact]
     public async Task OmitsContainerCommandForResourceThatIsNotAContainer()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
