@@ -26,7 +26,10 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
     private const string ImageReference = $"{ImageName}:{ImageTag}";
 
     // Directory output flattens the registry-qualified image name into a single file name.
-    private const string FlattenedArchiveName = "registry.example.com-5000-team-program.tar";
+    // Directory output uses the .NET SDK's "<repository>.tar.gz" name, so those tests use a repository the
+    // SDK accepts. The SDK rejects registry ports in ContainerRepository.
+    private const string SdkRepository = "team/program";
+    private const string SdkArchiveName = $"{SdkRepository}.tar.gz";
 
     [Theory]
     [InlineData(false)]
@@ -351,14 +354,14 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         builder.Services.AddFakeContainerRuntime(runtime);
         var outputPath = CreateOutputPath(workspace, path, trailingSeparator, existingDirectory);
         var expectedArchivePath = GetExpectedArchivePath(outputPath, path, trailingSeparator, existingDirectory);
-        var resource = AddArchiveResource(builder, workspace.WorkspaceRoot.FullName, outputPath);
+        var resource = AddArchiveResource(builder, workspace.WorkspaceRoot.FullName, outputPath, SdkRepository);
         using var app = builder.Build();
 
         await BuildAsync(app, resource.Resource, false, TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedArchivePath, await ResolveContainerImageReferenceAsync(app, resource.Resource));
         AssertUncompressed(expectedArchivePath);
-        Assert.Equal([ImageReference], TestContainerImageArchive.ReadDockerImageReferences(expectedArchivePath));
+        Assert.Equal([$"{SdkRepository}:{ImageTag}"], TestContainerImageArchive.ReadDockerImageReferences(expectedArchivePath));
         Assert.Equal("sdk+assets", TestContainerImageArchive.ReadLayerContents(expectedArchivePath));
         Assert.False(Directory.Exists(Assert.Single(runtime.BuildImageCalls).options!.OutputPath));
     }
@@ -380,13 +383,14 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         builder.Services.AddFakeContainerRuntime(runtime);
         var outputPath = CreateOutputPath(workspace, path, trailingSeparator, existingDirectory);
         var expectedArchivePath = GetExpectedArchivePath(outputPath, path, trailingSeparator, existingDirectory);
-        var resource = AddProgram(builder, workspace.WorkspaceRoot.FullName, outputPath);
+        var resource = AddProgram(builder, workspace.WorkspaceRoot.FullName, outputPath, SdkRepository);
         using var app = builder.Build();
 
         await BuildAsync(app, resource.Resource, false, TestContext.Current.CancellationToken);
 
         // The SDK must receive an explicit file so it writes the same archive as the layered path in
-        // LayeredArchivePreservesOutputPathConventions, rather than its default "<repository>.tar.gz".
+        // LayeredArchivePreservesOutputPathConventions. For directories that file uses the SDK's own
+        // "<repository>.tar.gz" name, but an existing dotted directory stays a directory.
         var publish = Assert.Single(runner.ProcessSpecs);
         var archiveArgument = Assert.Single(
             publish.ArgumentList!,
@@ -404,8 +408,11 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
     [InlineData("program.TGZ", true)]
     [InlineData("program.tar", false)]
     [InlineData("archives", false)]
-    public async Task ArchiveWithCompressedExtensionWarnsThatItIsUncompressed(string path, bool expectWarning)
+    [InlineData("archives.tgz", false, true)]
+    public async Task ArchiveWithCompressedExtensionWarnsThatItIsUncompressed(string path, bool expectWarning, bool existingDirectory = false)
     {
+        // Only an explicitly chosen file name warns. Directory output, including an existing directory with a
+        // ".tgz" name, receives the SDK's default "<repository>.tar.gz" name, which is not the caller's choice.
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Services.AddLogging(logging => logging.AddFakeLogging());
@@ -414,7 +421,12 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         builder.Services.AddSingleton<IProcessRunner>(runner);
         builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "Docker"));
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, path);
-        var resource = AddProgram(builder, workspace.WorkspaceRoot.FullName, outputPath);
+        if (existingDirectory)
+        {
+            Directory.CreateDirectory(outputPath);
+        }
+
+        var resource = AddProgram(builder, workspace.WorkspaceRoot.FullName, outputPath, SdkRepository);
         using var app = builder.Build();
 
         await BuildAsync(app, resource.Resource, false, TestContext.Current.CancellationToken);
@@ -478,13 +490,13 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         builder.Services.AddSingleton<IProcessRunner>(CreateProcessRunner(images, "sdk"));
         builder.Services.AddFakeContainerRuntime(runtime);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "archives");
-        var resource = AddArchiveResource(builder, workspace.WorkspaceRoot.FullName, outputPath)
+        var resource = AddArchiveResource(builder, workspace.WorkspaceRoot.FullName, outputPath, SdkRepository)
             .WithContainerBuildOptions(static context => context.ImageFormat = ContainerImageFormat.Oci);
         using var app = builder.Build();
 
         await BuildAsync(app, resource.Resource, false, TestContext.Current.CancellationToken);
 
-        var archivePath = Path.Combine(outputPath, FlattenedArchiveName);
+        var archivePath = Path.Combine(outputPath, SdkArchiveName);
         Assert.Equal(archivePath, await ResolveContainerImageReferenceAsync(app, resource.Resource));
         AssertUncompressed(archivePath);
         Assert.Equal(
@@ -493,7 +505,7 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         using var index = JsonDocument.Parse(TestContainerImageArchive.ReadEntryText(archivePath, "index.json"));
         var annotations = Assert.Single(index.RootElement.GetProperty("manifests").EnumerateArray()).GetProperty("annotations");
         Assert.Equal(ImageTag, annotations.GetProperty("org.opencontainers.image.ref.name").GetString());
-        Assert.Equal(ImageReference, annotations.GetProperty("io.containerd.image.name").GetString());
+        Assert.Equal($"{SdkRepository}:{ImageTag}", annotations.GetProperty("io.containerd.image.name").GetString());
     }
 
     private static string CreateOutputPath(TemporaryWorkspace workspace, string path, bool trailingSeparator, bool existingDirectory)
@@ -512,9 +524,10 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         // A directory is a trailing separator, a path without an extension, or an existing directory;
         // anything else names the archive file.
         return trailingSeparator || existingDirectory || !Path.HasExtension(path)
-            ? Path.Combine(outputPath, FlattenedArchiveName)
+            ? Path.Combine(outputPath, SdkArchiveName)
             : outputPath;
     }
+
     private static async Task<string?> ResolveContainerImageReferenceAsync(DistributedApplication app, IResource resource)
     {
         IValueProvider imageReference = new ContainerImageReference(resource);
@@ -538,11 +551,12 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
     private static IResourceBuilder<ProjectResource> AddArchiveResource(
         IDistributedApplicationBuilder builder,
         string workspacePath,
-        string outputPath)
+        string outputPath,
+        string imageName = ImageName)
     {
         var assets = builder.AddContainer("assets", "assets-image")
             .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
-        return AddProgram(builder, workspacePath, outputPath)
+        return AddProgram(builder, workspacePath, outputPath, imageName)
             .WithAnnotation(new ContainerFilesDestinationAnnotation
             {
                 Source = assets.Resource,
@@ -553,14 +567,15 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
     private static IResourceBuilder<ProjectResource> AddProgram(
         IDistributedApplicationBuilder builder,
         string workspacePath,
-        string outputPath)
+        string outputPath,
+        string imageName = ImageName)
     {
 #pragma warning disable CS0618 // Retain the legacy archive contract alongside shared .NET-program publishing coverage.
         return builder.AddProject("program", Path.Combine(workspacePath, "program.csproj"), static options => options.ExcludeLaunchProfile = true)
 #pragma warning restore CS0618
             .WithContainerBuildOptions(context =>
             {
-                context.LocalImageName = ImageName;
+                context.LocalImageName = imageName;
                 context.LocalImageTag = ImageTag;
                 context.Destination = ContainerImageDestination.Archive;
                 context.ImageFormat = ContainerImageFormat.Docker;

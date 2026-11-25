@@ -441,16 +441,17 @@ internal sealed class ResourceContainerImageManager(
         }
 
         if (!string.IsNullOrEmpty(options.OutputPath) &&
-            DotnetProgramPublishing.GetArchiveOutputPath(options.OutputPath, options.LocalImageName) is var archivePath &&
-            DotnetProgramPublishing.HasCompressedArchiveExtension(archivePath))
+            DotnetProgramPublishing.IsExplicitArchiveOutputPath(options.OutputPath) &&
+            DotnetProgramPublishing.HasCompressedArchiveExtension(options.OutputPath))
         {
             // Container image archives are uncompressed tars on every publishing path, matching the .NET SDK.
-            // A ".gz" name most likely means the caller expects gzip, so call out the mismatch.
+            // An explicitly chosen ".gz" name most likely means the caller expects gzip, so call out the
+            // mismatch. The SDK's default "<repository>.tar.gz" directory name is not the caller's choice.
             logger.LogWarning(
                 "The container image archive for resource {ResourceName} is written to {ArchivePath} as an uncompressed tar file. " +
                 "Use a .tar extension to match its format.",
                 resource.Name,
-                archivePath);
+                options.OutputPath);
         }
 
         var hasContainerFiles = resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out _);
@@ -617,7 +618,8 @@ internal sealed class ResourceContainerImageManager(
         if (!string.IsNullOrEmpty(options.OutputPath))
         {
             // Resolve directories to an explicit file so the SDK writes exactly the archive that the
-            // layering path and ContainerImageReference use, instead of its own "<repository>.tar.gz".
+            // layering path and ContainerImageReference use. This also keeps an existing dotted directory,
+            // such as "artifacts.v1", a directory; the SDK alone would try to write a file at that path.
             arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument(
                 "ContainerArchiveOutputPath",
                 DotnetProgramPublishing.GetArchiveOutputPath(options.OutputPath, options.LocalImageName)));

@@ -314,16 +314,16 @@ internal static class DotnetProgramPublishing
     /// </summary>
     /// <remarks>
     /// Both the SDK-only and the container-file layering paths write this exact file, so consumers can
-    /// find the archive without knowing whether the resource has container files. A directory receives
-    /// <c>&lt;image-name&gt;.tar</c> rather than the SDK's default <c>&lt;repository&gt;.tar.gz</c>, because
-    /// the archive is an uncompressed tar and the SDK default nests registry-qualified names in
-    /// subdirectories. See https://github.com/dotnet/sdk-container-builds/issues/518.
+    /// find the archive without knowing whether the resource has container files. A directory receives the
+    /// .NET SDK's default <c>&lt;repository&gt;.tar.gz</c> name, which is an uncompressed tar despite its
+    /// extension. See https://github.com/dotnet/sdk-container-builds/issues/518.
+    /// https://github.com/dotnet/sdk/blob/v10.0.400/src/Containers/Microsoft.NET.Build.Containers/LocalDaemons/ArchiveFileRegistry.cs
     /// </remarks>
-    internal static string GetArchiveOutputPath(string outputPath, string imageName)
+    internal static string GetArchiveOutputPath(string outputPath, string repository)
     {
         return IsExplicitArchiveOutputPath(outputPath)
             ? outputPath
-            : Path.Combine(outputPath, $"{ResourceExtensions.FlattenContainerImageName(imageName)}.tar");
+            : Path.Combine(outputPath, $"{repository}.tar.gz");
     }
 
     /// <summary>
