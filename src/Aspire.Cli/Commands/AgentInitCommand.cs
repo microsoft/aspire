@@ -276,8 +276,11 @@ internal sealed class AgentInitCommand : BaseCommand
         var appHost = useSettings ? await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken) : null;
         if (appHost is null)
         {
+            // DefaultFiltered also adds the AppHost named by aspire.config.json in a parent directory. Without
+            // settings, discovery must stay inside the search directory, which ExplicitDirectory guarantees.
+            var scope = useSettings ? AppHostDiscoveryScope.DefaultFiltered : AppHostDiscoveryScope.ExplicitDirectory;
             var candidates = await _projectLocator.FindAppHostProjectFilesAsync(
-                searchDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken, skipValidation: true);
+                searchDirectory, scope, cancellationToken, skipValidation: true);
             appHost = candidates.Count switch
             {
                 1 => candidates[0],
@@ -841,18 +844,35 @@ internal sealed class AgentInitCommand : BaseCommand
     private async Task<FileInfo?> FindWorkspaceAppHostAsync(
         DirectoryInfo workspaceRoot, Func<Task<FileInfo?>> discoverAppHostAsync, CancellationToken cancellationToken)
     {
-        if (AgentInstructionsFile.IsInDirectory(ExecutionContext.WorkingDirectory.FullName, workspaceRoot))
+        var workingDirectory = ExecutionContext.WorkingDirectory;
+        if (AgentInstructionsFile.IsInDirectory(workingDirectory.FullName, workspaceRoot))
         {
             // Reuse the discovery that also supplies skill-source settings, so a run prompts for the AppHost at
-            // most once. Its candidates come from below the working directory, so they are in the workspace;
-            // only a saved setting can point outside it.
+            // most once. Its walk covers only the working directory's subtree; settings, including a parent
+            // aspire.config.json, can point outside the workspace.
             var appHost = await discoverAppHostAsync();
-            return appHost is not null && AgentInstructionsFile.IsInDirectory(appHost.FullName, workspaceRoot) ? appHost : null;
+            if (appHost is not null && AgentInstructionsFile.IsInDirectory(appHost.FullName, workspaceRoot))
+            {
+                return appHost;
+            }
+
+            // Run from a subdirectory such as src/Web, the AppHost can live in a sibling such as src/AppHost,
+            // which that walk never visits, so search the whole workspace. A selection prompt in the reused
+            // discovery always returns a choice, so reaching here means it did not prompt, except when the user
+            // picked a settings-provided AppHost outside the workspace. When the working directory is the
+            // workspace root (each contains the other), searching it again would repeat that discovery.
+            if (AgentInstructionsFile.IsInDirectory(workspaceRoot.FullName, workingDirectory))
+            {
+                return null;
+            }
         }
 
-        // Settings are read relative to the working directory, which is outside this workspace. The workspace
-        // root's own configuration has already been checked by the caller.
-        return await FindAppHostAsync(workspaceRoot, useSettings: false, cancellationToken);
+        // Settings are read relative to the working directory, which does not describe this whole workspace. The
+        // workspace root's own configuration has already been checked by the caller.
+        var workspaceAppHost = await FindAppHostAsync(workspaceRoot, useSettings: false, cancellationToken);
+        return workspaceAppHost is not null && AgentInstructionsFile.IsInDirectory(workspaceAppHost.FullName, workspaceRoot)
+            ? workspaceAppHost
+            : null;
     }
 
     private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(

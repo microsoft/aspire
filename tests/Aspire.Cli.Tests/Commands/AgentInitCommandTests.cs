@@ -263,16 +263,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var workingDirectoryAppHost = new FileInfo(Path.Combine(context.Project.FullName, "A.AppHost", "A.AppHost.csproj"));
         var otherRepository = context.Workspace.CreateDirectory("other-repo");
         var otherRepositoryAppHost = new FileInfo(Path.Combine(otherRepository.FullName, "B.AppHost", "B.AppHost.csproj"));
-        List<string> searchDirectories = [];
+        List<(string Directory, AppHostDiscoveryScope Scope)> searches = [];
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(workingDirectoryAppHost),
-                FindAppHostProjectFilesAsyncCallback = (directory, _, _, _) =>
+                FindAppHostProjectFilesAsyncCallback = (directory, scope, _, _) =>
                 {
-                    searchDirectories.Add(directory.FullName);
+                    searches.Add((directory.FullName, scope));
                     return Task.FromResult<List<FileInfo>>(directory.FullName == otherRepository.FullName
                         ? [otherRepositoryAppHost]
                         : [workingDirectoryAppHost]);
@@ -283,12 +283,46 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"agent init --workspace-root \"{otherRepository.FullName}\" --agents copilot --scope project --skills none --mcp=false --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal([otherRepository.FullName], searchDirectories);
+        Assert.Equal([(otherRepository.FullName, AppHostDiscoveryScope.ExplicitDirectory)], searches);
         var newLine = Environment.NewLine;
         Assert.Equal(
             $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("B.AppHost/B.AppHost.csproj", aspireSkillsPluginRegistered: false, newLine)}{newLine}",
             await File.ReadAllTextAsync(Path.Combine(otherRepository.FullName, AgentInstructionsFile.FileName)));
         Assert.False(File.Exists(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
+    }
+
+    [Fact]
+    public async Task AgentInit_WritesAgentInstructionsForSiblingAppHostWhenRunFromWorkspaceSubdirectory()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var webDirectory = context.Project.CreateSubdirectory(Path.Combine("src", "Web"));
+        var appHost = new FileInfo(Path.Combine(context.Project.FullName, "src", "AppHost", "AppHost.csproj"));
+        List<(string Directory, AppHostDiscoveryScope Scope)> searches = [];
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(webDirectory, context.Home);
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(null),
+                FindAppHostProjectFilesAsyncCallback = (directory, scope, _, _) =>
+                {
+                    searches.Add((directory.FullName, scope));
+                    return Task.FromResult<List<FileInfo>>(directory.FullName == context.Project.FullName ? [appHost] : []);
+                }
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --workspace-root \"{context.Project.FullName}\" --agents copilot --scope project --skills none --mcp=false --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(
+            [(webDirectory.FullName, AppHostDiscoveryScope.DefaultFiltered), (context.Project.FullName, AppHostDiscoveryScope.ExplicitDirectory)],
+            searches);
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("src/AppHost/AppHost.csproj", aspireSkillsPluginRegistered: false, newLine)}{newLine}",
+            await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
     }
 
     [Theory]
