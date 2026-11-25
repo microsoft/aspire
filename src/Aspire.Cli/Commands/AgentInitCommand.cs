@@ -507,6 +507,17 @@ internal sealed class AgentInitCommand : BaseCommand
         var (scopeProvided, requestedScope) = scopeBinding.Resolve();
         var scope = scopeProvided ? requestedScope : scopeBinding.DefaultValue;
 
+        // The start flow in AGENTS.md describes the AppHost, not the selected skills or MCP server, so it is
+        // written whether or not anything else is configured. AGENTS.md is a project file, so global setup,
+        // which leaves the project untouched, skips it.
+        async Task<bool> WriteAgentInstructionsForScopeAsync(bool aspireSkillsRegistered) =>
+            scope is not AgentConfigurationScope.Project || await WriteAgentInstructionsAsync(
+                workspaceRoot,
+                discoverAppHost ? null : configurationDirectory,
+                discoverAppHost ? GetDiscoveredAppHostAsync : null,
+                aspireSkillsRegistered,
+                cancellationToken);
+
         if (!configureAspire && !playwright && !dotnetInspect && !configureMcp)
         {
             // Nothing is installed, so scope is not prompted for. The re-run still refreshes hooks for
@@ -514,6 +525,12 @@ internal sealed class AgentInitCommand : BaseCommand
             await ConfigureTelemetryHooksForAspireSetupAsync(selectedClients, [], workspaceRoot, scope, cancellationToken);
 
             DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
+            if (!await WriteAgentInstructionsForScopeAsync(aspireSkillsRegistered: false))
+            {
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, AgentCommandStrings.ConfigurationCompletedWithErrors);
+                return new(CliExitCodes.InvalidCommand, selectedClients, []);
+            }
+
             InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
             return new(CliExitCodes.Success, selectedClients, []);
         }
@@ -744,16 +761,8 @@ internal sealed class AgentInitCommand : BaseCommand
             cancellationToken);
 
         // --- Phase 7: Describe the start flow in AGENTS.md ---
-        // AGENTS.md is a project file, so global setup, which leaves the project untouched, skips it.
-        if (scope is AgentConfigurationScope.Project)
-        {
-            hasErrors |= !await WriteAgentInstructionsAsync(
-                workspaceRoot,
-                discoverAppHost ? null : configurationDirectory,
-                discoverAppHost ? GetDiscoveredAppHostAsync : null,
-                GetAspireSkillsRegisteredClients(registrationResults, skillSources).Any(),
-                cancellationToken);
-        }
+        hasErrors |= !await WriteAgentInstructionsForScopeAsync(
+            GetAspireSkillsRegisteredClients(registrationResults, skillSources).Any());
 
         if (hasErrors)
         {

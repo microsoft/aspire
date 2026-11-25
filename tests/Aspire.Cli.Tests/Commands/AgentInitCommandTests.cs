@@ -138,7 +138,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInit_WithoutAspireSkills_DoesNotDiscoverAppHost()
+    public async Task AgentInit_GlobalScopeWithoutAspireSkills_DoesNotDiscoverAppHost()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var interaction = new TestInteractionService();
@@ -152,11 +152,32 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             };
         }).BuildServiceProvider();
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "agent init --agents copilot --skills none --mcp=false --non-interactive");
+            "agent init --agents copilot --scope global --skills none --mcp=false --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedRenderables);
         Assert.Empty(interaction.DisplayedMessages);
+    }
+
+    [Fact]
+    public async Task AgentInit_WritesAgentInstructionsForProjectScopeWithoutSkillsOrMcp()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
+            {"appHost":{"path":"src/AppHost/apphost.cs"}}
+            """);
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills none --mcp=false --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("src/AppHost/apphost.cs", aspireSkillsPluginRegistered: false, newLine)}{newLine}",
+            await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
     }
 
     [Theory]
