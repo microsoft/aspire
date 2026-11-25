@@ -26,6 +26,10 @@ internal sealed class ChildProcessOptions
     public Action<string>? StandardErrorCallback { get; init; }
     public ChildProcessLifetime Lifetime { get; init; }
     public string? CompletionPath { get; init; }
+    /// <summary>
+    /// Allocates the completion-marker directory for an owned tree when <see cref="CompletionPath"/> is not supplied.
+    /// </summary>
+    public ITemporaryStorage? TemporaryStorage { get; init; }
     public Func<ProcessStartInfo, string?, TimeSpan, ProcessStartInfo> CreateSupervisorStartInfo { get; init; } = ProcessSupervisor.CreateStartInfo;
     public bool Detached { get; init; }
     public bool KillEntireProcessTreeOnCancel { get; init; } = true;

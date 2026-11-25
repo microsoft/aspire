@@ -18,6 +18,10 @@
     margin-left: auto;
 }
 
+.copy-button-icon {
+    display: inline-flex;
+}
+
 .text-visualizer-container {
     display: flex;
     flex-direction: column;

@@ -601,7 +601,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         using var nativeProvider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
-                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+                new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         }).BuildServiceProvider();
         var nativeRunner = nativeProvider.GetRequiredService<IDotNetCliRunner>();
         var inspectionCount = 0;
@@ -703,7 +703,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         using var nativeProvider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
-                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+                new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         }).BuildServiceProvider();
         var nativeRunner = nativeProvider.GetRequiredService<IDotNetCliRunner>();
         var evaluatedMetadata = false;

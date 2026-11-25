@@ -68,7 +68,15 @@ const bingTool3 = await project.addBingGroundingTool('bing-tool-3');
 await bingTool3.withReference(bingParam);
 const sharepoint = await project.addSharePointTool('sharepoint-tool', ['https://contoso.sharepoint.com', 'MySite']);
 const fabric = await project.addFabricTool('fabric-tool', ['workspace-id']);
-const azFunc = await project.addAzureFunctionTool('az-func-tool', 'myFunction', 'Does something', '{}', 'https://queue.core.windows.net', 'input-q', 'https://queue.core.windows.net', 'output-q');
+const azFunc = await project.addAzureFunctionTool('az-func-tool', {
+    functionName: 'myFunction',
+    description: 'Does something',
+    parametersJson: '{}',
+    inputQueueEndpoint: 'https://queue.core.windows.net',
+    inputQueueName: 'input-q',
+    outputQueueEndpoint: 'https://queue.core.windows.net',
+    outputQueueName: 'output-q'
+});
 const funcTool = await project.addFunctionTool('func-tool', 'myFunc', '{}');
 
 // Prompt Agent

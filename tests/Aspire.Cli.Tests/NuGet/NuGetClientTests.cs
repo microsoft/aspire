@@ -81,7 +81,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var ids = Enumerable.Range(0, packageCount).Select(index => $"Paging.Package{index:D4}").ToArray();
         var searchResource = new PagedPackageSearchResource(ids);
-        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
+        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance)
         {
             AmbientSettingsLoader = NuGetTestHelper.LoadSettings,
             MachineWideSettingsFactory = () => new TestMachineWideSettings(NullSettings.Instance),
@@ -304,6 +304,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         // The aspire-managed helper requested one page per source and never paged further.
@@ -331,6 +332,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         var results = await client.SearchAsync(
@@ -388,7 +390,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             useChannelOverlay ? [new PackageMapping("Aspire*", selectedFeed.FullName)] : null,
             restrictToSelectedSources: false,
             TestContext.Current.CancellationToken);
-        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance);
+        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance);
 
         var results = await client.SearchAsync(
             "Aspire.Hosting",
@@ -498,7 +500,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
         var logger = new FakeLogger<NuGetClient>();
-        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), logger);
+        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), logger);
 
         var exception = Assert.Throws<NuGetOperationException>(() => client.ResolveSdkPackageSearchSourceNames(
             [new() { Id = "Aspire.Hosting.SourceProbe", Version = "1.0.0", Source = sourceName }],
@@ -616,6 +618,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         var results = await client.SearchAsync(
@@ -654,6 +657,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         var results = await client.SearchAsync(
@@ -680,6 +684,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         var results = await client.SearchAsync(
@@ -719,6 +724,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             logger);
 
         var results = await client.SearchAsync(
@@ -764,6 +770,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         var exception = await Assert.ThrowsAsync<NuGetOperationException>(() => client.RestoreAsync(
@@ -793,6 +800,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             logger);
 
         var exception = await Assert.ThrowsAsync<NuGetOperationException>(() => client.RestoreAsync(
@@ -833,7 +841,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             static async (packageId, configPath, restorePath, workingDirectory) =>
             {
                 Environment.SetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification, null);
-                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), NullLogger<NuGetClient>.Instance);
+                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance);
 
                 await client.RestoreAsync(
                     [(packageId, "[1.0.0]")],
@@ -863,7 +871,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             static async (configPath, restorePath, workingDirectory) =>
             {
                 Environment.SetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification, null);
-                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), NullLogger<NuGetClient>.Instance);
+                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance);
 
                 await Assert.ThrowsAsync<NuGetOperationException>(() => client.RestoreAsync(
                     [($"Aspire.Test.Missing.{Guid.NewGuid():N}", "[1.0.0]")],
@@ -895,7 +903,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             static async (packageId, configPath, restorePath, workingDirectory) =>
             {
                 Environment.SetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification, null);
-                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), NullLogger<NuGetClient>.Instance);
+                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance);
                 using var cancellationSource = new CancellationTokenSource();
                 cancellationSource.Cancel();
 
@@ -922,7 +930,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     {
         RemoteExecutor.Invoke(static () =>
         {
-            var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance);
+            var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance);
 
             var first = client.BeginOperation();
             var second = client.BeginOperation();
@@ -1009,7 +1017,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         RemoteExecutor.Invoke(
             static async (feedPath, workingDirectory) =>
             {
-                var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance);
+                var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance);
 
                 var results = await client.SearchAsync(
                     "Aspire.Test.Package",
@@ -1054,6 +1062,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         string? packageRoot = null;
@@ -1159,6 +1168,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 var client = new NuGetClient(
                     new TestFeatures(),
                     new TestEnvironment(),
+                    new Aspire.Shared.TemporaryStorage(),
                     NullLogger<NuGetClient>.Instance);
 
                 await client.RestoreAsync(
@@ -1219,6 +1229,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 var client = new NuGetClient(
                     new TestFeatures(),
                     new TestEnvironment(),
+                    new Aspire.Shared.TemporaryStorage(),
                     NullLogger<NuGetClient>.Instance);
 
                 await client.RestoreAsync(
@@ -1267,6 +1278,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         using var restoredPackageScope = new RestoredPackageScope(
             GetEffectiveGlobalPackagesFolder(nugetConfigPath: null, workspace.WorkspaceRoot.FullName),
@@ -1322,6 +1334,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         // Package IDs are case-insensitive, so a request may use any casing. The manifest's package ID must
@@ -1378,6 +1391,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         // Each package exists on only one feed, so the restore succeeds only if the explicit source is used in
@@ -1441,6 +1455,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         await client.RestoreAsync(
@@ -1504,6 +1519,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         await client.RestoreAsync(
@@ -1557,6 +1573,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         var exception = await Assert.ThrowsAsync<NuGetOperationException>(() => client.RestoreAsync(
@@ -1613,6 +1630,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         await client.RestoreAsync(
@@ -1676,6 +1694,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         try
@@ -1735,6 +1754,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         var settings = client.GetSettings(
@@ -1801,6 +1821,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         var settings = client.GetSettings(
@@ -1821,6 +1842,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         var sourceIdentityKey = Enumerable.Repeat((byte)0x5A, NuGetSourceIdentity.KeySizeInBytes).ToArray();
 
@@ -1841,6 +1863,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         client.WriteNuGetConfig(

@@ -12,6 +12,8 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Sections;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -104,6 +106,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
             initialResources: [ModelTestHelpers.CreateResource("test-TestId"), ModelTestHelpers.CreateResource("key", resourceType: KnownResourceTypes.Parameter)],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         Services.GetRequiredService<NavigationManager>().NavigateTo("/structuredlogs");
+        var header = Render<SectionOutlet>(p => p.Add(o => o.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await UseComfortableDensityAsync(cut);
@@ -119,7 +122,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Assert.Null(cut.Find("[data-resource-name='test-TestId'] .resource-row-link").GetAttribute("data-tooltip"));
 
         // Opening the view again shows which rows have nothing for it.
-        await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-StructuredLogs"));
+        await header.Find("#tab-StructuredLogs").ClickAsync(new MouseEventArgs());
         cut.Render();
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.Equal(["test-TestId", "key"], GetUnavailableRows());
@@ -434,9 +437,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Assert.Equal(unavailable, cut.Find("[data-resource-name='test-TestId']").ClassList.Contains("resource-row-unavailable"));
     }
 
-    // The "No logs" and "Not applicable" badges are on the second line of a row, so these tests use a two-line
-    // density. The list starts compact, where an unavailable row is only muted (see
-    // CompactDensity_UnavailableRowKeepsReasonWithoutBadge). Set after loading, which applies stored preferences.
+    // The "No logs" and "Not applicable" badges are on the second line of a row.
     private Task UseComfortableDensityAsync(IRenderedComponent<ResourcesLayout> cut) =>
         cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
 }

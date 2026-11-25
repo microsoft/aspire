@@ -231,11 +231,12 @@ public class NuGetPackageOperationConfigurationTests(ITestOutputHelper outputHel
         var nuGetClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         var service = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
             nuGetClient,
-            new TestConfigurationService())
+            new TestConfigurationService(), new Aspire.Shared.TemporaryStorage())
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };

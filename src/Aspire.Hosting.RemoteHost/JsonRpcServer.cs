@@ -34,7 +34,8 @@ internal sealed class JsonRpcServer : BackgroundService
         IConfiguration configuration,
         IServiceScopeFactory scopeFactory,
         ILogger<JsonRpcServer> logger,
-        RemoteHostProfilingTelemetry profilingTelemetry)
+        RemoteHostProfilingTelemetry profilingTelemetry,
+        ITemporaryStorage temporaryStorage)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
@@ -44,7 +45,7 @@ internal sealed class JsonRpcServer : BackgroundService
         _useDefaultSocketPath = string.IsNullOrEmpty(socketPath);
         if (string.IsNullOrEmpty(socketPath) && OperatingSystem.IsWindows())
         {
-            socketPath = Path.Combine(Path.GetTempPath(), "aspire", "remote-app-host.sock");
+            socketPath = Path.Combine(temporaryStorage.GetTempPath(), "aspire", "remote-app-host.sock");
         }
         else if (string.IsNullOrEmpty(socketPath))
         {

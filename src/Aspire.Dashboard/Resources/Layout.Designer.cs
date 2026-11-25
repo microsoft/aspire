@@ -61,6 +61,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Couldn&apos;t save the change. Check that browser storage is available and try again..
+        /// </summary>
+        public static string BrowserStorageSaveFailed {
+            get {
+                return ResourceManager.GetString("BrowserStorageSaveFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Select run: {0}.
         /// </summary>
         public static string DashboardRunMenuAccessibleLabel {
@@ -655,83 +664,56 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource&apos;s traces with the same time window. Trace counts and span kinds can differ..
+        ///   Looks up a localized string similar to {0} failed trace in the last {1} minutes.
         /// </summary>
-        public static string ResourcePaneActivityContext {
+        public static string ResourcePaneActivityFailedSingleTooltip {
             get {
-                return ResourceManager.GetString("ResourcePaneActivityContext", resourceCulture);
+                return ResourceManager.GetString("ResourcePaneActivityFailedSingleTooltip", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0} incoming.
+        ///   Looks up a localized string similar to {0} failed traces in the last {1} minutes.
         /// </summary>
-        public static string ResourcePaneActivityCount {
+        public static string ResourcePaneActivityFailedTooltip {
             get {
-                return ResourceManager.GetString("ResourcePaneActivityCount", resourceCulture);
+                return ResourceManager.GetString("ResourcePaneActivityFailedTooltip", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0} failed.
+        ///   Looks up a localized string similar to {0} incoming trace in the last {1} minutes.
         /// </summary>
-        public static string ResourcePaneActivityFailures {
+        public static string ResourcePaneActivityIncomingSingleTooltip {
             get {
-                return ResourceManager.GetString("ResourcePaneActivityFailures", resourceCulture);
+                return ResourceManager.GetString("ResourcePaneActivityIncomingSingleTooltip", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to p95 {0}.
+        ///   Looks up a localized string similar to {0} incoming traces in the last {1} minutes.
         /// </summary>
-        public static string ResourcePaneActivityP95 {
+        public static string ResourcePaneActivityIncomingTooltip {
             get {
-                return ResourceManager.GetString("ResourcePaneActivityP95", resourceCulture);
+                return ResourceManager.GetString("ResourcePaneActivityIncomingTooltip", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Only the newest 5,000 incoming spans across resources were sampled. Counts are minimums and p95 describes this sample..
+        ///   Looks up a localized string similar to P95 latency: {0} in the last {1} minutes.
         /// </summary>
-        public static string ResourcePaneActivitySampled {
+        public static string ResourcePaneActivityP95Tooltip {
             get {
-                return ResourceManager.GetString("ResourcePaneActivitySampled", resourceCulture);
+                return ResourceManager.GetString("ResourcePaneActivityP95Tooltip", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0}+ incoming.
+        ///   Looks up a localized string similar to Sample p95 latency: {0} in the last {1} minutes.
         /// </summary>
-        public static string ResourcePaneActivitySampledCount {
+        public static string ResourcePaneActivitySampledP95Tooltip {
             get {
-                return ResourceManager.GetString("ResourcePaneActivitySampledCount", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0}+ failed.
-        /// </summary>
-        public static string ResourcePaneActivitySampledFailures {
-            get {
-                return ResourceManager.GetString("ResourcePaneActivitySampledFailures", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Sample p95 {0}.
-        /// </summary>
-        public static string ResourcePaneActivitySampledP95 {
-            get {
-                return ResourceManager.GetString("ResourcePaneActivitySampledP95", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0} valid duration samples. P95 appears after at least 20 samples..
-        /// </summary>
-        public static string ResourcePaneActivitySamples {
-            get {
-                return ResourceManager.GetString("ResourcePaneActivitySamples", resourceCulture);
+                return ResourceManager.GetString("ResourcePaneActivitySampledP95Tooltip", resourceCulture);
             }
         }
         
@@ -1213,6 +1195,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Home.
+        /// </summary>
+        public static string ResourceTabHome {
+            get {
+                return ResourceManager.GetString("ResourceTabHome", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Overview.
         /// </summary>
         public static string ResourceTabOverview {
@@ -1227,15 +1218,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceTabsLandmark {
             get {
                 return ResourceManager.GetString("ResourceTabsLandmark", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Home.
-        /// </summary>
-        public static string ResourceTabHome {
-            get {
-                return ResourceManager.GetString("ResourceTabHome", resourceCulture);
             }
         }
         

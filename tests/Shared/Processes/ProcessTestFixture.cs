@@ -56,7 +56,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
         [
             "IChildProcess.cs", "ChildProcess.cs", "ChildProcessOptions.cs", "ProcessScope.cs",
             "ProcessSupervisor.cs", "ProcessSupervisorLogger.cs", "ProcessSupervisor.Windows.cs", "ParentProcessLivenessMonitor.cs",
-            "ProcessStartTimeHelper.cs", "ProcessSignaler.cs", "KnownConfigNames.cs"
+            "ProcessStartTimeHelper.cs", "ProcessSignaler.cs", "KnownConfigNames.cs", "TemporaryStorage.cs"
         ];
         var sourcePaths = sources.Select(source => Path.Combine(repository.FullName, "src", "Shared", source)).Concat(
         [
@@ -348,7 +348,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
             case "owner":
                 await using (var guardian = new ChildProcess(
                     Command("tree", args[1]),
-                    NullLogger.Instance, new ChildProcessOptions { Lifetime = ChildProcessLifetime.OwnedTree }, OperatingSystem.IsWindows()))
+                    NullLogger.Instance, new ChildProcessOptions { Lifetime = ChildProcessLifetime.OwnedTree, TemporaryStorage = new TemporaryStorage() }, OperatingSystem.IsWindows()))
                 {
                     await guardian.StartAsync(CancellationToken.None);
                     await using var scope = new ProcessScope(guardian, NullLogger.Instance, "test owner");

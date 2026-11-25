@@ -30,9 +30,6 @@ public partial class ResourcePaneInsights
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
-    [Inject]
-    public required BrowserTimeProvider TimeProvider { get; init; }
-
     protected override void OnInitialized() => Layout.PaneActivityChanged += OnActivityChanged;
 
     protected override void OnParametersSet() => _snapshot = Layout.GetPaneActivitySnapshot(ResourceKey);
@@ -47,19 +44,13 @@ public partial class ResourcePaneInsights
         }
     }
 
-    private string GetContext(ResourcePaneActivitySnapshot snapshot)
+    private static string FormatCount(int count, bool sampled)
     {
-        var context = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneActivityContext)],
-            ResourceName,
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, snapshot.WindowStart),
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, snapshot.WindowEnd),
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, snapshot.Activity.LatestStartTime),
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, snapshot.Refreshed));
-        var samples = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneActivitySamples)], snapshot.Activity.DurationSampleCount);
-        return snapshot.Sampled
-            ? $"{context} {samples} {Loc[nameof(Resources.Layout.ResourcePaneActivitySampled)]}"
-            : $"{context} {samples}";
+        var formatted = count.ToString("N0", CultureInfo.CurrentCulture);
+        return sampled ? $"{formatted}+" : formatted;
     }
+
+    private string GetLinkLabel(string description) => $"{ResourceName}: {description}";
 
     private string GetTracesUrl(ResourcePaneActivitySnapshot snapshot, bool failed)
     {

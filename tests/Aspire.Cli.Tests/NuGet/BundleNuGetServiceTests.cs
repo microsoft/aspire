@@ -61,7 +61,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var original = File.ReadAllBytes(configPath);
         var client = NuGetTestHelper.CreateClient();
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client,
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage());
         var channel = PackageChannel.CreateExplicitChannel(
             stable ? "stable" : "test", PackageChannelQuality.Both,
             [new(stable ? "*" : "Aspire*", stable ? PackageSources.NuGetOrg : selectedFeed)],
@@ -127,7 +127,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage());
 
         var configuration = service.BuildConfiguration(
             workspace.WorkspaceRoot, "test", [new("Aspire*", "https://example.com/override")],
@@ -162,7 +162,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
-            new TestConfigurationService { SettingsFilePath = global.FullName });
+            new TestConfigurationService { SettingsFilePath = global.FullName }, new Aspire.Shared.TemporaryStorage());
 
         var protectedSettings = service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken);
         Assert.True(Assert.Single(protectedSettings.Sources).IsIntegrationSource);
@@ -196,7 +196,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage());
 
         var settings = service.GetNuGetSettings(app.FullName, TestContext.Current.CancellationToken);
 
@@ -236,7 +236,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(configPath, original);
         var client = NuGetTestHelper.CreateClient();
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client,
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage());
         var configuration = service.BuildConfiguration(
             appHostDirectory, "test",
             [new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json"), new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
@@ -300,7 +300,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             """);
         var client = NuGetTestHelper.CreateClient();
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client,
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage());
         var configuration = service.BuildAppHostConfiguration(
             appHostDirectory, "test",
             [new PackageMapping("Aspire*", "https://selected.example/v3/index.json")],
@@ -689,7 +689,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         => new(
             NullLogger<BundleNuGetService>.Instance,
             nuGetClient,
-            new TestConfigurationService());
+            new TestConfigurationService(),
+            new Aspire.Shared.TemporaryStorage());
 
     private static string GetRestoreDirectory(
         TemporaryWorkspace workspace,

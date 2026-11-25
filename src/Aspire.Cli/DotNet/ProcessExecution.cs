@@ -16,9 +16,11 @@ internal sealed class ProcessExecution : ChildProcess, IProcessExecution
         ProcessStartInfo startInfo,
         ILogger logger,
         ProcessInvocationOptions options,
-        IEnvironment hostEnvironment)
+        IEnvironment hostEnvironment,
+        ITemporaryStorage temporaryStorage)
         : base(startInfo, logger, new ChildProcessOptions
         {
+            TemporaryStorage = temporaryStorage,
             StandardOutputCallback = line => options.StandardOutputCallback?.Invoke(line),
             StandardErrorCallback = line => options.StandardErrorCallback?.Invoke(line),
             KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,

@@ -8,6 +8,7 @@ using Aspire.Hosting.Native.Dashboard;
 using Aspire.Hosting.Native.Cli;
 using Aspire.Hosting.Native.Runtime;
 using Aspire.Hosting.Native.Auxiliary;
+using Aspire.Shared;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +16,7 @@ namespace Aspire.Hosting.Native.Server;
 
 /// <summary>Runs native transport and controller services under the generic host lifetime.</summary>
 internal sealed class NativeServerHostedService(NativeServerConfiguration settings, string[] args,
-    ILoggerFactory loggerFactory, IHostApplicationLifetime applicationLifetime) : BackgroundService
+    ILoggerFactory loggerFactory, IHostApplicationLifetime applicationLifetime, ITemporaryStorage temporaryStorage) : BackgroundService
 {
     private NativeApplicationLifetime? _applicationStop;
 
@@ -87,7 +88,7 @@ internal sealed class NativeServerHostedService(NativeServerConfiguration settin
         await using var diagnostics = new NativeDiagnosticPump(writer.Write, DiagnosticStreamFailed, options).ConfigureAwait(false);
         var endPoint = NativeStartupArguments.Parse(args, settings.SocketPath);
         using var shutdown = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        var dcp = new DcpApiClient(options, loggerFactory.CreateLogger<DcpApiClient>());
+        var dcp = new DcpApiClient(options, loggerFactory.CreateLogger<DcpApiClient>(), temporaryStorage);
         await using var dcpLifetime = dcp.ConfigureAwait(false);
         var dcpExecutable = settings.IsPublishing ? null : settings.DcpPath;
         var server = new NativeApplicationServer(UnavailableWorkloadExecutor.Instance, options.Runtime);

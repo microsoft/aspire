@@ -334,6 +334,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 #pragma warning restore ASPNETCORE9004
 #pragma warning restore FLUENTUI0001
         });
+        // Browser storage reads return protected dashboard customizations over the Blazor hub.
+        builder.Services.AddServerSideBlazor().AddHubOptions(options => options.MaximumReceiveMessageSize = 64 * 1024);
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
@@ -407,6 +409,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // OTLP services.
         builder.Services.AddGrpc();
+        builder.Services.TryAddSingleton<ITemporaryStorage, TemporaryStorage>();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
         // Tags, resource order and pinned metrics are kept in the browser's local storage, so each circuit loads its own.

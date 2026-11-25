@@ -13,6 +13,7 @@ using Humanizer;
 using System.Globalization;
 using System.Web;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Localization;
@@ -55,6 +56,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly List<MenuButtonItem> _paneMenuItems = [];
     private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
     private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
+    // Registered with the main layout, which lists these views in the narrow layout's navigation menu. It's created
+    // once so the layout can tell whether the registered entries are still this layout's when it's disposed.
+    private Func<IEnumerable<MobileNavMenuEntry>>? _mobileNavMenuEntries;
     // Blazor compares event handlers and delegates by reference when it diffs a render. A lambda created for each row
     // on each render would make every row's handlers, buttons and menus look changed, so each resource's handlers
     // are created once and reused across renders (see RowHandlers). They're keyed by the resource's unique name, not
@@ -98,17 +102,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _wasResourcePickerOpen;
     private bool _focusResourcePicker;
     private FluentTextInput? _resourcePaneSearch;
-    // Whether the pane lists the resources that only send telemetry, and so whether "all resources" covers them. It's
-    // the "Telemetry sources" option at the end of the filter's resource types. Like the filter's other options, it
-    // starts on, so an unfiltered list shows everything.
-    private bool _showTelemetryOnlyResources = true;
+    // Null until the saved filter loads or the user makes a choice. The pane shows all sources by default.
+    private bool? _showTelemetryOnlyResources;
+    private bool ShowTelemetryOnlyResources => _showTelemetryOnlyResources ?? true;
     // The name telemetry sources are stored under in BrowserStorageKeys.ResourcePaneKinds.
     private const string TelemetrySourcesKind = "TelemetrySources";
     private bool _pendingLandingRedirect;
     private bool _hasLocation;
     private string? _lastLocation;
-    // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
-    private ResourceTab? _navigatingToTab;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
     private List<SelectedResourceItem> _selectedItems = [];
@@ -302,27 +303,34 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
         UpdateTelemetryOnlyResources();
 
-        var paneCollapsedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
+        var panePreferences = await LocalStorage.ReadUnprotectedSnapshotAsync([
+            BrowserStorageKeys.ResourcePaneCollapsed,
+            BrowserStorageKeys.ResourcePaneWidth,
+            BrowserStorageKeys.ResourcePaneMode,
+            BrowserStorageKeys.ResourcePaneGrouping,
+            BrowserStorageKeys.ResourcePaneKinds
+        ]);
+        var paneCollapsedResult = panePreferences.Get<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
         if (paneCollapsedResult.Success)
         {
             _isPaneCollapsed = paneCollapsedResult.Value;
         }
 
-        var paneWidthResult = await LocalStorage.GetUnprotectedAsync<int>(BrowserStorageKeys.ResourcePaneWidth);
+        var paneWidthResult = panePreferences.Get<int>(BrowserStorageKeys.ResourcePaneWidth);
         if (paneWidthResult.Success)
         {
             _paneWidth = Math.Clamp(paneWidthResult.Value, MinimumPaneWidthPx, MaximumPaneWidthPx);
         }
         // The URL selects the mode when navigating from the main navigation. Other resource URLs, such as a row's
         // link, don't include it, so the last mode is remembered.
-        var paneModeResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneMode);
+        var paneModeResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneMode);
         if (DashboardClient.IsEnabled && paneModeResult.Success && Enum.TryParse<ResourcePaneMode>(paneModeResult.Value, ignoreCase: true, out var storedPaneMode) && storedPaneMode != ResourcePaneMode.Telemetry)
         {
             // Migrate the former Tags navigation view to the resource pane's grouping preference.
             _grouping = storedPaneMode == ResourcePaneMode.Tags ? ResourcePaneGrouping.Tags : ResourcePaneGrouping.None;
             PaneState.SetMode(ResourcePaneMode.Resources);
         }
-        var groupingResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneGrouping);
+        var groupingResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneGrouping);
         if (groupingResult.Success && Enum.TryParse<ResourcePaneGrouping>(groupingResult.Value, out var grouping) && Enum.IsDefined(grouping))
         {
             _grouping = grouping;
@@ -335,11 +343,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // A comma-separated list of the kinds of items the pane lists, such as "Resources,Parameters,TelemetrySources".
         // The pane used to have a toggle for each kind. Resources and parameters are now always listed (the filter's
         // types narrow them down), so only the telemetry sources entry still counts.
-        var kindsResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneKinds);
-        if (kindsResult.Success && kindsResult.Value is { } storedKinds)
+        if (_showTelemetryOnlyResources is null)
         {
-            var kinds = storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            _showTelemetryOnlyResources = kinds.Contains(TelemetrySourcesKind, StringComparer.Ordinal);
+            var kindsResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneKinds);
+            _showTelemetryOnlyResources = !kindsResult.Success || kindsResult.Value is not { } storedKinds ||
+                storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Contains(TelemetrySourcesKind, StringComparer.Ordinal);
         }
         await ApplyPaneModeFromLocationAsync(_lastLocation);
         if (cancellationToken.IsCancellationRequested)
@@ -430,11 +439,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             UpsertResource(resource);
         }
-        OrderStore.EnsureResources(snapshot.Where(r => !r.IsParameter)
-            .OrderBy(r => r.ResourceType).ThenBy(r => r, ResourceViewModelNameComparer.Instance)
-            .Select(r => r.PersistentKey));
         UpdateResourceTagFilters();
-        EnsureGroupOrder();
 
         _isLoaded = true;
         UpdateTelemetryOnlyResources();
@@ -452,10 +457,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     if (changeType == ResourceViewModelChangeType.Upsert)
                     {
                         UpsertResource(resource);
-                        if (!resource.IsParameter)
-                        {
-                            OrderStore.EnsureResources([resource.PersistentKey]);
-                        }
                     }
                     else if (changeType == ResourceViewModelChangeType.Delete)
                     {
@@ -467,7 +468,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 await InvokeAsync(async () =>
                 {
                     UpdateResourceTagFilters();
-                    EnsureGroupOrder();
                     UpdateTelemetryOnlyResources();
                     // After the telemetry sources are refreshed, so both kinds of row handlers are pruned against
                     // the current rows.
@@ -500,8 +500,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (!ReferenceEquals(MainLayout, _subscribedMainLayout))
         {
             _subscribedMainLayout?.HomeNavigationStarting -= OnHomeNavigationStarting;
+            _subscribedMainLayout?.ClearPageNavMenuEntries(_mobileNavMenuEntries);
             _subscribedMainLayout = MainLayout;
             _subscribedMainLayout?.HomeNavigationStarting += OnHomeNavigationStarting;
+            _mobileNavMenuEntries ??= GetMobileNavMenuEntries;
+            _subscribedMainLayout?.SetPageNavMenuEntries(_mobileNavMenuEntries);
         }
         if (!ViewportInformation.IsDesktop)
         {
@@ -564,7 +567,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         _isPaneFullCanvas = false;
         ClearPaneActivity();
-        _navigatingToTab = null;
         var previousTab = CurrentTab;
         var previousSelection = _selectedResourceNames;
         // Closing the menu can yield a render. Publish the new selection first so
@@ -622,14 +624,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (!IsResourceListHome(NavigationManager.Uri))
         {
             _homeNavigation = NavigationManager.ToAbsoluteUri(DashboardUrls.HomeUrl()).AbsoluteUri;
-            // Marks the layout, so the script also reports choosing the current tab while home loads (see
-            // OpenTabFromFullCanvasAsync).
+            // Marks the layout as waiting for home (data-home-pending).
             StateHasChanged();
         }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // The menu is a sibling, not a child of this layout, so its entries need a separate refresh.
+        _subscribedMainLayout?.RefreshPageNavMenuEntries(_mobileNavMenuEntries);
+
         var focusResourcePicker = _focusResourcePicker && _isResourcePickerOpen;
         _focusResourcePicker = false;
         var pickerChanged = _isResourcePickerOpen != _wasResourcePickerOpen;
@@ -697,10 +701,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
 
             _isResizerRegistered = showResizer;
-            await _jsModule.InvokeVoidAsync(
-                "setTabListAriaLabel",
-                GetTabId(CurrentTab),
-                Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)].Value);
 
             if (_startPaneSelectionReveal is { } startLocation)
             {
@@ -748,7 +748,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private IList<MenuButtonItem> GetOverflowMenuItems() =>
-        GetTabMenuItems(includeHome: false).Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
+        GetTabMenuItems().Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
 
     /// <summary>
     /// Called by the pane resizer after the user resizes the resource list.
@@ -1348,17 +1348,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private IEnumerable<TelemetryOnlyResource> GetVisibleTelemetryResources() =>
         _telemetryOnlyResources.Where(r =>
-            (!DashboardClient.IsEnabled || _showTelemetryOnlyResources || IsSelected(r.Name)) &&
+            (!DashboardClient.IsEnabled || ShowTelemetryOnlyResources || IsSelected(r.Name)) &&
             r.Name.Contains(_filter.TextFilter, StringComparisons.UserTextSearch));
+
+    private IEnumerable<ResourceViewModel> GetOrderableResources() =>
+        _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(_filter.ShowHiddenResources));
 
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
-        var positions = OrderStore.GetPositions(_resourceByName.Values.Where(r => !r.IsParameter));
-        var filteredResources = _resourceByName.Values
-            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
+        var filteredResources = OrderStore.OrderResources(GetOrderableResources())
+            .Where(r => _filter.FilterAllResourceKinds(r, _filter.TextFilter))
             .Select(r => new ResourceGridViewModel { Resource = r })
-            .OrderBy(r => positions.GetValueOrDefault(r.Resource.PersistentKey, long.MaxValue))
-            .ThenBy(r => r.Resource, ResourceViewModelNameComparer.Instance)
             .ToList();
 
         // Nested resources are placed under their parent after sorting so children keep their order.
@@ -1373,56 +1373,103 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .ToList();
 
+    private bool IsResourcePaneGrouped => DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.None;
+
+    private IEnumerable<PaneSection> GetPaneSections()
+    {
+        if (DashboardClient.IsEnabled)
+        {
+            if (IsResourcePaneGrouped)
+            {
+                foreach (var group in GetResourceGroups())
+                {
+                    yield return new GroupPaneSection(GetGroupKey(group), group);
+                }
+            }
+            else if (GetPaneRows().ToList() is { Count: > 0 } treeRows)
+            {
+                yield return new TreePaneSection(treeRows);
+            }
+
+            // Tags already include parameters in their groups.
+            if (_grouping != ResourcePaneGrouping.Tags && GetParameterPaneRows() is { Count: > 0 } parameterRows)
+            {
+                yield return new ParametersPaneSection(parameterRows);
+            }
+        }
+
+        if (GetVisibleTelemetryResources().ToList() is { Count: > 0 } telemetryRows)
+        {
+            yield return new TelemetryPaneSection(telemetryRows);
+        }
+    }
+
+    private void RenderPaneSection(RenderTreeBuilder builder, PaneSection section)
+    {
+        switch (section)
+        {
+            case GroupPaneSection { Group: var group }:
+                RenderPaneGroup(builder, section.Key, GetGroupName(group.Value), group.Resources.Select(GetResourceName).ToList(),
+                    GetPaneCountText(group.Resources.Count, 0, 0), RenderGroupIcon(group), RenderFlatResourceRows(group.Resources),
+                    isSection: false, actionTag: _grouping == ResourcePaneGrouping.Tags ? group.Value : null);
+                break;
+            case TreePaneSection tree:
+                RenderPaneGroup(builder, section.Key, ResourcesLoc[nameof(Resources.Resources.ResourcesHeader)],
+                    section.Resources.Select(GetResourceName).ToList(), GetPaneCountText(tree.Rows.Count, 0, 0),
+                    icon: null, RenderTreeResourceRows(tree.Rows, GetTreeGuides(tree.Rows)), isSection: true, actionTag: null);
+                break;
+            case ParametersPaneSection parameters:
+                RenderPaneGroup(builder, section.Key, Loc[nameof(Resources.Layout.NavMenuParametersTab)],
+                    parameters.Rows.Select(GetResourceName).ToList(), GetPaneCountText(0, parameters.Rows.Count, 0),
+                    IsResourcePaneGrouped ? RenderSectionIcon(new Icons.Regular.Size16.Key(), "var(--colorPaletteDarkOrangeForeground2)") : null,
+                    RenderFlatResourceRows(parameters.Rows), isSection: true, actionTag: null);
+                break;
+            case TelemetryPaneSection telemetry:
+                RenderPaneGroup(builder, section.Key, Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
+                    telemetry.Rows.Select(row => row.Name).ToList(), GetPaneCountText(0, 0, telemetry.Rows.Count),
+                    IsResourcePaneGrouped ? RenderSectionIcon(new Icons.Regular.Size16.DataUsage(), "var(--colorPaletteBlueForeground2)") : null,
+                    RenderTelemetryRows(telemetry.Rows), isSection: true, actionTag: null);
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected resource pane section: {section.GetType().Name}.");
+        }
+    }
+
     /// <summary>
     /// Gets the filtered resources grouped by the selected property. Text search matches group names or resources.
     /// </summary>
     private List<ResourceGroup> GetResourceGroups()
     {
-        var groups = _grouping == ResourcePaneGrouping.Tags ? GetTagGroups() : _resourceByName.Values
-            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
+        var resources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources));
+        var byTags = _grouping == ResourcePaneGrouping.Tags;
+        var groups = byTags ? GetTagGroups(resources) : resources
+            .Where(r => !r.IsParameter)
             .GroupBy(r => _grouping == ResourcePaneGrouping.ResourceType ? r.ResourceType
                 : string.IsNullOrEmpty(r.State) ? nameof(KnownResourceState.Unknown) : r.State, StringComparer.OrdinalIgnoreCase)
-            .Select(group => new ResourceGroup(group.Key,
-                group.Where(r => GetGroupName(group.Key).Contains(_filter.TextFilter, StringComparisons.UserTextSearch) || r.MatchesFilter(_filter.TextFilter))
-                    .OrderBy(r => r, ResourceViewModelNameComparer.Instance).ToList()))
-            .Where(group => group.Resources.Count > 0)
+            .Select(group => new ResourceGroup(group.Key, group.OrderBy(r => r, ResourceViewModelNameComparer.Instance).ToList()))
             .OrderBy(group => GetGroupName(group.Value), StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        var positions = OrderStore.GetGroupPositions(_grouping.ToString());
-        return groups.OrderBy(group => positions.GetValueOrDefault(GetGroupOrderKey(group), long.MaxValue)).ToList();
+        // Replay before filtering so a hidden anchor still determines the order of the remaining groups.
+        return OrderStore.OrderGroups(_grouping.ToString(), groups, GetGroupOrderKey)
+            .Where(group => !byTags || IsTagVisible(GetGroupOrderKey(group)))
+            .Select(group =>
+            {
+                var textFilter = group.Value is not null && GetGroupName(group.Value).Contains(_filter.TextFilter, StringComparisons.UserTextSearch)
+                    ? string.Empty
+                    : _filter.TextFilter;
+                return new ResourceGroup(group.Value, group.Resources.Where(r => _filter.FilterAllResourceKinds(r, textFilter)).ToList());
+            })
+            .Where(group => group.Resources.Count > 0)
+            .ToList();
     }
 
-    private string GetGroupName(string? value) => GetGroupName(_grouping, value);
-
-    private string GetGroupName(ResourcePaneGrouping grouping, string? value) => grouping switch
+    private string GetGroupName(string? value) => _grouping switch
     {
         ResourcePaneGrouping.Tags => value ?? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)],
         ResourcePaneGrouping.State => string.IsNullOrEmpty(value) ? ColumnsLoc[nameof(Columns.UnknownStateLabel)] : value.Humanize(),
         _ => value ?? string.Empty
     };
-
-    private void EnsureGroupOrder()
-    {
-        // Register groups independently of search/type/state/health filters, so a filtered view cannot change
-        // their saved order. Hidden resources participate once the user chooses to show them.
-        var resources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
-        var tagsByResource = TagStore.GetTagsByResource(resources);
-        var tags = TagStore.GetAllTags(resources)
-            .Where(tag => resources.Any(r => ResourceTagStore.HasTag(r, tag, tagsByResource)))
-            .ToList();
-        if (resources.Any(r => !tagsByResource.ContainsKey(r.DisplayName)))
-        {
-            tags.Add(string.Empty);
-        }
-        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.Tags), tags);
-        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.ResourceType), resources.Select(r => r.ResourceType)
-            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase));
-        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.State), resources
-            .Select(r => string.IsNullOrEmpty(r.State) ? nameof(KnownResourceState.Unknown) : r.State)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(value => GetGroupName(ResourcePaneGrouping.State, value), StringComparer.CurrentCultureIgnoreCase));
-    }
 
     // Tags are normalized to nonempty values, so the empty key uniquely identifies the synthetic untagged group.
     private static string GetGroupOrderKey(ResourceGroup group) => group.Value ?? string.Empty;
@@ -1474,27 +1521,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // Resources with multiple tags appear in each group; untagged resources initially appear last. Parameters are part of
     // the groups too, after the group's resources: an app tags a parameter like the resource that uses it, so the
     // parameter shows next to that resource.
-    private List<ResourceGroup> GetTagGroups()
+    private List<ResourceGroup> GetTagGroups(IEnumerable<ResourceViewModel> resources)
     {
-        var textFilter = _filter.TextFilter;
-        var resources = OrderTagGroupResources(_resourceByName.Values
-            .Where(r => _filter.FilterAllResourceKinds(r, textFilter: string.Empty))).ToList();
-
-        var tagsByResource = TagStore.GetTagsByResource(resources);
+        var orderedResources = OrderTagGroupResources(resources).ToList();
+        var tagsByResource = TagStore.GetTagsByResource(orderedResources);
         var groups = new List<ResourceGroup>();
-        foreach (var tag in TagStore.GetAllTags(resources))
+        foreach (var tag in TagStore.GetAllTags(orderedResources))
         {
-            // A resource can carry several tags. When the tag filter hides a tag, its group stays hidden even though
-            // resources shown through another tag also carry it.
-            if (!IsTagVisible(tag))
-            {
-                continue;
-            }
-
-            var tagMatchesFilter = textFilter.Length == 0 || tag.Contains(textFilter, StringComparisons.UserTextSearch);
-            var taggedResources = resources
+            var taggedResources = orderedResources
                 .Where(r => ResourceTagStore.HasTag(r, tag, tagsByResource))
-                .Where(r => tagMatchesFilter || r.MatchesFilter(textFilter))
                 .ToList();
 
             if (taggedResources.Count > 0)
@@ -1503,12 +1538,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
         }
 
-        var untaggedResources = resources
+        var untaggedResources = orderedResources
             .Where(r => !tagsByResource.ContainsKey(r.DisplayName))
-            .Where(r => textFilter.Length == 0 || r.MatchesFilter(textFilter))
             .ToList();
 
-        if (untaggedResources.Count > 0 && IsTagVisible(string.Empty))
+        if (untaggedResources.Count > 0)
         {
             groups.Add(new ResourceGroup(Value: null, untaggedResources));
         }
@@ -1525,19 +1559,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsTagVisible(string tag) =>
         !_filter.ResourceTagsToVisibility.TryGetValue(tag, out var visible) || visible;
 
-    private bool IsGroupCollapsed(ResourceGroup group) => _collapsedGroups.Contains(GetGroupKey(group));
-
-    private bool IsSectionCollapsed(string sectionKey) => _collapsedGroups.Contains(sectionKey);
-
-    private void ToggleGroup(ResourceGroup group)
-    {
-        ToggleCollapsedGroup(GetGroupKey(group));
-    }
-
-    private void ToggleSection(string sectionKey)
-    {
-        ToggleCollapsedGroup(sectionKey);
-    }
+    private bool IsGroupCollapsed(string key) => _collapsedGroups.Contains(key);
 
     private void ToggleCollapsedGroup(string key)
     {
@@ -1554,7 +1576,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (_isLoaded)
         {
             UpdateResourceTagFilters();
-            EnsureGroupOrder();
         }
         StateHasChanged();
     });
@@ -1570,7 +1591,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     "telemetry-sources",
                     Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
                     () => _telemetryOnlyResources.Count,
-                    () => _showTelemetryOnlyResources,
+                    () => ShowTelemetryOnlyResources,
                     SetTelemetrySourcesShownAsync)
             ]),
         new("states", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceStatesHeader)], _filter.ResourceStatesToVisibility, r => [r.State ?? string.Empty]),
@@ -1637,28 +1658,30 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     public async Task<bool> ReorderResourceAsync(string resourceName, string targetName, bool after)
     {
         // Revalidate on the server: filters, grouping, or the resource tree can change during a drag.
-        if (!CanReorderResources ||
-            !_resourceByName.TryGetValue(resourceName, out var resource) ||
-            !_resourceByName.TryGetValue(targetName, out var target) ||
-            !_filter.Filter(resource) || !_filter.Filter(target) ||
-            !StringComparers.ResourceName.Equals(GetReorderParentName(resource), GetReorderParentName(target)))
+        if (CanReorderResources &&
+            _resourceByName.TryGetValue(resourceName, out var resource) &&
+            _resourceByName.TryGetValue(targetName, out var target) &&
+            _filter.Filter(resource) && _filter.Filter(target))
         {
-            Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because the visible list changed or the resources aren't siblings.", resourceName, targetName);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
-            return false;
-        }
-        if (!OrderStore.TryMove(resource.PersistentKey, target.PersistentKey, after, _resourceByName.Values.Where(r => !r.IsParameter)))
-        {
-            Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because a resource has no position.", resourceName, targetName);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
-            return false;
+            switch (await OrderStore.MoveResourceAsync(resource, target, after, GetOrderableResources()))
+            {
+                case ResourceOrderMoveResult.Unchanged:
+                    return false;
+                case ResourceOrderMoveResult.NotSaved:
+                    await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+                    return false;
+                case ResourceOrderMoveResult.Moved:
+                    _orderStatus = string.Format(CultureInfo.CurrentCulture,
+                        Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
+                        GetResourceName(resource), GetResourceName(target));
+                    StateHasChanged();
+                    return true;
+            }
         }
 
-        _orderStatus = string.Format(CultureInfo.CurrentCulture,
-            Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
-            GetResourceName(resource), GetResourceName(target));
-        StateHasChanged();
-        return true;
+        Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because the visible list changed or the resources aren't siblings.", resourceName, targetName);
+        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
+        return false;
     }
 
     private void OnOrderChanged() => _ = InvokeAsync(StateHasChanged);
@@ -1670,24 +1693,27 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             ? GetResourceGroups() : [];
         var group = groups.Find(group => StringComparers.ResourceName.Equals(GetGroupKey(group), groupKey));
         var target = groups.Find(group => StringComparers.ResourceName.Equals(GetGroupKey(group), targetKey));
-        if (group is null || target is null)
+        if (group is not null && target is not null)
         {
-            Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because the grouping or visible list changed.", groupKey, targetKey);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
-            return false;
-        }
-        if (!OrderStore.TryMoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after))
-        {
-            Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because a group has no position.", groupKey, targetKey);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
-            return false;
+            switch (await OrderStore.MoveGroupAsync(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after, groups.Select(GetGroupOrderKey)))
+            {
+                case ResourceOrderMoveResult.Unchanged:
+                    return false;
+                case ResourceOrderMoveResult.NotSaved:
+                    await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+                    return false;
+                case ResourceOrderMoveResult.Moved:
+                    _orderStatus = string.Format(CultureInfo.CurrentCulture,
+                        Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
+                        GetGroupName(group.Value), GetGroupName(target.Value));
+                    StateHasChanged();
+                    return true;
+            }
         }
 
-        _orderStatus = string.Format(CultureInfo.CurrentCulture,
-            Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
-            GetGroupName(group.Value), GetGroupName(target.Value));
-        StateHasChanged();
-        return true;
+        Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because the grouping or visible list changed.", groupKey, targetKey);
+        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
+        return false;
     }
 
     private async Task OnToggleCollapseAsync(string uniqueResourceName)
@@ -1803,7 +1829,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             EventCallback.Factory.Create<bool>(this, value =>
             {
                 _filter.ShowHiddenResources = value;
-                EnsureGroupOrder();
                 UpdatePaneMenuItems();
             }));
     }
@@ -1866,12 +1891,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         .Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden)
         .Take(DashboardUIHelpers.MaxHighlightedCommands);
 
-    private static IEnumerable<CommandViewModel> GetFullPageRowCommands(ResourceViewModel resource) =>
-        resource.IsParameter
-            ? resource.Commands.Where(c =>
-                string.Equals(c.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName) &&
-                c.State != CommandViewModelState.Hidden).Take(1)
-            : GetHighlightedCommands(resource);
+    private IEnumerable<CommandViewModel> GetInlineRowCommands(ResourceViewModel resource) =>
+        _isPaneFullCanvas ? GetHighlightedCommands(resource) : GetSidebarCommands(resource);
 
     private static IEnumerable<CommandViewModel> GetResourceRowCommands(ResourceViewModel resource)
     {
@@ -1958,11 +1979,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsCommandDisabled(ResourceViewModel resource, CommandViewModel command) =>
         DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(resource.Name, command.Name);
 
-    private List<MenuButtonItem> GetTagGroupMenuItems(string tagName) =>
-        ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, $"resource-pane-tag-menu-header-{Guid.NewGuid():N}",
-            () => GetTagGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(group.Value, tagName))?.Resources ?? [],
+    private List<MenuButtonItem> GetPaneGroupMenuItems(string groupKey, string groupName, bool isTag) =>
+        ResourceMenuBuilder.CreateGroupMenuItems(groupName, $"resource-pane-group-menu-header-{Guid.NewGuid():N}",
+            isTag ? new Icons.Regular.Size16.Tag() : null,
+            () => GetPaneGroupMembers(groupKey),
             (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
-            (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync());
+            (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync(),
+            showEmptyGroup: true);
+
+    private IReadOnlyList<ResourceViewModel> GetPaneGroupMembers(string groupKey) => groupKey switch
+    {
+        ResourcesSectionKey => _grouping == ResourcePaneGrouping.None ? GetPaneRows().Select(row => row.Resource).ToList() : [],
+        ParametersSectionKey => _grouping != ResourcePaneGrouping.Tags ? GetParameterPaneRows() : [],
+        TelemetrySectionKey => [],
+        _ => GetResourceGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(GetGroupKey(group), groupKey))?.Resources ?? []
+    };
 
     private List<MenuButtonItem> GetResourceMenuItems(ResourceViewModel resource)
     {
@@ -2051,6 +2082,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (resource.IsParameter &&
             string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName))
         {
+            // The parameter editor is on its Overview, so this does nothing when the parameter is already selected.
             NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)));
             return Task.CompletedTask;
         }
@@ -2348,7 +2380,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // All resources: the app's resources, and the telemetry sources while the pane lists them. Parameters don't
             // send telemetry.
             names = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetPinResourceName);
-            if (_showTelemetryOnlyResources)
+            if (ShowTelemetryOnlyResources)
             {
                 names = names.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey.Name));
             }
@@ -2370,7 +2402,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // "All resources" covers the app's resources, and the telemetry sources while the pane lists them. Parameters
         // don't send telemetry.
         var keys = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey);
-        if (_showTelemetryOnlyResources)
+        if (ShowTelemetryOnlyResources)
         {
             keys = keys.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey));
         }
@@ -2644,13 +2676,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _selectionAnchor = resourceName;
         }
 
-        if (selection.Count == 0)
-        {
-            // Remember the cleared selection so the overview doesn't select a resource again.
-            await SetStoredSelectionAsync(selection);
-        }
-
-        NavigateToSelection(selection);
+        await NavigateToSelectionAsync(selection);
     }
 
     // A single selected resource is shown by its row alone, so a one-resource group doesn't duplicate the highlight.
@@ -2711,7 +2737,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _selectionAnchor = selection is [.., var last] ? last : null;
-        NavigateToSelection(selection);
+        await NavigateToSelectionAsync(selection);
     }
 
     private async Task OnAllResourcesClickAsync()
@@ -2757,7 +2783,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // "Select all" covers telemetry sources only while the pane lists them, as its telemetry scope does (see
         // GetPaneTelemetryKeys). Deselecting one resource must not add sources the filter hides.
         var names = GetAllResourceNames();
-        if (DashboardClient.IsEnabled && _showTelemetryOnlyResources)
+        if (DashboardClient.IsEnabled && ShowTelemetryOnlyResources)
         {
             names.AddRange(_telemetryOnlyResources.Select(r => r.Name).Where(n => !names.Contains(n, StringComparers.ResourceName)));
         }
@@ -2765,8 +2791,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return names;
     }
 
-    private void NavigateToSelection(IReadOnlyList<string> resourceNames)
+    private async Task NavigateToSelectionAsync(IReadOnlyList<string> resourceNames)
     {
+        if (resourceNames.Count == 0)
+        {
+            // Clear the remembered selection before Overview can restore it during navigation.
+            await SetStoredSelectionAsync(resourceNames);
+        }
+
         var url = GetSelectionUrl(resourceNames);
         _animatedPaneNavigation = _isPaneFullCanvas && resourceNames.Count == 1
             ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri
@@ -2798,33 +2830,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private List<string> GetVisibleRowNames()
     {
-        List<string> names;
-        if (DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.None)
+        var names = new List<string>();
+        // A resource with several tags is listed several times. Ranges use its first visible position.
+        var groupedNames = new HashSet<string>(StringComparers.ResourceName);
+        foreach (var section in GetPaneSections().Where(section => !IsGroupCollapsed(section.Key)))
         {
-            // A resource with several tags is listed several times. Ranges use its first position.
-            names = GetResourceGroups()
-                .Where(g => !IsGroupCollapsed(g))
-                .SelectMany(g => g.Resources)
-                .Select(GetResourceName)
-                .Distinct(StringComparers.ResourceName)
-                .ToList();
-        }
-        else
-        {
-            names = IsSectionCollapsed(ResourcesSectionKey)
-                ? []
-                : GetPaneRows().Select(r => GetResourceName(r.Resource)).ToList();
-
-            if (!IsSectionCollapsed(ParametersSectionKey))
+            if (section is TelemetryPaneSection telemetry)
             {
-                names.AddRange(GetParameterPaneRows().Select(GetResourceName));
+                names.AddRange(telemetry.Rows.Select(row => row.Name));
+            }
+            else
+            {
+                var resourceNames = section.Resources.Select(GetResourceName);
+                names.AddRange(section is GroupPaneSection ? resourceNames.Where(groupedNames.Add) : resourceNames);
             }
         }
 
-        if (!IsSectionCollapsed(TelemetrySectionKey))
-        {
-            names.AddRange(GetVisibleTelemetryResources().Select(r => r.Name));
-        }
         return names;
     }
 
@@ -2838,17 +2859,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private static string GetTabId(ResourceTab tab) => $"tab-{tab}";
 
-    // The id of the hidden tab that's active while no tab is shown selected (see RenderTabNavigation). It doesn't
-    // start with "tab-", so OnTabChanged ignores it.
-    private const string NoActiveTabId = "resource-tab-none";
-
-    // The narrow layout's Home tab. It doesn't start with "tab-", so the resource tab handlers ignore it.
-    private const string HomeTabId = "resource-tab-home";
-
-    // A narrow layout has no room for the brand, so its tab strip goes home instead. Without the resource service there's
-    // no home to go to (see Home).
-    private bool ShowsHomeTab(bool isDesktop) => !isDesktop && DashboardClient.IsEnabled;
-
     // Goes home as the brand does, which clears the stored selection.
     private Task GoHomeAsync()
     {
@@ -2861,201 +2871,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return Task.CompletedTask;
     }
 
-    private async Task OnTabChanged(FluentTab? newTab, bool isDesktop, string? renderedLocation)
+    // A plain click on a tab is handled here rather than by the browser, which the script stops from following the
+    // link (see registerTabOverflow in ResourcesLayout.razor.js): a tab chosen while home loads waits for it, and leaving
+    // home's resource list docks it. A click with Ctrl, Shift, Alt or Cmd opens the link in a new browser tab or window
+    // instead, and a middle click doesn't raise a click at all.
+    private Task OnTabClickAsync(MouseEventArgs e, ResourceTab tab)
     {
-        if (newTab?.Id == HomeTabId)
+        // The current tab is already showing, unless home's resource list covers it: choosing it then opens its content.
+        if (!IsPlainClick(e) || (tab == CurrentTab && !IsResourceListShownAsHome && _homeNavigation is null))
         {
-            await OnHomeTabChosenAsync(isDesktop, renderedLocation);
-            return;
+            return Task.CompletedTask;
         }
 
-        // FluentTabs also raises this when a tab is disposed, for example when leaving the resources view, and
-        // when it syncs with ActiveTabId after a navigation. Only a change made while this layout shows the current
-        // URL is a user selecting a tab.
-        // Switching between the live view and a recording re-creates the page, and the outgoing layout's tabs
-        // raise changes while they're torn down, which would otherwise navigate to another tab.
-        // A delayed event from the previous header must not navigate the newly selected resource, unless the user really
-        // chose that tab: a click that lands just as a navigation finishes reaches the layout from the outgoing header.
-        // The script records real activations, which the header's own change events while it's torn down never are.
-        var isStale = !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal)
-            || !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal);
-        if (isStale && newTab?.Id is { } staleId && staleId.StartsWith("tab-", StringComparison.Ordinal) &&
-            _jsModule is not null && !_isDisposed && isDesktop == ViewportInformation.IsDesktop)
-        {
-            try
-            {
-                if (await _jsModule.InvokeAsync<bool>("consumeRecentTabActivation", staleId) &&
-                    Enum.TryParse<ResourceTab>(staleId["tab-".Length..], out var staleTab) &&
-                    string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal))
-                {
-                    await OpenChosenTabAsync(staleTab);
-                }
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-            return;
-        }
-
-        if (_isDisposed
-            || isDesktop != ViewportInformation.IsDesktop
-            || isStale
-            || newTab?.Id is not { } id
-            || !id.StartsWith("tab-", StringComparison.Ordinal)
-            || !Enum.TryParse<ResourceTab>(id["tab-".Length..], out var tab)
-            // Includes choosing the current tab while the content is closed: FluentTabs raises the same change when it
-            // syncs with ActiveTabId, so it can't tell the user's choice apart. OpenTabFromFullCanvasAsync handles it.
-            || tab == CurrentTab
-            // A navigation started from the tab strip is still in flight. The layout re-renders when this handler
-            // returns, before the router reaches the new location, and that render must not put the previous tab
-            // back: the strip would report it as a change once the new page shows, and navigate back to it, forever.
-            || _navigatingToTab is not null)
-        {
-            return;
-        }
-
-        // A newly mounted FluentTabs can report its initial first tab after ActiveTabId
-        // has been applied. Only focused pointer/keyboard tab changes own navigation.
-        if (_jsModule is null || GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href)
-        {
-            return;
-        }
-        // Keep the user's choice rendered while the browser focus check is in flight.
-        _navigatingToTab = tab;
-        bool isFocused;
-        try
-        {
-            isFocused = await _jsModule.InvokeAsync<bool>("isResourceTabFocused", id);
-        }
-        catch (JSDisconnectedException)
-        {
-            return;
-        }
-        if (isFocused && !_isDisposed && isDesktop == ViewportInformation.IsDesktop &&
-            !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal) && _lastLocation is { } landed && IsResourceListHome(landed))
-        {
-            // Home landed while the check was in flight, and replaced the strip the tab was chosen from. If the user
-            // really chose it, open it for home's selection, as a tab chosen during the navigation is.
-            try
-            {
-                if (await _jsModule.InvokeAsync<bool>("consumeRecentTabActivation", id))
-                {
-                    await OpenChosenTabAsync(tab);
-                }
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-            return;
-        }
-        if (!isFocused || _isDisposed || isDesktop != ViewportInformation.IsDesktop || _navigatingToTab != tab ||
-            !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal) ||
-            !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal))
-        {
-            if (_navigatingToTab == tab && string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal))
-            {
-                _navigatingToTab = null;
-            }
-            return;
-        }
-
-        if (_homeNavigation is not null)
-        {
-            // Home is still loading. Open this tab once it has (see OnParametersSetAsync).
-            _tabAfterHome = tab;
-            return;
-        }
-
-        await NavigateToTabAsync(href);
+        return OpenTabAsync(tab);
     }
 
-    // Like the resource tabs (see OnTabChanged), Home is also reported when FluentTabs syncs with ActiveTabId or the
-    // outgoing strip is torn down. Only a change from the current strip, with Home focused, is the user's choice.
-    private async Task OnHomeTabChosenAsync(bool isDesktop, string? renderedLocation)
-    {
-        if (_isDisposed || _jsModule is null || IsResourceListShownAsHome || _homeNavigation is not null || !IsCurrentStrip())
-        {
-            return;
-        }
-
-        bool isFocused;
-        try
-        {
-            isFocused = await _jsModule.InvokeAsync<bool>("isResourceTabFocused", HomeTabId);
-        }
-        catch (JSDisconnectedException)
-        {
-            return;
-        }
-
-        // A navigation or resize may have finished while the focus check was in flight.
-        if (!isFocused || _isDisposed || !IsCurrentStrip())
-        {
-            return;
-        }
-
-        await GoHomeAsync();
-
-        bool IsCurrentStrip() =>
-            isDesktop == ViewportInformation.IsDesktop &&
-            ShowsHomeTab(isDesktop) &&
-            string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal) &&
-            string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal);
-    }
-
-    // Opens a tab the user chose, for the current selection. While the full-page list is showing, choosing the tab that's
-    // already current opens its content; otherwise it navigates to the tab.
-    private async Task OpenChosenTabAsync(ResourceTab tab)
-    {
-        if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href ||
-            (tab == CurrentTab && !IsResourceListShownAsHome))
-        {
-            return;
-        }
-
-        if (_homeNavigation is not null)
-        {
-            _tabAfterHome = tab;
-            return;
-        }
-
-        await NavigateToTabAsync(href);
-    }
-
-    /// <summary>
-    /// Called by the layout's script when the user clicks a tab, or presses Enter or Space on it, while home shows the
-    /// resource list. No resource tab is selected then, so choosing the current tab must open its content. FluentTabs
-    /// can't report that choice: it raises the same change when it syncs with ActiveTabId, for example right after
-    /// closing the content with a tab still focused, which would reopen it. Other tabs open through OnTabChanged.
-    /// </summary>
-    [JSInvokable]
-    public async Task OpenTabFromFullCanvasAsync(string tabId)
-    {
-        if (_isDisposed
-            || !tabId.StartsWith("tab-", StringComparison.Ordinal)
-            || !Enum.TryParse<ResourceTab>(tabId["tab-".Length..], out var tab))
-        {
-            return;
-        }
-
-        // Home is loading. FluentTabs reports no change for the tab that's already current, such as Overview chosen
-        // right after the brand, so the script reports it here. Like any tab chosen then, it opens once home has, for
-        // home's selection (see OnParametersSetAsync), rather than being lost and leaving the table open.
-        if (_homeNavigation is not null)
-        {
-            _tabAfterHome = tab;
-            return;
-        }
-
-        if (!IsResourceListShownAsHome
-            || tab != CurrentTab
-            || GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href)
-        {
-            return;
-        }
-
-        await NavigateToTabAsync(href);
-    }
+    private static bool IsPlainClick(MouseEventArgs e) => e.Button == 0 && !e.CtrlKey && !e.ShiftKey && !e.AltKey && !e.MetaKey;
 
     private async Task NavigateToTabAsync(string href)
     {
@@ -3066,13 +2897,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // slow to render or the current tab's menu item doesn't change the URL.
             _isPaneCollapsed = false;
             SetResourceListVisible(false);
-        }
-
-        // Opening the current tab from the full-canvas list doesn't change the URL, so no new location will clear the
-        // tab the strip shows while navigating (see OnParametersSetAsync). Clear it here instead.
-        if (string.Equals(NavigationManager.ToAbsoluteUri(href).AbsoluteUri, NavigationManager.Uri, StringComparison.Ordinal))
-        {
-            _navigatingToTab = null;
         }
 
         NavigationManager.NavigateTo(href);
@@ -3092,8 +2916,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         var isTelemetryOnly = SelectedTelemetryOnlyResource is not null;
 
-        // Every tab is always rendered and hidden when it doesn't apply. Removing a FluentTab makes FluentTabs
-        // activate its first tab, which would navigate away from the current page.
+        // Tabs that don't apply are returned hidden rather than left out, so the menus and the strip agree on them.
         var errorCount = _selectedItems.Sum(i => i.Resource is { } r ? GetUnviewedErrorCount(r) : 0);
         // Overview stays for a resource that isn't known, such as a replica that was replaced: its page says the
         // resource wasn't found, and the tab is the way back to it from the resource's other pages.
@@ -3117,15 +2940,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
-    // Mirrors GetTabs() as a dropdown for narrow layouts, where the FluentTabs row no longer fits and would
-    // otherwise need its own horizontal scrollbar (see the "resource-tabs-nav" container query in the stylesheet).
-    // A tab chosen from the overflow or compact menu. Like a tab in the strip, it waits for a home navigation in flight
-    // (see OnTabChanged), and its URL is worked out when it's chosen: the menu can have been built for the selection
-    // before home's.
-    private Task ChooseTabFromMenuAsync(ResourceTab tab)
+    // Opens a tab chosen from the strip, one of its menus or the narrow layout's navigation menu. It waits for a home
+    // navigation in flight, and its URL is worked out when it's chosen: the strip and menus can have been rendered for
+    // the selection before home's.
+    private Task OpenTabAsync(ResourceTab tab)
     {
         if (_homeNavigation is not null)
         {
+            // Home is loading. Open this tab once it has, for home's selection (see OnParametersSetAsync).
             _tabAfterHome = tab;
             return Task.CompletedTask;
         }
@@ -3135,24 +2957,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             : Task.CompletedTask;
     }
 
-    private IList<MenuButtonItem> GetTabMenuItems(bool includeHome)
+    // Mirrors GetTabs() as a dropdown for when the tab row no longer fits and would otherwise need its own horizontal
+    // scrollbar (see the "resource-tabs-nav" container query in the stylesheet).
+    private IList<MenuButtonItem> GetTabMenuItems()
     {
         var items = new List<MenuButtonItem>();
-
-        if (includeHome)
-        {
-            var homeIsActive = IsResourceListShownAsHome;
-            items.Add(new MenuButtonItem
-            {
-                Id = $"{HomeTabId}-menu-item",
-                Class = "resource-tab-menu-item",
-                Text = Loc[nameof(Resources.Layout.ResourceTabHome)],
-                StartIcon = homeIsActive ? new Icons.Filled.Size24.Home() : new Icons.Regular.Size24.Home(),
-                Role = MenuItemRole.Radio,
-                Checked = homeIsActive,
-                OnClick = GoHomeAsync
-            });
-        }
 
         foreach (var tab in GetTabs())
         {
@@ -3171,11 +2980,47 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 // Like the tab strip, the menu shows no current view while the content is closed.
                 Checked = tab.Tab == CurrentTab && !IsResourceListShownAsHome,
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
-                OnClick = () => ChooseTabFromMenuAsync(tab.Tab)
+                OnClick = () => OpenTabAsync(tab.Tab)
             });
         }
 
         return items;
+    }
+
+    // A narrow layout has no room for the tab strip, so home and the views are listed at the top of the main
+    // navigation menu instead (see MainLayout.SetPageNavMenuEntries). The menu evaluates this each time it renders, so it
+    // shows the current selection's views. Without the resource service there's no home to go to (see IsResourceListHome).
+    internal IEnumerable<MobileNavMenuEntry> GetMobileNavMenuEntries()
+    {
+        if (DashboardClient.IsEnabled)
+        {
+            var homeIsActive = IsResourceListShownAsHome;
+            yield return new MobileNavMenuEntry(
+                nameof(Resources.Layout.ResourceTabHome),
+                Loc[nameof(Resources.Layout.ResourceTabHome)],
+                () => homeIsActive || _homeNavigation is not null ? Task.CompletedTask : GoHomeAsync(),
+                new Icons.Regular.Size24.Home(),
+                ActiveIcon: new Icons.Filled.Size24.Home(),
+                IsActive: homeIsActive);
+        }
+
+        foreach (var tab in GetTabs())
+        {
+            if (!tab.IsVisible)
+            {
+                continue;
+            }
+
+            // Like the tab strip, no view is current while home's resource list covers the content.
+            var isActive = tab.Tab == CurrentTab && !IsResourceListShownAsHome;
+            yield return new MobileNavMenuEntry(
+                GetTabId(tab.Tab),
+                tab.Text,
+                () => isActive && _homeNavigation is null ? Task.CompletedTask : OpenTabAsync(tab.Tab),
+                tab.Icon,
+                IsActive: isActive,
+                ErrorCount: tab.ErrorCount);
+        }
     }
 
     internal static string GetStateClass(ResourceViewModel resource) =>
@@ -3196,6 +3041,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _isDisposed = true;
         _cts.Cancel();
         _subscribedMainLayout?.HomeNavigationStarting -= OnHomeNavigationStarting;
+        _subscribedMainLayout?.ClearPageNavMenuEntries(_mobileNavMenuEntries);
         TagStore.Changed -= OnTagsChanged;
         ViewPreferences.Changed -= OnViewPreferencesChanged;
         OrderStore.Changed -= OnOrderChanged;
@@ -3238,6 +3084,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private sealed record SelectedResourceItem(string Name, ResourceViewModel? Resource, TelemetryOnlyResource? TelemetryOnly);
 
     private sealed record ResourceGroup(string? Value, List<ResourceViewModel> Resources);
+
+    private abstract record PaneSection(string Key, IEnumerable<ResourceViewModel> Resources);
+
+    private sealed record GroupPaneSection(string Key, ResourceGroup Group) : PaneSection(Key, Group.Resources);
+
+    private sealed record TreePaneSection(IReadOnlyList<ResourceGridViewModel> Rows)
+        : PaneSection(ResourcesSectionKey, Rows.Select(row => row.Resource));
+
+    private sealed record ParametersPaneSection(IReadOnlyList<ResourceViewModel> Rows) : PaneSection(ParametersSectionKey, Rows);
+
+    private sealed record TelemetryPaneSection(IReadOnlyList<TelemetryOnlyResource> Rows) : PaneSection(TelemetrySectionKey, []);
 
     private sealed record TabItem(ResourceTab Tab, string Text, Icon Icon, bool IsVisible, string Href, int ErrorCount, bool IsAvailable);
 

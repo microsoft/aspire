@@ -10,8 +10,12 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITelemetryRepository
 {
     public Func<GetLogsContext, CancellationToken, Task<PagedResult<LogSummary>>>? GetLogSummariesAsyncHandler { get; init; }
+    public Func<List<ResourceKey>, int, bool, CancellationToken, Task<OverviewLogs>>? GetOverviewLogsAsyncHandler { get; init; }
+    public Func<GetTracesRequest, CancellationToken, Task<GetTraceSummariesResponse>>? GetTraceSummariesAsyncHandler { get; init; }
+    public Func<GetInstrumentRequest, CancellationToken, Task<OtlpInstrumentData?>>? GetInstrumentAsyncHandler { get; init; }
     public Func<GetRequestSpansRequest, CancellationToken, Task<GetRequestSpansResponse>>? GetRequestSpansAsyncHandler { get; init; }
     public Action<Func<Task>>? OnNewLogsRegistered { get; init; }
+    public Action<Func<Task>>? OnOverviewLogsRegistered { get; init; }
     public Action<Subscription>? OnNewResourcesSubscribed { get; init; }
 
     public bool IsReadOnly => inner.IsReadOnly;
@@ -39,6 +43,10 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Subscription OnNewLogs(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback)
     {
         OnNewLogsRegistered?.Invoke(callback);
+        if (resourceKey is not null && subscriptionType == SubscriptionType.Other)
+        {
+            OnOverviewLogsRegistered?.Invoke(callback);
+        }
         return inner.OnNewLogs(resourceKey, subscriptionType, callback);
     }
     public Subscription OnNewMetrics(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewMetrics(resourceKey, subscriptionType, callback);
@@ -47,13 +55,16 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Task<PagedResult<OtlpLogEntry>> GetLogsAsync(GetLogsContext context, CancellationToken cancellationToken) => inner.GetLogsAsync(context, cancellationToken);
     public Task<PagedResult<LogSummary>> GetLogSummariesAsync(GetLogsContext context, CancellationToken cancellationToken) =>
         GetLogSummariesAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetLogSummariesAsync(context, cancellationToken);
+    public Task<OverviewLogs> GetOverviewLogsAsync(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken) =>
+        GetOverviewLogsAsyncHandler?.Invoke(resourceKeys, recentCount, errorsOnly, cancellationToken) ?? inner.GetOverviewLogsAsync(resourceKeys, recentCount, errorsOnly, cancellationToken);
     public OtlpLogEntry? GetLog(long logId) => inner.GetLog(logId);
     public Task<List<OtlpLogEntry>> GetLogsForSpanAsync(string traceId, string spanId, CancellationToken cancellationToken) => inner.GetLogsForSpanAsync(traceId, spanId, cancellationToken);
     public Task<List<OtlpLogEntry>> GetLogsForTraceAsync(string traceId, CancellationToken cancellationToken) => inner.GetLogsForTraceAsync(traceId, cancellationToken);
     public Task<List<string>> GetLogPropertyKeysAsync(ResourceKey? resourceKey, CancellationToken cancellationToken) => inner.GetLogPropertyKeysAsync(resourceKey, cancellationToken);
     public Task<List<string>> GetTracePropertyKeysAsync(ResourceKey? resourceKey, CancellationToken cancellationToken) => inner.GetTracePropertyKeysAsync(resourceKey, cancellationToken);
     public Task<GetTracesResponse> GetTracesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTracesAsync(context, cancellationToken);
-    public Task<GetTraceSummariesResponse> GetTraceSummariesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTraceSummariesAsync(context, cancellationToken);
+    public Task<GetTraceSummariesResponse> GetTraceSummariesAsync(GetTracesRequest context, CancellationToken cancellationToken) =>
+        GetTraceSummariesAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetTraceSummariesAsync(context, cancellationToken);
     public Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken) => inner.GetSpansAsync(context, cancellationToken);
     public Task<GetRequestSpansResponse> GetRequestSpansAsync(GetRequestSpansRequest request, CancellationToken cancellationToken) =>
         GetRequestSpansAsyncHandler?.Invoke(request, cancellationToken) ?? inner.GetRequestSpansAsync(request, cancellationToken);
@@ -65,7 +76,8 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public OtlpResource? GetPeerResource(OtlpSpan span) => inner.GetPeerResource(span);
     public List<OtlpInstrumentSummary> GetInstrumentSummaries(ResourceKey key) => inner.GetInstrumentSummaries(key);
     public OtlpInstrumentSummary? GetInstrumentSummary(ResourceKey resourceKey, string meterName, string instrumentName) => inner.GetInstrumentSummary(resourceKey, meterName, instrumentName);
-    public Task<OtlpInstrumentData?> GetInstrumentAsync(GetInstrumentRequest request, CancellationToken cancellationToken) => inner.GetInstrumentAsync(request, cancellationToken);
+    public Task<OtlpInstrumentData?> GetInstrumentAsync(GetInstrumentRequest request, CancellationToken cancellationToken) =>
+        GetInstrumentAsyncHandler?.Invoke(request, cancellationToken) ?? inner.GetInstrumentAsync(request, cancellationToken);
     public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName) => inner.GetInstrumentLatestEndTime(resourceKey, meterName, instrumentName);
 
     public IAsyncEnumerable<OtlpSpan> WatchSpansAsync(WatchSpansRequest request, CancellationToken cancellationToken) => inner.WatchSpansAsync(request, cancellationToken);

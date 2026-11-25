@@ -22,6 +22,7 @@
     <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Shared/DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Shared/TrayCliProtocol.cs" />
     <Compile Include="$(SharedDir)LinuxTrayPayload.cs" Link="Shared/LinuxTrayPayload.cs" />
+    <Compile Include="$(SharedDir)TemporaryStorage.cs" Link="Shared/TemporaryStorage.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/Gtk.cs" Link="Linux/Gtk.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxFolderApplication.cs" Link="Linux/LinuxFolderApplication.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxFileManager.cs" Link="Linux/LinuxFileManager.cs" />

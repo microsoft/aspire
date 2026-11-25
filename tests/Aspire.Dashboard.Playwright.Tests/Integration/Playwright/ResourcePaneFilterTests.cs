@@ -208,8 +208,9 @@ public sealed class ResourcePaneLongFilterTests : PlaywrightTestsBase<ResourcePa
             foreach (var viewport in new[] { (Width: 1440, Height: 900), (Width: 768, Height: 1024), (Width: 390, Height: 844) })
             {
                 await page.SetViewportSizeAsync(viewport.Width, viewport.Height);
-                // The narrow header keeps its tabs while the drawer is open, but removes its title button.
-                await Assertions.Expect(page.Locator(".resource-context-header > .resource-tabs")).ToHaveCountAsync(viewport.Width <= 768 ? 1 : 0);
+                // A narrow layout lists the views in the navigation menu instead of a tab strip, and hides its context
+                // header while the drawer is open.
+                await Assertions.Expect(page.Locator(".resources-tab-header")).ToHaveCountAsync(viewport.Width <= 768 ? 0 : 1);
                 if (viewport.Width <= 768 && !await page.Locator(".resource-pane").IsVisibleAsync())
                 {
                     await page.Locator("h1.resource-title").GetByRole(AriaRole.Button, new() { Name = "resource-00", Exact = true }).ClickAsync();
