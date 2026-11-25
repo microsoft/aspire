@@ -1825,12 +1825,23 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _filter.ShowHiddenResources,
             _resourceByName.Values,
             SessionStorage,
-            EventCallback.Factory.Create<bool>(this, value =>
-            {
-                _filter.ShowHiddenResources = value;
-                UpdatePaneMenuItems();
-                ResourcesChanged?.Invoke();
-            }));
+            ShowHiddenResourcesChanged);
+    }
+
+    internal bool ShowHiddenResources => _filter.ShowHiddenResources;
+
+    internal EventCallback<bool> ShowHiddenResourcesChanged => EventCallback.Factory.Create<bool>(this, SetShowHiddenResources);
+
+    private void SetShowHiddenResources(bool value)
+    {
+        if (_filter.ShowHiddenResources == value)
+        {
+            return;
+        }
+
+        _filter.ShowHiddenResources = value;
+        UpdatePaneMenuItems();
+        ResourcesChanged?.Invoke();
     }
 
     // The density is set in the settings panel, which isn't part of this layout.

@@ -348,6 +348,48 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ResourcesLayout_AllResources_HiddenConsoleLogsFollowTheVisibilityToggle()
+    {
+        var viewport = CreateViewport(isDesktop: true);
+        var client = new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("worker", hidden: true)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            consoleLogsChannelProvider: name =>
+            {
+                var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+                channel.Writer.TryWrite([new ResourceLogLine(1, $"{name} log", IsErrorMessage: false)]);
+                return channel;
+            });
+        SetupConsoleLogsServices(client);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport).Add(p => p.Body, body =>
+        {
+            body.OpenComponent<Components.Pages.ConsoleLogs>(0);
+            body.CloseComponent();
+        }));
+        var page = cut.WaitForComponent<Components.Pages.ConsoleLogs>();
+
+        page.WaitForAssertion(() => Assert.Equal(["api log"], GetLogs()));
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: true);
+        page.WaitForAssertion(() => Assert.Equal(["api log", "worker log"], GetLogs()));
+
+        var settingsMenu = cut.FindComponents<AspireMenuButton>()
+            .Single(menu => menu.Instance.Title == Resources.ConsoleLogs.ConsoleLogsSettings);
+        var hideItem = Assert.Single(settingsMenu.Instance.ItemsProvider(),
+            item => item.Text == Resources.ControlsStrings.HideHiddenResources);
+        await page.InvokeAsync(hideItem.OnClick!);
+        page.WaitForAssertion(() => Assert.Equal(["api log"], GetLogs()));
+        Assert.False(cut.Instance.ShowHiddenResources);
+
+        IEnumerable<string?> GetLogs() => page.Instance._logEntries.GetEntries().Select(entry => entry.RawContent).Order();
+    }
+
+    [Fact]
     public void ToggleHiddenResourcesMenuItem_WhenSingleResourceSelected_NotShown()
     {
         // Arrange

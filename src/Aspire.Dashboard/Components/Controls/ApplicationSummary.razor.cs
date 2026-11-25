@@ -59,6 +59,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private TelemetryRefreshGeneration? _telemetryRefresh;
     private bool _isLoaded;
     private IReadOnlyList<string>? _scopedResourceNames;
+    private bool _showHiddenGraphResources;
     private List<ResourceKey>? _scopedTelemetryKeys;
     private DotNetObjectReference<ApplicationSummaryInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
@@ -80,6 +81,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // Null queries all sources; an empty scope has no telemetry. The overview resolves these keys the same way as Traces.
     [Parameter]
     public IReadOnlyList<ResourceKey>? TelemetryResourceKeys { get; set; }
+
+    [CascadingParameter(Name = nameof(ResourcesLayout.ShowHiddenResources))]
+    public bool ShowHiddenResources { get; set; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
@@ -287,8 +291,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
 
         UpdateTelemetryRefresh(resourceNamesChanged || telemetryKeysChanged);
-        if (resourceNamesChanged)
+        if (resourceNamesChanged || _showHiddenGraphResources != ShowHiddenResources)
         {
+            _showHiddenGraphResources = ShowHiddenResources;
             await UpdateResourceGraphResourcesAsync();
         }
     }
@@ -688,7 +693,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private async Task<bool> ShowTagGroupContextMenuAsync(string tagName, int clientX, int clientY)
     {
         var items = ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, ResourceContextMenuHeaderId,
-            () => ResourceGraphMapper.GetTagMembers(GetResources(), tagName, TagStore),
+            () => ResourceGraphMapper.GetTagMembers(GetResourcesInScope(ShowHiddenResources), tagName, TagStore),
             (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
             ExecuteCommandAsync);
         if (_contextMenu is not { } contextMenu || items.Count == 0)
@@ -715,12 +720,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await InvokeAsync(StateHasChanged);
     }
 
-    private IEnumerable<ResourceViewModel> GetResourcesInScope() =>
-        _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r));
+    private IEnumerable<ResourceViewModel> GetResourcesInScope(bool showHiddenResources) =>
+        _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources) && IsInScope(r));
 
     private List<ResourceViewModel> GetResources()
     {
-        return GetResourcesInScope()
+        return GetResourcesInScope(showHiddenResources: false)
             .OrderBy(r => NeedsAttention(r) ? 0 : 1)
             .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -750,10 +755,10 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private List<ResourceDto> GetResourceGraphResources()
     {
-        var resources = ResourceGraphMapper.OrderResources(GetResourcesInScope());
+        var resources = ResourceGraphMapper.OrderResources(GetResourcesInScope(ShowHiddenResources));
         var tagsByResource = TagStore.GetTagsByResource(resources);
         return resources
-            .Select(resource => ResourceGraphMapper.MapResource(resource, resources, _resourceByName, ColumnsLoc, showHiddenResources: false, IconResolver,
+            .Select(resource => ResourceGraphMapper.MapResource(resource, resources, _resourceByName, ColumnsLoc, ShowHiddenResources, IconResolver,
                 tagsByResource.GetValueOrDefault(resource.DisplayName) ?? []))
             .ToList();
     }
@@ -982,7 +987,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         [JSInvokable]
         public Task SelectTagGroup(string tagName, MouseEventArgs e) =>
             (summary.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout."))
-                .SelectGraphTagGroupAsync(tagName, e, summary.GetResourcesInScope(), showHiddenResources: false);
+                .SelectGraphTagGroupAsync(tagName, e, summary.GetResourcesInScope(summary.ShowHiddenResources), summary.ShowHiddenResources);
 
         [JSInvokable]
         public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>

@@ -142,6 +142,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     [CascadingParameter]
     public ResourcesLayout? ResourcesLayout { get; set; }
 
+    [CascadingParameter(Name = nameof(ResourcesLayout.ShowHiddenResources))]
+    public bool? LayoutShowHiddenResources { get; set; }
+
     [Parameter]
     public string? ResourceName { get; set; }
 
@@ -465,6 +468,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         Logger.LogDebug("Initializing console logs view model.");
 
+        var showHiddenResources = LayoutShowHiddenResources ?? _showHiddenResources;
+        var visibilityChanged = _showHiddenResources != showHiddenResources;
+        if (visibilityChanged)
+        {
+            _showHiddenResources = showHiddenResources;
+            UpdateResourcesList();
+        }
+
         // In the resources layout, the resource list owns the selection. The page doesn't restore a resource
         // remembered in the session, which could differ from the selection.
         if (ResourcesLayout is null)
@@ -490,7 +501,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         var allResourcesSelection = SelectedResourceNames is { Length: > 1 } && ResourcesLayout is not null ? SelectedResourceNames : null;
 
-        if (isAllSelected != _isSubscribedToAll)
+        if (visibilityChanged && isAllSelected && allResourcesSelection is null)
+        {
+            needsNewSubscription = true;
+        }
+        else if (isAllSelected != _isSubscribedToAll)
         {
             Logger.LogDebug("Switching to or from 'All' mode");
             needsNewSubscription = true;
@@ -641,9 +656,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 EventCallback.Factory.Create<bool>(this, async
                 value =>
                 {
-                    _showHiddenResources = value;
-                    UpdateResourcesList();
-                    UpdateMenuButtons();
+                    if (ResourcesLayout is { } layout)
+                    {
+                        await layout.ShowHiddenResourcesChanged.InvokeAsync(value);
+                    }
+                    else
+                    {
+                        _showHiddenResources = value;
+                        UpdateResourcesList();
+                        await SubscribeAsync(isAllSelected: true, selectedResourceName: null);
+                    }
 
                     await this.RefreshIfMobileAsync(_contentLayout);
                 }));
@@ -906,7 +928,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _resources = GetConsoleLogResourceSelectViewModels(_resourceByName, _allResource, unknownStateText, _showHiddenResources, out var optionToSelect);
         if (optionToSelect is not null)
         {
-            PageViewModel.SelectedResource = optionToSelect;
+            if (ResourcesLayout is not null || _isSubscribedToAll)
+            {
+                _resources = _resources.Insert(0, _allResource);
+            }
+            else
+            {
+                PageViewModel.SelectedResource = optionToSelect;
+            }
         }
     }
 

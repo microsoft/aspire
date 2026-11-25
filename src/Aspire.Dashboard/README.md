@@ -61,8 +61,9 @@ When all resources are selected, **Select all** has a filled accent background i
 highlighting every row. Selecting individual resources restores their row highlights and clears
 the button highlight; the all-resources scope and filters are unchanged.
 
-In the modern dashboard's **All resources** view, Metrics, Structured Logs, and Traces exclude hidden resources unless
-**View options > Show hidden resources** is enabled. A trace that includes a visible resource
+In the modern dashboard's **All resources** view, Console Logs, Metrics, Structured Logs, and Traces exclude hidden resources unless
+**View options > Show hidden resources** is enabled. The **Overview > Graph** view also follows this setting.
+A trace that includes a visible resource
 still shows all its spans, including spans from hidden resources.
 
 ## Closing detail pages
