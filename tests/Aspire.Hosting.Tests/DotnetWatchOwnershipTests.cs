@@ -23,6 +23,42 @@ public class DotnetWatchOwnershipTests
         Assert.Equal(expected, DotnetWatchOwnership.IsCliOwned(owner));
     }
 
+    [Fact]
+    public void AppHostEnvironmentRecordRestoresRecordedValuesAndUnsetsTheRest()
+    {
+        var original = new Dictionary<string, string?> { ["MSBuildSDKsPath"] = "/custom \"sdks\"/Sdks", ["Unrelated"] = "kept" };
+        var encoded = DotnetWatchOwnership.EncodeAppHostEnvironment(name => original.GetValueOrDefault(name));
+        Assert.Equal("{\"MSBuildSDKsPath\":\"/custom \\u0022sdks\\u0022/Sdks\"}", encoded);
+
+        // As inherited from the watcher host, which loaded MSBuild from the AppHost's SDK.
+        var current = new Dictionary<string, string?>
+        {
+            ["MSBUILD_EXE_PATH"] = "/sdk/11.0.100/MSBuild.dll",
+            ["MSBuildExtensionsPath"] = "/sdk/11.0.100",
+            ["MSBuildSDKsPath"] = "/sdk/11.0.100/Sdks",
+            ["Unrelated"] = "kept"
+        };
+        DotnetWatchOwnership.RestoreAppHostEnvironment(encoded, (name, value) => current[name] = value);
+
+        Assert.Equal(new Dictionary<string, string?>
+        {
+            ["MSBUILD_EXE_PATH"] = null,
+            ["MSBuildExtensionsPath"] = null,
+            ["MSBuildSDKsPath"] = "/custom \"sdks\"/Sdks",
+            ["Unrelated"] = "kept"
+        }, current);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("{\"MSBUILD_EXE_PATH\":\"/custom/MSBuild.dll\",\"MSBuildSDKsPath\":1}")]
+    [InlineData("not json")]
+    public void MalformedAppHostEnvironmentRecordIsRejectedWithoutRestoringAnything(string encoded)
+    {
+        Assert.ThrowsAny<System.Text.Json.JsonException>(
+            () => DotnetWatchOwnership.RestoreAppHostEnvironment(encoded, (_, _) => Assert.Fail("Nothing may be restored.")));
+    }
+
     [Theory]
     [InlineData(null, true)]
     [InlineData("ide", true)]
@@ -76,7 +112,8 @@ public class DotnetWatchOwnershipTests
                 DotnetWatchOwnership.OwnerEnvironmentVariable,
                 DotnetWatchOwnership.AppHostControlEnvironmentVariable,
                 DotnetWatchOwnership.AppHostSessionEnvironmentVariable,
-                DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable
+                DotnetWatchOwnership.ResourceWatchSuppressionEnvironmentVariable,
+                DotnetWatchOwnership.AppHostEnvironmentVariable
             ],
             DotnetWatchOwnership.PrivateEnvironmentVariables);
         Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name =>

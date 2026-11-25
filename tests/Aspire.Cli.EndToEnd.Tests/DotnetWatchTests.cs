@@ -16,6 +16,22 @@ public sealed class DotnetWatchCSharpTests(ITestOutputHelper output)
         DotnetWatchTestRunner.RunAsync(output, "csharp");
 }
 
+public sealed class DotnetWatchCSharpSdk10Tests(ITestOutputHelper output)
+{
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task CSharpAppHostOnSdk10ReconstructsTheModelAndCleansOldGenerations() =>
+        DotnetWatchTestRunner.RunAsync(output, "csharp", "--sdk-major", "10");
+}
+
+public sealed class DotnetWatchMixedSdkTests(ITestOutputHelper output)
+{
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task MixedSdkAppHostReconstructionAndServiceHotReloadUseMajorSpecificPayloads() =>
+        DotnetWatchTestRunner.RunAsync(output, "mixed-sdk");
+}
+
 public sealed class DotnetWatchTypeScriptTests(ITestOutputHelper output)
 {
     [Fact]
@@ -46,6 +62,14 @@ public sealed class DotnetWatchBuildTests(ITestOutputHelper output)
     [CaptureWorkspaceOnFailure]
     public Task InitialBuildRecoveryAndCommandsRespectWatchBuildOwnership() =>
         DotnetWatchTestRunner.RunAsync(output, "builds");
+}
+
+public sealed class DotnetWatchBuildSdk10Tests(ITestOutputHelper output)
+{
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task InitialBuildRecoveryAndCommandsOnSdk10RespectWatchBuildOwnership() =>
+        DotnetWatchTestRunner.RunAsync(output, "builds", "--sdk-major", "10");
 }
 
 public sealed class DotnetWatchCompatibilityTests(ITestOutputHelper output)
@@ -107,7 +131,7 @@ public sealed class DotnetWatchStartupTests(ITestOutputHelper output)
 
 internal static class DotnetWatchTestRunner
 {
-    internal static async Task RunAsync(ITestOutputHelper output, string scenario)
+    internal static async Task RunAsync(ITestOutputHelper output, string scenario, params string[] verifierArguments)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -136,6 +160,14 @@ internal static class DotnetWatchTestRunner
         else
         {
             await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+            // The image supplies only the latest .NET 10 SDK. Watch scenarios exercise
+            // the latest patch of each SDK major, so install .NET 11 from its channel.
+            await auto.RunCommandAsync(
+                "curl -fsSL https://dot.net/v1/dotnet-install.sh -o watch-dotnet-install.sh && " +
+                "bash watch-dotnet-install.sh --channel 11.0 --install-dir /usr/share/dotnet --no-path && " +
+                "rm watch-dotnet-install.sh",
+                counter,
+                TimeSpan.FromMinutes(5));
             await auto.InstallAspireCliAsync(strategy, counter);
         }
 
@@ -143,8 +175,9 @@ internal static class DotnetWatchTestRunner
         {
             // The verifier selects an installed SDK explicitly and owns only fixture-tagged
             // processes. A zero exit is insufficient: its marker follows HTTP and cleanup assertions.
+            var arguments = string.Join(" ", verifierArguments.Select(argument => "'" + argument.Replace("'", "'\\''") + "'"));
             await auto.RunCommandAsync(
-                $"python3 verify-watch.py {scenario}",
+                $"python3 verify-watch.py {scenario} {arguments}",
                 counter,
                 TimeSpan.FromMinutes(scenario == "startup" ? 30 : 12));
         }

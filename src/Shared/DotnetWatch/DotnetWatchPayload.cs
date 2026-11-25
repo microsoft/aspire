@@ -52,13 +52,15 @@ internal static class DotnetWatchPayload
             throw new InvalidDataException("The watch tool and SDK must declare valid Microsoft.NETCore.App runtime requirements.");
         }
 
-        // Loading a newer SDK's MSBuild into an older watcher runtime is not supported,
-        // even when the muxer also has the newer runtime installed.
-        if (toolVersion < sdkVersion)
+        // The watcher runs on the newest installed patch of its runtime (the default roll-forward policy), and an SDK
+        // installs the runtime its MSBuild needs into the same .NET installation, so any SDK of the watcher's major
+        // version works with it, including patches released after the watcher. Another major's MSBuild needs the
+        // watcher built for that major.
+        if (toolVersion.Major != sdkVersion.Major)
         {
             throw new InvalidDataException(
                 $"The SDK's MSBuild requires .NET {sdkRuntime.Version}, but the watch tool targets .NET {toolRuntime.Version}. " +
-                "Select a compatible SDK/tool pair or run without --watch.");
+                "Select an SDK of the watch tool's major version or run without --watch.");
         }
 
         return requirements;

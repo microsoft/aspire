@@ -35,7 +35,8 @@ namespace Aspire.Hosting.Dotnet.WatchHost;
 /// <c>dotnet run -e</c> so native certificate validation sees them before the application starts.
 /// </para>
 /// <para>
-/// Wire contract pinned to watcher 10.0.403 (dotnet/dotnet 5a2162be): version byte 1, 7-bit-length-prefixed UTF-8
+/// Wire contract of the shipped watchers, 10.0.403 (dotnet/dotnet 5a2162be) and 11.0.100 (dotnet/dotnet 297acf93), whose
+/// resource launch sources are identical: version byte 1, 7-bit-length-prefixed UTF-8
 /// JSON <c>LaunchResourceRequest</c>, ACK byte 1, then records of (type byte 1=stdout/2=stderr, 7-bit-length string).
 /// </para>
 /// </remarks>

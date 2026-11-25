@@ -8,10 +8,14 @@
   </PropertyGroup>
 
   <!-- Explicit prelaunch query only: ordinary Restore/Build/Run/Publish never resolves or acquires a watcher.
-       DotNetHostPath identifies the muxer that selected this project's SDK, including global.json paths. -->
+       DotNetHostPath identifies the muxer that selected this project's SDK, including global.json paths. The watcher
+       comes from tools/dotnet-watch/<major of that SDK>/, because a watcher loads MSBuild from the SDK it watches with.
+       When the package ships watchers but none for this SDK major, the target returns no item, and the CLI runs the
+       AppHost without watching it. ASPIRE_DOTNET_WATCH_TOOL_PATH replaces the shipped watchers for every SDK major. -->
   <Target Name="ResolveAspireDotnetWatch" Returns="@(_AspireDotnetWatch)">
     <PropertyGroup>
-      <_AspireDotnetWatchPath>$([MSBuild]::NormalizePath('$(AspireDotnetWatchToolsDir)', 'Microsoft.DotNet.HotReload.Watch.Aspire.dll'))</_AspireDotnetWatchPath>
+      <_AspireDotnetWatchSdkMajor>$([System.Text.RegularExpressions.Regex]::Match('$(NETCoreSdkVersion)', '^\d+').Value)</_AspireDotnetWatchSdkMajor>
+      <_AspireDotnetWatchPath>$([MSBuild]::NormalizePath('$(AspireDotnetWatchToolsDir)', '$(_AspireDotnetWatchSdkMajor)', 'Microsoft.DotNet.HotReload.Watch.Aspire.dll'))</_AspireDotnetWatchPath>
       <_AspireDotnetWatchOverride Condition="'$(ASPIRE_DOTNET_WATCH_TOOL_PATH)' != ''">$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ASPIRE_DOTNET_WATCH_TOOL_PATH)'))</_AspireDotnetWatchOverride>
       <_AspireDotnetWatchPath Condition="'$(_AspireDotnetWatchOverride)' != ''">$(_AspireDotnetWatchOverride)</_AspireDotnetWatchPath>
       <_AspireDotnetWatchPath Condition="'$(_AspireDotnetWatchOverride)' != '' and $([System.IO.Directory]::Exists('$(_AspireDotnetWatchOverride)'))">$([MSBuild]::NormalizePath('$(_AspireDotnetWatchOverride)', 'Microsoft.DotNet.HotReload.Watch.Aspire.dll'))</_AspireDotnetWatchPath>
@@ -19,15 +23,21 @@
       <_AspireDotnetWatchMuxer>$(DotNetHostPath)</_AspireDotnetWatchMuxer>
       <_AspireDotnetWatchMuxer Condition="'$(_AspireDotnetWatchMuxer)' == ''">$(DOTNET_HOST_PATH)</_AspireDotnetWatchMuxer>
     </PropertyGroup>
-    <Error Condition="!Exists('$(_AspireDotnetWatchPath)')"
+    <ItemGroup>
+      <_AspireDotnetWatchShipped Include="$(AspireDotnetWatchToolsDir)*/Microsoft.DotNet.HotReload.Watch.Aspire.dll" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_AspireDotnetWatchUnsupportedSdk Condition="'$(_AspireDotnetWatchOverride)' == '' and !Exists('$(_AspireDotnetWatchPath)') and '@(_AspireDotnetWatchShipped)' != ''">true</_AspireDotnetWatchUnsupportedSdk>
+    </PropertyGroup>
+    <Error Condition="'$(_AspireDotnetWatchMuxer)' == '' or '$(_AspireDotnetWatchSdkMajor)' == '' or !Exists('$(MSBuildToolsPath)/MSBuild.dll')"
+           Text="The AppHost SDK and muxer could not be established for bundled watch prelaunch. Run without --watch or select an installed .NET SDK." />
+    <Error Condition="'$(_AspireDotnetWatchUnsupportedSdk)' != 'true' and !Exists('$(_AspireDotnetWatchPath)')"
            Text="The bundled watch tool '$(_AspireDotnetWatchPath)' does not exist. Restore and rebuild the AppHost, correct ASPIRE_DOTNET_WATCH_TOOL_PATH, or run without --watch." />
     <Error Condition="!Exists('$(_AspireDotnetWatchHostPath)')"
            Text="The bundled watch host '$(_AspireDotnetWatchHostPath)' does not exist. Restore and rebuild the AppHost or run without --watch." />
-    <Error Condition="'$(_AspireDotnetWatchMuxer)' == '' or '$(NETCoreSdkVersion)' == '' or !Exists('$(MSBuildToolsPath)/MSBuild.dll')"
-           Text="The AppHost SDK and muxer could not be established for bundled watch prelaunch. Run without --watch or select an installed .NET SDK." />
     <ItemGroup>
       <_AspireDotnetWatch Remove="@(_AspireDotnetWatch)" />
-      <_AspireDotnetWatch Include="$(_AspireDotnetWatchPath)">
+      <_AspireDotnetWatch Include="$(_AspireDotnetWatchPath)" Condition="'$(_AspireDotnetWatchUnsupportedSdk)' != 'true'">
         <ToolPath>$(_AspireDotnetWatchPath)</ToolPath>
         <WatchHostPath>$(_AspireDotnetWatchHostPath)</WatchHostPath>
         <DotnetPath>$(_AspireDotnetWatchMuxer)</DotnetPath>
@@ -37,8 +47,8 @@
     </ItemGroup>
   </Target>
 
-  <!-- Records where the hot reload watch tool (Microsoft.DotNet.HotReload.Watch.Aspire.dll) and the watch host
-       (Aspire.Hosting.Dotnet.WatchHost.dll) are, so watch runs use the shipped files instead of acquiring them. -->
+  <!-- Records where the hot reload watch tools (<SDK major>/Microsoft.DotNet.HotReload.Watch.Aspire.dll) and the watch
+       host (Aspire.Hosting.Dotnet.WatchHost.dll) are, so watch runs use the shipped files instead of acquiring them. -->
   <Target Name="_SetAspireDotnetWatchToolsAttribute" BeforeTargets="GetAssemblyAttributes" Condition="'$(IsAspireHost)' == 'true'">
     <ItemGroup>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">

@@ -41,7 +41,7 @@ public class DotnetWatchEventInterpreterTests
 
         // The event follows every apply attempt (applied, blocked by compile errors, no changes), so the notice is outcome-neutral.
         Assert.Equal(WatchNoticeKind.HotReloadApplied, notice.Kind);
-        Assert.Equal("⌚ The watcher processed the change for api. Watcher 10.0.403 does not report whether hot reload applied. Open 'dotnet-watch-api' Console logs in the dashboard, or run 'aspire logs dotnet-watch-api --tail 50'.", notice.Message);
+        Assert.Equal("⌚ The watcher processed the change for api. The watcher does not report whether hot reload applied. Open 'dotnet-watch-api' Console logs in the dashboard, or run 'aspire logs dotnet-watch-api --tail 50'.", notice.Message);
         Assert.Equal([s_api], notice.ProjectPaths);
     }
 

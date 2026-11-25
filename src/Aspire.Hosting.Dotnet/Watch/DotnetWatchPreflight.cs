@@ -17,6 +17,11 @@ internal interface IDotnetWatchPreflight
         string path, string? configuration, IReadOnlyDictionary<string, string> environment,
         bool globalProperties, string workingDirectory, CancellationToken cancellationToken);
 
+    /// <summary>Evaluates the project as <c>dotnet build</c> started in <paramref name="buildDirectory"/> sees it, SDK selection included.</summary>
+    Task<DotnetWatchProjectGraphResult> EvaluateBuildAsync(
+        string path, string? configuration, IReadOnlyDictionary<string, string> environment,
+        string buildDirectory, CancellationToken cancellationToken);
+
     Task<DotnetWatchResolvedPayload> ResolvePayloadAsync(
         DotnetWatchProjectGraphResult graph, IDistributedApplicationBuilder builder,
         ILogger logger, CancellationToken cancellationToken);
@@ -28,6 +33,11 @@ internal sealed class DotnetWatchPreflight : IDotnetWatchPreflight
         string path, string? configuration, IReadOnlyDictionary<string, string> environment,
         bool globalProperties, string workingDirectory, CancellationToken cancellationToken) =>
         DotnetWatchProjectGraph.EvaluateGraphAsync(path, configuration, environment, globalProperties, workingDirectory, cancellationToken);
+
+    public Task<DotnetWatchProjectGraphResult> EvaluateBuildAsync(
+        string path, string? configuration, IReadOnlyDictionary<string, string> environment,
+        string buildDirectory, CancellationToken cancellationToken) =>
+        DotnetWatchProjectGraph.EvaluateBuildGraphAsync(path, configuration, environment, buildDirectory, cancellationToken);
 
     public async Task<DotnetWatchResolvedPayload> ResolvePayloadAsync(
         DotnetWatchProjectGraphResult graph, IDistributedApplicationBuilder builder,

@@ -1836,6 +1836,20 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             RequiresLauncherMonitoring = false
         };
         var appHost = CreateProjectAppHost();
+        // The watcher applies this profile over the inherited environment, so its value is what the AppHost restores.
+        Directory.CreateDirectory(Path.Combine(appHost.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHost.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "http": {
+                  "commandName": "Project",
+                  "environmentVariables": {
+                    "MSBuildSDKsPath": "/profile/Sdks"
+                  }
+                }
+              }
+            }
+            """);
         var command = CreateBuiltAppHostCommand("AppHost");
         var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "10.0.403", "10.0.14");
         var builds = 0;
@@ -1871,6 +1885,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal("true", env["DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER"]);
             Assert.Equal(generation.Endpoint, env[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
             Assert.Equal(generation.Session, env[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
+            // The watcher host replaces these for the AppHost's SDK; the AppHost restores the recorded values.
+            Assert.Equal(
+                """{"MSBUILD_EXE_PATH":"/custom/MSBuild.dll","MSBuildExtensionsPath":"/custom","MSBuildSDKsPath":"/profile/Sdks"}""",
+                env[DotnetWatchOwnership.AppHostEnvironmentVariable]);
             launchEnvironment = env;
             var started = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(Environment.ProcessId);
             Assert.NotNull(started);
@@ -1902,7 +1920,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             WorkingDirectory = _workspace.WorkspaceRoot,
             Watch = true,
             WatchGeneration = generation,
-            EnvironmentVariables = new Dictionary<string, string> { ["ApplicationVariable"] = "preserved" },
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["ApplicationVariable"] = "preserved",
+                ["MSBUILD_EXE_PATH"] = "/custom/MSBuild.dll",
+                ["MSBuildExtensionsPath"] = "/custom",
+                ["MSBuildSDKsPath"] = "/custom/Sdks"
+            },
             UnmatchedTokens = ["--environment", "two words", "", "--project"]
         }, TestContext.Current.CancellationToken);
 
@@ -1914,21 +1938,27 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal("preserved", launchEnvironment["ApplicationVariable"]);
     }
 
-    [Fact]
-    public async Task RunAsync_UnsupportedAppHostSdkRunsOrdinarilyWithoutDisablingServiceWatch()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_UnsupportedAppHostSdkRunsOrdinarilyWithoutDisablingServiceWatch(bool noWatcherForSdkMajor)
     {
         using var directory = new DotnetWatchTestDirectory();
         using var shutdown = new TestGracefulShutdownWindow();
         await using var generation = new DotnetWatchAppHostGeneration(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance);
         var appHost = CreateProjectAppHost();
         var command = CreateBuiltAppHostCommand("AppHost");
-        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "11.0.100-rc.2.26504.105", "10.0.14");
+        // Either the resolved watcher is of another major than the AppHost's SDK, or the package ships no watcher for
+        // that major and the resolve target returns no item.
+        var payload = noWatcherForSdkMajor
+            ? TestDotnetWatchAppHostPayload.Create(directory.Directory, "12.0.100-preview.1.26101.1", "10.0.14")
+            : TestDotnetWatchAppHostPayload.Create(directory.Directory, "11.0.100-rc.2.26504.105", "10.0.14");
         var runner = new TestDotNetCliRunner
         {
             BuildAsyncCallback = (_, _, _, _) => 0,
             GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
                 (0, targets.Contains(DotnetWatchAppHostLaunch.ResolveTarget)
-                    ? payload.CreateQueryDocument()
+                    ? noWatcherForSdkMajor ? payload.CreateQueryDocumentWithoutWatcher() : payload.CreateQueryDocument()
                     : CreateAppHostInfoJson(runCommand: command.FullName)),
             RunAppHostCommandAsyncCallback = (_, executable, _, _, environment, _, _, _) =>
             {
@@ -1938,6 +1968,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                 Assert.Equal(DotnetWatchOwnership.CliOwner, environment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
                 Assert.Equal("", environment[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
                 Assert.Equal("", environment[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
+                Assert.Equal("", environment[DotnetWatchOwnership.AppHostEnvironmentVariable]);
                 return Task.FromResult(124);
             }
         };

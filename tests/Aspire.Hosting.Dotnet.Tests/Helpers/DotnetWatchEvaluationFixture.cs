@@ -28,7 +28,11 @@ internal sealed class DotnetWatchEvaluationFixture : IDisposable
     internal string SdkVersion { get; private set; } = string.Empty;
     internal string[] SdkRoots { get; private set; } = [];
 
-    internal static async Task<DotnetWatchEvaluationFixture> CreateAsync(ITestOutputHelper output)
+    /// <summary>
+    /// Creates a fixture that evaluates with the newest installed SDK of <paramref name="sdkMajor"/>. Projects target
+    /// net10.0 for every SDK major (newer SDKs build it), so the same expectations hold for each shipped watcher.
+    /// </summary>
+    internal static async Task<DotnetWatchEvaluationFixture> CreateAsync(ITestOutputHelper output, int sdkMajor)
     {
         var fixture = new DotnetWatchEvaluationFixture(output);
         try
@@ -43,7 +47,7 @@ internal sealed class DotnetWatchEvaluationFixture : IDisposable
                 .Distinct(DotnetWatchProjectGraph.PathComparer)
                 .ToArray();
             fixture.SdkRoots = candidates;
-            fixture.PinSdk(fixture.Path, $"{DotnetWatchToolResolver.SupportedSdkMajor}.0.100", "latestFeature");
+            fixture.PinSdk(fixture.Path, $"{sdkMajor}.0.100", "latestFeature");
             var sdk = await DotnetWatchToolResolver.ResolveSdkAsync(fixture.Path, TestContext.Current.CancellationToken).ConfigureAwait(false);
             fixture.SdkDirectory = DotnetWatchProjectGraph.Normalize(sdk.SdkDirectory);
             fixture.Muxer = DotnetWatchProjectGraph.Normalize(sdk.Muxer);
@@ -73,7 +77,7 @@ internal sealed class DotnetWatchEvaluationFixture : IDisposable
         Write(System.IO.Path.Combine(name, name + ".csproj"), $$"""
             <Project Sdk="{{sdk}}">
               <PropertyGroup>
-                <TargetFramework>net{{DotnetWatchToolResolver.SupportedSdkMajor}}.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <OutputType>Exe</OutputType>
               </PropertyGroup>
               {{content}}

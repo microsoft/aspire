@@ -13,7 +13,8 @@ using Aspire.Shared.DotnetWatch;
 namespace Aspire.Hosting.Watch;
 
 /// <summary>
-/// Announces real CLI-owned AppHost starts and invalidates the constructed model after metadata updates.
+/// Restores the AppHost's environment in CLI-owned AppHost watch generations, announces their starts, and invalidates the
+/// constructed model after metadata updates.
 /// </summary>
 internal static class DotnetWatchMetadataUpdateHandler
 {
@@ -23,8 +24,36 @@ internal static class DotnetWatchMetadataUpdateHandler
 
     [ModuleInitializer]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2255:The 'ModuleInitializer' attribute should not be used in libraries",
-        Justification = "Only explicit CLI-owned AppHost watch generations announce startup; ordinary and IDE hosts do nothing.")]
-    internal static void Initialize() => _ = NotifyStartedAsync(Environment.GetEnvironmentVariable, CancellationToken.None);
+        Justification = "Only explicit CLI-owned AppHost watch generations restore their environment and announce startup; ordinary and IDE hosts do nothing.")]
+    internal static void Initialize()
+    {
+        RestoreAppHostEnvironment(Environment.GetEnvironmentVariable, Environment.SetEnvironmentVariable);
+        _ = NotifyStartedAsync(Environment.GetEnvironmentVariable, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Undoes the MSBuild variables that the watcher host set on itself for this AppHost's SDK, before the AppHost starts
+    /// any process. Otherwise SDK queries, builds and resources inherit them and use this SDK even when their global.json
+    /// selects another one, such as services pinned to another SDK major.
+    /// </summary>
+    internal static void RestoreAppHostEnvironment(Func<string, string?> getEnvironmentVariable, Action<string, string?> setEnvironmentVariable)
+    {
+        if (!DotnetWatchOwnership.IsCliOwned(getEnvironmentVariable(DotnetWatchOwnership.OwnerEnvironmentVariable)) ||
+            getEnvironmentVariable(DotnetWatchOwnership.AppHostEnvironmentVariable) is not { Length: > 0 } recorded)
+        {
+            return;
+        }
+
+        try
+        {
+            DotnetWatchOwnership.RestoreAppHostEnvironment(recorded, setEnvironmentVariable);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // The CLI always records valid JSON. A malformed value can only come from elsewhere; keep the inherited
+            // values rather than fail the AppHost's startup.
+        }
+    }
 
     internal static void UpdateApplication(Type[]? updatedTypes)
     {

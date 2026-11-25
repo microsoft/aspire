@@ -38,13 +38,41 @@ internal static class DotnetWatchProjectGraph
     internal static string Normalize(string path) =>
         Path.TrimEndingDirectorySeparator(PathNormalizer.ResolveToFilesystemPath(Path.GetFullPath(ReplaceSeparators(path))));
 
-    /// <summary>Evaluates physical roots, references, active imports, and build outputs without building or restoring.</summary>
-    internal static async Task<DotnetWatchProjectGraphResult> EvaluateGraphAsync(
+    /// <summary>
+    /// Evaluates physical roots, references, active imports, and build outputs without building or restoring, with the SDK
+    /// the project's own directory selects (the watcher binds its <c>--sdk</c> from the root, independently of its cwd).
+    /// </summary>
+    internal static Task<DotnetWatchProjectGraphResult> EvaluateGraphAsync(
         string projectPath,
         string? configuration,
         IReadOnlyDictionary<string, string> environment,
         bool globalProperties,
         string workingDirectory,
+        CancellationToken cancellationToken) =>
+        EvaluateGraphCoreAsync(projectPath, configuration, environment, globalProperties, workingDirectory,
+            selectSdkFromWorkingDirectory: false, cancellationToken);
+
+    /// <summary>
+    /// Evaluates the project as <c>dotnet build</c> started in <paramref name="buildDirectory"/> sees it: the muxer selects the
+    /// SDK from that directory's global.json scope, which can differ from the project's own when the watcher builds several
+    /// roots through a temporary solution in its temp directory.
+    /// </summary>
+    internal static Task<DotnetWatchProjectGraphResult> EvaluateBuildGraphAsync(
+        string projectPath,
+        string? configuration,
+        IReadOnlyDictionary<string, string> environment,
+        string buildDirectory,
+        CancellationToken cancellationToken) =>
+        EvaluateGraphCoreAsync(projectPath, configuration, environment, globalProperties: false, buildDirectory,
+            selectSdkFromWorkingDirectory: true, cancellationToken);
+
+    private static async Task<DotnetWatchProjectGraphResult> EvaluateGraphCoreAsync(
+        string projectPath,
+        string? configuration,
+        IReadOnlyDictionary<string, string> environment,
+        bool globalProperties,
+        string workingDirectory,
+        bool selectSdkFromWorkingDirectory,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectPath);
@@ -54,7 +82,7 @@ internal static class DotnetWatchProjectGraph
         using var evaluationActivity = DotnetWatchProfiling.StartEvaluation(projectPath, globalProperties);
         var directory = Normalize(workingDirectory);
         var path = NormalizeRelative(projectPath, directory);
-        var sdkScopeDirectory = Path.GetDirectoryName(path)!;
+        var sdkScopeDirectory = selectSdkFromWorkingDirectory ? directory : Path.GetDirectoryName(path)!;
         var effectiveEnvironment = environment.Where(pair => !DotnetWatchOwnership.IsPrivateEnvironmentVariable(pair.Key))
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
         if (effectiveEnvironment.Keys.Any(name => name.Equals("CompileItems", StringComparison.OrdinalIgnoreCase) ||
@@ -70,8 +98,8 @@ internal static class DotnetWatchProjectGraph
             throw new DistributedApplicationException(
                 "The bundled watch graph evaluation adapter is missing. Restore and rebuild the AppHost with Aspire.Hosting.Dotnet, or run without watch.");
         }
-        // The upstream watcher binds --sdk from the root, independently of its startup cwd. Query a bare project
-        // there: no service evaluation/targets, no response files, and no ambiguity when two SDK installs share a version.
+        // Query a bare project from the SDK scope directory: no service evaluation/targets, no response files, and no
+        // ambiguity when two SDK installs share a version.
         var sdkInfo = CreateStartInfo("dotnet", sdkScopeDirectory, effectiveEnvironment, configuration, globalProperties);
         foreach (var argument in new[]
         {
@@ -248,6 +276,10 @@ internal static class DotnetWatchProjectGraph
                 {
                     continue;
                 }
+                if (IsSanctionedHotReloadOutputsAdaptation(name, leftValue, rightValue))
+                {
+                    continue;
+                }
 
                 if (IsRefreshMetadata(name))
                 {
@@ -311,6 +343,14 @@ internal static class DotnetWatchProjectGraph
     private static bool IsSanctionedFileAppWatcherAdaptation(string name, string? ordinaryValue, string? watcherValue) =>
         (name.Equals("StartupHookSupport", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("MetadataUpdaterSupport", StringComparison.OrdinalIgnoreCase)) &&
+        ordinaryValue?.Equals("true", StringComparison.OrdinalIgnoreCase) != true &&
+        watcherValue?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+
+    // Non-Debug watch builds turn on the SDK's hot reload build outputs, which an ordinary non-Debug build leaves at
+    // their Debug-only default. They add runtimeconfig.dev.json options and build-only browser tools assets, not compiled
+    // output. A project that sets the property explicitly wins over the watcher environment, so both graphs agree.
+    private static bool IsSanctionedHotReloadOutputsAdaptation(string name, string? ordinaryValue, string? watcherValue) =>
+        name.Equals("EnableHotReloadInRuntimeConfigDevFile", StringComparison.OrdinalIgnoreCase) &&
         ordinaryValue?.Equals("true", StringComparison.OrdinalIgnoreCase) != true &&
         watcherValue?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
 

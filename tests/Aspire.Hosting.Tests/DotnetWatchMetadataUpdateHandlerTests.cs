@@ -22,6 +22,32 @@ public class DotnetWatchMetadataUpdateHandlerTests
     }
 
     [Theory]
+    [InlineData("cli", "{}", true)]
+    [InlineData("cli", "", false)]
+    [InlineData(null, "{}", false)]
+    [InlineData("ide", "{}", false)]
+    // A malformed record keeps the inherited values instead of failing the AppHost's startup.
+    [InlineData("cli", "{\"MSBuildSDKsPath\":1}", false)]
+    public void OnlyCliOwnedAppHostsWithARecordRestoreTheWatcherMSBuildVariables(string? owner, string recorded, bool restores)
+    {
+        var inherited = new Dictionary<string, string?>
+        {
+            [DotnetWatchOwnership.OwnerEnvironmentVariable] = owner,
+            [DotnetWatchOwnership.AppHostEnvironmentVariable] = recorded,
+            ["MSBUILD_EXE_PATH"] = "/sdk/11.0.100/MSBuild.dll",
+            ["MSBuildExtensionsPath"] = "/sdk/11.0.100",
+            ["MSBuildSDKsPath"] = "/sdk/11.0.100/Sdks"
+        };
+        var environment = new Dictionary<string, string?>(inherited);
+
+        DotnetWatchMetadataUpdateHandler.RestoreAppHostEnvironment(environment.GetValueOrDefault, (name, value) => environment[name] = value);
+
+        Assert.Equal(restores
+            ? new Dictionary<string, string?>(inherited) { ["MSBUILD_EXE_PATH"] = null, ["MSBuildExtensionsPath"] = null, ["MSBuildSDKsPath"] = null }
+            : inherited, environment);
+    }
+
+    [Theory]
     [InlineData(null, null, null, null, null)]
     [InlineData("true", null, "unused", "0123456789abcdef0123456789abcdef", null)]
     [InlineData("true", "ide", "unused", "0123456789abcdef0123456789abcdef", null)]

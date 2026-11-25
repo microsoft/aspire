@@ -678,6 +678,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string WatchAppHostSdkUnsupported {
+            get {
+                return ResourceManager.GetString("WatchAppHostSdkUnsupported", resourceCulture);
+            }
+        }
+
         internal static string WatchAppHostRuntimeMissing {
             get {
                 return ResourceManager.GetString("WatchAppHostRuntimeMissing", resourceCulture);

@@ -10,6 +10,7 @@ using System.IO.Hashing;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Shared;
@@ -839,22 +840,21 @@ internal static class DotnetWatchCoordinator
                 {
                     try
                     {
-                        var defaultTempGraph = await evaluator.EvaluateAsync(
+                        var defaultTempGraph = await evaluator.EvaluateBuildAsync(
                             group[0].ProjectPath,
                             group[0].Metadata.BuildConfiguration,
                             group[0].BuildEnvironment,
-                            globalProperties: false,
                             Path.GetTempPath(),
                             cancellationToken).ConfigureAwait(false);
                         if (DotnetWatchProjectGraph.Compare(group[0].Graph!, defaultTempGraph).Kind !=
                             DotnetWatchGraphComparisonKind.Equivalent)
                         {
-                            server.TempDirectory = CreateSdkTempDirectory(server, group[0].Graph!.SdkVersion);
+                            server.TempDirectory = CreateSdkTempDirectory(server, group[0].Graph!);
                         }
                     }
                     catch (DistributedApplicationException)
                     {
-                        server.TempDirectory = CreateSdkTempDirectory(server, group[0].Graph!.SdkVersion);
+                        server.TempDirectory = CreateSdkTempDirectory(server, group[0].Graph!);
                     }
                 }
                 foreach (var project in group)
@@ -863,8 +863,8 @@ internal static class DotnetWatchCoordinator
                         (multipleRoots ? Path.GetTempPath() : Path.GetDirectoryName(project.ProjectPath)!);
                     try
                     {
-                        var buildGraph = await evaluator.EvaluateAsync(project.ProjectPath, project.Metadata.BuildConfiguration,
-                            project.BuildEnvironment, globalProperties: false, buildDirectory, cancellationToken).ConfigureAwait(false);
+                        var buildGraph = await evaluator.EvaluateBuildAsync(project.ProjectPath, project.Metadata.BuildConfiguration,
+                            project.BuildEnvironment, buildDirectory, cancellationToken).ConfigureAwait(false);
                         var comparison = DotnetWatchProjectGraph.Compare(project.Graph!, buildGraph);
                         if (comparison.Kind != DotnetWatchGraphComparisonKind.Equivalent)
                         {
@@ -1021,7 +1021,7 @@ internal static class DotnetWatchCoordinator
                 ? FindSdkScope(directory) ?? directory : directory;
         }
 
-        private string CreateSdkTempDirectory(WatchServer server, string sdkVersion)
+        private string CreateSdkTempDirectory(WatchServer server, DotnetWatchProjectGraphResult graph)
         {
             var root = OperatingSystem.IsWindows()
                 ? RunDirectory
@@ -1033,10 +1033,35 @@ internal static class DotnetWatchCoordinator
             {
                 File.SetUnixFileMode(directory, DotnetWatchServerInfrastructure.PrivateDirectoryMode);
             }
-            File.WriteAllText(Path.Combine(directory, "global.json"),
-                $$"""{ "sdk": { "version": "{{sdkVersion}}", "rollForward": "disable", "allowPrerelease": true } }""");
+            File.WriteAllBytes(Path.Combine(directory, "global.json"), CreateSdkPin(graph.SdkDirectory, graph.SdkVersion));
             DotnetWatchServerInfrastructure.ValidateCoreFxPipePath(directory);
             return directory;
+        }
+
+        // Pins the exact SDK and searches its own dotnet root first (global.json "paths", .NET 10+ hosts): the watcher's
+        // build runs that root's muxer, while the build-context check runs `dotnet` from PATH, which can be another install
+        // (for example when a repository's global.json "paths" selects a local .dotnet). For example:
+        //   { "sdk": { "version": "10.0.404", "rollForward": "disable", "allowPrerelease": true, "paths": [ "/repo/.dotnet", "$host$" ] } }
+        // See https://learn.microsoft.com/dotnet/core/tools/global-json.
+        private static byte[] CreateSdkPin(string sdkDirectory, string sdkVersion)
+        {
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream))
+            {
+                writer.WriteStartObject();
+                writer.WriteStartObject("sdk");
+                writer.WriteString("version", sdkVersion);
+                writer.WriteString("rollForward", "disable");
+                writer.WriteBoolean("allowPrerelease", true);
+                writer.WriteStartArray("paths");
+                writer.WriteStringValue(Path.GetFullPath(Path.Combine(sdkDirectory, "..", "..")));
+                writer.WriteStringValue("$host$");
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+                writer.WriteEndObject();
+            }
+
+            return stream.ToArray();
         }
 
         private readonly object _inventoryGate = new();
@@ -1134,6 +1159,9 @@ internal static class DotnetWatchCoordinator
             var ordinary = await EvaluateOrdinaryRootsAsync(services, cancellationToken).ConfigureAwait(false);
             var replacements = new Dictionary<WatchedProject, DotnetWatchProjectGraphResult>();
             var structureChanged = false;
+            var multipleRoots = Projects.Where(project => project.Server == server)
+                .Select(project => DotnetWatchProjectGraph.Normalize(project.ProjectPath))
+                .Distinct(DotnetWatchProjectGraph.PathComparer).Count() > 1;
             foreach (var project in Projects.Where(project => project.Server == server))
             {
                 var environment = new Dictionary<string, string>(project.BuildEnvironment, StringComparer.OrdinalIgnoreCase);
@@ -1164,8 +1192,9 @@ internal static class DotnetWatchCoordinator
                         throw new DotnetWatchIncompatibleGraphException(
                             $"The observed watch graph became incompatible: {comparison.Describe()}. Restart the complete watch run.");
                     }
-                    var build = await evaluator.EvaluateAsync(project.ProjectPath, project.Metadata.BuildConfiguration, environment,
-                        globalProperties: false, server.TempDirectory ?? Path.GetDirectoryName(project.ProjectPath)!, cancellationToken).ConfigureAwait(false);
+                    var build = await evaluator.EvaluateBuildAsync(project.ProjectPath, project.Metadata.BuildConfiguration, environment,
+                        server.TempDirectory ?? (multipleRoots ? Path.GetTempPath() : Path.GetDirectoryName(project.ProjectPath)!),
+                        cancellationToken).ConfigureAwait(false);
                     var buildComparison = DotnetWatchProjectGraph.Compare(current, build);
                     if (buildComparison.Kind == DotnetWatchGraphComparisonKind.Equivalent)
                     {
@@ -3718,6 +3747,16 @@ internal static class DotnetWatchCoordinator
             // service environment (endpoints, connection strings) to the launched app. Release defaults Optimize only
             // when it's empty, so this keeps Release's output paths and constants.
             properties["Optimize"] = "false";
+
+            // The SDK produces its hot reload build outputs (runtimeconfig.dev.json options and, for web projects, the
+            // browser tools assets) only for Debug unless the build host enables them with this switch. Watcher 11.0.100
+            // can't launch a web project without the browser tools: it logs an event that has no message descriptor and
+            // its logger throws ("The given key '1021' was not present in the dictionary",
+            // https://github.com/dotnet/sdk/issues/57358). See
+            // https://github.com/dotnet/dotnet/blob/297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f/src/sdk/src/Dotnet.Watch/Watch/Browser/BrowserToolsBuildOutputsExtensions.cs#L31-L33
+            // and https://github.com/dotnet/dotnet/blob/297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f/src/sdk/src/StaticWebAssetsSdk/Targets/Microsoft.NET.Sdk.StaticWebAssets.HotReload.targets#L24-L31.
+            // Revisit the switch once the shipped .NET 11 watcher includes the fix for that issue.
+            properties["EnableHotReloadInRuntimeConfigDevFile"] = "true";
         }
 
         if (metadata.Any(m => ((IProjectMetadata)m).IsFileBasedApp))

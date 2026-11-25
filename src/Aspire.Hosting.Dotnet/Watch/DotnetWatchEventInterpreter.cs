@@ -146,7 +146,7 @@ internal sealed class DotnetWatchEventInterpreter
                 if (updated.Length > 0)
                 {
                     notices.Add(Notice(WatchNoticeKind.HotReloadApplied, LogLevel.Information,
-                        $"⌚ The watcher processed the change for {Names(updated)}. Watcher 10.0.403 does not report whether hot reload applied. Open '{_watchResourceName}' Console logs in the dashboard, or run 'aspire logs {_watchResourceName} --tail 50'.", updated));
+                        $"⌚ The watcher processed the change for {Names(updated)}. The watcher does not report whether hot reload applied. Open '{_watchResourceName}' Console logs in the dashboard, or run 'aspire logs {_watchResourceName} --tail 50'.", updated));
                 }
                 break;
 

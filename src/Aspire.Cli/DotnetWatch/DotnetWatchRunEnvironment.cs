@@ -44,5 +44,6 @@ internal static class DotnetWatchRunEnvironment
     {
         environment[DotnetWatchOwnership.AppHostControlEnvironmentVariable] = "";
         environment[DotnetWatchOwnership.AppHostSessionEnvironmentVariable] = "";
+        environment[DotnetWatchOwnership.AppHostEnvironmentVariable] = "";
     }
 }

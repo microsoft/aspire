@@ -1651,10 +1651,10 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
         var defaultTemp = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath()));
         var evaluator = new DotnetWatchPreflightTestServices
         {
-            TransformWithWorkingDirectory = (_, globalProperties, _, workingDirectory, graph) =>
-                !globalProperties &&
+            // Only a build started in the default temp directory selects another SDK; the root-bound watcher doesn't.
+            TransformBuild = (_, buildDirectory, graph) =>
                 DotnetWatchProjectGraph.PathComparer.Equals(
-                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(workingDirectory)), defaultTemp)
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(buildDirectory)), defaultTemp)
                     ? graph with { SdkVersion = "10.0.999" }
                     : graph
         };

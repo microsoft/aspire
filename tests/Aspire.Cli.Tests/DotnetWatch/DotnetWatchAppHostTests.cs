@@ -32,7 +32,7 @@ public class DotnetWatchAppHostTests
             {
                 Assert.Equal(appHost.FullName, project.FullName);
                 Assert.Empty(items);
-                Assert.Equal(["Configuration", "TargetFrameworks"], properties);
+                Assert.Equal(["Configuration", "TargetFrameworks", "NETCoreSdkVersion"], properties);
                 Assert.Equal(["ResolveAspireDotnetWatch"], targets);
                 Assert.True(options.NoRestore);
                 Assert.True(options.QueryTargetResults);
@@ -91,13 +91,18 @@ public class DotnetWatchAppHostTests
     }
 
     [Theory]
-    [InlineData("11.0.100-rc.2.26504.105", "10.0.14", true)]
-    [InlineData("11.0.100-rc.2.26504.105", "11.0.0-rc.2.26504.105", false)]
-    [InlineData("10.0.403", "10.0.14", false)]
-    public void ValidatesSelectedSdkWithoutReplacingItOrDiscardingTheServiceTool(string sdkVersion, string runtimeVersion, bool incompatible)
+    [InlineData("11.0.100-rc.2.26504.105", null, "10.0.14", true)]
+    [InlineData("11.0.100-rc.2.26504.105", null, "11.0.0-rc.2.26504.105", false)]
+    [InlineData("10.0.403", null, "10.0.14", false)]
+    // An SDK patch released after the watcher requests a newer runtime patch; the watcher runs on that patch.
+    [InlineData("10.0.404", "10.0.15", "10.0.14", false)]
+    [InlineData("11.0.100", "11.0.0", "11.0.0", false)]
+    // A watcher only loads MSBuild of its own major, older or newer.
+    [InlineData("10.0.403", "10.0.14", "11.0.0", true)]
+    public void ValidatesSelectedSdkWithoutReplacingItOrDiscardingTheServiceTool(string sdkVersion, string? msbuildRuntimeVersion, string runtimeVersion, bool incompatible)
     {
         using var directory = new DotnetWatchTestDirectory();
-        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, sdkVersion, runtimeVersion);
+        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, sdkVersion, runtimeVersion, msbuildRuntimeVersion);
         using var result = payload.CreateQueryDocument();
 
         var launch = DotnetWatchAppHostLaunch.Read(new FileInfo(Path.Combine(directory.Directory.FullName, "AppHost.csproj")),
@@ -108,6 +113,26 @@ public class DotnetWatchAppHostTests
         Assert.Equal(payload.DotnetPath, launch.DotnetPath);
         Assert.Equal(payload.SdkDirectory, launch.SdkDirectory);
         Assert.Equal(sdkVersion, launch.SdkVersion);
+    }
+
+    [Fact]
+    public void AppHostSdkWithoutAShippedWatcherIsAHostCoverageDiagnostic()
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "12.0.100-preview.1.26101.1", "10.0.14");
+        using var result = payload.CreateQueryDocumentWithoutWatcher();
+        var appHost = new FileInfo(Path.Combine(directory.Directory.FullName, "AppHost.csproj"));
+
+        var launch = DotnetWatchAppHostLaunch.Read(appHost, result.RootElement, toolOverride: null, rollForwardOverride: null);
+
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, RunCommandStrings.WatchAppHostSdkUnsupported,
+            12, "12.0.100-preview.1.26101.1"), launch.HostIncompatibility);
+        Assert.Equal("12.0.100-preview.1.26101.1", launch.SdkVersion);
+
+        // An explicit override always resolves to one tool, so an empty result can't be the override's.
+        var exception = Assert.Throws<InvalidDataException>(() => DotnetWatchAppHostLaunch.Read(
+            appHost, result.RootElement, toolOverride: payload.ToolPath, rollForwardOverride: null));
+        Assert.Equal(RunCommandStrings.WatchBootstrapInvalid, exception.Message);
     }
 
     [Fact]

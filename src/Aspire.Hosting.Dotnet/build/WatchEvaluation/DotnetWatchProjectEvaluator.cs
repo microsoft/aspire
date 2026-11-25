@@ -164,7 +164,6 @@ internal static class DotnetWatchProjectEvaluator
             {
                 // Use the same SDK implementation as dotnet build/watch. It expands directives, resolves imported
                 // references, and visits included C# sources; no handwritten #: parser or generated XML replica.
-                // https://github.com/dotnet/sdk/blob/v10.0.403/src/Microsoft.DotNet.ProjectTools/VirtualProjectBuilder.cs
                 virtualBuilder ??= GetVirtualBuilder(sdkDirectory);
                 if (!int.TryParse(request.SdkVersion.AsSpan(0, request.SdkVersion.IndexOf('.')), out var major))
                 {
@@ -178,8 +177,7 @@ internal static class DotnetWatchProjectEvaluator
                         errors.Add($"'{source}' line {line}");
                     }
                 };
-                instance = GetMethod(virtualBuilder, "CreateProjectInstance", [typeof(string), typeof(string), collectionType, typeof(Action<string, int, string>)])
-                    .Invoke(null, [path, $"net{major}.0", collection, report])!;
+                instance = CreateFileAppInstance(virtualBuilder, collectionType, collection, path, $"net{major}.0", report);
                 if (errors.Count > 0)
                 {
                     throw new EvaluationException($"The SDK rejected file-app directives at {string.Join(", ", errors)}; watch build fidelity is unknown.");
@@ -251,7 +249,7 @@ internal static class DotnetWatchProjectEvaluator
                 .ToArray();
             properties["CompileItems"] = JsonSerializer.Serialize(compileItems, DotnetWatchProjectEvaluationJsonContext.Default.DotnetWatchCompileItemArray);
             properties["PackageReferences"] = JsonSerializer.Serialize(packages, DotnetWatchProjectEvaluationJsonContext.Default.DotnetWatchPackageReferenceArray);
-            ValidateRunArguments(instanceType, instance, path);
+            ValidateRunArguments(instanceType, instance, path, sdkDirectory);
             var fullPath = (string)fullPathProperty.GetValue(instance)!;
             if (string.IsNullOrEmpty(fullPath) || string.IsNullOrEmpty(properties["MSBuildProjectDirectory"]))
             {
@@ -343,7 +341,7 @@ internal static class DotnetWatchProjectEvaluator
         return assignment?[prefix.Length..];
     }
 
-    private static void ValidateRunArguments(Type instanceType, object instance, string path)
+    private static void ValidateRunArguments(Type instanceType, object instance, string path, string sdkDirectory)
     {
         var targets = instanceType.GetProperty("Targets")?.GetValue(instance) as IDictionary
             ?? throw new EvaluationException("The selected SDK cannot expose run-command target definitions.");
@@ -366,12 +364,30 @@ internal static class DotnetWatchProjectEvaluator
                 var value = targetType.GetProperty(hook)?.GetValue(target) as string ?? string.Empty;
                 var expanded = (string)GetMethod(instanceType, "ExpandString", [typeof(string)]).Invoke(instance, [value])!;
                 if (expanded.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Contains("ComputeRunArguments", StringComparer.OrdinalIgnoreCase))
+                    .Contains("ComputeRunArguments", StringComparer.OrdinalIgnoreCase) &&
+                    !IsSdkRunCommandCheck(name, targetType, target, sdkDirectory))
                 {
                     throw new EvaluationException($"Project '{path}' attaches a custom target to ComputeRunArguments; watch launch fidelity cannot be established without running targets.");
                 }
             }
         }
+    }
+
+    // .NET 11 SDKs run this validation-only target after ComputeRunArguments. It reports unsupported .NET Framework run
+    // scenarios with NETSdkError and never changes RunCommand, RunArguments or RunWorkingDirectory, so evaluated launch
+    // values stay faithful. Only the selected SDK's own definition is exempt; a project target of the same name is not.
+    // https://github.com/dotnet/dotnet/blob/297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f/src/sdk/src/Tasks/Microsoft.NET.Build.Tasks/targets/Microsoft.NET.Sdk.targets#L1471-L1481
+    private static bool IsSdkRunCommandCheck(string name, Type targetType, object target, string sdkDirectory)
+    {
+        if (!name.Equals("_CheckRunCommandSupported", StringComparison.Ordinal) ||
+            targetType.GetProperty("FullPath")?.GetValue(target) is not string { Length: > 0 } file)
+        {
+            return false;
+        }
+
+        var sdkRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sdkDirectory)) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(file).StartsWith(sdkRoot,
+            OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
     }
 
     private static Type GetVirtualBuilder(string sdkDirectory)
@@ -382,7 +398,45 @@ internal static class DotnetWatchProjectEvaluator
             throw new EvaluationException("The selected SDK does not expose evaluated file-app projects.");
         }
 
-        return GetType(AssemblyLoadContext.Default.LoadFromAssemblyPath(path), "Microsoft.DotNet.ProjectTools.VirtualProjectBuilder");
+        // .NET 11 SDKs moved the builder to Microsoft.DotNet.FileBasedPrograms (see CreateFileAppInstance).
+        var tools = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
+        return tools.GetType(FileBasedProgramsNamespace + ".VirtualProjectBuilder", throwOnError: false) is { IsPublic: true } builder
+            ? builder
+            : GetType(tools, "Microsoft.DotNet.ProjectTools.VirtualProjectBuilder");
+    }
+
+    private const string FileBasedProgramsNamespace = "Microsoft.DotNet.FileBasedPrograms";
+
+    // .NET 10 SDKs expose a synchronous CreateProjectInstance that returns MSBuild's ProjectInstance. .NET 11 SDKs expose
+    // an asynchronous CreateProjectInstanceAsync over their own build abstractions, and BuildServiceExtensions wraps the
+    // MSBuild project collection for it and unwraps the project instance it returns.
+    // https://github.com/dotnet/dotnet/blob/5a2162bea6845eabc1fc721624a43568c65db3b1/src/sdk/src/Microsoft.DotNet.ProjectTools/VirtualProjectBuilder.cs#L265
+    // https://github.com/dotnet/dotnet/blob/297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f/src/sdk/src/Cli/Microsoft.DotNet.FileBasedPrograms/VirtualProjectBuilder.cs#L284
+    private static object CreateFileAppInstance(
+        Type virtualBuilder, Type collectionType, object collection, string path, string targetFramework, Action<string, int, string> report)
+    {
+        if (virtualBuilder.Namespace != FileBasedProgramsNamespace)
+        {
+            return GetMethod(virtualBuilder, "CreateProjectInstance", [typeof(string), typeof(string), collectionType, typeof(Action<string, int, string>)])
+                .Invoke(null, [path, targetFramework, collection, report])!;
+        }
+
+        var tools = virtualBuilder.Assembly;
+        var extensions = GetType(tools, FileBasedProgramsNamespace + ".BuildServiceExtensions");
+        var buildService = GetType(tools, FileBasedProgramsNamespace + ".BuildService")
+            .GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+            ?? throw new EvaluationException("The selected SDK does not expose public 'BuildService.Instance' evaluation.");
+        var projectCollection = GetMethod(extensions, "Wrap", [collectionType]).Invoke(null, [collection]);
+        var pending = GetMethod(virtualBuilder, "CreateProjectInstanceAsync",
+            [
+                GetType(tools, FileBasedProgramsNamespace + ".IBuildService"), typeof(string), typeof(string),
+                GetType(tools, FileBasedProgramsNamespace + ".IProjectCollection"), typeof(Action<string, int, string>)
+            ]).Invoke(null, [buildService, path, targetFramework, projectCollection, report])!;
+        // ValueTask<IProjectInstance>: AsTask observes both synchronous and asynchronous completion.
+        var task = (Task)GetMethod(pending.GetType(), "AsTask", []).Invoke(pending, null)!;
+        task.GetAwaiter().GetResult();
+        var project = task.GetType().GetProperty("Result")!.GetValue(task);
+        return GetMethod(extensions, "Unwrap", [GetType(tools, FileBasedProgramsNamespace + ".IProjectInstance")]).Invoke(null, [project])!;
     }
 
     private static Type GetType(Assembly assembly, string name) =>

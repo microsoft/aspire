@@ -372,6 +372,11 @@
         <target state="new">The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WatchAppHostSdkUnsupported">
+        <source>The AppHost selects SDK {1}, but the restored Aspire.Hosting.Dotnet package has no hot reload watcher for .NET {0} SDKs.</source>
+        <target state="new">The AppHost selects SDK {1}, but the restored Aspire.Hosting.Dotnet package has no hot reload watcher for .NET {0} SDKs.</target>
+        <note>{0} is the SDK major version, {1} is the full SDK version.</note>
+      </trans-unit>
       <trans-unit id="WatchAppHostWaitingForFix">
         <source>Waiting for a fix: save a change to retry, or press CTRL+R · CTRL+C to stop.</source>
         <target state="new">Waiting for a fix: save a change to retry, or press CTRL+R · CTRL+C to stop.</target>

@@ -148,13 +148,18 @@ Native protocol-v2 polyglot servers retain their selected backend and run normal
 or managed C# service watching. An effective watch request emits one warning: stop and rerun Aspire
 to apply AppHost edits. Explicit `--watch false` suppresses that warning even when the default is enabled.
 
-The package ships `Microsoft.DotNet.HotReload.Watch.Aspire` **10.0.403**, its service WatchHost,
-and an SDK-bound evaluation adapter. Nothing is installed or downloaded at run time. The selected
-SDK must be compatible with that .NET 10 watcher, and its muxer must provide both
-`Microsoft.NETCore.App` and `Microsoft.AspNetCore.App` **10.0.14** under the effective runtime
-roll-forward policy. Installing only the repository SDK or a newer runtime does not establish
-these prerequisites. An explicit `ASPIRE_DOTNET_WATCH_TOOL_PATH` selects a complete tool directory;
-relative overrides are resolved from the AppHost context, and invalid overrides are not ignored.
+The package ships `Microsoft.DotNet.HotReload.Watch.Aspire` **10.0.403** and **11.0.100**, one
+watcher per supported SDK major, plus its service WatchHost and an SDK-bound evaluation adapter.
+Nothing is installed or downloaded at run time. A watcher loads MSBuild from the SDK that the
+watched projects select, so each watch group, and a C# AppHost, uses the watcher for its SDK's
+major version: any .NET 10 or .NET 11 SDK, including patches released later. Projects that select
+another SDK major run without watching, with a diagnostic. The selected muxer must provide the
+watcher's `Microsoft.NETCore.App` and `Microsoft.AspNetCore.App` runtimes under the effective
+roll-forward policy: **10.0.14** or a later 10.0 patch for the .NET 10 watcher, and **11.0.0** or a
+later 11.0 patch for the .NET 11 watcher. Each SDK installs its own runtime patch, so installing only a
+pre-release SDK or an older runtime does not establish these prerequisites. An explicit
+`ASPIRE_DOTNET_WATCH_TOOL_PATH` selects a complete tool directory for every SDK major; relative
+overrides are resolved from the AppHost context, and invalid overrides are not ignored.
 
 Before handing builds to the watcher, Aspire evaluates active project references, imports, SDKs,
 and output/intermediate directories, including ordinary resources. Compatible roots that share
@@ -270,12 +275,25 @@ Ordinary builds still capture their own per-attempt values, which are checked be
 Guarded refresh can evaluate watched callbacks again; changing the observed build assumptions requires
 run restart rather than silently selecting another context.
 
+The watcher builds a watch group with several root projects through a temporary solution in its temp
+directory (`dotnet build` can't build several projects, [dotnet/sdk#51311](https://github.com/dotnet/sdk/issues/51311)),
+and the temp directory's `global.json` scope can select another SDK.
+When it does, the group's watcher gets a private temp directory that pins the group's SDK, and the
+group's services get their own temp directory back when they launch. Preflight doesn't evaluate the
+projects with that private temp directory, so a project whose evaluated outputs or imports depend on
+`TMPDIR` (`TMP` or `TEMP` on Windows) isn't supported in such a group.
+
 Representable non-Debug configurations, file-based C# services, working directories, launch profiles,
 arguments, and build environments are retained. The watcher requires managed hot-reload agents;
 unrepresentable contexts are diagnosed in preflight rather than silently selecting different output.
 For Release configurations, explicitly set `Optimize` to `false` and `MetadataUpdaterSupport` to
 `true` in the service project. Project properties that disable startup hooks or metadata updating
 cannot be repaired through lower-precedence watcher environment variables.
+For non-Debug configurations, the watcher's build environment sets `EnableHotReloadInRuntimeConfigDevFile`
+to `true`, the SDK switch for its hot reload build outputs: the .NET 11 watcher can't launch a web
+project without them. A web project that sets `StaticWebAssetsEnabled`, `JSModulesEnabled` or
+`EnableHotReloadInRuntimeConfigDevFile` to `false` fails to launch under the .NET 11 watcher; opt it
+out with `WithWatch(false)` ([dotnet/sdk#57358](https://github.com/dotnet/sdk/issues/57358)).
 Keep a file-based service and its content in a dedicated directory. The pinned SDK also observes
 new files under that directory; unrelated projects' generated outputs can trigger its known
 virtual-project restore failure. A resulting watcher failure fences the group rather than

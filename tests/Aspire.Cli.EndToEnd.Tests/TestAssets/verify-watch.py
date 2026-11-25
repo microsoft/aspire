@@ -31,7 +31,6 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 
-SDK_VERSION = "10.0.403"
 WATCH_TOOL = "Microsoft.DotNet.HotReload.Watch.Aspire.dll"
 WATCH_HOST = "Aspire.Hosting.Dotnet.WatchHost.dll"
 RESOURCE_SUPPRESSION = "ASPIRE_RESOURCE_WATCH_SUPPRESS"
@@ -51,6 +50,10 @@ PRIVATE_ENVIRONMENT = (
 WATCH_ENABLED = "AppHost__Run__WatchEnabled"
 RUN_TAG = "WATCH_TEST_RUN_ID"
 POLL_INTERVAL = 0.25
+# A detached start returns after the CLI built and started the AppHost, but a foreground start returns at once. The
+# first wait after a foreground start therefore also covers the AppHost's restore and build, which took more than
+# two minutes for a cold SDK 10 build in the test container.
+FOREGROUND_START_TIMEOUT = 240
 # Terminal CSI/OSC controls, for example ESC[31m (color), ESC[2K (line clear) and ESC]8;;<url>ESC\ (hyperlink).
 TERMINAL_CONTROLS = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*?(?:\x07|\x1b\\))")
 
@@ -270,8 +273,22 @@ def installed_sdks(environment):
             if match:
                 version, sdk_directory = match.groups()
                 found.setdefault(version, pathlib.Path(sdk_directory).parent.resolve())
-    require(SDK_VERSION in found, f"The bundled watcher scenarios require installed SDK {SDK_VERSION}; found {found}.")
     return found
+
+
+def stable_sdk_versions(sdks, major):
+    return sorted(
+        (version for version in sdks if re.fullmatch(rf"{major}\.\d+\.\d+", version)),
+        key=lambda version: tuple(int(part) for part in version.split(".")),
+    )
+
+
+def select_sdk_version(sdks, major):
+    versions = stable_sdk_versions(sdks, major)
+    require(versions,
+            f"The watch scenarios require an installed stable .NET {major} SDK (--sdk-major {major}); "
+            f"found {', '.join(sorted(sdks)) or 'no installed SDKs'}.")
+    return versions[-1]
 
 
 def configure_feeds(root, hive, base):
@@ -416,7 +433,7 @@ class Fixture:
             *PRIVATE_ENVIRONMENT, WATCH_ENABLED,
         ):
             self.environment.pop(key, None)
-        sdk_root = context.sdks[SDK_VERSION]
+        sdk_root = context.sdks[context.sdk_version]
         self.dotnet = str(sdk_root / "dotnet")
         # The watcher's agent appends CoreFxPipe_<32 hex digits>, and multi-root
         # builds add another SDK-pinned directory. Keep the runner's short temp
@@ -448,8 +465,8 @@ class Fixture:
             self.environment["npm_config_registry"] = self.npm_registry
         self.pin_sdk(self.root)
         selected = self.command([self.dotnet, "--version"])
-        require(selected.stdout.strip() == SDK_VERSION,
-                f"Fixture global.json paths did not select SDK {SDK_VERSION}: {selected.stdout!r}")
+        require(selected.stdout.strip() == context.sdk_version,
+                f"Fixture global.json paths did not select SDK {context.sdk_version}: {selected.stdout!r}")
         # Fixtures under wv must not inherit Arcade/central package/build settings
         # from the repository. This is fixture configuration, never a root edit.
         write(self.root / "Directory.Build.props", """
@@ -505,7 +522,8 @@ class Fixture:
         else:
             self.apphost = self.root / "apphost.mts"
 
-    def pin_sdk(self, directory, version=SDK_VERSION):
+    def pin_sdk(self, directory, version=None):
+        version = self.context.sdk_version if version is None else version
         write(directory / "global.json", json.dumps({
             "sdk": {
                 "version": version,
@@ -1052,16 +1070,18 @@ public class ReplacementModelBase { }
 
 
 class Context:
-    def __init__(self, root, scenario, packages=None, feeds=None):
+    def __init__(self, root, scenario, sdk_major, packages=None, feeds=None):
         self.root = root
         self.evidence = Evidence(root, scenario)
         self.hive = PackageHive(packages)
         self.sdks = installed_sdks(os.environ)
+        self.sdk_major = sdk_major
+        self.sdk_version = select_sdk_version(self.sdks, sdk_major)
         self.feeds = feeds
         self.fixtures = []
         self.evidence.check("fresh-package-hive-and-installed-sdk",
                             version=self.hive.version, packages=str(self.hive.directory),
-                            sdk=SDK_VERSION, sdkRoot=str(self.sdks[SDK_VERSION]))
+                            sdk=self.sdk_version, sdkRoot=str(self.sdks[self.sdk_version]))
 
 
 # Scenario functions below deliberately share the CLI, SDK, package, and process
@@ -1111,6 +1131,104 @@ def verify_generation(fixture, old, previous_host, expected, names=("api",)):
     return current, host
 
 
+def verify_watcher_command(identity, mode, sdk_version, sdk_root):
+    tools = [
+        (index, pathlib.Path(argument)) for index, argument in enumerate(identity.arguments)
+        if pathlib.Path(argument).name == WATCH_TOOL
+    ]
+    require(len(tools) == 1, f"No unique watcher payload in the observed command: {identity.arguments}")
+    index, tool = tools[0]
+    major = sdk_version.split(".")[0]
+    require(tool.is_file() and tool.parts[-4:] == ("tools", "dotnet-watch", major, WATCH_TOOL),
+            f"SDK {sdk_version} did not launch its major-specific payload: {identity.arguments}")
+    require(index >= 2 and identity.arguments[index - 1] == "exec",
+            f"The watcher payload was not launched with an explicit muxer exec command: {identity.arguments}")
+    # Service owners embed "WatchHost.dll server -- dotnet exec .../10/<watcher>.dll server --sdk .../sdk/10.0.404".
+    # AppHosts use "dotnet exec .../11/<watcher>.dll host --sdk .../sdk/11.0.101 --entrypoint ...".
+    # Inspect only the nested watcher's arguments so an outer WatchHost switch cannot satisfy the check.
+    arguments = identity.arguments[index + 1:]
+    require(arguments and arguments[0] == mode and "--sdk" in arguments,
+            f"The observed watcher command is not '{mode} --sdk': {identity.arguments}")
+    sdk_index = arguments.index("--sdk") + 1
+    sdk_directory = (sdk_root / "sdk" / sdk_version).resolve()
+    require(sdk_index < len(arguments) and pathlib.Path(arguments[sdk_index]).resolve() == sdk_directory,
+            f"The watcher did not load selected SDK {sdk_version}: {identity.arguments}")
+    require(mode != "host" or "--entrypoint" in arguments,
+            f"The AppHost watcher command has no actual entry point: {identity.arguments}")
+    return {"sdkVersion": sdk_version, "sdkDirectory": str(sdk_directory),
+            "toolPath": str(tool), "process": identity.evidence()}
+
+
+def verify_mixed_sdk(context):
+    require(context.sdk_major == 11, "The mixed-sdk scenario requires --sdk-major 11 for its C# AppHost.")
+    versions = {"api": select_sdk_version(context.sdks, 10), "worker": context.sdk_version}
+    fixture = Fixture(context, "mixed-sdk-generations")
+    projects = {"api": "Sdk10/Api/Api.csproj", "worker": "Sdk11/Worker/Worker.csproj"}
+    for name, project in projects.items():
+        fixture.service(str(pathlib.Path(project).parent))
+        fixture.pin_sdk(fixture.root / pathlib.Path(project).parts[0], versions[name])
+        selected = fixture.dotnet_command("--version", cwd=(fixture.root / project).parent)
+        require(selected.stdout.strip() == versions[name],
+                f"The mixed-sdk service {name} did not select SDK {versions[name]}: {selected.stdout!r}")
+    fixture.csharp_model("".join(fixture.registration(name, project) for name, project in projects.items()))
+    fixture.start(watch=True, detached=False, interactive=True)
+    initial = {name: fixture.response(name, timeout=FOREGROUND_START_TIMEOUT) for name in projects}
+    for name in projects:
+        fixture.application_snapshot(name)
+    previous_host = fixture.host_instance()
+    require(previous_host["owner"] == "cli" and previous_host["control"] and previous_host["session"],
+            f"Mixed-sdk AppHost watching did not establish private generation ownership: {previous_host}")
+
+    def watchers():
+        servers = {name: fixture.server_for(project)[1] for name, project in projects.items()}
+        require(len(fixture.servers()) == 2 and servers["api"] != servers["worker"],
+                "The mixed-major services did not establish two independent watch servers.")
+        hosts = [
+            process for process in fixture.capture_generation()
+            if "host" in process.arguments
+            and any(pathlib.Path(argument).name == WATCH_TOOL for argument in process.arguments)
+        ]
+        require(len(hosts) == 1, f"No unique AppHost watcher host command was observed: {hosts}")
+        return {
+            **{
+                name: verify_watcher_command(server, "server", versions[name], context.sdks[versions[name]])
+                for name, server in servers.items()
+            },
+            "apphost": verify_watcher_command(
+                hosts[0], "host", context.sdk_version, context.sdks[context.sdk_version]),
+        }
+
+    context.evidence.check("mixed-sdk-initial-major-specific-watchers", watchers=watchers(), responses=initial)
+    old = fixture.capture_generation()
+    replace_once(fixture.apphost.parent / "AppHost.cs", 'Value() => "one"', 'Value() => "two"')
+    api, current_host = verify_generation(fixture, old, previous_host, "two", ("api", "worker"))
+    reconstructed = {"api": api, "worker": fixture.response("worker", lambda value: value["configured"] == "two")}
+    for name in projects:
+        verify_new_application(initial[name], reconstructed[name], "Mixed-sdk AppHost model reconstruction")
+    selected_watchers = watchers()
+    context.evidence.check("mixed-sdk-apphost-reconstruction-and-old-generation-cleanup",
+                          previousApphost=previous_host, apphost=current_host,
+                          responses=reconstructed, watchers=selected_watchers)
+    assert_terminal_boundary(fixture)
+
+    updated = {}
+    for name, project in projects.items():
+        expected = f"sdk{versions[name].split('.')[0]}-after"
+        updated[name] = hot_reload(
+            fixture, (fixture.root / project).parent / "Program.cs",
+            'Read() => "before"', f'Read() => "{expected}"', [name], expected=expected,
+        )[name]
+        verify_same_application(reconstructed[name], updated[name], f"SDK {versions[name]} method-body edit")
+    require(fixture.host_instance() == current_host, "A service hot reload reconstructed the mixed-sdk AppHost.")
+    require(watchers() == selected_watchers, "A service method-body edit replaced a mixed-sdk watcher.")
+    context.evidence.check("mixed-sdk-both-services-hot-reload-with-stable-pids", responses=updated)
+    assert_terminal_boundary(fixture)
+    fixture.ctrl_c()
+    require(not fixture.owned_processes(), "Mixed-sdk fixture-owned processes survived Ctrl+C.")
+    context.evidence.check("mixed-sdk-ctrl-c-owned-process-and-run-directory-cleanup",
+                          orphanProcesses=0, leakedRunDirectories=0, **assert_terminal_boundary(fixture))
+
+
 def verify_csharp(context):
     fixture = Fixture(context, "csharp-generations")
     fixture.shared()
@@ -1122,7 +1240,7 @@ def verify_csharp(context):
     parked_registration = fixture.registration("parked", "Parked/Parked.csproj", ".WithExplicitStart()")
     fixture.csharp_model(api_registration + worker_registration + parked_registration)
     fixture.start(watch=True, detached=False, interactive=True)
-    first = fixture.response()
+    first = fixture.response(timeout=FOREGROUND_START_TIMEOUT)
     worker = fixture.response("worker")
     fixture.application_snapshot()
     previous_host = fixture.host_instance()
@@ -1239,7 +1357,7 @@ def verify_csharp_startup_failure(context):
     # whole-process watchdog, rather than race two equal 240-second deadlines.
     failure.environment["ASPIRE_CLI_START_TIMEOUT"] = "15"
     run = failure.start(watch=True, detached=False)
-    result = run.wait(timeout=120)
+    result = run.wait(timeout=FOREGROUND_START_TIMEOUT)
     require(result != 0, f"A failing initial AppHost model returned success: {result}")
     failure.foreground = None
     require("WATCH_TEST_MODEL_FAILURE" in (failure.root / "watch-owner.log").read_text(),
@@ -1806,7 +1924,7 @@ def verify_builds(context):
     replace_once(program, 'Read() => "before"', "Read() => ;")
     fixture.start(detached=False)
     wait_for(lambda: fixture.resource("api", retry=True).get("properties", {}).get("dotnet-watch.build") == "failed",
-             "waiting for the watcher's failed initial build")
+             "waiting for the watcher's failed initial build", timeout=FOREGROUND_START_TIMEOUT)
     require(build_attempts(api_project) == 1,
             f"Initial service build ownership was duplicated: {build_attempts(api_project)} compile attempts.")
     require(not (fixture.root / "ef-built-assembly.json").exists(),
@@ -2070,15 +2188,16 @@ builder.Configuration["AppHost:BuildConfiguration"] = "Release";""")
     sdk_temp = pathlib.Path(server_environment.get("TMPDIR", str(application_temp))).resolve()
     sdk_pin = None
     if sdk_temp != application_temp:
-        require(sdk_temp.is_relative_to(application_temp)
-                and sdk_temp.name.startswith("tmp-") and sdk_temp.parent.name.startswith("aspw-")
-                and sdk_temp.parent.stat().st_mode & 0o777 == 0o700,
+        # Unix socket paths are length-limited, so the redirect is /tmp/aspw-<run>/t<server>, not under the app's temp.
+        require(re.fullmatch(r"t\d+", sdk_temp.name) and sdk_temp.parent.name.startswith("aspw-")
+                and sdk_temp.parent.parent == pathlib.Path("/tmp").resolve()
+                and all(path.stat().st_mode & 0o777 == 0o700 for path in (sdk_temp, sdk_temp.parent)),
                 f"The multi-root server did not receive a private owned SDK-temp directory: {sdk_temp}")
         sdk_pin = read_json(sdk_temp / "global.json")
-        require(sdk_pin["sdk"]["version"] == SDK_VERSION and sdk_pin["sdk"]["rollForward"] == "disable",
+        require(sdk_pin["sdk"]["version"] == context.sdk_version and sdk_pin["sdk"]["rollForward"] == "disable",
                 f"Redirected multi-root SDK selection is not explicitly pinned: {sdk_pin}")
     selected = fixture.command([fixture.dotnet, "--version"], cwd=sdk_temp, environment=server_environment)
-    require(selected.stdout.strip() == SDK_VERSION, f"The actual multi-root build temp selected {selected.stdout!r}")
+    require(selected.stdout.strip() == context.sdk_version, f"The actual multi-root build temp selected {selected.stdout!r}")
     context.evidence.check("managed-file-app-release-profiles-working-directory-literal-args-and-sdk-temp",
                           api=api, worker=worker, file=file, sdkTemp=str(sdk_temp), sdkPin=sdk_pin)
 
@@ -2230,7 +2349,8 @@ def verify_isolation(context):
     replace_once(source, api_registration, collision.registration("api", "Api/Api.csproj", ".WithWatch(true)"))
     collision.environment["ASPIRE_CLI_START_TIMEOUT"] = "15"
     failed_run = collision.start(detached=False)
-    require(failed_run.wait(timeout=120) != 0, "Unsatisfied explicit WithWatch(true) silently ran ordinarily.")
+    require(failed_run.wait(timeout=FOREGROUND_START_TIMEOUT) != 0,
+            "Unsatisfied explicit WithWatch(true) silently ran ordinarily.")
     collision.foreground = None
     require("WithWatch(true)" in (collision.root / "watch-owner.log").read_text(),
             "Unsatisfied explicit watch did not name the requirement.")
@@ -2348,8 +2468,10 @@ public static class AddedValue
     current = sdk_scope.response()
     _, sdk_owner = sdk_scope.server_for("Api/Api.csproj")
     application = sdk_scope.track(current["pid"])
-    alternate = next((version for version in context.sdks if version.startswith("11.")), None)
-    if alternate:
+    alternate_major = 10 if context.sdk_major == 11 else 11
+    alternatives = stable_sdk_versions(context.sdks, alternate_major)
+    if alternatives:
+        alternate = alternatives[-1]
         sdk_scope.pin_sdk(sdk_scope.root / "Api", alternate)
         invalidated = fenced_group(sdk_scope, "api", sdk_owner, application)
         context.evidence.check("new-sdk-scope-fenced-and-waits-settled", selectedSdk=alternate,
@@ -2357,9 +2479,10 @@ public static class AddedValue
     else:
         # An unavailable exact pin cannot establish a changed SDK identity. Preserve
         # the last-good graph and service until another edit can be evaluated.
+        unavailable = f"{context.sdk_major}.0.999"
         write(sdk_scope.root / "Api" / "global.json", json.dumps({
-            "sdk": {"version": "10.0.999", "rollForward": "disable",
-                    "paths": [str(context.sdks[SDK_VERSION])]}
+            "sdk": {"version": unavailable, "rollForward": "disable",
+                    "paths": [str(context.sdks[context.sdk_version])]}
         }, indent=2))
         wait_for(lambda: structured_log_has(
             sdk_scope, "api", "Build-input evaluation failed: Watch SDK selection failed"),
@@ -2369,7 +2492,7 @@ public static class AddedValue
         require(sdk_owner.alive() and application.alive(),
                 "Unknown SDK evaluation stopped the last-good watcher or application.")
         context.evidence.check("unknown-sdk-scope-preserves-last-good-state",
-                              selectedSdk="10.0.999", response=preserved)
+                              selectedSdk=unavailable, response=preserved)
     sdk_scope.stop()
 
 
@@ -2492,16 +2615,20 @@ def query_payload(fixture, environment=None, success=True):
     require(target["Result"] == "Success" and len(target["Items"]) == 1,
             f"The actual packed resolve target did not return one descriptor: {payload}")
     item = target["Items"][0]
-    require(item["SdkVersion"] == SDK_VERSION, f"Packed prelaunch silently selected a different SDK: {item}")
+    require(item["SdkVersion"] == fixture.context.sdk_version,
+            f"Packed prelaunch silently selected a different SDK: {item}")
     require(pathlib.Path(item["ToolPath"]).is_file() and pathlib.Path(item["WatchHostPath"]).is_file(),
             f"Packed prelaunch did not resolve complete bundled entry points: {item}")
+    require(pathlib.Path(item["ToolPath"]).parts[-4:]
+            == ("tools", "dotnet-watch", str(fixture.context.sdk_major), WATCH_TOOL),
+            f"Packed prelaunch did not select the SDK-major-specific payload: {item}")
     msbuild = pathlib.Path(item["MSBuildPath"])
     # The package returns its executing MSBuildToolsPath directory. The CLI
     # also accepts a full MSBuild.dll descriptor; both identify the same selected SDK.
     sdk_directory = msbuild.parent if msbuild.name == "MSBuild.dll" else msbuild
     require((sdk_directory / "MSBuild.dll").is_file()
-            and sdk_directory.name == SDK_VERSION
-            and sdk_directory.parent.parent.resolve() == fixture.context.sdks[SDK_VERSION],
+            and sdk_directory.name == fixture.context.sdk_version
+            and sdk_directory.parent.parent.resolve() == fixture.context.sdks[fixture.context.sdk_version],
             f"The packed target did not return its actual selected SDK: {item}")
     require(pathlib.Path(item["DotnetPath"]).resolve() == pathlib.Path(fixture.dotnet).resolve(),
             f"The packed target substituted another muxer: {item}")
@@ -2630,28 +2757,52 @@ def verify_payload(context):
     properties = consumption["Properties"]
     tool = pathlib.Path(descriptor["ToolPath"]).resolve()
     host = pathlib.Path(descriptor["WatchHostPath"]).resolve()
-    require(tool.parent == pathlib.Path(properties["AspireDotnetWatchToolsDir"]).resolve()
+    require(tool.parent == (pathlib.Path(properties["AspireDotnetWatchToolsDir"]) / str(context.sdk_major)).resolve()
             and host.parent == pathlib.Path(properties["AspireDotnetWatchHostDir"]).resolve(),
             "The actual resolve descriptor and consumed MSBuild watch directories disagree.")
     package = fixture.hive.package("Aspire.Hosting.Dotnet")
+    watcher_files = (
+        WATCH_TOOL,
+        "Microsoft.DotNet.HotReload.Watch.Aspire.deps.json",
+        "Microsoft.DotNet.HotReload.Watch.Aspire.runtimeconfig.json",
+        "hotreload/net6.0/Microsoft.AspNetCore.Watch.BrowserRefresh.dll",
+        "hotreload/net6.0/Microsoft.Extensions.DotNetDeltaApplier.dll",
+        "hotreload/net10.0/Microsoft.Extensions.DotNetDeltaApplier.dll",
+    )
+    required_payload = (
+        *(f"tools/dotnet-watch/{major}/{filename}" for major in (10, 11) for filename in watcher_files),
+        f"tools/dotnet-watch-host/{WATCH_HOST}",
+        "tools/dotnet-watch-host/Aspire.Hosting.Dotnet.WatchHost.deps.json",
+        "tools/dotnet-watch-host/Aspire.Hosting.Dotnet.WatchHost.runtimeconfig.json",
+    )
+    runtime_frameworks = {}
     with zipfile.ZipFile(package) as archive:
         names = set(archive.namelist())
-        required = (
-            "buildTransitive/Aspire.Hosting.Dotnet.targets",
-            f"tools/dotnet-watch/{WATCH_TOOL}",
-            "tools/dotnet-watch/Microsoft.DotNet.HotReload.Watch.Aspire.deps.json",
-            "tools/dotnet-watch/Microsoft.DotNet.HotReload.Watch.Aspire.runtimeconfig.json",
-            f"tools/dotnet-watch-host/{WATCH_HOST}",
-            "tools/dotnet-watch-host/Aspire.Hosting.Dotnet.WatchHost.deps.json",
-            "tools/dotnet-watch-host/Aspire.Hosting.Dotnet.WatchHost.runtimeconfig.json",
+        required = ("buildTransitive/Aspire.Hosting.Dotnet.targets", *required_payload)
+        missing = sorted(set(required) - names)
+        require(not missing, f"The fresh packed watcher payload is incomplete: {missing}")
+        unexpected = sorted(
+            name for name in names
+            if name.startswith("tools/dotnet-watch/") and name != "tools/dotnet-watch/"
+            and not name.startswith(("tools/dotnet-watch/10/", "tools/dotnet-watch/11/"))
         )
-        require(all(name in names for name in required), f"The fresh packed watcher payload is incomplete: {names}")
+        require(not unexpected, f"Only the 10/ and 11/ payload trees may be under tools/dotnet-watch/: {unexpected}")
+        for major in (10, 11):
+            runtime = json.loads(archive.read(
+                f"tools/dotnet-watch/{major}/Microsoft.DotNet.HotReload.Watch.Aspire.runtimeconfig.json"))
+            options = runtime["runtimeOptions"]
+            frameworks = options.get("frameworks") or [options["framework"]]
+            core = [framework for framework in frameworks if framework["name"] == "Microsoft.NETCore.App"]
+            require(len(core) == 1 and core[0]["version"].split(".")[0] == str(major),
+                    f"The {major}/ watcher does not require Microsoft.NETCore.App {major}: {runtime}")
+            runtime_frameworks[str(major)] = frameworks
     for consumed in (tool, host):
         require(consumed.is_relative_to(dotnet_package["root"]),
                 f"The actual watch descriptor escaped its consumed Hosting.Dotnet package: {consumed}")
-        entry = consumed.relative_to(dotnet_package["root"]).as_posix()
+    for entry in required_payload:
         require(entry in dotnet_package["files"], f"The resolved watch payload is not in the actual assets inventory: {entry}")
-        comparisons.append(compare_fresh_package_bytes(fixture, consumed, "Aspire.Hosting.Dotnet", entry))
+        comparisons.append(compare_fresh_package_bytes(
+            fixture, dotnet_package["root"] / entry, "Aspire.Hosting.Dotnet", entry))
     for filename in ("Aspire.DotnetWatch.Evaluation.dll", "Aspire.DotnetWatch.Evaluation.proj"):
         entries = [entry for entry in dotnet_package["files"] if pathlib.PurePosixPath(entry).name == filename]
         require(len(entries) == 1, f"The actual restored assets inventory omitted one evaluator input: {filename}")
@@ -2670,11 +2821,6 @@ def verify_payload(context):
     require(len(targets) == 1, f"The active assets target has no unique Hosting.Dotnet build target: {targets}")
     comparisons.append(compare_fresh_package_bytes(
         fixture, dotnet_package["root"] / targets[0], "Aspire.Hosting.Dotnet", targets[0]))
-    runtime = read_json(pathlib.Path(descriptor["ToolPath"]).with_suffix(".runtimeconfig.json"))
-    frameworks = runtime["runtimeOptions"].get("frameworks") or [runtime["runtimeOptions"]["framework"]]
-    require(all(framework["version"].split(".")[0] == "10" for framework in frameworks),
-            f"The actual bundled runtime contract is not .NET 10: {runtime}")
-
     relative = dict(fixture.environment)
     relative["ASPIRE_DOTNET_WATCH_TOOL_PATH"] = os.path.relpath(descriptor["ToolPath"], fixture.apphost.parent)
     require(query_payload(fixture, environment=relative)["ToolPath"] == descriptor["ToolPath"],
@@ -2691,7 +2837,7 @@ def verify_payload(context):
             comparisons.append(compare_fresh_package_bytes(fixture, output, package_name, entry))
     require(watcher_install_cache_entries(fixture) == before, "Ordinary Build acquired a watch runtime tool.")
     context.evidence.check("actual-packed-resolve-target-complete-payload-and-authoritative-overrides",
-                          descriptor=descriptor, frameworks=frameworks, consumedAssets=comparisons)
+                          descriptor=descriptor, frameworks=runtime_frameworks, consumedAssets=comparisons)
 
     fixture.start()
     fixture.response()
@@ -2746,7 +2892,7 @@ await builder.addExecutable('api', {json.dumps(fixture.dotnet)}, {json.dumps(str
         return servers[0]
 
     fixture.start(watch=True, detached=False)
-    first = fixture.response()
+    first = fixture.response(timeout=FOREGROUND_START_TIMEOUT)
     first_server = native_server(expect_warning=True)
     replace_once(fixture.apphost, "'WATCH_MODEL_VALUE', 'one'", "'WATCH_MODEL_VALUE', 'two'")
 
@@ -2763,7 +2909,7 @@ await builder.addExecutable('api', {json.dumps(fixture.dotnet)}, {json.dumps(str
     fixture.config["features"]["defaultWatchEnabled"] = True
     fixture.save_config()
     fixture.start(watch=None, detached=False)
-    updated = fixture.response("api", lambda value: value["configured"] == "two")
+    updated = fixture.response("api", lambda value: value["configured"] == "two", timeout=FOREGROUND_START_TIMEOUT)
     verify_new_application(first, updated, "Explicitly restarting the native v2 run after an AppHost edit")
     replacement_server = native_server(expect_warning=True)
     require(first_server != replacement_server, "Explicit run restart reused the departed native server.")
@@ -2773,7 +2919,7 @@ await builder.addExecutable('api', {json.dumps(fixture.dotnet)}, {json.dumps(str
 
     replace_once(fixture.apphost, "'WATCH_MODEL_VALUE', 'two'", "'WATCH_MODEL_VALUE', 'three'")
     fixture.start(watch=False, detached=False)
-    ordinary = fixture.response("api", lambda value: value["configured"] == "three")
+    ordinary = fixture.response("api", lambda value: value["configured"] == "three", timeout=FOREGROUND_START_TIMEOUT)
     verify_new_application(updated, ordinary, "Native v2 explicit false overrides default watch")
     ordinary_server = native_server(expect_warning=False)
     fixture.stop()
@@ -2849,7 +2995,7 @@ def verify_policy(context):
         choices = ".WithWatch(true)" if language == "csharp" else ".withWatch({ enabled: true })"
         policy_model(fixture, None, choices, "invalid")
         fixture.start(watch=False, detached=False)
-        fixture.response("api", lambda value: value["configured"] == "invalid")
+        fixture.response("api", lambda value: value["configured"] == "invalid", timeout=FOREGROUND_START_TIMEOUT)
         fixture.response("plain")
         fixture.application_snapshot()
         require(fixture.resource("plain")["properties"].get("resource.watch.state") == "excluded",
@@ -2914,7 +3060,7 @@ def verify_terminal(context):
     write(source, "#error INITIAL_RESOURCE_BOUNDARY_CANARY\n" + original)
     fixture.start(watch=False, detached=False, interactive=True)
     wait_for(lambda: fixture.resource("api", retry=True)["properties"].get("resource.watch.state") == "build-failed",
-             "waiting for structured initial build-failed coverage")
+             "waiting for structured initial build-failed coverage", timeout=FOREGROUND_START_TIMEOUT)
     owner_snapshot, _ = fixture.server_for("Api/Api.csproj")
     log_name = owner_snapshot.get("displayName", owner_snapshot["name"])
     wait_for(lambda: structured_log_has(fixture, log_name, canaries[0]),
@@ -2993,7 +3139,7 @@ def verify_terminal(context):
                          "var builder = DistributedApplication.CreateBuilder(args);")
         failed.environment["ASPIRE_CLI_START_TIMEOUT"] = "15"
         run = failed.start(watch=True, detached=False, interactive=True, success=False)
-        require(run.wait(timeout=150) != 0, f"{kind} returned a success-shaped exit.")
+        require(run.wait(timeout=FOREGROUND_START_TIMEOUT) != 0, f"{kind} returned a success-shaped exit.")
         failed.foreground = None
         failed.finish_terminal()
         failed.wait_cleanup(failed.tracked | failed.capture_generation())
@@ -3057,7 +3203,7 @@ def verify_startup(context):
                 before_builds = {str(project.relative_to(fixture.root)): build_attempts(project) for project in build_projects}
                 started = time.monotonic()
                 fixture.start(watch=apphost_watching, detached=False)
-                fixture.response("api")
+                fixture.response("api", timeout=FOREGROUND_START_TIMEOUT)
                 fixture.response("worker")
                 health_seconds = time.monotonic() - started
                 processes = fixture.owned_processes()
@@ -3090,7 +3236,7 @@ def verify_startup(context):
             # Capture a separate trace, not a wall-clock benchmark with collector overhead mixed in.
             archive = fixture.root / "startup-profile.zip"
             profile_run = fixture.start(watch=apphost_watching, detached=False, profile_path=archive)
-            fixture.response("api")
+            fixture.response("api", timeout=FOREGROUND_START_TIMEOUT)
             fixture.response("worker")
             fixture.capture_generation()
             # Self-profile stops the wrapped run after its capture delay and then exports.
@@ -3139,6 +3285,7 @@ def verify_startup(context):
 
 SCENARIOS = {
     "csharp": verify_csharp,
+    "mixed-sdk": verify_mixed_sdk,
     "typescript": verify_typescript,
     "replicas": verify_replicas,
     "builds": verify_builds,
@@ -3156,6 +3303,8 @@ SCENARIOS = {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scenario", choices=SCENARIOS)
+    parser.add_argument("--sdk-major", type=int, choices=(10, 11), default=11,
+                        help="SDK major for fixtures; selects the latest installed stable SDK (default: 11).")
     parser.add_argument("--workspace", type=pathlib.Path,
                         help="Fresh directory below cwd; omitted only when copied into a test workspace.")
     parser.add_argument("--packages", help="Fresh locally built Aspire package hive (otherwise ASPIRE_CLI_PACKAGES).")
@@ -3180,7 +3329,7 @@ def main():
     context = None
     succeeded = False
     try:
-        context = Context(root, arguments.scenario, arguments.packages, feeds)
+        context = Context(root, arguments.scenario, arguments.sdk_major, arguments.packages, feeds)
         SCENARIOS[arguments.scenario](context)
         for fixture in context.fixtures:
             require(not fixture.owned_processes(), f"Task-owned processes survived final cleanup in {fixture.root}.")

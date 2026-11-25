@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
@@ -13,12 +14,13 @@ namespace Aspire.Hosting.Dotnet.Watch;
 /// Locates the <c>Microsoft.DotNet.HotReload.Watch.Aspire</c> server that ships with this package.
 /// </summary>
 /// <remarks>
-/// The tool is repacked into the Aspire.Hosting.Dotnet package under <c>tools/dotnet-watch/</c> (see
-/// <c>Aspire.Hosting.Dotnet.csproj</c>), and the package's buildTransitive targets stamp that directory on the AppHost
-/// assembly as <see cref="ToolsDirectoryMetadataKey"/> metadata, the way DCP's location reaches the AppHost.
-/// The watcher loads MSBuild from the selected SDK, so it only works with SDKs of its own major version: watch mode
-/// supports .NET 10 SDKs only. There is no download and no fallback: an unsupported SDK or a missing tool is an error
-/// that says how to fix it.
+/// The tool is repacked into the Aspire.Hosting.Dotnet package under <c>tools/dotnet-watch/&lt;SDK major&gt;/</c> (see
+/// <c>Aspire.Hosting.Dotnet.csproj</c>), and the package's buildTransitive targets stamp <c>tools/dotnet-watch/</c> on the
+/// AppHost assembly as <see cref="ToolsDirectoryMetadataKey"/> metadata, the way DCP's location reaches the AppHost.
+/// A watcher loads MSBuild from the selected SDK, so it only works with SDKs of its own major version: the package ships
+/// one watcher for each of the <see cref="SupportedSdkMajors"/>, and each watch group uses the one for the SDK its
+/// projects select. There is no download and no fallback: an unsupported SDK or a missing tool is an error that says
+/// how to fix it.
 /// The location is chosen by how this assembly was loaded, never by probing one place and then another: when
 /// Aspire.Hosting.Dotnet is loaded straight from its restored NuGet package (package-backed polyglot AppHosts on the
 /// prebuilt AppHost server, which never run the package's MSBuild targets), the payload is that package's
@@ -32,10 +34,10 @@ internal static class DotnetWatchToolResolver
     public const string PackageId = "Microsoft.DotNet.HotReload.Watch.Aspire";
     public const string ToolDllName = PackageId + ".dll";
 
-    /// <summary>The only SDK major version the shipped tool supports.</summary>
-    public const int SupportedSdkMajor = 10;
+    /// <summary>The SDK major versions that the package ships a watcher for, under <c>tools/dotnet-watch/&lt;major&gt;/</c>.</summary>
+    public static IReadOnlyList<int> SupportedSdkMajors { get; } = [10, 11];
 
-    /// <summary>AppHost assembly metadata key holding the directory that contains the shipped tool.</summary>
+    /// <summary>AppHost assembly metadata key holding the directory that contains the shipped tools, one folder per SDK major.</summary>
     public const string ToolsDirectoryMetadataKey = "aspiredotnetwatchtoolsdir";
 
     /// <summary>Explicitly selects a tool directory or DLL path instead of the shipped tool.</summary>
@@ -136,8 +138,8 @@ internal static class DotnetWatchToolResolver
     }
 
     /// <summary>
-    /// Returns the watch tool DLL for <paramref name="sdkVersion"/>: <paramref name="overridePath"/> when set, otherwise the
-    /// shipped tool under <paramref name="toolsDirectory"/>.
+    /// Returns the watch tool DLL for <paramref name="sdkVersion"/>: <paramref name="overridePath"/> when set (for every SDK
+    /// major), otherwise the shipped tool for the SDK's major under <paramref name="toolsDirectory"/>.
     /// </summary>
     /// <exception cref="DistributedApplicationException">The SDK isn't supported or the tool isn't there; the message says how to fix it.</exception>
     public static string ResolveToolPath(string? overridePath, string? toolsDirectory, string sdkVersion, ILogger logger)
@@ -154,11 +156,13 @@ internal static class DotnetWatchToolResolver
             return dll;
         }
 
-        if (GetSdkMajor(sdkVersion) != SupportedSdkMajor)
+        var sdkMajor = GetSdkMajor(sdkVersion);
+        if (!SupportedSdkMajors.Contains(sdkMajor))
         {
+            var supported = string.Join(" and ", SupportedSdkMajors);
             throw new DistributedApplicationException(
-                $"Hot reload supports .NET {SupportedSdkMajor} SDKs only, but the watched projects select SDK {sdkVersion}. " +
-                $"Select a .NET {SupportedSdkMajor} SDK in their global.json, or run without --watch.");
+                $"Hot reload supports .NET {supported} SDKs, but the watched projects select SDK {sdkVersion}. " +
+                "Select one of those SDKs in their global.json, or run without --watch.");
         }
 
         if (string.IsNullOrEmpty(toolsDirectory))
@@ -169,7 +173,7 @@ internal static class DotnetWatchToolResolver
                 $"rebuild it, set {ToolPathConfigurationKey} to the tool's folder, or run without --watch.");
         }
 
-        var toolDll = Path.Combine(toolsDirectory, ToolDllName);
+        var toolDll = Path.Combine(toolsDirectory, sdkMajor.ToString(CultureInfo.InvariantCulture), ToolDllName);
         if (!File.Exists(toolDll))
         {
             throw new DistributedApplicationException(

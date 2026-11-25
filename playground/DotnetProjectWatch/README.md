@@ -1,18 +1,18 @@
 # Selective AppHost and .NET service watch
 
-Run this playground with plain `aspire run` to exercise default compatible C# resource watching.
-The repository currently selects a .NET 11 preview SDK for the AppHost, while the shipped watcher
-10.0.403 targets .NET 10, so the in-repo AppHost prints a diagnosed fallback and runs normally.
-Optional compatible C# AppHost watching is exercised by the package-hive
-[`DotnetWatchCSharpTests`](../../tests/Aspire.Cli.EndToEnd.Tests/DotnetWatchTests.cs), whose fixture
-selects a .NET 10 SDK. `--watch` / `features.defaultWatchEnabled` select AppHost edits only;
+Run this playground with plain `aspire run` to exercise default compatible C# resource watching, and with
+`aspire run --watch` to also apply AppHost edits. The AppHost uses the repository's .NET 11 SDK, while the services
+select a .NET 10 SDK (`services/global.json`), so a watch run uses both shipped watchers: 11.0.100 for the AppHost and
+10.0.403 for the services. The package-hive
+[`DotnetWatchCSharpTests`](../../tests/Aspire.Cli.EndToEnd.Tests/DotnetWatchTests.cs) exercise compatible C# AppHost
+watching against packed packages. `--watch` / `features.defaultWatchEnabled` select AppHost edits only;
 `--watch false` leaves service watching enabled. Use the AppHost creation option
 `DefaultResourceWatchEnabled` (polyglot `defaultResourceWatchEnabled`) or `AppHost:Run:WatchEnabled`
 for the global resource default; the last `.WithWatch(true/false)` overrides that default. See the
 [integration README](../../src/Aspire.Hosting.Dotnet/README.md#watch-apphost-and-service-changes)
 for the current prerequisites, evaluated isolation rules, and coverage limits.
 
-The package ships watcher 10.0.403 and WatchHost; it does not acquire a tool at run time. Compatible
+The package ships watchers 10.0.403 and 11.0.100, one per SDK major, and WatchHost; it does not acquire a tool at run time. Compatible
 project-based C# AppHosts reconstruct the complete model after changes, while managed-server TypeScript
 AppHosts use their language-native watching. Native protocol-v2 servers run without AppHost or managed
 C# service watching and warn when watching is requested; stop and rerun Aspire to apply AppHost edits.
@@ -58,13 +58,15 @@ Start, crash Restart, watched Rebuild, and "AppHost never watched" statements ar
   `dotnet-watch` executable resource (`Aspire.Hosting.Dotnet/Watch/DotnetWatchCoordinator.cs`). The watcher's build is the only build.
   A project with `WithBuildEnvironment` and a file-based app get a watch server of their own (`dotnet-watch-<name>`), and
   projects whose `global.json` selects a different SDK share one per SDK scope. Each resource:
-  - resolves the SDK the services use (their `global.json`) and runs the `Microsoft.DotNet.HotReload.Watch.Aspire` 10.0.403
-    server, so **watch mode supports .NET 10 SDKs only**. Nothing is downloaded at run time: like DCP, the tool is
-    `PackageDownload`ed when `Aspire.Hosting.Dotnet` builds, packed into its nupkg under `tools/dotnet-watch/`, and
-    `buildTransitive/Aspire.Hosting.Dotnet.targets` stamps that directory on the AppHost as `aspiredotnetwatchtoolsdir`
+  - resolves the SDK the services use (their `global.json`) and runs the `Microsoft.DotNet.HotReload.Watch.Aspire`
+    server for that SDK's major version: **10.0.403 for .NET 10 SDKs and 11.0.100 for .NET 11 SDKs**, because a watcher
+    loads MSBuild from the SDK it watches with. Nothing is downloaded at run time: like DCP, the tools are
+    `PackageDownload`ed when `Aspire.Hosting.Dotnet` builds, packed into its nupkg under `tools/dotnet-watch/<major>/`, and
+    `buildTransitive/Aspire.Hosting.Dotnet.targets` stamps `tools/dotnet-watch/` on the AppHost as `aspiredotnetwatchtoolsdir`
     assembly metadata (in-repo AppHosts use `artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/`). A missing tool, missing
-    metadata, or a selected SDK that isn't .NET 10 fails with an error that says how to fix it; there is no fallback.
-    `ASPIRE_DOTNET_WATCH_TOOL_PATH` points at an explicit tool directory instead (for testing a different watcher build).
+    metadata, or a selected SDK of another major fails with an error that says how to fix it; there is no fallback.
+    `ASPIRE_DOTNET_WATCH_TOOL_PATH` points every SDK major at an explicit tool directory instead (for testing a different
+    watcher build).
   - runs `dotnet exec <host> server -- dotnet exec <tool> server --sdk <sdk> --server <pipe> --status-pipe <pipe> --control-pipe <pipe> --resource <each project>`
     (the host supervises the watcher's process tree and stops it when the AppHost goes away) from a
     per-run directory `/tmp/aspw-<id>`, which is deleted on shutdown. The directory is created `0700` (an existing or
@@ -135,12 +137,13 @@ In the dashboard:
 - **Stop**/**Start** work as usual. **Restart** of a running single-replica service asks the watcher to relaunch it
   (`rebuild` on the control pipe, no build); otherwise it's the normal restart. **Rebuild** stops the service, runs
   `dotnet build`, and starts it again.
-- If the watch tool can't be resolved (tool missing, SDK isn't .NET 10), the terminal says why and what to do; after fixing it,
+- If the watch tool can't be resolved (tool missing, SDK isn't .NET 10 or 11), the terminal says why and what to do; after fixing it,
   **Start** `dotnet-watch` (`aspire resource dotnet-watch start`) and the services start.
 
 ### Accepted losses (protocol-only)
 
-The 10.0.403 status pipe carries less than the watcher's console, and the console is no longer parsed. Until the status
+The status pipe of the shipped watchers (10.0.403 and 11.0.100 emit the same events) carries less than the watcher's
+console, and the console is no longer parsed. Until the status
 pipe grows the missing fields ([dotnet/sdk issue](#upstream-asks)), these are gone:
 
 - **Error text, apply timing and changed files.** `build_complete` leaves `error` empty and `hot_reload_applied` has no
@@ -187,31 +190,28 @@ re-run (all pass). Older transcripts under `docs/` show the earlier, console-der
 | Multiple projects | fixed | One watcher for api + worker (+ replicas). Projects are grouped per `global.json` SDK scope; the multi-root temp directory redirect (upstream dotnet/sdk#51311) only applies when the temp directory selects a different SDK, and services get their own temp directory back | #20997 |
 | Service crash → restart | fixed | `/crash` → **Crashed**, exit code 3; save → relaunched in 6–8 s. Dashboard summary counts it as an error. [screenshot](docs/07-crashed.png) | |
 | Dashboard Stop / Start / Restart / Rebuild | works | Start after Stop ~13 s; Restart of a running service → `rebuild` on the control pipe → `🔄 Restarting api…`, new PID, no build; Restart of a crashed service → `▶️ api is running again.`; Rebuild 8–10 s, hot reload afterwards 0.7 s | #20702 |
-| Build configuration, `WithBuildEnvironment`, `WithWorkingDirectory` | fixed | Playground switches `WATCHDEMO_BUILD_CONFIGURATION=Release WATCHDEMO_BUILD_MARKER=marker-42 WATCHDEMO_WORKING_DIRECTORY=/tmp`: `/diag` shows `assemblyConfiguration: Release`, `buildMarker: marker-42`, `workingDirectory: /tmp`; an edit hot reloads in 4.6–5.2 s, same PID. The configuration travels as `Configuration` + `Optimize=false` (the agent needs unoptimized code); build env moves the project to its own watch server; the working directory is `-p:RunWorkingDirectory`. | |
+| Build configuration, `WithBuildEnvironment`, `WithWorkingDirectory` | fixed | Playground switches `WATCHDEMO_BUILD_CONFIGURATION=Release WATCHDEMO_BUILD_MARKER=marker-42 WATCHDEMO_WORKING_DIRECTORY=/tmp`: `/diag` shows `assemblyConfiguration: Release`, `buildMarker: marker-42`, `workingDirectory: /tmp`; an edit hot reloads in 4.6–5.2 s, same PID. The configuration travels as `Configuration` + `Optimize=false` (the agent needs unoptimized code) + `EnableHotReloadInRuntimeConfigDevFile=true` (the .NET 11 watcher needs the SDK's hot reload build outputs to launch web projects); build env moves the project to its own watch server; the working directory is `-p:RunWorkingDirectory`. | |
 | Ctrl+C | fixed | CLI exits in 0.2–0.5 s; services gone in 0.4–0.8 s, watcher, its host and file-based app in 1.9–2.3 s, DCP in 3.4–5.2 s (was 10–50 s); `/tmp/aspw-*` removed. The watch host gives the watcher a 1.5 s grace, then kills its supervised process group | #17590 |
 | Env vars and endpoints across restarts | works | `GREETING_SOURCE`, `services__api__*` and the 5380 endpoint survive rude-edit restarts (11 s edit→served) and relaunches (same target port; worker keeps reaching api); [transcript](docs/transcripts/08-restart-preserves-env-and-endpoints.txt) | |
 | App arguments (`WithArgs`) | fixed | The watcher appends arguments directly to `dotnet run`; the proxy now prefixes them with `--`, so `WithArgs("--Demo:Greeting", "from args")` reaches the app (`/config` → `from args`) | |
 | `WithReplicas(2)` | fixed | Shared edit reaches both replicas (same PIDs); rude edit restarts both. `/crash` on one replica prints `💥 api exited with code 3` but marks no replica Crashed (the status pipe doesn't say which process exited; accepted loss); a save relaunches it. The watcher races concurrent first launches of the same web project ("Server not started" from its browser refresh server, unfixed in dotnet/sdk main), so the proxies launch a project's replicas one at a time until it has launched once (`--launch-gate`). [transcript](docs/transcripts/03-replicas-csproj-static.txt) | #13738 |
 | File-based C# app (`AddDotnetProject("x", "app.cs")`) | fixed | Playground `ticker` (`Scripts/ticker.cs`). Method edits hot reload (3–10 s including the 3 s tick; watcher 57–83 ms after warm-up), same PID. A top-level statement edit restarts it with a fresh watcher in 15–24 s; hot reload works afterwards. Workarounds for the watcher: the proxy adds `--file`; status paths of the virtual `ticker.cs.csproj` map back to `ticker.cs`; the app gets its own watch server (a project-file change otherwise crashes the shared watcher); `StartupHookSupport`/`MetadataUpdaterSupport` are turned on (the PublishAot default turns them off, so every edit failed with ENC0097 on .NET 10); a failed `build_complete` for the virtual `ticker.cs.csproj` after startup (the watcher can't rebuild it) restarts the app with a fresh watcher. | |
-| Watch tool acquisition | fixed | Shipped in `Aspire.Hosting.Dotnet` (no download); a missing tool or non-.NET 10 SDK is an actionable terminal error. | |
+| Watch tool acquisition | fixed | Shipped in `Aspire.Hosting.Dotnet` (no download); a missing tool or an SDK other than .NET 10 or 11 is an actionable terminal error. | |
 | Plain `dotnet run` of the AppHost / IDE debug | works | IDE: notice, the IDE owns hot reload. `AppHost__Run__WatchEnabled=true` without the CLI: services are watched and hot reloaded the same as with `aspire run --watch` | #15710 |
 | Per-resource opt-out | fixed | `.WithWatch(false)`: terminal and resource-log notice, plain `dotnet run`. [transcript](docs/transcripts/11-watch-opt-out-and-rejection.txt) | #20702 |
 | Run-to-completion / persistent | fixed | `WaitForCompletion` targets run once unwatched (notice); persistent lifetime is an error (unit-tested) | #9756 |
-| AppHost edits (Session 8) | not supported | Restart `aspire run`. See Known gaps. | #13839 |
+| AppHost edits (`aspire run --watch`) | fixed | An AppHost edit replaces the complete AppHost generation: the CLI stops the old AppHost and its resources and starts a fresh one with the new model, while service edits keep hot reloading in place. Two AppHost edits each replaced the generation; Ctrl+C then removed every `/tmp/aspw-*` directory. See the [integration README](../../src/Aspire.Hosting.Dotnet/README.md#watch-apphost-and-service-changes). | #13839 |
 
 ## Known gaps
 
 Closed in this PR (see the PR description for commits): build configuration / `WithBuildEnvironment` /
 `WithWorkingDirectory`, Crashed counted as Inactive, slow Ctrl+C, the TMPDIR/global.json hack,
-file-based apps and package/project reference changes. Still open:
+file-based apps, package/project reference changes and AppHost edits. Still open:
 
 - **Blazor gateway (`WithBlazorGateway`)**: not feasible here. The gateway runs through its own launch tool
   (`WithLaunchToolArgs`), and the watch server can only launch `dotnet run` for a project it builds; it has no way to run a
   custom launcher or to attach to a process it didn't start. It opts itself out (`WithWatch(false)`). Needs a launch hook in
   the watch server (dotnet/sdk).
-- **AppHost edits (Session 8)**: not implemented. The AppHost is never watched by design (`--watch` covers services only):
-  restarting it means tearing down DCP and every resource, which needs a CLI-level restart loop around the AppHost
-  process, not a change to the service watcher. Restart `aspire run` after editing the AppHost.
 - **Reference changes restart a whole watch server**: a project-file change restarts every service on that watch server
   (15–29 s), because the watcher can't rebuild one root or forget its delta history. A file-based app or a project with
   `WithBuildEnvironment` has its own server, so only it restarts.
@@ -221,7 +221,14 @@ file-based apps and package/project reference changes. Still open:
   of a subreaper doesn't matter), `PosixSignalRegistration` (mapped to console control events on Windows),
   `TMP`/`TEMP` vs. `TMPDIR` for the temp directory redirect, case-insensitive path comparison for status paths on Windows
   and macOS, and per-user private run directories.
-- The shipped tool is 10.0.403; .NET 10 SDK feature bands other than 10.0.4xx use it unverified.
+- The shipped tools are 10.0.403 and 11.0.100. Other SDK feature bands and SDK patches released after them use them
+  unverified.
+- **The .NET 10 watcher and static web assets on macOS/Linux**: with SDK 10.0.300 or later, watcher 10.0.403 logs
+  `❌ Failed to read '…/obj\Debug/net10.0/staticwebassets.development.json'` for web projects, because it joins the raw
+  mixed-separator `IntermediateOutputPath` ([dotnet/sdk#54309](https://github.com/dotnet/sdk/issues/54309)). The app still
+  serves edited `wwwroot` files, but the watcher applies no static asset update for them (`No managed code changes to
+  apply`), so a connected browser isn't refreshed. The .NET 11 watcher has the fix
+  ([dotnet/sdk#54536](https://github.com/dotnet/sdk/pull/54536)); `release/10.0.4xx` doesn't.
 - Package-backed polyglot AppHosts (no MSBuild targets run for the prebuilt server) have no AppHost metadata. They load
   `Aspire.Hosting.Dotnet.dll` straight from its restored package, and then that package's `tools/dotnet-watch/` and
   `tools/dotnet-watch-host/` are the only source (chosen by load location, not probed after the metadata; unit-tested,
@@ -229,7 +236,13 @@ file-based apps and package/project reference changes. Still open:
 - Build settings travel in the watcher's environment (it has no per-project build arguments), so they have environment
   precedence: a project that sets `Configuration` or `Optimize` unconditionally wins. A variable that was unset before
   comes back to the service as empty rather than unset (`configuration: ""` in `/diag`). In watch mode a Release build is
-  unoptimized (`Optimize=false`), which the hot reload agent requires.
+  unoptimized (`Optimize=false`), which the hot reload agent requires, and keeps the SDK's hot reload build outputs
+  (`EnableHotReloadInRuntimeConfigDevFile=true`), which the .NET 11 watcher requires for web projects.
+- **The .NET 11 watcher and web projects without hot reload browser tools**: watcher 11.0.100 can't launch a web project
+  whose browser tools are off, because it logs an event that has no message descriptor and its logger throws. The watch
+  group then fails with `The given key '1021' was not present in the dictionary`. That happens when the project sets
+  `StaticWebAssetsEnabled`, `JSModulesEnabled` or `EnableHotReloadInRuntimeConfigDevFile` to `false`. Opt such a project
+  out with `WithWatch(false)` ([dotnet/sdk#57358](https://github.com/dotnet/sdk/issues/57358)).
 
 ## Repro
 
@@ -237,9 +250,8 @@ Prereqs: Linux or macOS. The repo's local SDK is installed by restore (`./restor
 the SDK from the root `global.json`, plus the .NET 10 runtime that restore also installs). The services select a .NET 10
 SDK (`services/global.json`), which must be installed next to the `dotnet` that runs them; for the repo-local muxer:
 `curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0 --install-dir .dotnet`.
-This direct in-repo route exercises service watching only because the AppHost itself uses the repository's .NET 11
-preview SDK. Use the package-hive `DotnetWatchCSharpTests` E2E route above to exercise combined AppHost reconstruction
-and service watching against the pinned .NET 10 watcher.
+In this direct in-repo route the AppHost uses the repository's .NET 11 SDK, so `aspire run --watch` reconstructs the
+AppHost after edits with watcher 11.0.100 while the services use watcher 10.0.403.
 
 ```bash
 git clone --branch spike/project-v2-csharpprogram-watch https://github.com/microsoft/aspire && cd aspire

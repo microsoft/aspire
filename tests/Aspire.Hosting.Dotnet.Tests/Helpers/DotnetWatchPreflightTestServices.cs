@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Hosting.Dotnet.Watch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ internal sealed class DotnetWatchPreflightTestServices : IDotnetWatchPreflight
 {
     internal Func<string, bool, IReadOnlyDictionary<string, string>, DotnetWatchProjectGraphResult, DotnetWatchProjectGraphResult>? Transform { get; set; }
     internal Func<string, bool, IReadOnlyDictionary<string, string>, string, DotnetWatchProjectGraphResult, DotnetWatchProjectGraphResult>? TransformWithWorkingDirectory { get; set; }
+    internal Func<string, string, DotnetWatchProjectGraphResult, DotnetWatchProjectGraphResult>? TransformBuild { get; set; }
     internal string? PayloadFailure { get; set; }
     internal Func<CancellationToken, Task>? BeforeEvaluation { get; set; }
     private int _evaluationCount;
@@ -62,6 +64,14 @@ internal sealed class DotnetWatchPreflightTestServices : IDotnetWatchPreflight
             : TransformWithWorkingDirectory(path, globalProperties, environment, workingDirectory, result);
     }
 
+    public async Task<DotnetWatchProjectGraphResult> EvaluateBuildAsync(
+        string path, string? configuration, IReadOnlyDictionary<string, string> environment,
+        string buildDirectory, CancellationToken cancellationToken)
+    {
+        var result = await EvaluateAsync(path, configuration, environment, globalProperties: false, buildDirectory, cancellationToken);
+        return TransformBuild is null ? result : TransformBuild(path, buildDirectory, result);
+    }
+
     public Task<DotnetWatchResolvedPayload> ResolvePayloadAsync(
         DotnetWatchProjectGraphResult graph, IDistributedApplicationBuilder builder,
         ILogger logger, CancellationToken cancellationToken)
@@ -71,7 +81,8 @@ internal sealed class DotnetWatchPreflightTestServices : IDotnetWatchPreflight
             throw new DistributedApplicationException(failure);
         }
         return Task.FromResult(new DotnetWatchResolvedPayload(
-            Path.Combine(DotnetWatchToolResolver.GetToolsDirectory(builder.AppHostAssembly)!, DotnetWatchToolResolver.ToolDllName),
+            Path.Combine(DotnetWatchToolResolver.GetToolsDirectory(builder.AppHostAssembly)!,
+                DotnetWatchToolResolver.GetSdkMajor(graph.SdkVersion).ToString(CultureInfo.InvariantCulture), DotnetWatchToolResolver.ToolDllName),
             DotnetWatchToolResolver.ResolveWatchHostPath(DotnetWatchToolResolver.GetWatchHostDirectory(builder.AppHostAssembly))));
     }
 }

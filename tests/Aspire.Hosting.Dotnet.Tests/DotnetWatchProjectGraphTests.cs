@@ -12,11 +12,13 @@ namespace Aspire.Hosting.Dotnet.Tests;
 
 public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
 {
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task UsesEvaluatedConditionalImportedReferencesAndActiveImportPaths()
+    public async Task UsesEvaluatedConditionalImportedReferencesAndActiveImportPaths(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var library = fixture.Project("Library");
         var ignored = fixture.Project("Ignored");
         var imported = fixture.Write("build/active.input", """
@@ -52,11 +54,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.False(Directory.Exists(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(project)!, "obj")));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task PreservesGlobalPropertyAndLowerPrecedenceEnvironmentDistinction()
+    public async Task PreservesGlobalPropertyAndLowerPrecedenceEnvironmentDistinction(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var library = fixture.Project("Library");
         var project = fixture.Project("App", """
             <PropertyGroup><BuildFlavor>unconditional</BuildFlavor></PropertyGroup>
@@ -80,11 +84,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.False(DotnetWatchProjectGraph.Equivalent(normal, watcher));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task PreservesReleaseConfigurationAndHotReloadAdaptationWhenSdkDefaultsPermitIt()
+    public async Task PreservesReleaseConfigurationAndHotReloadAdaptationWhenSdkDefaultsPermitIt(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var project = fixture.Project("App");
         var environment = new Dictionary<string, string> { ["Optimize"] = "false" };
 
@@ -96,11 +102,32 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.Equal(normal.Projects[project].Outputs, watcher.Projects[project].Outputs);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task EvaluatesFileAppDirectivesWithGlobalConfigurationAndSdkImports()
+    public async Task ReleaseWatchAdaptationMatchesTheOrdinaryReleaseBuildOfAPreparedProject(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
+        var project = fixture.Project("App", """
+            <PropertyGroup><Optimize>false</Optimize><MetadataUpdaterSupport>true</MetadataUpdaterSupport></PropertyGroup>
+            """, sdk: "Microsoft.NET.Sdk.Web");
+        var adaptation = DotnetWatchCoordinator.GetBuildProperties([new DotnetProjectMetadata(project, "Release", "app")]);
+
+        var ordinary = await fixture.EvaluateAsync(project, "Release", new Dictionary<string, string>(), globalProperties: true);
+        var watcher = await fixture.EvaluateAsync(project, "Release", adaptation, globalProperties: false);
+        Assert.Equal("true", watcher.Projects[project].Properties["EnableHotReloadInRuntimeConfigDevFile"]);
+        Assert.True(DotnetWatchProjectGraph.Equivalent(ordinary, watcher));
+        Assert.Equal(ordinary.Projects[project].Outputs, watcher.Projects[project].Outputs);
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
+    [RequiresTools(["dotnet"])]
+    public async Task EvaluatesFileAppDirectivesWithGlobalConfigurationAndSdkImports(int sdkMajor)
+    {
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var release = fixture.Project("ReleaseLibrary");
         var debug = fixture.Project("DebugLibrary");
         var include = fixture.Write("shared/source.cs", "internal static class Included { }");
@@ -147,11 +174,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.False(DotnetWatchProjectGraph.Equivalent(normal, watcher));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task FileAppDefaultConfigurationSupportsEnvironmentAdaptation()
+    public async Task FileAppDefaultConfigurationSupportsEnvironmentAdaptation(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var project = fixture.Write("app.cs", "Console.WriteLine(\"File app\");");
         var environment = new Dictionary<string, string>
         {
@@ -167,11 +196,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.True(DotnetWatchProjectGraph.Equivalent(normal, watcher));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task ExposesSdkEvaluatedFileAppCompileAndPackageChangesForGuardedRefresh()
+    public async Task ExposesSdkEvaluatedFileAppCompileAndPackageChangesForGuardedRefresh(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         fixture.Write("first.cs", "internal static class First { }");
         fixture.Write("second.cs", "internal static class Second { }");
         var source = """
@@ -196,7 +227,9 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         {
             Initial = Items(first),
             Changed = Items(structural),
-        }, new JsonSerializerOptions { WriteIndented = true }), "json");
+        }, new JsonSerializerOptions { WriteIndented = true }), "json")
+            // Both SDK majors must expose the same file-app items.
+            .IgnoreParametersForVerified();
 
         object Items(DotnetWatchProjectGraphResult graph)
         {
@@ -212,15 +245,20 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("AdditionalProperties", "Configuration=Release")]
-    [InlineData("SetConfiguration", "Configuration=Release")]
-    [InlineData("SetPlatform", "Platform=x64")]
-    [InlineData("Targets", "Build")]
-    [InlineData("GlobalPropertiesToRemove", "Configuration")]
+    [InlineData("AdditionalProperties", "Configuration=Release", 10)]
+    [InlineData("AdditionalProperties", "Configuration=Release", 11)]
+    [InlineData("SetConfiguration", "Configuration=Release", 10)]
+    [InlineData("SetConfiguration", "Configuration=Release", 11)]
+    [InlineData("SetPlatform", "Platform=x64", 10)]
+    [InlineData("SetPlatform", "Platform=x64", 11)]
+    [InlineData("Targets", "Build", 10)]
+    [InlineData("Targets", "Build", 11)]
+    [InlineData("GlobalPropertiesToRemove", "Configuration", 10)]
+    [InlineData("GlobalPropertiesToRemove", "Configuration", 11)]
     [RequiresTools(["dotnet"])]
-    public async Task DiagnosesUnrepresentableReferenceContextBeforeExecutingTargets(string name, string value)
+    public async Task DiagnosesUnrepresentableReferenceContextBeforeExecutingTargets(string name, string value, int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         fixture.Project("Library");
         var project = fixture.Project("App", $$"""
             <ItemGroup><ProjectReference Include="../Library/Library.csproj" {{name}}="{{value}}" /></ItemGroup>
@@ -232,12 +270,14 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("", true)]
-    [InlineData("profile.pubxml", false)]
+    [InlineData("", true, 10)]
+    [InlineData("", true, 11)]
+    [InlineData("profile.pubxml", false, 10)]
+    [InlineData("profile.pubxml", false, 11)]
     [RequiresTools(["dotnet"])]
-    public async Task AllowsDefaultWebPublishProfileRemovalOnlyWhenNoProfileIsSelected(string profile, bool supported)
+    public async Task AllowsDefaultWebPublishProfileRemovalOnlyWhenNoProfileIsSelected(string profile, bool supported, int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var library = fixture.Project("Library");
         var project = fixture.Project("App", $$"""
             <PropertyGroup><WebPublishProfileFile>{{profile}}</WebPublishProfileFile></PropertyGroup>
@@ -256,11 +296,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task RejectsCustomRunArgumentExecutionWithoutRunningIt()
+    public async Task RejectsCustomRunArgumentExecutionWithoutRunningIt(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var marker = System.IO.Path.Combine(fixture.Path, "target-ran");
         var project = fixture.Project("App", $$"""
             <Target Name="CustomRunArguments" BeforeTargets="ComputeRunArguments">
@@ -273,11 +315,44 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.False(File.Exists(marker));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task KeepsRootSdkSelectionIndependentOfEvaluationStartupDirectory()
+    public async Task OnlyTheSdkRunCommandCheckMayFollowComputeRunArguments(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        // .NET 11 SDKs define a validation-only _CheckRunCommandSupported target after ComputeRunArguments, so evaluating
+        // an ordinary project must succeed. A project target that replaces it (declared after the SDK's targets, so it wins)
+        // can change the launch and is rejected.
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
+        var ordinary = fixture.Project("Ordinary");
+        var overridden = fixture.Write(System.IO.Path.Combine("Overridden", "Overridden.csproj"), """
+            <Project>
+              <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <OutputType>Exe</OutputType>
+              </PropertyGroup>
+              <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+              <Target Name="_CheckRunCommandSupported" AfterTargets="ComputeRunArguments">
+                <PropertyGroup><RunArguments>--changed</RunArguments></PropertyGroup>
+              </Target>
+            </Project>
+            """);
+
+        var graph = await fixture.EvaluateAsync(ordinary);
+        Assert.Equal(fixture.SdkVersion, graph.SdkVersion);
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => fixture.EvaluateAsync(overridden));
+        Assert.Contains("attaches a custom target to ComputeRunArguments", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
+    [RequiresTools(["dotnet"])]
+    public async Task KeepsRootSdkSelectionIndependentOfEvaluationStartupDirectory(int sdkMajor)
+    {
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var project = fixture.Project("App");
         var startup = System.IO.Path.Combine(fixture.Path, "different-startup");
         fixture.PinSdk(startup, "99.0.100");
@@ -298,9 +373,29 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
 
     [Fact]
     [RequiresTools(["dotnet"])]
-    public async Task FencesOutputChangesDependentOnEvaluationStartupDirectory()
+    public async Task BuildEvaluationSelectsTheSdkFromTheBuildDirectory()
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var root = await DotnetWatchEvaluationFixture.CreateAsync(output, 10);
+        using var build = await DotnetWatchEvaluationFixture.CreateAsync(output, 11);
+        var project = root.Project("App");
+
+        var watcher = await root.EvaluateAsync(project, globalProperties: false, workingDirectory: build.Path);
+        var built = await DotnetWatchProjectGraph.EvaluateBuildGraphAsync(
+            project, configuration: null, new Dictionary<string, string>(), build.Path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(root.SdkDirectory, watcher.SdkDirectory);
+        Assert.Equal(build.SdkDirectory, built.SdkDirectory);
+        Assert.Equal(build.SdkVersion, built.SdkVersion);
+        Assert.Equal(DotnetWatchGraphComparisonKind.Incompatible, DotnetWatchProjectGraph.Compare(watcher, built).Kind);
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
+    [RequiresTools(["dotnet"])]
+    public async Task FencesOutputChangesDependentOnEvaluationStartupDirectory(int sdkMajor)
+    {
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var project = fixture.Project("App", """
             <PropertyGroup><OutputPath>$(MSBuildStartupDirectory)/outputs/</OutputPath></PropertyGroup>
             """);
@@ -312,11 +407,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.NotEqual(normal.Projects[project].Outputs, watcher.Projects[project].Outputs);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task DiagnosesUnrepresentedAutomaticResponseFileWithoutExecutingIt()
+    public async Task DiagnosesUnrepresentedAutomaticResponseFileWithoutExecutingIt(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var project = fixture.Project("App");
         fixture.Write("Directory.Build.rsp", "-property:Configuration=Release");
 
@@ -324,11 +421,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.Contains("Directory.Build.rsp", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task DoesNotForwardPrivateAppHostOwnershipOrNotificationState()
+    public async Task DoesNotForwardPrivateAppHostOwnershipOrNotificationState(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var project = fixture.Project("App", """
             <PropertyGroup>
               <ObservedOwner>$(ASPIRE_DOTNET_WATCH_OWNER)</ObservedOwner>
@@ -348,11 +447,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.False(graph.Projects[project].Properties.ContainsKey(name)));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task AnchorsMixedSeparatorOutputPathsToPhysicalProjectInsteadOfStartupDirectory()
+    public async Task AnchorsMixedSeparatorOutputPathsToPhysicalProjectInsteadOfStartupDirectory(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var project = fixture.Project("App", """
             <PropertyGroup>
               <OutputPath>..\shared\bin\</OutputPath>
@@ -376,11 +477,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
             node.Outputs.Order(StringComparer.Ordinal));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task EvaluatedReferencesAndOutputDomainsDetermineBuildIsolation()
+    public async Task EvaluatedReferencesAndOutputDomainsDetermineBuildIsolation(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         fixture.Project("Shared");
         var left = fixture.Project("Left", """<ItemGroup><ProjectReference Include="../Shared/Shared.csproj" /></ItemGroup>""");
         var right = fixture.Project("Right", """<ItemGroup><ProjectReference Include="../Shared/Shared.csproj" /></ItemGroup>""");
@@ -396,11 +499,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.False(DotnetWatchProjectGraph.SharesOutputs(leftGraph, independentGraph));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task DiagnosesSdkResolverReplacementInsteadOfInventingRootSdkFidelity()
+    public async Task DiagnosesSdkResolverReplacementInsteadOfInventingRootSdkFidelity(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var project = fixture.Project("App");
         var foreign = Directory.CreateDirectory(System.IO.Path.Combine(fixture.Path, "foreign-sdk")).FullName;
 
@@ -409,11 +514,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.Contains("MSBuildSDKsPath", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task MultiTargetedRootsRequireSelectionAndReferencedLibrariesUseTheirParentFramework()
+    public async Task MultiTargetedRootsRequireSelectionAndReferencedLibrariesUseTheirParentFramework(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
         var multi = fixture.Write("Multi/Multi.csproj", """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup><TargetFrameworks>net10.0;net11.0</TargetFrameworks></PropertyGroup>
@@ -432,11 +539,13 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
         Assert.Equal("net10.0", graph.Projects[DotnetWatchProjectGraph.Normalize(multi)].Properties["TargetFramework"]);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
     [RequiresTools(["dotnet"])]
-    public async Task DiagnosesCyclesWithoutBuilding()
+    public async Task DiagnosesCyclesWithoutBuilding(int sdkMajor)
     {
-        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output, sdkMajor);
 
         var first = fixture.Project("First", """<ItemGroup><ProjectReference Include="../Second/Second.csproj" /></ItemGroup>""");
         fixture.Project("Second", """<ItemGroup><ProjectReference Include="../First/First.csproj" /></ItemGroup>""");

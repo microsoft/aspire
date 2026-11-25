@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
@@ -148,21 +149,24 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("10.0.100")]
-    [InlineData("10.0.403")]
-    public void ToolIsResolvedForNet10Sdks(string sdkVersion)
+    [InlineData("10.0.100", 10)]
+    [InlineData("10.0.403", 10)]
+    [InlineData("10.0.404", 10)]
+    [InlineData("11.0.100", 11)]
+    [InlineData("11.0.100-rc.2.26504.105", 11)]
+    public void ToolIsResolvedForTheSdkMajor(string sdkVersion, int major)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var toolsDir = CreateToolsLayout(workspace.Path);
 
         var dll = DotnetWatchToolResolver.ResolveToolPath(null, toolsDir, sdkVersion, NullLogger.Instance);
 
-        Assert.Equal(Path.Combine(toolsDir, DotnetWatchToolResolver.ToolDllName), dll);
+        Assert.Equal(Path.Combine(toolsDir, major.ToString(CultureInfo.InvariantCulture), DotnetWatchToolResolver.ToolDllName), dll);
     }
 
     [Theory]
     [InlineData("9.0.300")]
-    [InlineData("11.0.100-rc.2.26504.105")]
+    [InlineData("12.0.100-preview.1.26101.1")]
     public void UnsupportedSdkMajorFailsExplicitly(string sdkVersion)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -171,9 +175,10 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         var ex = Assert.Throws<DistributedApplicationException>(
             () => DotnetWatchToolResolver.ResolveToolPath(null, toolsDir, sdkVersion, NullLogger.Instance));
 
-        Assert.Contains("supports .NET 10 SDKs only", ex.Message);
-        Assert.Contains($"select SDK {sdkVersion}", ex.Message);
-        Assert.Contains("global.json", ex.Message);
+        Assert.Equal(
+            $"Hot reload supports .NET 10 and 11 SDKs, but the watched projects select SDK {sdkVersion}. " +
+            "Select one of those SDKs in their global.json, or run without --watch.",
+            ex.Message);
     }
 
     [Fact]
@@ -213,7 +218,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
             typeof(DotnetWatchCoordinatorTests).Assembly, DotnetWatchToolResolver.ToolsDirectoryMetadataKey, "dotnet-watch", dll));
 
         var ex = Assert.Throws<DistributedApplicationException>(() => DotnetWatchToolResolver.ResolveToolPath(null, expected, "10.0.100", NullLogger.Instance));
-        Assert.Contains(Path.Combine(expected, DotnetWatchToolResolver.ToolDllName), ex.Message);
+        Assert.Contains(Path.Combine(expected, "10", DotnetWatchToolResolver.ToolDllName), ex.Message);
     }
 
     [Fact]
@@ -248,33 +253,51 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var toolsDir = CreateToolsLayout(workspace.Path);
+        var net10Tool = Path.Combine(toolsDir, "10");
 
-        // The override bypasses the SDK check: it's how a matching tool is tried against another SDK.
+        // The override is one tool for every SDK major and bypasses the major check: it's how a tool is tried against
+        // another SDK.
         Assert.Equal(
-            Path.Combine(toolsDir, DotnetWatchToolResolver.ToolDllName),
-            DotnetWatchToolResolver.ResolveToolPath(toolsDir, toolsDirectory: null, "11.0.100", NullLogger.Instance));
+            Path.Combine(net10Tool, DotnetWatchToolResolver.ToolDllName),
+            DotnetWatchToolResolver.ResolveToolPath(net10Tool, toolsDir, "11.0.100", NullLogger.Instance));
+        Assert.Equal(
+            Path.Combine(net10Tool, DotnetWatchToolResolver.ToolDllName),
+            DotnetWatchToolResolver.ResolveToolPath(net10Tool, toolsDirectory: null, "12.0.100", NullLogger.Instance));
         Assert.Throws<DistributedApplicationException>(
             () => DotnetWatchToolResolver.ResolveToolPath(Path.Combine(workspace.Path, "nope"), toolsDir, "10.0.100", NullLogger.Instance));
     }
 
     [Fact]
-    public void ShippedToolTargetsNet10()
+    public void ShippedToolsTargetTheirSdkMajors()
     {
         // The test assembly carries the same metadata AppHosts get, pointing at the layout Aspire.Hosting.Dotnet builds.
         var toolsDir = DotnetWatchToolResolver.GetToolsDirectory(typeof(DotnetWatchCoordinatorTests).Assembly);
         Assert.NotNull(toolsDir);
 
-        var dll = DotnetWatchToolResolver.ResolveToolPath(null, toolsDir, "10.0.100", NullLogger.Instance);
-        var runtimeConfig = Path.ChangeExtension(dll, ".runtimeconfig.json");
-        Assert.True(File.Exists(runtimeConfig), runtimeConfig);
-        using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(runtimeConfig));
-        Assert.Equal("net10.0", json.RootElement.GetProperty("runtimeOptions").GetProperty("tfm").GetString());
+        // The packaged payload folders and the majors the resolver accepts must stay in sync.
+        var shipped = Directory.EnumerateDirectories(toolsDir)
+            .Where(directory => File.Exists(Path.Combine(directory, DotnetWatchToolResolver.ToolDllName)))
+            .Select(directory => int.Parse(Path.GetFileName(directory), CultureInfo.InvariantCulture))
+            .Order();
+        Assert.Equal(DotnetWatchToolResolver.SupportedSdkMajors, shipped);
+        foreach (var major in DotnetWatchToolResolver.SupportedSdkMajors)
+        {
+            var dll = DotnetWatchToolResolver.ResolveToolPath(null, toolsDir, $"{major}.0.100", NullLogger.Instance);
+            var runtimeConfig = Path.ChangeExtension(dll, ".runtimeconfig.json");
+            Assert.True(File.Exists(runtimeConfig), runtimeConfig);
+            using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(runtimeConfig));
+            Assert.Equal($"net{major}.0", json.RootElement.GetProperty("runtimeOptions").GetProperty("tfm").GetString());
+        }
     }
 
     private static string CreateToolsLayout(string root)
     {
         var toolsDir = Directory.CreateDirectory(Path.Combine(root, "dotnet-watch")).FullName;
-        File.WriteAllText(Path.Combine(toolsDir, DotnetWatchToolResolver.ToolDllName), "");
+        foreach (var major in DotnetWatchToolResolver.SupportedSdkMajors)
+        {
+            var payload = Directory.CreateDirectory(Path.Combine(toolsDir, major.ToString(CultureInfo.InvariantCulture))).FullName;
+            File.WriteAllText(Path.Combine(payload, DotnetWatchToolResolver.ToolDllName), "");
+        }
         return toolsDir;
     }
 
@@ -378,9 +401,9 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Empty(DotnetWatchCoordinator.GetBuildProperties([new DotnetProjectMetadata(projectPath, "Debug", "service")]));
 
         var release = DotnetWatchCoordinator.GetBuildProperties([new DotnetProjectMetadata(projectPath, "Release", "service")]);
-        Assert.Equal("Release", release["Configuration"]);
-        Assert.Equal("false", release["Optimize"]);
-        Assert.False(release.ContainsKey("StartupHookSupport"));
+        Assert.Equal(
+            [("Configuration", "Release"), ("EnableHotReloadInRuntimeConfigDevFile", "true"), ("Optimize", "false")],
+            release.OrderBy(property => property.Key, StringComparer.Ordinal).Select(property => (property.Key, property.Value)));
     }
 
     [Fact]

@@ -33,7 +33,7 @@ internal sealed record DotnetWatchAppHostLaunch(
         var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
             appHost,
             items: [],
-            properties: ["Configuration", "TargetFrameworks"],
+            properties: ["Configuration", "TargetFrameworks", "NETCoreSdkVersion"],
             targets: [ResolveTarget],
             new ProcessInvocationOptions
             {
@@ -67,10 +67,11 @@ internal sealed record DotnetWatchAppHostLaunch(
         string? rollForwardOverride)
     {
         // -getTargetResult returns the actual package target's result, not an unevaluated item:
-        // {"Properties":{"Configuration":"Debug","TargetFrameworks":""},
+        // {"Properties":{"Configuration":"Debug","TargetFrameworks":"","NETCoreSdkVersion":"10.0.403"},
         //  "TargetResults":{"ResolveAspireDotnetWatch":{"Result":"Success","Items":[{
-        //   "Identity":".../watch.dll","ToolPath":".../watch.dll","WatchHostPath":".../WatchHost.dll",
+        //   "Identity":".../dotnet-watch/10/watch.dll","ToolPath":".../dotnet-watch/10/watch.dll","WatchHostPath":".../WatchHost.dll",
         //   "DotnetPath":".../dotnet","SdkVersion":"10.0.403","MSBuildPath":".../sdk/10.0.403/"}]}}}
+        // "Items" is empty when the package ships no watcher for the major version of the AppHost's SDK.
         var target = GetProperty(GetProperty(result, "TargetResults"), ResolveTarget);
         if (GetRequiredString(target, "Result") != "Success")
         {
@@ -78,6 +79,19 @@ internal sealed record DotnetWatchAppHostLaunch(
         }
 
         var tools = GetProperty(target, "Items");
+        if (tools.ValueKind == JsonValueKind.Array && tools.GetArrayLength() == 0 && toolOverride is null)
+        {
+            // Only the AppHost runs unwatched: watched services select their own SDKs and payloads.
+            var appHostSdkVersion = GetRequiredString(GetProperty(result, "Properties"), "NETCoreSdkVersion");
+            if (!SemVersion.TryParse(appHostSdkVersion, SemVersionStyles.Strict, out var appHostSdk))
+            {
+                throw new InvalidDataException(RunCommandStrings.WatchBootstrapInvalid);
+            }
+
+            return new("", "", "", appHostSdkVersion, "", string.Format(CultureInfo.CurrentCulture,
+                RunCommandStrings.WatchAppHostSdkUnsupported, appHostSdk.Major, appHostSdkVersion));
+        }
+
         if (tools.ValueKind != JsonValueKind.Array || tools.GetArrayLength() != 1)
         {
             throw new InvalidDataException(RunCommandStrings.WatchBootstrapInvalid);

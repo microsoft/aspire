@@ -362,6 +362,10 @@
   <data name="WatchAppHostRequirementsInvalid" xml:space="preserve">
     <value>The resolved watcher payload or the AppHost's selected SDK {0} cannot be used: {1} Use a complete, compatible watcher payload and SDK without forcing major-version roll-forward.</value>
   </data>
+  <data name="WatchAppHostSdkUnsupported" xml:space="preserve">
+    <value>The AppHost selects SDK {1}, but the restored Aspire.Hosting.Dotnet package has no hot reload watcher for .NET {0} SDKs.</value>
+    <comment>{0} is the SDK major version, {1} is the full SDK version.</comment>
+  </data>
   <data name="WatchAppHostRuntimeMissing" xml:space="preserve">
     <value>The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</value>
   </data>

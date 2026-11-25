@@ -14,7 +14,7 @@ internal sealed record TestDotnetWatchAppHostPayload(
     string SdkVersion,
     string DependencyPath)
 {
-    internal static TestDotnetWatchAppHostPayload Create(DirectoryInfo root, string sdkVersion, string toolRuntimeVersion)
+    internal static TestDotnetWatchAppHostPayload Create(DirectoryInfo root, string sdkVersion, string toolRuntimeVersion, string? msbuildRuntimeVersion = null)
     {
         var toolDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, "tools", "watch"));
         var hostDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, "tools", "watch-host"));
@@ -36,7 +36,7 @@ internal sealed record TestDotnetWatchAppHostPayload(
         WriteEntryPoint(toolPath, toolRuntimeVersion, includeAspNetCore: true, dependency: Path.GetFileName(dependencyPath));
         WriteEntryPoint(hostPath, toolRuntimeVersion, includeAspNetCore: false, dependency: null);
         WriteEntryPoint(Path.Combine(sdkDirectory.FullName, "MSBuild.dll"),
-            sdkVersion.StartsWith("11.", StringComparison.Ordinal) ? "11.0.0-rc.2.26504.105" : "10.0.14",
+            msbuildRuntimeVersion ?? (sdkVersion.StartsWith("11.", StringComparison.Ordinal) ? "11.0.0-rc.2.26504.105" : "10.0.14"),
             includeAspNetCore: false, dependency: null);
         Directory.CreateDirectory(Path.Combine(dotnetDirectory.FullName, "shared", "Microsoft.NETCore.App", toolRuntimeVersion));
         Directory.CreateDirectory(Path.Combine(dotnetDirectory.FullName, "shared", "Microsoft.AspNetCore.App", toolRuntimeVersion));
@@ -49,7 +49,8 @@ internal sealed record TestDotnetWatchAppHostPayload(
         ["Properties"] = new JsonObject
         {
             ["Configuration"] = "Debug",
-            ["TargetFrameworks"] = ""
+            ["TargetFrameworks"] = "",
+            ["NETCoreSdkVersion"] = SdkVersion
         },
         ["TargetResults"] = new JsonObject
         {
@@ -73,6 +74,14 @@ internal sealed record TestDotnetWatchAppHostPayload(
     };
 
     internal JsonDocument CreateQueryDocument() => JsonDocument.Parse(CreateQueryResult().ToJsonString());
+
+    /// <summary>The query result when the package ships no watcher for the AppHost SDK's major version.</summary>
+    internal JsonDocument CreateQueryDocumentWithoutWatcher()
+    {
+        var result = CreateQueryResult();
+        result["TargetResults"]!["ResolveAspireDotnetWatch"]!["Items"] = new JsonArray();
+        return JsonDocument.Parse(result.ToJsonString());
+    }
 
     private static void WriteEntryPoint(string path, string runtimeVersion, bool includeAspNetCore, string? dependency)
     {

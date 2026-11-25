@@ -44,13 +44,15 @@ internal sealed class WatchServerHarness : IAsyncDisposable
     private readonly List<Process> _processes = [];
     private readonly CancellationTokenSource _cts = new();
     private readonly ITestOutputHelper _output;
+    private readonly int _sdkMajor;
     private readonly string _runDirectory;
     private Task? _statusTask;
     private DotnetWatchControlPipeServer? _controlServer;
 
-    private WatchServerHarness(ITestOutputHelper output, string directory)
+    private WatchServerHarness(ITestOutputHelper output, int sdkMajor, string directory)
     {
         _output = output;
+        _sdkMajor = sdkMajor;
         Directory = directory;
         _runDirectory = Path.Combine(directory, "run");
         System.IO.Directory.CreateDirectory(_runDirectory);
@@ -91,12 +93,15 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         }
     }
 
-    /// <summary>Copies the fixture app to a temp directory and starts the watch server on it.</summary>
-    public static async Task<WatchServerHarness> StartAsync(ITestOutputHelper output, Action<string>? prepareApp = null)
+    /// <summary>
+    /// Copies the fixture app to a temp directory and starts the shipped watch server for <paramref name="sdkMajor"/> on it,
+    /// with the newest installed SDK of that major and an app targeting that major's framework.
+    /// </summary>
+    public static async Task<WatchServerHarness> StartAsync(ITestOutputHelper output, int sdkMajor, Action<string>? prepareApp = null)
     {
         // Short root: Unix socket paths are limited to ~108 characters.
         var directory = System.IO.Directory.CreateTempSubdirectory("awc-").FullName;
-        var harness = new WatchServerHarness(output, directory);
+        var harness = new WatchServerHarness(output, sdkMajor, directory);
         try
         {
             await harness.StartCoreAsync(prepareApp).ConfigureAwait(false);
@@ -111,11 +116,12 @@ internal sealed class WatchServerHarness : IAsyncDisposable
 
     private async Task StartCoreAsync(Action<string>? prepareApp)
     {
-        // Watch mode supports .NET 10 SDKs only: select the newest installed one for the fixture, then pin it exactly
-        // (as the coordinator does). Isolate the fixture from the repo build, whose global.json selects a newer SDK.
+        // Each shipped watcher supports its own SDK major: select the newest installed SDK of the requested major for the
+        // fixture, then pin it exactly (as the coordinator does). Isolate the fixture from the repo build, whose
+        // global.json may select another SDK.
         System.IO.Directory.CreateDirectory(Directory);
         var globalJson = Path.Combine(Directory, "global.json");
-        File.WriteAllText(globalJson, $$"""{ "sdk": { "version": "{{DotnetWatchToolResolver.SupportedSdkMajor}}.0.100", "rollForward": "latestFeature" } }""");
+        File.WriteAllText(globalJson, $$"""{ "sdk": { "version": "{{_sdkMajor}}.0.100", "rollForward": "latestFeature" } }""");
         var sdk = await DotnetWatchToolResolver.ResolveSdkAsync(Directory, _cts.Token).ConfigureAwait(false);
         Muxer = sdk.Muxer;
         File.WriteAllText(globalJson, $$"""{ "sdk": { "version": "{{sdk.SdkVersion}}", "rollForward": "disable" } }""");
@@ -132,7 +138,7 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         File.WriteAllText(ProjectPath, $"""
             <Project Sdk="Microsoft.NET.Sdk.Web">
               <PropertyGroup>
-                <TargetFramework>net{DotnetWatchToolResolver.SupportedSdkMajor}.0</TargetFramework>
+                <TargetFramework>net{_sdkMajor}.0</TargetFramework>
                 <Nullable>enable</Nullable>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <NuGetAudit>false</NuGetAudit>

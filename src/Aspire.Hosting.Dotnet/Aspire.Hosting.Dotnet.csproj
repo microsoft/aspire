@@ -17,12 +17,17 @@
     <Compile Remove="build\WatchEvaluation\DotnetWatchProjectEvaluator.cs" />
   </ItemGroup>
 
-  <!-- Hot reload watch server (Microsoft.DotNet.HotReload.Watch.Aspire), shipped like DCP: the DotnetTool package
-       can't be a PackageReference (NU1212), so PackageDownload fetches it at restore and its payload is repacked into
-       this package under tools/dotnet-watch/. buildTransitive/Aspire.Hosting.Dotnet.targets stamps that directory on
-       the AppHost as 'aspiredotnetwatchtoolsdir' assembly metadata. Nothing is downloaded at run time. -->
+  <!-- Hot reload watch servers (Microsoft.DotNet.HotReload.Watch.Aspire), shipped like DCP: the DotnetTool package
+       can't be a PackageReference (NU1212), so PackageDownload fetches it at restore and each payload is repacked into
+       this package under tools/dotnet-watch/<SDK major>/. A watcher loads MSBuild from the SDK that the watched projects
+       select, so every supported SDK major needs its own watcher; hosting and the CLI pick the payload by SDK major.
+       buildTransitive/Aspire.Hosting.Dotnet.targets stamps tools/dotnet-watch/ on the AppHost as
+       'aspiredotnetwatchtoolsdir' assembly metadata. Nothing is downloaded at run time. -->
   <ItemGroup>
-    <PackageDownload Include="Microsoft.DotNet.HotReload.Watch.Aspire" Version="[$(MicrosoftDotNetHotReloadWatchAspireVersion)]" />
+    <PackageDownload Include="Microsoft.DotNet.HotReload.Watch.Aspire"
+                     Version="[$(MicrosoftDotNetHotReloadWatchAspireSdk10Version)];[$(MicrosoftDotNetHotReloadWatchAspireSdk11Version)]" />
+    <_AspireDotnetWatchPayload Include="10" SdkMajor="10" Version="$(MicrosoftDotNetHotReloadWatchAspireSdk10Version)" ToolTargetFramework="net10.0" />
+    <_AspireDotnetWatchPayload Include="11" SdkMajor="11" Version="$(MicrosoftDotNetHotReloadWatchAspireSdk11Version)" ToolTargetFramework="net11.0" />
   </ItemGroup>
 
   <!-- The watch host (proxy for each watched replica, host of the watch server process) ships the same way under
@@ -45,28 +50,30 @@
   </PropertyGroup>
 
   <Target Name="_CollectDotnetWatchToolFiles">
-    <PropertyGroup>
-      <_AspireDotnetWatchToolSource>$(NuGetPackageRoot)microsoft.dotnet.hotreload.watch.aspire/$(MicrosoftDotNetHotReloadWatchAspireVersion)/tools/net10.0/any/</_AspireDotnetWatchToolSource>
-    </PropertyGroup>
-    <Error Condition="!Exists('$(_AspireDotnetWatchToolSource)Microsoft.DotNet.HotReload.Watch.Aspire.dll')"
-           Text="Microsoft.DotNet.HotReload.Watch.Aspire $(MicrosoftDotNetHotReloadWatchAspireVersion) is missing from '$(_AspireDotnetWatchToolSource)'. Restore this project." />
+    <ItemGroup>
+      <_AspireDotnetWatchToolSource Remove="@(_AspireDotnetWatchToolSource)" />
+      <_AspireDotnetWatchToolSource Include="@(_AspireDotnetWatchPayload->'$(NuGetPackageRoot)microsoft.dotnet.hotreload.watch.aspire/%(Version)/tools/%(ToolTargetFramework)/any/')" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(_AspireDotnetWatchToolSource.Identity)Microsoft.DotNet.HotReload.Watch.Aspire.dll')"
+           Text="Microsoft.DotNet.HotReload.Watch.Aspire %(_AspireDotnetWatchToolSource.Version) is missing from '%(_AspireDotnetWatchToolSource.Identity)'. Restore this project." />
     <ItemGroup>
       <_AspireDotnetWatchToolFile Remove="@(_AspireDotnetWatchToolFile)" />
-      <_AspireDotnetWatchToolFile Include="$(_AspireDotnetWatchToolSource)**/*" />
+      <!-- Batches over the payloads; RecursiveDir stays relative to each payload's root. -->
+      <_AspireDotnetWatchToolFile Include="%(_AspireDotnetWatchToolSource.Identity)**/*" SdkMajor="%(_AspireDotnetWatchToolSource.SdkMajor)" />
     </ItemGroup>
   </Target>
 
-  <!-- Lays out the payload for in-repo AppHosts, which reference this project rather than the package. -->
+  <!-- Lays out the payloads for in-repo AppHosts, which reference this project rather than the package. -->
   <Target Name="_LayoutDotnetWatchTools" AfterTargets="Build" DependsOnTargets="_CollectDotnetWatchToolFiles" Condition="'$(AspireDotnetWatchToolsDir)' != ''">
     <Copy SourceFiles="@(_AspireDotnetWatchToolFile)"
-          DestinationFiles="@(_AspireDotnetWatchToolFile->'$(AspireDotnetWatchToolsDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          DestinationFiles="@(_AspireDotnetWatchToolFile->'$(AspireDotnetWatchToolsDir)%(SdkMajor)/%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="_AddDotnetWatchToolsToPackage" DependsOnTargets="_CollectDotnetWatchToolFiles" Returns="@(TfmSpecificPackageFile)">
     <ItemGroup>
       <!-- Full file path: NuGet appends RecursiveDir to directory PackagePaths, which would nest culture folders (cs/cs/). -->
-      <TfmSpecificPackageFile Include="@(_AspireDotnetWatchToolFile)" PackagePath="tools/dotnet-watch/%(RecursiveDir)%(Filename)%(Extension)" />
+      <TfmSpecificPackageFile Include="@(_AspireDotnetWatchToolFile)" PackagePath="tools/dotnet-watch/%(SdkMajor)/%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>
   </Target>
 

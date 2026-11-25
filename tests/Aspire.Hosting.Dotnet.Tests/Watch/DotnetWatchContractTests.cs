@@ -19,20 +19,23 @@ namespace Aspire.Hosting.Dotnet.Tests.Watch;
 /// </summary>
 /// <remarks>
 /// Outerloop: each test builds a web app with the watcher (tens of seconds), using the watch tool Aspire.Hosting.Dotnet
-/// lays out (or <c>ASPIRE_DOTNET_WATCH_TOOL_PATH</c>) and a .NET 10 SDK installed next to the <c>dotnet</c> on PATH. Run locally with
+/// lays out for each SDK major (or <c>ASPIRE_DOTNET_WATCH_TOOL_PATH</c>) and .NET 10 and .NET 11 SDKs installed next to the
+/// <c>dotnet</c> on PATH. Run locally with
 /// <c>dotnet test tests/Aspire.Hosting.Dotnet.Tests -- --filter-class *DotnetWatchContractTests</c>.
 /// </remarks>
-[OuterloopTest("Builds and hot reloads a real app with the dotnet-watch server and a .NET 10 SDK.")]
+[OuterloopTest("Builds and hot reloads a real app with the dotnet-watch servers and .NET 10 and .NET 11 SDKs.")]
 [RequiresTools(["dotnet"])]
 public class DotnetWatchContractTests(ITestOutputHelper output)
 {
     private static readonly TimeSpan s_httpTimeout = TimeSpan.FromMinutes(1);
 
-    [Fact]
-    public async Task LaunchSpecReachesTheApp()
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
+    public async Task LaunchSpecReachesTheApp(int sdkMajor)
     {
         var proxy = RequireProxy();
-        await using var harness = await WatchServerHarness.StartAsync(output);
+        await using var harness = await WatchServerHarness.StartAsync(output, sdkMajor);
         await harness.WaitForStatusAsync(0, "build_complete", s => s.GetProperty("success").GetBoolean());
 
         var port = GetFreePort();
@@ -62,8 +65,10 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
         Assert.False(app.HasExited);
     }
 
-    [Fact]
-    public async Task StatusEventsAndNoticesFollowTheEditLifecycle()
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
+    public async Task StatusEventsAndNoticesFollowTheEditLifecycle(int sdkMajor)
     {
         var proxy = RequireProxy();
         var greeting = (string body, string extraField) => $$"""
@@ -79,7 +84,7 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
             """;
 
         // Initial build failure: the server reports a failed build and waits for a fix.
-        await using var harness = await WatchServerHarness.StartAsync(output, dir => File.WriteAllText(Path.Combine(dir, "Greeting.cs"), greeting("\"contract v1\" +", "")));
+        await using var harness = await WatchServerHarness.StartAsync(output, sdkMajor, dir => File.WriteAllText(Path.Combine(dir, "Greeting.cs"), greeting("\"contract v1\" +", "")));
         var greetingPath = Path.Combine(harness.AppDirectory, "Greeting.cs");
         var (_, index) = await harness.WaitForStatusAsync(0, "build_complete", s => !s.GetProperty("success").GetBoolean());
 
@@ -173,11 +178,13 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
-    public async Task RebuildRestartsRunningReplicasWithoutBuilding()
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
+    public async Task RebuildRestartsRunningReplicasWithoutBuilding(int sdkMajor)
     {
         var proxy = RequireProxy();
-        await using var harness = await WatchServerHarness.StartAsync(output);
+        await using var harness = await WatchServerHarness.StartAsync(output, sdkMajor);
         await harness.WaitForStatusAsync(0, "build_complete", s => s.GetProperty("success").GetBoolean());
 
         // Launched one at a time: the watcher races concurrent first launches of a web project.
@@ -214,15 +221,17 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task EditRelaunchesACrashedApplicationWhoseProxyIsGone(bool restartedFirst)
+    [InlineData(false, 10)]
+    [InlineData(false, 11)]
+    [InlineData(true, 10)]
+    [InlineData(true, 11)]
+    public async Task EditRelaunchesACrashedApplicationWhoseProxyIsGone(bool restartedFirst, int sdkMajor)
     {
         // Pins why the coordinator replaces the watcher when it launches a project whose instances were all stopped:
         // the watcher relaunches a crashed application on the next edit even after the proxy that requested it
         // disconnected. That process runs without a proxy and holds the instance's port.
         var proxy = RequireProxy();
-        await using var harness = await WatchServerHarness.StartAsync(output);
+        await using var harness = await WatchServerHarness.StartAsync(output, sdkMajor);
         var (port, mark) = await StopInstanceAsync(harness, proxy, restartedFirst, crash: true);
 
         await EditAsync(Path.Combine(harness.AppDirectory, "Greeting.cs"),
@@ -235,12 +244,14 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task EditDoesNotRelaunchARunningApplicationWhoseProxyIsGone(bool restartedFirst)
+    [InlineData(false, 10)]
+    [InlineData(false, 11)]
+    [InlineData(true, 10)]
+    [InlineData(true, 11)]
+    public async Task EditDoesNotRelaunchARunningApplicationWhoseProxyIsGone(bool restartedFirst, int sdkMajor)
     {
         var proxy = RequireProxy();
-        await using var harness = await WatchServerHarness.StartAsync(output);
+        await using var harness = await WatchServerHarness.StartAsync(output, sdkMajor);
         var (port, mark) = await StopInstanceAsync(harness, proxy, restartedFirst, crash: false);
 
         await EditAsync(Path.Combine(harness.AppDirectory, "Greeting.cs"),
@@ -284,13 +295,15 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
         return (port, harness.Observations.Count);
     }
 
-    [Fact]
-    public async Task PackageReferenceChangeIsNotDeployedByTheWatcher()
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
+    public async Task PackageReferenceChangeIsNotDeployedByTheWatcher(int sdkMajor)
     {
         // Pins why the coordinator restarts the watcher when a project file changes: the watcher re-evaluates and
         // restores the project but doesn't build it, so code using a new package hot reloads and then fails to load it.
         var proxy = RequireProxy();
-        await using var harness = await WatchServerHarness.StartAsync(output);
+        await using var harness = await WatchServerHarness.StartAsync(output, sdkMajor);
         var (_, index) = await harness.WaitForStatusAsync(0, "build_complete", s => s.GetProperty("success").GetBoolean());
         var port = GetFreePort();
         harness.LaunchThroughProxy(proxy, [], new Dictionary<string, string> { ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}" }, ["ASPNETCORE_URLS"]);

@@ -92,6 +92,23 @@ internal sealed partial class DotNetAppHostProject
 
         environment[KnownConfigNames.SuppressCliRunHook] = "true";
         environment["DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER"] = "true";
+        // The watcher host sets MSBuild variables for the AppHost's SDK on itself, and the AppHost inherits them.
+        // Record what the AppHost gets without the watcher, so it can restore them before it starts processes that
+        // select other SDKs (see DotnetWatchMetadataUpdateHandler.RestoreAppHostEnvironment). The watcher applies the
+        // AppHost's launch profile on top of the inherited environment, as `dotnet run` does, so profile values win.
+        var profileEnvironment = new Dictionary<string, string>();
+        TryApplyProjectLaunchSettings(
+            context.AppHostFile,
+            profileEnvironment,
+            [],
+            options.NoLaunchProfile,
+            options.LaunchProfile,
+            hasExplicitApplicationArgs: context.UnmatchedTokens.Length > 0,
+            hasRunArguments: false);
+        environment[DotnetWatchOwnership.AppHostEnvironmentVariable] = DotnetWatchOwnership.EncodeAppHostEnvironment(
+            name => profileEnvironment.TryGetValue(name, out var value) || environment.TryGetValue(name, out value)
+                ? value
+                : _environment.GetEnvironmentVariable(name));
         var watchOptions = options.Clone();
         watchOptions.DotNetExecutablePath = launch.DotnetPath;
         watchOptions.DisableExtensionLaunch = true;
