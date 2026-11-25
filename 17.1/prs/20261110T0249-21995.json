@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Dashboard circuit survives views removed during initialization",
+  "mergedAt": "2026-11-10T02:49:03Z",
+  "number": 21995,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "included",
+  "title": "Keep dashboard views removed while they initialize from ending the circuit"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-10T10:58:02Z",
+  "number": 21939,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Keep Java container env var tests from running the real dcp info"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only E2E hardening",
+  "mergedAt": "2026-11-10T00:12:05Z",
+  "number": 21962,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Harden KinD/Helm/kubectl and Radius install downloads in Kubernetes E2E tests"
+}

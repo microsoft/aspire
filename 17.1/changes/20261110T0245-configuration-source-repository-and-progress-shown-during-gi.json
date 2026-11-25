@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Fetching a Git configuration source now names the repository and shows progress while acquiring and validating it.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce5",
+  "firstMergedAt": "2026-11-10T02:45:31Z",
+  "lastMergedAt": "2026-11-10T02:45:31Z",
+  "name": "Configuration source repository and progress shown during Git acquisition",
+  "owner": "JamesNK",
+  "prs": [
+    21982
+  ]
+}

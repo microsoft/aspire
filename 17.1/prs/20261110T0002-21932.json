@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-10T00:02:11Z",
+  "number": 21932,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Write the WinUI E2E ready marker atomically so the test never reads an empty file"
+}

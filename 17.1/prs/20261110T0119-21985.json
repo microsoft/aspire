@@ -1,0 +1,9 @@
+{
+  "author": "MattKotsenas",
+  "comment": "WithOutputDiffing available via standard AppHost usings",
+  "mergedAt": "2026-11-10T01:19:04Z",
+  "number": 21985,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "included",
+  "title": "Make WithOutputDiffing available through standard AppHost usings"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Stable AppHost ports and Git worktree isolation",
+  "mergedAt": "2026-11-09T23:08:25Z",
+  "number": 21013,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "included",
+  "title": "Persist stable AppHost ports and add worktree isolation"
+}

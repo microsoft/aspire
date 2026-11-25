@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only E2E setup",
+  "mergedAt": "2026-11-10T10:55:45Z",
+  "number": 21949,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Bound and retry GitHub downloads in Kubernetes E2E setup"
+}

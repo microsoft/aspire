@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Flaky test fix",
+  "mergedAt": "2026-11-10T12:01:56Z",
+  "number": 21471,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Fix flaky TerminalWebSocketTests final-output drain: deliver queued producer output before ending"
+}

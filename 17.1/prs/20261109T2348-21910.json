@@ -1,0 +1,9 @@
+{
+  "author": "sammychinedu2ky",
+  "comment": "Trace attribute filter no longer freezes the Traces page",
+  "mergedAt": "2026-11-09T23:48:40Z",
+  "number": 21910,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "included",
+  "title": "Fix trace attribute filter freezing the traces page"
+}

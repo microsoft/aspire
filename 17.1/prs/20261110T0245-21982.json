@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Configuration source repository and progress shown during Git acquisition",
+  "mergedAt": "2026-11-10T02:45:31Z",
+  "number": 21982,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "included",
+  "title": "Show configuration source repositories and Git acquisition progress"
+}

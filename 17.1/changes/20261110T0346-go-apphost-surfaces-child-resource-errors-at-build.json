@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Generated Go AppHosts now collect failures from child resources and return them from Build(), so an invalid application model is no longer silently accepted.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc39",
+  "firstMergedAt": "2026-11-10T03:46:42Z",
+  "lastMergedAt": "2026-11-10T03:46:42Z",
+  "name": "Go AppHost surfaces child resource errors at Build",
+  "owner": "IEvangelist",
+  "prs": [
+    21969
+  ]
+}

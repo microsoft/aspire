@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-10T12:01:45Z",
+  "number": 21928,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Keep Azure tests that don't need DCP from launching it"
+}

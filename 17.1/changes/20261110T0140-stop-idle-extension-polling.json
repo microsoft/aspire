@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension stops its status and resource watchers when neither the Aspire panel nor an AppHost editor is visible and nothing else needs data, resuming immediately when needed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd0b",
+  "firstMergedAt": "2026-11-10T01:40:30Z",
+  "lastMergedAt": "2026-11-10T01:40:30Z",
+  "name": "Stop idle extension polling",
+  "owner": "ellahathaway",
+  "prs": [
+    21890
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot baseline version bump",
+  "mergedAt": "2026-11-10T03:22:59Z",
+  "number": 21307,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Update PackageValidationBaselineVersion to 13.6.4"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Generated public endpoint ports are now persisted in AppHost-local state under .aspire/state, so endpoint addresses stay stable across restarts for both C# and polyglot AppHosts, and linked Git worktrees can be isolated with a new feature flag. Existing user-secret port values are migrated on first use.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udccc",
+  "firstMergedAt": "2026-11-09T23:08:25Z",
+  "lastMergedAt": "2026-11-09T23:08:25Z",
+  "name": "Stable AppHost ports and Git worktree isolation",
+  "owner": "danegsta",
+  "prs": [
+    21013
+  ]
+}

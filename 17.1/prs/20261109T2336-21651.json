@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "E2E test-only change",
+  "mergedAt": "2026-11-09T23:36:28Z",
+  "number": 21651,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Capture CLI diagnostics when an E2E command hangs"
+}

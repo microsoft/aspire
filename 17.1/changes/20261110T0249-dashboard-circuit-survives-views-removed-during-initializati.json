@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Switching tabs or crossing the desktop breakpoint right after a view opens no longer ends the Blazor circuit and stops every view in the browser tab.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udee1\ufe0f",
+  "firstMergedAt": "2026-11-10T02:49:03Z",
+  "lastMergedAt": "2026-11-10T02:49:03Z",
+  "name": "Dashboard circuit survives views removed during initialization",
+  "owner": "sebastienros",
+  "prs": [
+    21995
+  ]
+}

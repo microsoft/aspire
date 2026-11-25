@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Internal process runner robustness",
+  "mergedAt": "2026-11-09T23:40:38Z",
+  "number": 21556,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Keep captured output when ProcessCaptureRunner's post-exit drain bound expires"
+}

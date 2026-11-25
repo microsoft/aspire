@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Internal cancellation consistency in MAUI build queue",
+  "mergedAt": "2026-11-09T23:37:07Z",
+  "number": 21571,
+  "runDate": "2026-11-25T18:10:00Z",
+  "status": "excluded",
+  "title": "Make MAUI build-queue cancellation surface a consistent OperationCanceledException"
+}
