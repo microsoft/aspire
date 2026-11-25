@@ -19,7 +19,7 @@ public class CliDownloaderTests
         {
             GetStagingChannelUnavailableReasonCallback = () => stagingUnavailableReason
         };
-        var downloader = new CliDownloader(new TestEnvironment(), NullLogger<CliDownloader>.Instance, new TestInteractionService(), packagingService);
+        var downloader = new CliDownloader(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<CliDownloader>.Instance, new TestInteractionService(), packagingService);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => downloader.DownloadLatestCliAsync(channelName, CancellationToken.None));
 

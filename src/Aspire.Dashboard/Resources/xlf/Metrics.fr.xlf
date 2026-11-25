@@ -167,6 +167,11 @@
         <target state="translated">Épingler la métrique</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsPinLimitReached">
+        <source>Can't pin this metric. The limit is {0} pins per application. Select fewer resources or unpin existing metrics.</source>
+        <target state="new">Can't pin this metric. The limit is {0} pins per application. Select fewer resources or unpin existing metrics.</target>
+        <note>{0} is the maximum number of saved metric pins.</note>
+      </trans-unit>
       <trans-unit id="MetricsPinnedEmpty">
         <source>No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</source>
         <target state="translated">Aucune métrique épinglée pour cette ressource. Épinglez une métrique à partir de sa carte ou de son graphique pour l’afficher ici.</target>

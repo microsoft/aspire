@@ -7,6 +7,7 @@ using System.Diagnostics;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
 using Aspire.Shared;
+using Aspire.Shared.Tests;
 using Aspire.Tests.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,7 @@ public class IntegrationHostProcessLauncherTests(ITestOutputHelper output)
         var logger = new RecordingLogger<IntegrationHostLauncher>();
         var launcher = new IntegrationHostProcessLauncher(
             new LanguageSupportResolver(services, () => [], NullLogger<LanguageSupportResolver>.Instance),
-            IntegrationHostConfiguration.Default, RemoteHostProfilingTelemetry.Disabled, logger, factory, new FakeTimeProvider());
+            IntegrationHostConfiguration.Default, RemoteHostProfilingTelemetry.Disabled, logger, factory, TestTemporaryStorage.Create(), new FakeTimeProvider());
         var descriptor = new IntegrationHostDescriptor { Language = "test/launch", PackageName = "example", HostEntryPoint = "unused.mts" };
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => launcher.LaunchAsync(descriptor, "attempt", cancellation.Token));
@@ -50,7 +51,7 @@ public class IntegrationHostProcessLauncherTests(ITestOutputHelper output)
             new Dictionary<string, string?> { ["REMOTE_APP_HOST_SOCKET_PATH"] = "test-socket" }).Build());
         var launcher = new IntegrationHostProcessLauncher(
             new LanguageSupportResolver(services, () => [typeof(TestIntegrationLanguageSupport).Assembly], NullLogger<LanguageSupportResolver>.Instance),
-            configuration, RemoteHostProfilingTelemetry.Disabled, NullLogger<IntegrationHostLauncher>.Instance, factory, new FakeTimeProvider());
+            configuration, RemoteHostProfilingTelemetry.Disabled, NullLogger<IntegrationHostLauncher>.Instance, factory, TestTemporaryStorage.Create(), new FakeTimeProvider());
         var descriptor = new IntegrationHostDescriptor { Language = "test/launch", PackageName = "example", HostEntryPoint = Path.Combine(AppContext.BaseDirectory, "host.mts") };
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => launcher.LaunchAsync(descriptor, "attempt", TestContext.Current.CancellationToken));
@@ -83,7 +84,7 @@ public class IntegrationHostProcessLauncherTests(ITestOutputHelper output)
         }).Build());
         var launcher = new IntegrationHostProcessLauncher(
             new LanguageSupportResolver(services, () => [typeof(TestIntegrationLanguageSupport).Assembly], NullLogger<LanguageSupportResolver>.Instance),
-            configuration, RemoteHostProfilingTelemetry.Disabled, logger, factory, clock);
+            configuration, RemoteHostProfilingTelemetry.Disabled, logger, factory, TestTemporaryStorage.Create(), clock);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => launcher.LaunchAsync(descriptor, "attempt", TestContext.Current.CancellationToken));
 
@@ -134,7 +135,7 @@ public class IntegrationHostProcessLauncherTests(ITestOutputHelper output)
             new Dictionary<string, string?> { ["REMOTE_APP_HOST_SOCKET_PATH"] = "test-socket" }).Build());
         var launcher = new IntegrationHostProcessLauncher(
             new LanguageSupportResolver(services, () => [typeof(TestIntegrationLanguageSupport).Assembly], NullLogger<LanguageSupportResolver>.Instance),
-            configuration, RemoteHostProfilingTelemetry.Disabled, logger, factory, new FakeTimeProvider());
+            configuration, RemoteHostProfilingTelemetry.Disabled, logger, factory, TestTemporaryStorage.Create(), new FakeTimeProvider());
         var descriptor = new IntegrationHostDescriptor { Language = "test/launch", PackageName = "example", HostEntryPoint = Path.Combine(AppContext.BaseDirectory, "host.mts") };
 
         var error = await Assert.ThrowsAsync<AggregateException>(() => launcher.LaunchAsync(descriptor, "attempt", TestContext.Current.CancellationToken));

@@ -13,6 +13,7 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Internal;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Publishing;
@@ -784,7 +785,7 @@ internal sealed class ResourceContainerImageManager(
         var responseFile = await MsBuildResponseFileFactory.CreateAsync(
             environment,
             projectMetadata.IsFileBasedApp,
-            logger,
+            serviceProvider.GetRequiredService<IFileSystemService>().TempDirectory,
             cancellationToken).ConfigureAwait(false);
         var workingDirectory = projectMetadata.BuildWorkingDirectory ??
             Path.GetDirectoryName(projectMetadata.ProjectPath);

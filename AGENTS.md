@@ -293,37 +293,9 @@ var resources = new List<Resource>();
 - **VS Code**: Run `./build.sh` first, then use `./start-code.sh` to launch with correct environment
 - **Visual Studio**: Run `./build.cmd` first, then use `./startvs.cmd` to launch with local SDK environment
 
-### Start App Hosts in a background job
+### Run playground AppHosts from source
 
-When running an App Host from an interactive console (for example, PowerShell or a terminal session you plan to reuse), start it in a background job/process. If you start the App Host in the foreground and then reuse the console for another command (or stop the current interactive session), the App Host process can be terminated.
-
-Run the App Host in the background so it continues running while you execute other commands:
-
-**PowerShell (Start-Job)**
-
-```powershell
-# From the AppHost project directory
-Start-Job -Name "AspireAppHost" -ScriptBlock { dotnet run }
-
-# Inspect output / state
-Get-Job -Name "AspireAppHost" | Format-List *
-Receive-Job -Name "AspireAppHost" -Keep
-
-# Stop when done
-Stop-Job -Name "AspireAppHost"
-Remove-Job -Name "AspireAppHost"
-```
-
-**bash (background process)**
-
-```bash
-# From the AppHost project directory
-dotnet run > apphost.log 2>&1 &
-
-# Find and stop later
-ps aux | grep dotnet
-kill <pid>
-```
+Use the [run-playground-apphosts skill](.agents/skills/run-playground-apphosts/SKILL.md) to run an in-repo playground with the CLI built from the current worktree.
 
 ### Testing
 
@@ -601,6 +573,7 @@ The following specialized skills are available in `.agents/skills/`:
 - **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
 - **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
 - **azdo-internal**: Use when asked to trigger or inspect Aspire internal Azure DevOps builds, source indexing (`microsoft-aspire-source-index`, definition 1693), or release validation on `dnceng/internal`; push to the internal mirror; download logs or artifacts; or validate `eng/` pipeline changes.
+- **run-playground-apphosts**: Runs Aspire playground AppHosts with the source CLI and handles worktree isolation, SDK discovery, port conflicts, and locked outputs.
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
 - **reviewing-aspire-architecture**: Use only when explicitly asked for deep architectural or pattern review of an existing PR or diff, or for a concrete Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for design or explanation requests, ordinary reviews, or based on changed file paths.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.

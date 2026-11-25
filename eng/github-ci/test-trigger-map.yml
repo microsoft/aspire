@@ -158,6 +158,7 @@ path_rules:
   - paths:
       - src/Directory.Build.props
       - src/Directory.Build.targets
+      - src/BannedSymbols.txt
       - tests/Directory.Build.props
       - tests/Directory.Build.targets
       - tests/Directory.Packages.props
@@ -352,8 +353,9 @@ path_rules:
       - .github/workflows/cli-starter-validation.yml
       - eng/scripts/cli-starter-validation.ps1
       - eng/scripts/get-aspire-cli-pr.ps1
+      - eng/scripts/stage-cli-starter-validation-diagnostics.ps1
     targets: [job:cli-starter-validation]
-    reason: the reusable workflow, PR installer, and scenario script implement starter validation
+    reason: the reusable workflow, PR installer, scenario script, and diagnostics staging script implement starter validation
   - paths:
       - .github/workflows/native-dashboard-validation.yml
       - eng/scripts/test-native-dashboard.ps1
@@ -432,6 +434,11 @@ path_rules:
       - eng/scripts/load-cli-e2e-images.sh
     targets: [test:Aspire.Cli.EndToEnd.Tests]
     reason: builds or loads the CLI E2E images consumed only by Aspire.Cli.EndToEnd.Tests
+  - paths:
+      - eng/scripts/build-cli-e2e-images.sh
+      - eng/scripts/run-bounded-image-build.ts
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests]
+    reason: shared image build entry point and its shell behavior tests
   - paths:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
@@ -563,6 +570,7 @@ path_rules:
       # Script behavior and packaging fixtures.
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1
+      - eng/scripts/stage-cli-starter-validation-diagnostics.ps1
       - eng/scripts/stabilization-smoke-init-restore.sh
       - eng/scripts/validate-npm-package-signatures.ps1
       - eng/scripts/validate-npm-release-aliases.ps1

@@ -23,7 +23,7 @@ public class OwnedProcessExecutionTests(ProcessTestFixture fixture)
     public async Task OwnedHelper_PreservesStatusAndReapsWorkers(bool parentExitOptIn, int exitCode)
     {
         using var readiness = new ProcessTestReadiness();
-        var factory = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         await using var execution = factory.CreateExecution(
             fixture.CreateStartInfo("tree-exit", readiness.Name, exitCode.ToString(CultureInfo.InvariantCulture)),
             new ProcessInvocationOptions

@@ -585,6 +585,7 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
             languageDiscovery ?? new TestLanguageDiscovery(s_goLanguage),
             CreateExecutionContext(workspace),
             new TestEnvironment(environment),
+            new Aspire.Shared.TemporaryStorage(),
             commandResolver ?? (command => $"/usr/bin/{command}"),
             versionResolver ?? ReturnsVersion("go version go1.26.1 windows/amd64"),
             toolchainResolver ?? ThrowsIfToolchainIsProbed);

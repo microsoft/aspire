@@ -4,6 +4,7 @@
 using System.IO.Hashing;
 using System.Text;
 using System.Xml.Linq;
+using Aspire.Shared;
 
 namespace Aspire.Cli.NuGet;
 
@@ -27,10 +28,11 @@ internal sealed class TemporaryNuGetConfigFile : IDisposable
 
     public string CacheIdentity { get; private set; }
 
-    public static Task<TemporaryNuGetConfigFile> CreateAsync(Action<string> writeConfig)
+    public static Task<TemporaryNuGetConfigFile> CreateAsync(ITemporaryStorage temporaryStorage, Action<string> writeConfig)
     {
+        ArgumentNullException.ThrowIfNull(temporaryStorage);
         ArgumentNullException.ThrowIfNull(writeConfig);
-        return CreateInDirectoryAsync(Directory.CreateTempSubdirectory("aspire-nuget-config"), writeConfig);
+        return CreateInDirectoryAsync(temporaryStorage.CreateTempSubdirectory("aspire-nuget-config"), writeConfig);
     }
 
     public static Task<TemporaryNuGetConfigFile> CreateAsync(DirectoryInfo parentDirectory, Action<string> writeConfig)

@@ -44,7 +44,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempSubdirectory_CreatesDirectory()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
 
         using var tempDir = service.TempDirectory.CreateTempSubdirectory();
 
@@ -55,7 +55,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempSubdirectory_WithPrefix_CreatesDirectoryWithPrefix()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
 
         using var tempDir = service.TempDirectory.CreateTempSubdirectory("test-prefix");
 
@@ -67,7 +67,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempSubdirectory_Dispose_DeletesDirectory()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         var tempDir = service.TempDirectory.CreateTempSubdirectory();
         var path = tempDir.Path;
 
@@ -81,7 +81,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempFile_CreatesFile()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
 
         using var tempFile = service.TempDirectory.CreateTempFile();
 
@@ -92,7 +92,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempFile_WithFileName_CreatesNamedFile()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
 
         using var tempFile = service.TempDirectory.CreateTempFile("config.json");
 
@@ -104,7 +104,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempFile_Dispose_DeletesFile()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         var tempFile = service.TempDirectory.CreateTempFile();
         var path = tempFile.Path;
 
@@ -118,7 +118,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempFile_WithFileName_Dispose_DeletesFileAndParentDirectory()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         var tempFile = service.TempDirectory.CreateTempFile("test-file.txt");
         var filePath = tempFile.Path;
         var parentDir = Path.GetDirectoryName(filePath);
@@ -137,7 +137,7 @@ public class FileSystemServiceTests
     {
         // This test verifies the intentional pattern of extracting .Path
         // without disposing, which is common in the codebase
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         string? extractedPath;
 
         // Simulate the common pattern: extract path, let object go out of scope
@@ -159,7 +159,7 @@ public class FileSystemServiceTests
     {
         // This test verifies the intentional pattern of extracting .Path
         // without disposing, which is common in the codebase
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         string? extractedPath;
 
         // Simulate the common pattern: extract path, let object go out of scope
@@ -179,7 +179,7 @@ public class FileSystemServiceTests
     [Fact]
     public void TempDirectory_Property_ReturnsSameInstance()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
 
         var tempDir1 = service.TempDirectory;
         var tempDir2 = service.TempDirectory;
@@ -190,7 +190,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempSubdirectory_MultipleCallsCreateDifferentDirectories()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
 
         using var tempDir1 = service.TempDirectory.CreateTempSubdirectory();
         using var tempDir2 = service.TempDirectory.CreateTempSubdirectory();
@@ -203,7 +203,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempFile_MultipleCallsCreateDifferentFiles()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
 
         using var tempFile1 = service.TempDirectory.CreateTempFile();
         using var tempFile2 = service.TempDirectory.CreateTempFile();
@@ -216,7 +216,7 @@ public class FileSystemServiceTests
     [Fact]
     public void Dispose_CalledMultipleTimes_DoesNotThrow()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         var tempDir = service.TempDirectory.CreateTempSubdirectory();
         var tempFile = service.TempDirectory.CreateTempFile();
 
@@ -232,7 +232,7 @@ public class FileSystemServiceTests
     [Fact]
     public void ServiceDispose_CleansUpUndisposedFiles()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         
         // Create temp files/dirs without disposing them
         var tempDir = service.TempDirectory.CreateTempSubdirectory();
@@ -253,7 +253,7 @@ public class FileSystemServiceTests
     [Fact]
     public void ServiceDispose_WithPreserveConfiguration_SkipsCleanup()
     {
-        var service = new FileSystemService(CreateConfiguration(preserveTempFiles: true));
+        var service = new FileSystemService(CreateConfiguration(preserveTempFiles: true), new Aspire.Shared.TemporaryStorage());
         
         var tempDir = service.TempDirectory.CreateTempSubdirectory();
         var tempFile = service.TempDirectory.CreateTempFile();
@@ -278,7 +278,7 @@ public class FileSystemServiceTests
     [Fact]
     public void TempDirectory_Dispose_WithPreserveConfiguration_SkipsCleanup()
     {
-        var service = new FileSystemService(CreateConfiguration(preserveTempFiles: true));
+        var service = new FileSystemService(CreateConfiguration(preserveTempFiles: true), new Aspire.Shared.TemporaryStorage());
         
         var tempDir = service.TempDirectory.CreateTempSubdirectory();
         var dirPath = tempDir.Path;
@@ -298,7 +298,7 @@ public class FileSystemServiceTests
     [Fact]
     public void TempFile_Dispose_WithPreserveConfiguration_SkipsCleanup()
     {
-        var service = new FileSystemService(CreateConfiguration(preserveTempFiles: true));
+        var service = new FileSystemService(CreateConfiguration(preserveTempFiles: true), new Aspire.Shared.TemporaryStorage());
         
         var tempFile = service.TempDirectory.CreateTempFile();
         var filePath = tempFile.Path;
@@ -318,7 +318,7 @@ public class FileSystemServiceTests
     [Fact]
     public void ServiceDispose_WithMixedDisposedAndUndisposedItems_CleansUpOnlyUndisposed()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         
         // Create multiple temp items
         var tempDir1 = service.TempDirectory.CreateTempSubdirectory();
@@ -350,7 +350,7 @@ public class FileSystemServiceTests
     [Fact]
     public void ServiceDispose_EmptyTracking_DoesNotThrow()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         
         // Dispose without creating any temp items
         service.Dispose();
@@ -362,7 +362,7 @@ public class FileSystemServiceTests
     [Fact]
     public void ServiceDispose_CalledMultipleTimes_IsIdempotent()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         
         // Create temp items
         var tempDir = service.TempDirectory.CreateTempSubdirectory();
@@ -383,7 +383,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempFile_WithFileName_TracksOnlyFile()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         
         var tempFile = service.TempDirectory.CreateTempFile("test.txt");
         var filePath = tempFile.Path;
@@ -403,7 +403,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempFile_AfterServiceDisposed_ThrowsObjectDisposedException()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         
         // Dispose the service
         service.Dispose();
@@ -415,7 +415,7 @@ public class FileSystemServiceTests
     [Fact]
     public void CreateTempDirectory_AfterServiceDisposed_ThrowsObjectDisposedException()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         
         // Dispose the service
         service.Dispose();
@@ -427,7 +427,7 @@ public class FileSystemServiceTests
     [Fact]
     public void SetLogger_CanBeCalledWithoutError()
     {
-        var service = new FileSystemService(CreateConfiguration());
+        var service = new FileSystemService(CreateConfiguration(), new Aspire.Shared.TemporaryStorage());
         var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var logger = loggerFactory.CreateLogger<FileSystemService>();
         
@@ -437,5 +437,25 @@ public class FileSystemServiceTests
         // Should still work normally
         using var tempDir = service.TempDirectory.CreateTempSubdirectory();
         Assert.True(Directory.Exists(tempDir.Path));
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("false", false)]
+    [InlineData("0", false)]
+    [InlineData("no", false)]
+    [InlineData("true", true)]
+    [InlineData("TRUE", true)]
+    [InlineData("1", true)]
+    public void PreserveTempFiles_RequiresTruthyValue(string? value, bool expected)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ASPIRE_PRESERVE_TEMP_FILES"] = value })
+            .Build();
+
+        var service = new FileSystemService(configuration, new Aspire.Shared.TemporaryStorage());
+
+        Assert.Equal(expected, service.ShouldPreserveTempFiles);
     }
 }

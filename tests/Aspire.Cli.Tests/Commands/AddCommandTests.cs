@@ -1111,7 +1111,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         };
         // Without a local config, the shared fixture's synthetic user config would make the
         // recommended destination point at the test binaries rather than this workspace.
-        var nuGetClient = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
+        var nuGetClient = new NuGetClient(new TestFeatures(), new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<NuGetClient>.Instance)
         {
             AmbientSettingsLoader = (directory, _) => File.Exists(Path.Combine(directory, "nuget.config"))
                 ? Settings.LoadSpecificSettings(directory, "nuget.config")
