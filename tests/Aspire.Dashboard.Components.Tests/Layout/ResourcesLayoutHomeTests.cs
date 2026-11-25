@@ -371,25 +371,34 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("row")]
-    [InlineData("all")]
-    [InlineData("navigation")]
-    public async Task Home_LeavingDocksAListThatWasHidden(string exit)
+    [InlineData("row", true)]
+    [InlineData("all", true)]
+    [InlineData("navigation", true)]
+    [InlineData("tab", true)]
+    [InlineData("row", false)]
+    [InlineData("all", false)]
+    [InlineData("navigation", false)]
+    [InlineData("tab", false)]
+    public async Task Home_LeavingPreservesSidebarCollapsePreference(string exit, bool collapsed)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
-        var stored = new Dictionary<string, object?> { [BrowserStorageKeys.ResourcePaneCollapsed] = true };
-        storage.OnGetUnprotectedAsync = key => stored.TryGetValue(key, out var value) ? (true, value) : (false, null);
-        storage.OnSetUnprotectedAsync = (key, value) => stored[key] = value;
+        await storage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneCollapsed, collapsed);
         var navigation = Services.GetRequiredService<NavigationManager>();
-        navigation.NavigateTo("/");
+        navigation.NavigateTo("/resources/api");
+        var header = Render<SectionOutlet>(p => p.Add(o => o.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        // The list was hidden beside other pages, but home is the list itself, across the page.
+        Assert.Equal(collapsed, cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
+
+        navigation.NavigateTo("/");
+        cut.Render();
+        // Home shows the full list regardless of the sidebar preference.
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
 
         switch (exit)
         {
@@ -399,17 +408,20 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
             case "all":
                 await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
                 break;
+            case "tab":
+                await header.Find("#tab-Traces").ClickAsync(new MouseEventArgs());
+                break;
             default:
                 navigation.NavigateTo("/structuredlogs");
                 break;
         }
         cut.Render();
 
-        // Leaving home docks the list it showed, and remembers that, rather than hiding it again.
-        cut.WaitForAssertion(() => Assert.Equal(false, stored[BrowserStorageKeys.ResourcePaneCollapsed]));
+        var saved = await storage.GetUnprotectedAsync<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
+        Assert.True(saved.Success);
+        Assert.Equal(collapsed, saved.Value);
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
-        Assert.Single(cut.FindAll(".resources-layout > .resource-pane"));
+        Assert.Equal(collapsed, cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
     }
 
     [Theory]

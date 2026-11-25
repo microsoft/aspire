@@ -63,9 +63,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(selected ? "api" : appHostEnabled ? "All resources" : "All sources", picker.TextContent.Trim());
         Assert.Equal("dialog", picker.GetAttribute("aria-haspopup"));
         Assert.Equal("false", picker.GetAttribute("aria-expanded"));
-        var icon = Assert.Single(picker.QuerySelectorAll(".resource-header-icon"));
-        Assert.NotNull(icon.ParentElement);
-        Assert.Equal("start", icon.ParentElement.GetAttribute("slot"));
+        var iconClass = appHostEnabled && selected ? ".resource-row-icon" : ".resource-header-icon";
+        Assert.Single(picker.QuerySelectorAll($"[slot='start'] > {iconClass}"));
         Assert.Empty(cut.FindAll(".resource-header-row > .resource-header-icon"));
         Assert.Empty(cut.FindAll(".resource-pane"));
 
@@ -160,6 +159,36 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Single(cut.FindAll("#resourcePaneFilterButton"));
         Assert.Single(cut.FindAll("#resourcePaneGroupingButton"));
         Assert.Equal("api", cut.Find(".resource-title").TextContent.Trim());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PaneCollapsePreference_IsSavedAndRestoredByANewLayout(bool collapsed)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find(".resource-pane-toggle-button").ClickAsync(new MouseEventArgs());
+        if (!collapsed)
+        {
+            await cut.Find(".resource-pane-toggle-button").ClickAsync(new MouseEventArgs());
+        }
+
+        var storage = Services.GetRequiredService<ILocalStorage>();
+        var saved = await storage.GetUnprotectedAsync<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
+        Assert.True(saved.Success);
+        Assert.Equal(collapsed, saved.Value);
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
+
+        var restored = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        restored.WaitForAssertion(() => Assert.True(restored.Instance.IsLoaded));
+        Assert.Equal(collapsed, restored.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
     }
 
     [Theory]
@@ -762,7 +791,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         Assert.Equal("http://localhost/traces/resource/api", navigation.Uri);
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
+        Assert.Equal(initiallyCollapsed, cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
         Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
         Assert.Equal("--resource-pane-expanded-width: 440px", cut.Find(".resources-layout").GetAttribute("style"));
         Assert.Equal(["api"], cut.Instance.SelectedResourceNames);

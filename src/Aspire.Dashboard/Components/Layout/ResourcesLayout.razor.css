@@ -37,12 +37,16 @@
 /* Compact rows are a single line, so they're sized for the 28px row actions rather than for two text bands. */
 .resource-pane-list.density-compact {
     --resource-row-height: var(--aspire-density-resource-row-height, 32px);
-    --resource-row-icon-size: 22px;
     --resource-row-meta-type-width: 64px;
     /* On the full canvas the identity track also budgets for the type, state dot and their gaps. */
     --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
     --resource-row-line-height: var(--lineHeightBase200);
     --resource-metadata-line-height: 16px;
+}
+
+.resource-pane-list.density-compact,
+.resource-picker-button > [slot="start"] {
+    --resource-row-icon-size: 22px;
 }
 
 /* Persistent types, such as "RabbitMQ (persistent)", are wider than the others, so every row's type column widens
@@ -144,6 +148,7 @@
 .resource-picker-button > [slot="start"] {
     display: flex;
     align-items: center;
+    padding-inline-end: 2px;
 }
 
 .resource-picker-button .resource-header-icon {
@@ -884,7 +889,8 @@
     justify-content: center;
 }
 
-.resource-row.selected:not(.resource-row-unavailable) .resource-row-icon {
+.resource-row.selected:not(.resource-row-unavailable) .resource-row-icon,
+.resource-picker-button .resource-row-icon {
     background: var(--resource-brand-soft);
 }
 
@@ -1841,10 +1847,7 @@
     gap: var(--aspire-space-2);
 }
 
-.density-compact .resource-row-icon {
-    flex-basis: var(--resource-row-icon-size);
-    width: var(--resource-row-icon-size);
-    height: var(--resource-row-icon-size);
+:is(.density-compact, .resource-picker-button) .resource-row-icon {
     border-radius: 6px;
 }
 
