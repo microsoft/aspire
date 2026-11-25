@@ -34,6 +34,11 @@ internal sealed class DcpConnectionChecker(
     private static readonly TimeSpan s_processExitTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_processExitPollInterval = TimeSpan.FromMilliseconds(50);
 
+    // Both exit waits can follow the stop request. Leave additional time for process disposal,
+    // output draining, and scheduling; cleanup remains best-effort if those operations stall.
+    internal static readonly TimeSpan s_cancelledCheckCleanupTimeout =
+        s_stopRequestTimeout + s_processExitTimeout + s_processExitTimeout + TimeSpan.FromSeconds(10);
+
     private const string DcpStopRequestMediaType = "application/merge-patch+json";
 
     public async Task<EnvironmentCheckResult> TestConnectionAsync(string dcpDirectory, bool useDeveloperCertificate, CancellationToken cancellationToken)

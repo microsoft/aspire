@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils.EnvironmentChecker;
 
 namespace Aspire.Cli.Commands;
 
@@ -12,6 +13,8 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class McpStartCommand : BaseCommand
 {
+    protected override TimeSpan GracefulShutdownBudget => EnvironmentChecker.s_commandGracefulShutdownTimeout;
+
     private readonly AgentMcpCommand _agentMcpCommand;
 
     public McpStartCommand(

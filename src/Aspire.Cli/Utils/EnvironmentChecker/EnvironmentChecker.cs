@@ -22,6 +22,11 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
     // those processes orphaned, so give the cancelled check a short, bounded window to clean up.
     internal static readonly TimeSpan s_cancelledCheckCleanupTimeout = TimeSpan.FromSeconds(5);
 
+    // DCP cleanup can use its full allowance before the command handler is canceled. Add five seconds
+    // so the check and its command/MCP handler can unwind before the graceful-shutdown timeout expires.
+    internal static readonly TimeSpan s_commandGracefulShutdownTimeout =
+        DcpConnectionChecker.s_cancelledCheckCleanupTimeout + TimeSpan.FromSeconds(5);
+
     private readonly IEnvironmentCheck[] _checks;
     private readonly ILogger<EnvironmentChecker> _logger;
     private readonly TimeSpan _checkTimeout;
@@ -135,16 +140,20 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
 
     private async Task WaitForCancelledCheckCleanupAsync(Task checkTask, Type checkType)
     {
+        var cleanupTimeout = checkType == typeof(DcpConnectionHealthCheck)
+            ? DcpConnectionChecker.s_cancelledCheckCleanupTimeout
+            : s_cancelledCheckCleanupTimeout;
+
         try
         {
-            await checkTask.WaitAsync(s_cancelledCheckCleanupTimeout, _timeProvider).ConfigureAwait(false);
+            await checkTask.WaitAsync(cleanupTimeout, _timeProvider).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             _logger.LogDebug(
                 "Environment check {CheckType} did not finish cleaning up within {TimeoutSeconds} seconds of cancellation.",
                 checkType.Name,
-                s_cancelledCheckCleanupTimeout.TotalSeconds);
+                cleanupTimeout.TotalSeconds);
         }
         catch (Exception ex)
         {

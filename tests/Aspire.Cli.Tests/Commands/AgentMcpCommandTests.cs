@@ -13,6 +13,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +34,67 @@ namespace Aspire.Cli.Tests.Commands;
 /// </summary>
 public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("agent mcp")]
+    [InlineData("mcp start")]
+    public async Task McpServer_WhenCanceled_AllowsDoctorCleanupBeforeForcedTermination(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+        using var transport = new TestMcpServerTransport(loggerFactory);
+        var checkStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.McpServerTransportFactory = _ => transport;
+        });
+        services.RemoveAll<IEnvironmentCheck>();
+        services.AddSingleton<IEnvironmentCheck>(new TestEnvironmentCheck(0, async cancellationToken =>
+        {
+            try
+            {
+                checkStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return [];
+            }
+            finally
+            {
+                cleanupStarted.TrySetResult();
+                await releaseCleanup.Task;
+            }
+        }));
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<ConsoleCancellationManager>();
+        var root = provider.GetRequiredService<RootCommand>();
+        var serverTask = root.Parse(commandLine).InvokeAsync(cancellationToken: manager.Token);
+
+        try
+        {
+            await using var client = await transport.CreateClientAsync(loggerFactory, TestContext.Current.CancellationToken);
+            using var toolCancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            var toolTask = client.CallToolAsync(KnownMcpTools.Doctor, cancellationToken: toolCancellation.Token).AsTask();
+            await checkStarted.Task.DefaultTimeout();
+
+            manager.Cancel(130);
+            await cleanupStarted.Task.DefaultTimeout();
+            toolCancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => toolTask).DefaultTimeout();
+
+            Assert.False(manager.GracefulShutdownToken.IsCancellationRequested);
+            Assert.False(serverTask.IsCompleted);
+        }
+        finally
+        {
+            releaseCleanup.TrySetResult();
+            if (!manager.IsCancellationRequested)
+            {
+                manager.Cancel(130);
+            }
+            await serverTask.DefaultTimeout();
+        }
+    }
+
     private async Task<McpTestContext> CreateMcpClientAsync(string? dashboardUrl = null, string? appHostPath = null)
     {
         var cts = new CancellationTokenSource();

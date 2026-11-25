@@ -333,6 +333,144 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
     }
 
+    [Fact]
+    public async Task CheckAllAsync_WhenCanceledDuringStalledDcpStop_WaitsForCleanup()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
+        var stopRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processDisposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = new FakeDcpApiServer(async cancellationToken =>
+        {
+            stopRequested.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        });
+        var factory = CreateFakeDcpFactory(server, onDispose: () => processDisposed.TrySetResult());
+        var connectionChecker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+        var check = new DcpConnectionHealthCheck(
+            new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
+            new NullBundleService(),
+            connectionChecker,
+            CreateExecutionContext(workspace),
+            NullLogger<DcpConnectionHealthCheck>.Instance);
+        var timeProvider = new SignalingFakeTimeProvider(
+            dueTime => dueTime > TimeSpan.Zero && dueTime < TimeSpan.FromMinutes(1));
+        var checker = new EnvironmentChecker(
+            [check],
+            NullLogger<EnvironmentChecker>.Instance,
+            checkTimeout: TimeSpan.FromMinutes(1),
+            totalTimeout: TimeSpan.FromMinutes(2),
+            timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        var checkAllTask = checker.CheckAllAsync(cancellation.Token);
+        try
+        {
+            await stopRequested.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+
+            cancellation.Cancel();
+            await timeProvider.TimerCreated.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+            // The stop request, exit waits, and output drain can outlast the default cleanup budget.
+            timeProvider.Advance(TimeSpan.FromSeconds(24));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => checkAllTask)
+                .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+            AssertKilledAndCleanedUp(execution);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            if (stopRequested.Task.IsCompletedSuccessfully)
+            {
+                await processDisposed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckAllAsync_WhenDcpCleanupStalls_CancellationWaitIsBounded()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
+        var probesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probeCount = 0;
+        var cleanupStartCount = 0;
+        var cleanupCompletionCount = 0;
+        var connectionChecker = new TestDcpConnectionChecker
+        {
+            TestConnectionAsyncCallback = async (_, useDeveloperCertificate, cancellationToken) =>
+            {
+                if (Interlocked.Increment(ref probeCount) == 2)
+                {
+                    probesStarted.TrySetResult();
+                }
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    return TestDcpConnectionChecker.CreateResult(useDeveloperCertificate, EnvironmentCheckStatus.Pass, "completed");
+                }
+                finally
+                {
+                    if (Interlocked.Increment(ref cleanupStartCount) == 2)
+                    {
+                        cleanupStarted.TrySetResult();
+                    }
+
+                    await releaseCleanup.Task;
+                    if (Interlocked.Increment(ref cleanupCompletionCount) == 2)
+                    {
+                        cleanupCompleted.TrySetResult();
+                    }
+                }
+            }
+        };
+        var check = new DcpConnectionHealthCheck(
+            new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
+            new NullBundleService(),
+            connectionChecker,
+            CreateExecutionContext(workspace),
+            NullLogger<DcpConnectionHealthCheck>.Instance);
+        var timeProvider = new SignalingFakeTimeProvider(
+            dueTime => dueTime > TimeSpan.Zero && dueTime < TimeSpan.FromMinutes(1));
+        var checker = new EnvironmentChecker(
+            [check],
+            NullLogger<EnvironmentChecker>.Instance,
+            checkTimeout: TimeSpan.FromMinutes(1),
+            totalTimeout: TimeSpan.FromMinutes(2),
+            timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var checkAllTask = checker.CheckAllAsync(cancellation.Token);
+
+        try
+        {
+            await probesStarted.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            cancellation.Cancel();
+            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            await timeProvider.TimerCreated.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+            timeProvider.Advance(TimeSpan.FromSeconds(24));
+            Assert.False(checkAllTask.IsCompleted);
+            timeProvider.Advance(TimeSpan.FromSeconds(1));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => checkAllTask)
+                .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            releaseCleanup.TrySetResult();
+            if (probesStarted.Task.IsCompletedSuccessfully)
+            {
+                await cleanupCompleted.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            }
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -28,6 +28,8 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AgentMcpCommand : BaseCommand
 {
+    protected override TimeSpan GracefulShutdownBudget => EnvironmentChecker.s_commandGracefulShutdownTimeout;
+
     private readonly Dictionary<string, CliMcpTool> _knownTools = [];
     private readonly IMcpResourceToolRefreshService _resourceToolRefreshService;
     private readonly ResourceWaitService _resourceWaitService;

@@ -36,6 +36,58 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DoctorCommand_WhenCanceled_AllowsCleanupBeforeForcedTermination()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var checkStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.RemoveAll<IEnvironmentCheck>();
+        services.AddSingleton<IEnvironmentCheck>(new TestEnvironmentCheck(0, async cancellationToken =>
+        {
+            try
+            {
+                checkStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return [];
+            }
+            finally
+            {
+                cleanupStarted.TrySetResult();
+                await releaseCleanup.Task;
+            }
+        }));
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<ConsoleCancellationManager>();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var commandTask = command.Parse("doctor").InvokeAsync(cancellationToken: manager.Token);
+
+        try
+        {
+            await checkStarted.Task.DefaultTimeout();
+            manager.Cancel(130);
+            await cleanupStarted.Task.DefaultTimeout();
+
+            Assert.False(manager.GracefulShutdownToken.IsCancellationRequested);
+            Assert.False(commandTask.IsCompleted);
+
+            manager.Cancel(130);
+            Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
+            Assert.False(manager.ProcessTerminationCompletionSource.Task.IsCompleted);
+        }
+        finally
+        {
+            releaseCleanup.TrySetResult();
+            if (!manager.IsCancellationRequested)
+            {
+                manager.Cancel(130);
+            }
+            await commandTask.DefaultTimeout();
+        }
+    }
+
+    [Fact]
     public async Task DoctorCommand_Json_IncludesStaticSkillsGuidance()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);

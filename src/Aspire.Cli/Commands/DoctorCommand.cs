@@ -17,6 +17,8 @@ internal sealed class DoctorCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
+    protected override TimeSpan GracefulShutdownBudget => EnvironmentChecker.s_commandGracefulShutdownTimeout;
+
     // The cli-version environment check already surfaces "newer version available"
     // information directly inside `checks[]` with structured metadata. The trailing
     // BaseCommand-driven update banner would print a second, less-structured copy on
