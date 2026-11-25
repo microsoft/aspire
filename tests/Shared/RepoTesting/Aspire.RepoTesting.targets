@@ -196,10 +196,18 @@
   
   <PropertyGroup Condition="'$(RepoRoot)' != 'null' and '$(TestsRunningOutsideOfRepo)' != 'true' and '$(IsAspireHost)' == 'true'">
     <!--
-    When building in the repo, we don't want our Aspire.Hosting.Tasks assembly to be loaded because it causes problems with MSBuild locking the assembly.
-    Disable validation of Aspire Host project resources to avoid loading the Aspire.Hosting.Tasks assembly.
+    Keep project-resource validation disabled in repository builds. Source-imported task assemblies
+    need special handling to avoid locking their build output.
     -->
     <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
+    <!-- The source targets are imported directly, so their packaged tools directory is not available. -->
+    <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' == 'Core'">net10.0</_AspireTasksTfm>
+    <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' != 'Core'">net472</_AspireTasksTfm>
+    <_AspirePrepareRepoTasks Condition="'$(_AspireTasksAssembly)' == ''">true</_AspirePrepareRepoTasks>
+    <!-- The run hook can load tasks before project references build. Keep their output
+         unlocked so the later build can update it while this MSBuild invocation is active. -->
+    <_AspireTasksAssembly Condition="'$(_AspirePrepareRepoTasks)' == 'true'">$(MSBuildProjectExtensionsPath)$(Configuration)\$(TargetFramework)\Aspire\Tasks\$(_AspireTasksTfm)\Aspire.Hosting.Tasks.dll</_AspireTasksAssembly>
+    <_AspireUseTaskHostFactory Condition="'$(_AspireUseTaskHostFactory)' == ''">true</_AspireUseTaskHostFactory>
     <!-- Test executables run MTP, not the AppHost CLI hook, including metadata-only CI enumeration. -->
     <_AspireSuppressCliRunHook Condition="'$(IsTestProject)' == 'true'">true</_AspireSuppressCliRunHook>
     <!-- Source imports bypass the package version substitution used by CLI pairing. -->
@@ -210,6 +218,24 @@
     <Import Project="$(RepoRoot)src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets" Condition="Exists('$(RepoRoot)src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets')" />
     <Import Project="$(RepoRoot)src\Aspire.AppHost.Sdk\SDK\Sdk.in.targets" Condition="Exists('$(RepoRoot)src\Aspire.AppHost.Sdk\SDK\Sdk.in.targets')" />
   </ImportGroup>
+
+  <!-- Run-argument inspection can execute before the AppHost's project references are built. -->
+  <Target Name="_PrepareAspireRepoTasks"
+          BeforeTargets="_ResolveAspireCliInvocation;_ValidateAspireHostProjectResources"
+          Condition="'$(_AspirePrepareRepoTasks)' == 'true' and '$(IsAspireHost)' == 'true' and ('$(AspireUseCliBundle)' == 'true' or '$(SkipValidateAspireHostProjectResources)' != 'true')">
+    <!-- A design-time AppHost evaluation can reach the run hook before the tasks exist;
+         build the task project normally so its assembly and references are produced. -->
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=$(_AspireTasksTfm)"
+             RemoveProperties="IsAspireHost;IsTestProject;FileBasedProgram;RuntimeIdentifier;SelfContained;PublishAot;DesignTimeBuild;BuildingProject;SkipCompilerExecution;$(_GlobalPropertiesToRemoveFromProjectReferences)">
+      <Output TaskParameter="TargetOutputs" PropertyName="_AspireRepoTasksAssembly" />
+    </MSBuild>
+    <Copy SourceFiles="$(_AspireRepoTasksAssembly)" DestinationFiles="$(_AspireTasksAssembly)" SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <FileWrites Include="$(_AspireTasksAssembly)" />
+    </ItemGroup>
+  </Target>
 
   <PropertyGroup Condition="'$(RepoRoot)' != 'null' and '$(TestsRunningOutsideOfRepo)' != 'true' and '$(IsAspireHost)' == 'true'">
     <!-- This is for in-repo testing and required for Aspire.Hosting.AppHost targets loading correctly. On real projects, this comes from SDK.props in Aspire.AppHost.SDK. -->
