@@ -339,32 +339,32 @@
       </trans-unit>
       <trans-unit id="ResourcePaneActivityFailedSingleTooltip">
         <source>{0} failed trace in the last {1} minutes</source>
-        <target state="new">{0} failed trace in the last {1} minutes</target>
+        <target state="translated">{0} başarısız iz son {1} dakika içinde</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityFailedTooltip">
         <source>{0} failed traces in the last {1} minutes</source>
-        <target state="new">{0} failed traces in the last {1} minutes</target>
+        <target state="translated">{0} başarısız iz son {1} dakika içinde</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityIncomingSingleTooltip">
         <source>{0} incoming trace in the last {1} minutes</source>
-        <target state="new">{0} incoming trace in the last {1} minutes</target>
+        <target state="translated">{0} gelen iz son {1} dakika içinde</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityIncomingTooltip">
         <source>{0} incoming traces in the last {1} minutes</source>
-        <target state="new">{0} incoming traces in the last {1} minutes</target>
+        <target state="translated">Son {0} dakika içinde {1} gelen iz</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityP95Tooltip">
         <source>P95 latency: {0} in the last {1} minutes</source>
-        <target state="new">P95 latency: {0} in the last {1} minutes</target>
+        <target state="translated">P95 gecikmesi: {0} son {1} dakika içinde</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivitySampledP95Tooltip">
         <source>Sample p95 latency: {0} in the last {1} minutes</source>
-        <target state="new">Sample p95 latency: {0} in the last {1} minutes</target>
+        <target state="translated">Örnek p95 gecikmesi: {0} son {1} dakika içinde</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneChildOf">
