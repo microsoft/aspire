@@ -5,6 +5,7 @@
 // same provider-neutral card shape.
 
 import { dayMs } from "./constants.mjs";
+import { throwGitHubResponseError, withGitHubTimeout } from "./github-request.mjs";
 import {
   azurePipelineRemovalKey,
   discoverAzureDevOpsPipelines,
@@ -127,7 +128,8 @@ export async function loadHealthDashboard({
   const jobs = [];
   let total = 0;
   let done = 0;
-  let lastPartialAt = 0;
+  let lastPartialAt = -Infinity;
+  let partialTimer = null;
 
   const snapshot = (loading) => {
     const items = associateHealthSources([...itemById.values()].sort(compareHealthItems));
@@ -154,15 +156,23 @@ export async function loadHealthDashboard({
     };
   };
 
-  const maybePartial = (force) => {
-    if (typeof onPartial !== "function") return;
-    const current = Date.now();
-    if (!force && current - lastPartialAt < PARTIAL_MIN_MS) return;
-    lastPartialAt = current;
+  const emitPartial = () => {
+    partialTimer = null;
+    lastPartialAt = Date.now();
     try {
       onPartial(snapshot(true));
     } catch {
       // A renderer callback cannot be allowed to abort provider queries.
+    }
+  };
+  const maybePartial = (force) => {
+    if (typeof onPartial !== "function") return;
+    const delay = PARTIAL_MIN_MS - (Date.now() - lastPartialAt);
+    if (force || delay <= 0) {
+      if (partialTimer) clearTimeout(partialTimer);
+      emitPartial();
+    } else if (!partialTimer) {
+      partialTimer = setTimeout(emitPartial, delay);
     }
   };
   const reportDone = () => {
@@ -239,7 +249,14 @@ export async function loadHealthDashboard({
   }
 
   total = jobs.length;
-  await Promise.all(jobs);
+  try {
+    await Promise.all(jobs);
+  } finally {
+    if (partialTimer) {
+      clearTimeout(partialTimer);
+      partialTimer = null;
+    }
+  }
   if (typeof onProgress === "function") onProgress({ done: total, total, phase: "done" });
   maybePartial(true);
   return snapshot(false);
@@ -714,19 +731,22 @@ function consecutiveFailures(history) {
 }
 
 async function gql(fetchImpl, token, query, variables, graphqlUrl) {
-  const response = await fetchImpl(graphqlUrl || GRAPHQL, {
-    method: "POST",
-    headers: {
-      Authorization: `bearer ${token}`,
-      "Content-Type": "application/json",
-      "User-Agent": "aspire-team-app-canvas",
-    },
-    body: JSON.stringify({ query, variables }),
+  return withGitHubTimeout(async (signal) => {
+    const response = await fetchImpl(graphqlUrl || GRAPHQL, {
+      method: "POST",
+      headers: {
+        Authorization: `bearer ${token}`,
+        "Content-Type": "application/json",
+        "User-Agent": "aspire-team-app-canvas",
+      },
+      body: JSON.stringify({ query, variables }),
+      signal,
+    });
+    if (!response.ok) await throwGitHubResponseError(response, signal);
+    const json = await response.json();
+    if (json.errors?.length) throw new Error(json.errors.map((error) => error.message).join("; "));
+    return json.data;
   });
-  if (!response.ok) throw new Error(`GitHub API ${response.status} ${response.statusText}`);
-  const json = await response.json();
-  if (json.errors?.length) throw new Error(json.errors.map((error) => error.message).join("; "));
-  return json.data;
 }
 
 function splitRepository(repository) {

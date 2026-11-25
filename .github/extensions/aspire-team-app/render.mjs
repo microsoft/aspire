@@ -261,7 +261,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 /* View router */
 .viewport { flex: 1; }
-.view { animation: viewEnter .22s ease both; }
+.view.forward { animation: viewEnter .22s ease both; }
 .view.back { animation: viewEnterBack .22s ease both; }
 .view.no-motion { animation: none; }
 @keyframes viewEnter { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
@@ -323,6 +323,8 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 /* Masonry card flow: cards pack into columns and use available vertical space
    instead of stretching to equal-height rows. Responsive via column-width. */
 .grid { column-width: 280px; column-gap: 12px; }
+/* Large queues contain many off-screen cards. Skip their layout until they approach the viewport. */
+.grid .card { content-visibility: auto; contain-intrinsic-size: auto 160px; }
 /* When JS lays the queue out as real columns, .grid becomes a flex row of
    .mcol-col stacks so cards fill the left column first (predictable reading
    order) instead of multi-column height balancing. */
@@ -632,6 +634,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 }
 .health-unit:hover .health-drag, .health-drag:hover { opacity: 1; color: var(--fg); }
 .health-drag:hover { background: var(--surface-3); }
+.health-drag:disabled { opacity: .4; cursor: default; }
 .health-drag:active { cursor: grabbing; transform: scale(.94); }
 .health-drag:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .health-drag::before {
@@ -1014,7 +1017,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .sk-card { height: 96px; border-radius: var(--radius); display: block; width: 100%; }
 
 @media (prefers-reduced-motion: reduce) {
-  .view, .view.back { animation: none; }
+  .view.forward, .view.back { animation: none; }
   .loadbar { transition: opacity .25s ease; }
   .sk::after { animation: none; }
   .iconbtn.spin svg, .rescan-btn.spin svg, .card-btn.spin .cb-ico svg { animation: none; }
@@ -1072,6 +1075,8 @@ const app = document.getElementById("app");
 const loadbar = document.getElementById("loadbar");
 let state = null;
 let prefs = null;
+let settingsPrefsRequest = null;
+let settingsPrefsError = null;
 let view = "queue";       // queue | settings | accounts | notifications | filters
 let keysBound = false;
 let cbMenuBound = false;
@@ -1090,6 +1095,8 @@ let refreshInFlight = 0;
 let refreshGen = 0;
 let rescanning = false;
 let loadError = null;
+let requestedMode = null;
+let modeRequestGeneration = 0;
 // A dashboard pushed over SSE while the user is on a form-bearing view (accounts editor,
 // settings, etc.) is stashed here and applied when they return to the queue, so a
 // background refresh never clobbers an in-progress edit.
@@ -1252,6 +1259,29 @@ async function readJson(res) {
   return data;
 }
 
+function loadSettingsPrefs() {
+  if (settingsPrefsRequest) return settingsPrefsRequest;
+  if (prefs) return Promise.resolve();
+  settingsPrefsError = null;
+  const request = (async () => {
+    try {
+      const data = await readJson(await fetch("api/prefs"));
+      if (!data.prefs || typeof data.prefs !== "object") throw new Error("Invalid settings response");
+      if (!prefs) {
+        prefs = data.prefs;
+        if (view === "settings") render();
+      }
+    } catch (e) {
+      if (!prefs) {
+        settingsPrefsError = String((e && e.message) || e);
+        if (view === "settings") render();
+      }
+    }
+  })();
+  settingsPrefsRequest = request.finally(() => { settingsPrefsRequest = null; });
+  return settingsPrefsRequest;
+}
+
 async function load() {
   // Capture the applied revision at request start. GET /api/state may be served stale-while-
   // revalidate and can still be in flight when an SSE 'state' event (applyPushedState) applies a
@@ -1269,21 +1299,24 @@ async function load() {
     // state/lastAppliedSeq backward. Mirrors the withRefresh/applyPushedState gate.
     const seq = data.dashboard && data.dashboard.seq;
     if (typeof seq !== "number" || seq > lastAppliedSeq) {
-      adoptState(data);
-      changed = true;
+      if (view !== "queue" && (state || (view === "settings" && prefs))) stashPendingState(data);
+      else {
+        adoptState(data);
+        changed = true;
+      }
     }
   } catch (e) {
     // Only publish this failure if no newer revision was applied while the GET was pending. A late
     // failure from a superseded request must not clobber the newer valid state (or its banner).
     if (lastAppliedSeq === startSeq) {
       loadError = String((e && e.message) || e);
-      changed = true;
+      changed = !(view === "settings" && prefs);
     }
   }
   if (changed) render(); else updateRefreshControls();
 }
 
-async function withRefresh(fn) {
+async function withRefresh(fn, deferWhileEditing = false) {
   const myGen = ++refreshGen;
   let changed = false;
   refreshInFlight++;
@@ -1297,8 +1330,11 @@ async function withRefresh(fn) {
       // (which would show stale data and corrupt later seq gates). Mirrors applyPushedState's gate.
       const seq = data.dashboard.seq;
       if (typeof seq !== "number" || seq > lastAppliedSeq) {
-        adoptState(data);
-        changed = true;
+        if (deferWhileEditing && view !== "queue" && (state || (view === "settings" && prefs))) stashPendingState(data);
+        else {
+          adoptState(data);
+          changed = true;
+        }
       }
     }
   } catch (e) {
@@ -1307,7 +1343,7 @@ async function withRefresh(fn) {
     // path is seq-gated for the same reason, but rejections carry no seq, so gate on refreshGen.
     if (myGen === refreshGen) {
       loadError = String((e && e.message) || e);
-      changed = true;
+      changed = !(deferWhileEditing && view !== "queue");
     }
   } finally {
     refreshInFlight--;
@@ -1376,11 +1412,8 @@ function setProgress(done, total) {
   beginProgress();
   const pct = total > 0 ? Math.max(8, Math.min(100, Math.round((done / total) * 100))) : 8;
   loadbar.style.width = pct + "%";
-  // Only fade on a terminal tick when this is the last in-flight refresh. Forced computes are
-  // serialized server-side, so when two withRefresh() calls overlap the FIRST compute emits its
-  // done>=total tick while the second is still fetching; fading here would bypass the counter's
-  // "last operation settles" invariant and flicker the bar back on at the second compute's first
-  // tick. withRefresh's finally (endProgress at refreshInFlight === 0) remains the backstop.
+  // Overlapping loads can finish in any order. Keep the bar visible until the last refresh
+  // settles; withRefresh's finally remains the backstop if a terminal tick is missed.
   if (total > 0 && done >= total && refreshInFlight <= 1) { endProgress(); }
 }
 function endProgress() {
@@ -1404,7 +1437,12 @@ function endProgress() {
 // dropped; and scroll position is preserved across the re-render.
 function applyPushedState(payload) {
   if (!payload || !payload.dashboard) return;
-  if (view !== "queue") { pendingState = payload; return; }
+  if (view !== "queue") {
+    if (!state && !(view === "settings" && prefs)) { adoptState(payload); render(); }
+    else stashPendingState(payload);
+    return;
+  }
+  if (requestedMode && payload.dashboard.mode !== requestedMode) return;
   const seq = payload.dashboard.seq;
   if (typeof seq === "number" && seq <= lastAppliedSeq) {
     // Stale or duplicate: the request response may have already applied this snapshot, or an older
@@ -1419,7 +1457,26 @@ function applyPushedState(payload) {
     adoptAppliedRev();
     return;
   }
+  // Keep the first useful partial board interactive rather than rebuilding it for every
+  // repository completion. The progress bar continues to update until the final board arrives.
+  if (state?.loading && payload.dashboard.loading && state.mode === payload.dashboard.mode &&
+      (partialHasResults(state) ||
+       (!partialHasResults(payload.dashboard) && (state.errors?.length || !payload.dashboard.errors?.length)))) return;
   applyState(payload);
+}
+
+function stashPendingState(payload) {
+  const seq = payload.dashboard?.seq;
+  const pendingSeq = pendingState?.dashboard?.seq;
+  if (typeof seq !== "number" || typeof pendingSeq !== "number" || seq > pendingSeq) pendingState = payload;
+}
+
+function partialHasResults(dashboard) {
+  const attention = dashboard.attention;
+  return !!(dashboard.health?.items?.length ||
+    dashboard.lanes?.some((lane) => lane.items?.length) ||
+    attention?.focus?.length || attention?.forMe?.length || attention?.community?.length ||
+    attention?.focusExclusions?.length || attention?.buckets?.some((bucket) => bucket.items?.length));
 }
 
 function sameRenderedHealthDashboard(left, right) {
@@ -1449,8 +1506,10 @@ function onUpdateAvailable(payload) {
 
 function onPreferences(nextPrefs) {
   if (!nextPrefs || typeof nextPrefs !== "object") return;
+  const showSettings = view === "settings" && !prefs;
   const wasEnabled = autoApplyEnabled();
   prefs = nextPrefs;
+  if (showSettings) render();
   updateRefreshControls();
   if (!wasEnabled && autoApplyEnabled() && updateAvailable) {
     applyAvailableUpdate();
@@ -1460,10 +1519,14 @@ function onPreferences(nextPrefs) {
 function onSnapshot(payload) {
   onPollSchedule(payload);
   if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
+  const showSettings = view === "settings" && !prefs;
   if (payload.prefs && typeof payload.prefs === "object") prefs = payload.prefs;
   // Initial load already reads the complete cache. On reconnect, replay either applies the missed
   // state automatically or restores the pending-update affordance without touching the board.
-  if (!state) return;
+  if (!state) {
+    if (showSettings && prefs) render();
+    return;
+  }
   if (autoApplyEnabled()) load(); else onUpdateAvailable(payload);
 }
 
@@ -1539,7 +1602,29 @@ async function openLinkedPr(link) {
 }
 
 const refresh = () => withRefresh(() => postJSON("api/refresh"));
-const setMode = (mode) => { if (state && state.mode === mode) return; goView("queue", false); return withRefresh(() => postJSON("api/mode", { mode })); };
+function setMode(mode) {
+  const alreadySelected = !requestedMode && state && state.mode === mode;
+  if (alreadySelected && view === "queue") return;
+  requestedMode = mode;
+  goView("queue", false);
+  if (alreadySelected) {
+    requestedMode = null;
+    return;
+  }
+  // Send every selection immediately: the server can return a cached board even while a
+  // different mode is still loading. Older responses cannot clear the latest selection.
+  const generation = ++modeRequestGeneration;
+  return withRefresh(async () => {
+    const data = await postJSON("api/mode", { mode });
+    return generation === modeRequestGeneration ? data : null;
+  }, true).finally(() => {
+    if (generation === modeRequestGeneration) {
+      const needsRender = !state || state.mode !== requestedMode;
+      requestedMode = null;
+      if (needsRender && view === "queue") render();
+    }
+  });
+}
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
 
 function captureSettingsDraft() {
@@ -1987,7 +2072,7 @@ function closeCbMenus() {
 }
 
 // Open a split-button dropdown as a viewport-fixed overlay. The menu is portaled to <body>
-// before positioning: the .view element runs a forward-filling keyframe animation
+// before positioning: a transitioning .view uses a forward-filling keyframe animation
 // (animation-fill-mode: both) whose frames include a transform, and a filling transform
 // animation establishes a containing block for position:fixed descendants in Blink/WebKit.
 // Left inside .view, the menu's fixed coordinates resolve against .view (which starts below
@@ -2109,9 +2194,11 @@ const restoreNotifs = () => withRefresh(() => postJSON("api/notifications/restor
 /* ---- navigation ---- */
 
 function goView(next, forward) {
+  const changedView = view !== next;
   if (view === "accounts" && next !== "accounts") { for (const k in editingByAcct) editingByAcct[k] = -1; }
   prevRank = RANK[view] || 0;
   view = next;
+  if (next === "settings" && !prefs) loadSettingsPrefs();
   // Returning to the queue is the moment to fold in any dashboard that streamed in while
   // the user was editing a form on another view.
   if (next === "queue" && pendingState) {
@@ -2124,7 +2211,7 @@ function goView(next, forward) {
       adoptState(payload);
     }
   }
-  render(forward === undefined ? undefined : forward);
+  render(changedView ? (forward ?? ((RANK[view] || 0) >= prevRank)) : undefined);
 }
 
 /* ---- cards ---- */
@@ -2327,14 +2414,8 @@ function cardActionBtn(pr, a) {
   // If a click's POST is still in flight when this card re-renders (e.g. from a streamed
   // 'state' event), keep the replacement split disabled so it can't re-queue the same action.
   const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
-  // While a forced refresh is finalizing, keep actions disabled so a click cannot race a user-driven
-  // mode/account change whose replacement snapshot has not committed yet.
-  const finalizing = refreshing && !inflight;
-  const busyCls = (inflight || finalizing) ? " busy" : "";
-  const spinCls = finalizing ? " spin" : "";
-  const disabledAttr = (!agentActions.available || inflight || refreshing) ? " disabled" : "";
-  const mainIcon = finalizing ? '<span class="cb-ico">' + ICONS.refresh + "</span>" : icon;
-  const mainLabel = finalizing ? "Finalizing\u2026" : a.label;
+  const busyCls = inflight ? " busy" : "";
+  const disabledAttr = (!agentActions.available || inflight) ? " disabled" : "";
   // open_pr_session can only target github.com, so the server degrades a new-session action on a
   // GHES/EMU (non-dotcom) PR to the current session. Detect that here from the server-resolved PR
   // url and don't advertise "Open in new session" for those cards: render a single current-session
@@ -2346,8 +2427,8 @@ function cardActionBtn(pr, a) {
   // request runs so focus may move away. Announcing politely surfaces that async result to screen
   // readers even after the button loses focus. A full re-render swaps in a fresh element with its
   // initial label, which does not announce, so only the in-place status updates are spoken.
-  const mainBtn = '<button type="button" class="card-btn cb-main' + busyCls + spinCls + '" data-target="' + mainTarget + '" aria-live="polite"' + disabledAttr + '>' +
-    mainIcon + '<span class="cb-label">' + esc(mainLabel) + "</span></button>";
+  const mainBtn = '<button type="button" class="card-btn cb-main' + busyCls + '" data-target="' + mainTarget + '" aria-live="polite"' + disabledAttr + '>' +
+    icon + '<span class="cb-label">' + esc(a.label) + "</span></button>";
   // GHES cards only support the current-session target. Without an active session,
   // neither target works, so omit the menu and expose the disabled group's explanation.
   if (!isDotcom || !agentActions.available) {
@@ -2599,7 +2680,8 @@ function laneIcon(lane) {
 }
 
 function laneHtml(lane) {
-  const items = (lane.items || []).map((it) => (it.pr ? prCard(it, laneCardActions(lane, it)) : issueCard(it))).join("");
+  const collapsed = collapsedLanes.has(lane.id);
+  const items = collapsed ? "" : (lane.items || []).map((it) => (it.pr ? prCard(it, laneCardActions(lane, it)) : issueCard(it))).join("");
   const tone = lane.tone || "muted";
   const repos = new Set((lane.items || []).map((it) => (it.pr || it.issue || {}).repository).filter(Boolean));
   const repoLabel = repos.size + (repos.size === 1 ? " repo" : " repos");
@@ -2607,8 +2689,8 @@ function laneHtml(lane) {
   const detail = capped
     ? "top " + lane.items.length + " of " + lane.cappedTotal
     : repoLabel;
-  const collapsed = collapsedLanes.has(lane.id);
-  return '<section class="lane' + (collapsed ? " collapsed" : "") + '" data-lane="' + esc(lane.id) + '">' +
+  return '<section class="lane' + (collapsed ? " collapsed" : "") + '" data-lane="' + esc(lane.id) +
+    '"' + (collapsed ? ' data-deferred="true"' : "") + '>' +
     '<button class="lane-head" data-lane-toggle="' + esc(lane.id) + '" aria-expanded="' + (collapsed ? "false" : "true") + '">' +
       '<span class="lane-ico t-' + tone + '">' + laneIcon(lane) + "</span>" +
       '<span class="lane-title">' + esc(lane.label) + "</span>" +
@@ -2627,12 +2709,19 @@ function slugId(s) {
 }
 
 // Buckets and the long Community list start collapsed so the focused queue stays the
-// headline. Seeded once; after that the user's own toggles win.
+// headline. New buckets can arrive in later partial snapshots; user toggles still win.
 let reviewDefaultsSeeded = false;
+const seededReviewBuckets = new Set();
 function seedReviewCollapse(att) {
+  for (const b of att.buckets || []) {
+    const id = slugId(b.label);
+    if (!seededReviewBuckets.has(id)) {
+      seededReviewBuckets.add(id);
+      collapsedLanes.add(id);
+    }
+  }
   if (reviewDefaultsSeeded) return;
   reviewDefaultsSeeded = true;
-  for (const b of att.buckets || []) collapsedLanes.add(slugId(b.label));
   collapsedLanes.add("community");
   collapsedLanes.add("attention-breakdown");
   collapsedLanes.add("later-in-queue");
@@ -2669,9 +2758,12 @@ function developerCountsHtml(list) {
 function collapsibleSect(opts) {
   const id = opts.id;
   const collapsed = collapsedLanes.has(id);
+  const deferred = collapsed && typeof opts.body === "function";
+  const body = deferred ? "" : (typeof opts.body === "function" ? opts.body() : opts.body || "");
   const count = (opts.count != null)
     ? '<span class="sect-count">' + esc(String(opts.count)) + "</span>" : "";
-  return '<section class="sect-group collapsible' + (collapsed ? " collapsed" : "") + '" data-sect="' + esc(id) + '">' +
+  return '<section class="sect-group collapsible' + (collapsed ? " collapsed" : "") + '" data-sect="' + esc(id) +
+    '"' + (deferred ? ' data-deferred="true"' : "") + '>' +
     '<button class="sect-head" data-collapse="' + esc(id) + '" aria-controls="' + esc(id) + '-body" aria-expanded="' + (collapsed ? "false" : "true") + '">' +
       (opts.icon ? '<span class="sect-icon t-' + (opts.iconTone || "muted") + '">' + opts.icon + "</span>" : "") +
       '<span class="sect-title">' + esc(opts.title) + "</span>" +
@@ -2681,7 +2773,7 @@ function collapsibleSect(opts) {
     "</button>" +
     '<div class="collapse-body" id="' + esc(id) + '-body"' + (collapsed ? " inert" : "") + '><div class="collapse-inner">' +
       (opts.subtitle ? '<p class="sect-sub">' + esc(opts.subtitle) + "</p>" : "") +
-      (opts.body || "") +
+      body +
     "</div></div>" +
   "</section>";
 }
@@ -2734,7 +2826,8 @@ function reviewBoardHtml() {
     items: att.focus || [], cappedTotal: att.focusTotal,
     numbered: true,
     cardActions: focusCardActions,
-    emptyText: "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
+    emptyText: state.loading ? "Still checking watched repositories." :
+      "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
   });
 
   const remainder = att.focusRemainder || [];
@@ -2767,7 +2860,8 @@ function reviewBoardHtml() {
     subtitle: "Open non-draft PRs you authored that do not currently qualify for the focused queue.",
     items: (att.focusExclusions || []).slice(0, 10), cappedTotal: (att.focusExclusions || []).length,
     cardActions: focusCardActions,
-    emptyText: "None right now \u00b7 every open PR you authored is already in the queue or still in draft.",
+    emptyText: state.loading ? "Still checking watched repositories." :
+      "None right now \u00b7 every open PR you authored is already in the queue or still in draft.",
   });
 
   // 4. Community — external-contributor PRs, collapsible reference group.
@@ -2781,7 +2875,7 @@ function reviewBoardHtml() {
       count: att.community.length,
       note: "external contributors \u00b7 " + repos.size + (repos.size === 1 ? " repo" : " repos"),
       subtitle: "Recently active external-contributor PRs, tracked apart from the core-team queue.",
-      body: '<div class="grid">' + att.community.map((it) => (it.pr ? prCard(it, signalActions(it)) : issueCard(it))).join("") + "</div>",
+      body: () => '<div class="grid">' + att.community.map((it) => (it.pr ? prCard(it, signalActions(it)) : issueCard(it))).join("") + "</div>",
     });
   }
 
@@ -2800,7 +2894,7 @@ function reviewBoardHtml() {
       count: total,
       note: buckets.length + " lane" + (buckets.length === 1 ? "" : "s"),
       subtitle: "Every signal lane behind the queue. Expand one to see the PRs it groups.",
-      body: buckets.map((b) => laneHtml({ id: slugId(b.label), label: b.label, tone: b.tone, items: b.items })).join(""),
+      body: () => buckets.map((b) => laneHtml({ id: slugId(b.label), label: b.label, tone: b.tone, items: b.items })).join(""),
     });
   }
 
@@ -2810,7 +2904,7 @@ function reviewBoardHtml() {
 /* ---- topbar ---- */
 
 function tabs() {
-  const mode = state ? state.mode : "review";
+  const mode = requestedMode || (state ? state.mode : "review");
   const defs = [["review", "Review"], ["issues", "Issues"], ["ship", "Ship"], ["health", "Health"]];
   return '<div class="tabs">' + defs.map(([id, label]) =>
     '<button class="tab ' + (mode === id ? "active" : "") + '" data-mode="' + id + '">' + label + "</button>"
@@ -3007,7 +3101,8 @@ function healthCard(item, index, total, options = {}) {
   const actionTarget = item.canOpenRepoSession ? "new-session" : "current-session";
   const fixLabel = item.canOpenRepoSession ? "Fix in repo" : "Work fix here";
   const handle = showHandle
-    ? '<button class="health-drag" type="button" draggable="true" data-health-drag="' +
+    ? '<button class="health-drag" type="button" draggable="' + (state?.loading ? "false" : "true") +
+      '"' + (state?.loading ? " disabled" : "") + ' data-health-drag="' +
       esc(groupId) + '" aria-label="Reorder ' + esc(orderName) +
       ". Position " + (index + 1) + " of " + total +
       '." aria-describedby="health-order-help" title="Drag to reorder. Arrow keys also move this group."></button>'
@@ -3049,7 +3144,8 @@ function healthGroup(group, index, total) {
       ? '<span class="health-group-match" title="Grouped using repository metadata reported by the provider.">Provider linked</span>'
       : "";
   return '<section class="health-unit health-source-group" data-health-group-id="' + esc(group.id) + '">' +
-    '<header class="health-group-head"><button class="health-drag" type="button" draggable="true" data-health-drag="' +
+    '<header class="health-group-head"><button class="health-drag" type="button" draggable="' +
+    (state?.loading ? "false" : "true") + '"' + (state?.loading ? " disabled" : "") + ' data-health-drag="' +
     esc(group.id) + '" aria-label="Reorder ' + esc(group.name) + ". Position " + (index + 1) + " of " + total +
     '." aria-describedby="health-order-help" title="Drag to reorder. Arrow keys also move this group."></button>' +
     '<span class="health-group-icon">' + ICONS.layers + '</span><div class="health-group-title">' + title +
@@ -3082,7 +3178,8 @@ function healthView() {
 
   return '<div class="subbar"><span class="who">' + ICONS.pulse + " Repository &amp; delivery health</span>" +
     '<span class="meta" id="health-order-help">' + groups.length + " repository group" + (groups.length === 1 ? "" : "s") +
-    " across " + items.length + " source" + (items.length === 1 ? "" : "s") + ". Drag groups to prioritize." + loadingNote +
+    " across " + items.length + " source" + (items.length === 1 ? "" : "s") +
+    (state.loading ? ". Reordering is available after loading." : ". Drag groups to prioritize.") + loadingNote +
     '</span><div class="stats"><span class="stat"><span class="dot bg-success"></span><b>' + (counts.healthy || 0) +
     '</b> Healthy</span><span class="stat"><span class="dot bg-warning"></span><b>' +
     ((counts.running || 0) + (counts.degraded || 0)) +
@@ -3110,13 +3207,16 @@ function queueView() {
     ? reviewBoardHtml()
     : (state.lanes.length
         ? state.lanes.map(laneHtml).join("")
-        : '<div class="state"><div class="ico">' + ICONS.check + "</div><h2>All clear</h2><p>No items in " + esc(state.mode) + " mode for your watched repositories.</p></div>");
+        : state.loading
+          ? '<div class="state" role="status"><h2>Checking watched repositories\u2026</h2><p>Results appear as sources finish.</p></div>'
+          : '<div class="state"><div class="ico">' + ICONS.check + "</div><h2>All clear</h2><p>No items in " + esc(state.mode) + " mode for your watched repositories.</p></div>");
   const draftsHidden = !state.showDrafts && state.counts && state.counts.drafts
     ? ' <span class="meta-draft">\u00b7 ' + state.counts.drafts + " draft" + (state.counts.drafts === 1 ? "" : "s") + " hidden</span>"
     : "";
   return '<div class="subbar">' +
       '<span class="who">' + who + "</span>" +
-      '<span class="meta">' + state.counts.prs + " open PRs across " + state.repos.length + " repos, updated " + timeAgo(state.fetchedAt) + draftsHidden + "</span>" +
+      '<span class="meta">' + state.counts.prs + " open PRs across " + state.repos.length + " repos, updated " + timeAgo(state.fetchedAt) + draftsHidden +
+        (state.loading ? " \u00b7 checking more repositories\u2026" : "") + "</span>" +
       statsHtml() +
     "</div>" +
     (state.errors && state.errors.length ? '<div class="errbar">' + esc(state.errors.join(" \u00b7 ")) + "</div>" : "") +
@@ -3399,28 +3499,42 @@ function authPicker() {
 
 function render(forward) {
   hideAgentActionTooltip();
-  app.removeAttribute("aria-busy");
   // Drop any split-button menu we portaled to <body> before rebuilding the subtree, so an
   // open menu never survives a re-render as a detached orphan carrying stale click handlers.
   document.querySelectorAll("body > .cb-menu").forEach((m) => m.remove());
-  if (loadError && !state) {
-    app.innerHTML = topbarShell() +
-      '<div class="state"><div class="ico">' + ICONS.alert + '</div><h2>Could not load</h2><p>' + esc(loadError) +
+  if (!state && !(view === "settings" && prefs)) {
+    const settings = view === "settings";
+    const errorMessage = settings ? settingsPrefsError : loadError;
+    const loading = settings
+      ? '<div class="state" role="status"><h2>Loading settings</h2></div>'
+      : '<div class="state" role="status"><h2>Loading ' +
+        esc(({ review: "Review", issues: "Issues", ship: "Ship", health: "Health" })[requestedMode || "review"]) +
+        '</h2><p>Checking watched repositories. You can switch tabs while this loads.</p></div>';
+    const error = '<div class="state"><div class="ico">' + ICONS.alert + '</div><h2>Could not load</h2><p>' + esc(errorMessage) +
       '</p><div class="state-cta"><button class="btn" id="retry-btn">Try again</button></div></div>';
-    const rt = document.getElementById("retry-btn"); if (rt) rt.addEventListener("click", load);
+    app.innerHTML = topbarHtml() + (errorMessage ? error : loading);
+    wire();
+    const rt = document.getElementById("retry-btn");
+    if (rt) rt.addEventListener("click", settings ? () => { loadSettingsPrefs(); render(); } : load);
+    updateRefreshControls();
     return;
   }
-  if (!state) return; // skeleton (initial HTML) stays until first load resolves
+  app.removeAttribute("aria-busy");
 
   let inner;
-  if (!state.authenticated && view === "queue" && state.mode !== "health") inner = authPicker();
-  else if (view === "settings") inner = settingsView();
+  if (view === "settings") inner = settingsView();
+  else if (view === "queue" && requestedMode && requestedMode !== state.mode) {
+    const label = { review: "Review", issues: "Issues", ship: "Ship", health: "Health" }[requestedMode];
+    inner = '<div class="state" role="status"><h2>Loading ' + esc(label) +
+      '</h2><p>Checking watched repositories. You can switch tabs or open Settings while this loads.</p></div>';
+  }
+  else if (!state.authenticated && view === "queue" && state.mode !== "health") inner = authPicker();
   else if (view === "filters") inner = filtersView();
   else if (view === "accounts") inner = accountsView();
   else if (view === "notifications") inner = notificationsView();
   else inner = queueView();
 
-  const dir = forward === false || (forward === undefined && (RANK[view] || 0) < prevRank) ? "back" : "";
+  const dir = forward === false ? "back" : forward === true ? "forward" : "";
   // A refresh/rescan that fails after the dashboard already loaded sets loadError
   // but keeps the last-good state. Surface it as a dismissible banner instead of
   // discarding the loaded UI (the full-screen "Could not load" state above only
@@ -3459,13 +3573,15 @@ function layoutGrids() {
   ensureGridObserver();
   if (__gridRO) __gridRO.disconnect();
   var grids = document.querySelectorAll(".grid");
+  // Read every width before rearranging cards to avoid a forced layout after each grid.
+  var widths = Array.from(grids, (grid) => grid.clientWidth);
   for (var i = 0; i < grids.length; i++) {
-    layoutGrid(grids[i]);
+    layoutGrid(grids[i], widths[i]);
     if (__gridRO) __gridRO.observe(grids[i]);
   }
 }
 
-function layoutGrid(grid) {
+function layoutGrid(grid, width) {
   var cards = grid.__cards;
   if (!cards) {
     cards = [];
@@ -3476,7 +3592,7 @@ function layoutGrid(grid) {
     if (!cards.length) return; // skeletons or non-card grids: leave alone
     grid.__cards = cards;
   }
-  var w = grid.clientWidth;
+  var w = width === undefined ? grid.clientWidth : width;
   if (!w) return; // not visible yet; the observer fires again when it is
   var COLW = 280, GAP = 12;
   var cols = Math.max(1, Math.floor((w + GAP) / (COLW + GAP)));
@@ -3499,10 +3615,6 @@ function layoutGrid(grid) {
     for (var k = 0; k < cnt; k++) col.appendChild(cards[idx++]);
     grid.appendChild(col);
   }
-}
-
-function topbarShell() {
-  return '<div class="topbar"><span class="brand"><span class="mark">' + LOGO + '</span><span class="brand-text">Aspire Team App</span></span><span class="spacer"></span></div>';
 }
 
 /* ---- watched-repository editor ---- */
@@ -3747,7 +3859,11 @@ function wire() {
       const nowCollapsed = !sec.classList.contains("collapsed");
       sec.classList.toggle("collapsed", nowCollapsed);
       b.setAttribute("aria-expanded", nowCollapsed ? "false" : "true");
-      if (nowCollapsed) collapsedLanes.add(id); else collapsedLanes.delete(id);
+      if (nowCollapsed) collapsedLanes.add(id);
+      else {
+        collapsedLanes.delete(id);
+        if (sec.dataset?.deferred === "true") renderExpandedControl("data-lane-toggle", id);
+      }
     }));
 
   // Generic collapsible sections (primary queues + secondary reference groups).
@@ -3761,7 +3877,11 @@ function wire() {
       b.setAttribute("aria-expanded", nowCollapsed ? "false" : "true");
       const body = sec.querySelector(".collapse-body");
       if (body) body.inert = nowCollapsed;
-      if (nowCollapsed) collapsedLanes.add(id); else collapsedLanes.delete(id);
+      if (nowCollapsed) collapsedLanes.add(id);
+      else {
+        collapsedLanes.delete(id);
+        if (sec.dataset?.deferred === "true") renderExpandedControl("data-collapse", id);
+      }
     }));
 
   document.querySelectorAll(".dismiss").forEach((b) =>
@@ -3841,6 +3961,14 @@ function wire() {
   });
 }
 
+function renderExpandedControl(attribute, id) {
+  const scroller = document.scrollingElement;
+  const top = scroller?.scrollTop;
+  render();
+  if (scroller && typeof top === "number") scroller.scrollTop = top;
+  document.querySelector("[" + attribute + '="' + cssEsc(id) + '"]')?.focus?.({ preventScroll: true });
+}
+
 function wireAccounts() {
   // Active toggles interleave/withdraw an account's results across every tab.
   document.querySelectorAll("input[data-active]").forEach((inp) =>
@@ -3890,5 +4018,6 @@ try {
 } catch {}
 
 wireAgentActionTooltips();
+render();
 load();
 `;

@@ -73,7 +73,17 @@ card shows are driven by its lane and its signal pills:
   while the current board remains visible, then applied in one update. The compact
   **Auto** toolbar switch can pause automatic UI updates; when paused, an **Apply
   update** pill appears only after changed data is ready. The refresh button tooltip
-  counts down to the next background data check.
+  counts down to the next background data check. GitHub requests time out after
+  30 seconds, including stalled response bodies, and a timed-out read is retried once
+  on a fresh request, so a provider cannot block tab changes indefinitely. Failed
+  sources show an error and can be retried with Refresh. Repositories with more than
+  two pages of open PRs or issues find later page boundaries with a cheap cursor-only
+  query and load those pages a few at a time instead of one after another.
+- **Responsive navigation** — completed tabs reopen from cache, even while another
+  tab is loading. A first visit starts without waiting for another tab and shows
+  clearly marked partial results as repositories or health sources respond. Review
+  and Ship share completed PR data; refreshes of an existing board remain atomic.
+  Settings remain accessible.
 - **Multiple GitHub accounts** — every detected credential (gh CLI, environment,
   Copilot) appears on the Accounts screen. Activate any number of them and their
   results **interleave across every tab**, de-duplicated by PR/issue URL. Each
@@ -158,6 +168,8 @@ supported. Explicit and discovered definitions are de-duplicated by canonical
 pipeline ID.
 
 Azure DevOps access reuses the installed Azure CLI and `azure-devops` extension.
+Install the extension with `az extension add --name azure-devops` if needed; the
+canvas does not dynamically install Azure CLI extensions during a refresh.
 Authenticate with an existing `az` session or `AZURE_DEVOPS_EXT_PAT`. The app stores
 only normalized pipeline coordinates and branch preferences; it never stores tokens
 or other credentials. GitHub and Azure DevOps sources are loaded independently, so

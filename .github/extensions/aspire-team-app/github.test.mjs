@@ -45,6 +45,193 @@ test("PR queue serializes a strict ten-card prefix and complete deduplicated urg
   }
 });
 
+test("GitHub connection timeouts explain connectivity failures without hiding other request errors", async () => {
+  for (const [error, message] of [
+    [new TypeError("fetch failed", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } }),
+      "Connection to GitHub timed out. Check network connectivity and try refreshing again."],
+    [new Error("GitHub API 403 Forbidden"), "GitHub API 403 Forbidden"],
+  ]) {
+    globalThis.fetch = async () => { throw error; };
+    const dashboard = await loadReview();
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire: ${message}`]);
+  }
+});
+
+test("GitHub 403 errors preserve the provider message and rate-limit headers without retrying", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return {
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      headers: new Headers({
+        "retry-after": "120",
+        "x-ratelimit-remaining": "0",
+        "x-ratelimit-reset": "1767225600",
+      }),
+      json: async () => ({ message: "API rate limit exceeded for this installation." }),
+    };
+  };
+  const dashboard = await loadReview();
+  assert.equal(calls, 1);
+  assert.deepEqual(dashboard.errors, [
+    "microsoft/aspire: GitHub API 403 Forbidden - API rate limit exceeded for this installation.; " +
+      "Retry-After: 120; rate limit remaining: 0; rate limit resets: 2026-01-01T00:00:00.000Z",
+  ]);
+});
+
+test("a forbidden cursor request does not retry the same repository serially", async () => {
+  const queries = [];
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    queries.push(body.query);
+    if (body.query.includes("edges { cursor }")) {
+      return {
+        ok: false, status: 403, statusText: "Forbidden",
+        headers: new Headers({ "retry-after": "120" }),
+        json: async () => ({ message: "Secondary rate limit." }),
+      };
+    }
+    return jsonResponse({ data: { repository: { pullRequests: {
+      totalCount: 100,
+      nodes: [prNode(1, isoAgo(hourMs))],
+      pageInfo: { hasNextPage: true, endCursor: "first" },
+    } } } });
+  };
+  const dashboard = await loadReview();
+  assert.equal(queries.length, 2);
+  assert.deepEqual(dashboard.errors, [
+    "microsoft/aspire: GitHub API 403 Forbidden - Secondary rate limit.; Retry-After: 120",
+  ]);
+});
+
+test("Review and Ship produce both snapshots from one readiness-aware PR load", async () => {
+  for (const mode of ["review", "ship"]) {
+    let calls = 0;
+    globalThis.fetch = async (_url, options) => {
+      calls++;
+      assert.equal(JSON.parse(options.body).variables.includeReadiness, true);
+      return jsonResponse({ data: { repository: { pullRequests: {
+        nodes: [prNode(1, isoAgo(hourMs))],
+      } } } });
+    };
+    let related;
+    const dashboard = await loadDashboard({
+      accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire"] }],
+      mode, release: "9.5", prefs: {}, dismissed: [],
+      onRelated: (value) => { related = value; },
+    });
+    const review = mode === "review" ? dashboard : related;
+    const ship = mode === "ship" ? dashboard : related;
+    assert.equal(calls, 1);
+    assert.equal(review.mode, "review");
+    assert.deepEqual(review.attention.focus.map((item) => item.pr.number), [1]);
+    assert.equal(ship.mode, "ship");
+    assert.deepEqual(ship.lanes.flatMap((lane) => lane.items.map((item) => item.pr.number)), [1]);
+    assert.deepEqual(review.errors, []);
+    assert.deepEqual(ship.errors, []);
+  }
+});
+
+test("a cold PR board publishes trailing updates while a repository is still blocked", { timeout: 15_000 }, async (t) => {
+  let releaseSlow;
+  let signalPartial;
+  let signalTrailing;
+  const slow = new Promise((resolve) => { releaseSlow = resolve; });
+  const firstPartial = new Promise((resolve) => { signalPartial = resolve; });
+  const trailingPartial = new Promise((resolve) => { signalTrailing = resolve; });
+  t.after(() => releaseSlow());
+  globalThis.fetch = async (_url, options) => {
+    const { variables } = JSON.parse(options.body);
+    if (variables.name === "slow") await slow;
+    if (variables.name === "fast2") await new Promise((resolve) => setTimeout(resolve, 10));
+    const number = variables.name === "fast" ? 1 : variables.name === "fast2" ? 2 : 3;
+    const node = prNode(number, isoAgo(hourMs));
+    node.url = `https://github.com/microsoft/${variables.name}/pull/${node.number}`;
+    return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+  };
+  const loading = loadDashboard({
+    accounts: [{ token: "token", login: "octo", repos: ["microsoft/fast", "microsoft/fast2", "microsoft/slow"] }],
+    mode: "review", prefs: {}, dismissed: [],
+    onPartial: (value) => {
+      signalPartial(value);
+      if (value.counts.total === 2) signalTrailing(value);
+    },
+  });
+  const partial = await firstPartial;
+  assert.equal(partial.loading, true);
+  assert.deepEqual(partial.attention.focus.map((item) => item.pr.number), [1]);
+  const trailing = await trailingPartial;
+  assert.deepEqual(trailing.attention.focus.map((item) => item.pr.number), [1, 2]);
+  releaseSlow();
+  const complete = await loading;
+  assert.notEqual(complete.loading, true);
+  assert.deepEqual(complete.attention.focus.map((item) => item.pr.number), [1, 2, 3]);
+});
+
+test("a hung GitHub request is retried once on a fresh request instead of failing the board", async (t) => {
+  const timeout = AbortSignal.timeout.bind(AbortSignal);
+  t.mock.method(AbortSignal, "timeout", () => timeout(20));
+  // AbortSignal.timeout timers are unref'd; keep the test process alive until the retry settles.
+  const keepAlive = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(keepAlive));
+  let calls = 0;
+  globalThis.fetch = async (_url, options) => {
+    if (++calls === 1) {
+      return new Promise((_, reject) => options.signal.addEventListener("abort", () => reject(options.signal.reason)));
+    }
+    return jsonResponse({ data: { repository: { pullRequests: { nodes: [prNode(1, isoAgo(hourMs))] } } } });
+  };
+  const dashboard = await loadReview();
+  assert.equal(calls, 2);
+  assert.deepEqual(dashboard.errors, []);
+  assert.equal(dashboard.counts.total, 1);
+});
+
+test("large repositories load later PR pages concurrently and follow a growing tail", async () => {
+  // 130 open PRs at 40 per page when the cursor walk runs. The tail grows by 41 items before
+  // the last page loads, so that page reports another page that the loader must still follow.
+  const nodes = Array.from({ length: 171 }, (_, index) => prNode(index + 1, isoAgo(hourMs)));
+  const cursorIndex = (after) => after === null ? -1 : Number(after.slice(1));
+  const detailedPages = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  globalThis.fetch = async (_url, options) => {
+    const { query, variables } = JSON.parse(options.body);
+    const start = cursorIndex(variables.after) + 1;
+    if (query.includes("edges { cursor }")) {
+      const end = Math.min(start + 100, 130);
+      return jsonResponse({ data: { repository: { pullRequests: {
+        pageInfo: { hasNextPage: end < 130, endCursor: `c${end - 1}` },
+        edges: Array.from({ length: end - start }, (_, offset) => ({ cursor: `c${start + offset}` })),
+      } } } });
+    }
+    detailedPages.push(variables.after);
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    inFlight--;
+    const end = Math.min(start + 40, nodes.length);
+    return jsonResponse({ data: { repository: { pullRequests: {
+      totalCount: 130,
+      nodes: nodes.slice(start, end),
+      pageInfo: { hasNextPage: end < nodes.length, endCursor: `c${end - 1}` },
+    } } } });
+  };
+  const dashboard = await loadDashboard({
+    accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire"] }],
+    mode: "ship",
+    prefs: {},
+    dismissed: [],
+    showDrafts: true,
+  });
+  assert.deepEqual(detailedPages.toSorted(), ["c119", "c159", "c39", "c79", null].toSorted());
+  assert.ok(maxInFlight > 1, "later pages load concurrently");
+  assert.deepEqual(dashboard.errors, []);
+  assert.equal(dashboard.counts.total, 171);
+});
+
 test("PRs at positions 16, 17, and 18 jump to 1, 2, and 3, then return when urgency is removed", async () => {
   const now = Date.now();
   const nodes = Array.from({ length: 20 }, (_, index) => ({

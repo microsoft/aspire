@@ -104,7 +104,17 @@ export async function savePrefs(prefs) {
   const pendingFile = join(ARTIFACT_DIR, `preferences.${randomUUID()}.pending`);
   try {
     await writeFile(pendingFile, JSON.stringify(prefs, null, 2) + "\n", { encoding: "utf8", flag: "wx" });
-    await rename(pendingFile, PREFS_FILE);
+    // On Windows a concurrent reader or indexer can briefly prevent replacement.
+    // Retry only transient access errors and propagate a persistent failure.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rename(pendingFile, PREFS_FILE);
+        break;
+      } catch (error) {
+        if (attempt === 4 || !["EPERM", "EACCES", "EBUSY"].includes(error?.code)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+      }
+    }
   } finally {
     await rm(pendingFile, { force: true });
   }
