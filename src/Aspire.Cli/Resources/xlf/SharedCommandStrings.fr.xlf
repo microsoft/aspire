@@ -24,12 +24,12 @@
       </trans-unit>
       <trans-unit id="FetchingSource">
         <source>Fetching {0} from {1} using Git...</source>
-        <target state="new">Fetching {0} from {1} using Git...</target>
+        <target state="translated">Récupération de {0} depuis {1} à l’aide de Git...</target>
         <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
       </trans-unit>
       <trans-unit id="FetchingSourceWithAuthentication">
         <source>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</source>
-        <target state="new">Fetching {0} from {1} using Git. Git may prompt you to authenticate.</target>
+        <target state="translated">Récupération des {0} à partir de {1} à l’aide de Git. Git peut vous inviter à vous authentifier.</target>
         <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
@@ -39,12 +39,12 @@
       </trans-unit>
       <trans-unit id="GitFetchConfigurationSource">
         <source>configuration source</source>
-        <target state="new">configuration source</target>
+        <target state="translated">source de configuration</target>
         <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="GitFetchTemplates">
         <source>templates</source>
-        <target state="new">templates</target>
+        <target state="translated">modèles</target>
         <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="HeaderLanguage">
@@ -144,12 +144,12 @@
       </trans-unit>
       <trans-unit id="NuGetSearchLimitWarning">
         <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
-        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <target state="translated">Les résultats de la recherche NuGet peuvent être incomplets, car la limite de {0} packages par flux a été atteinte. Utilisez des modèles de source d’intégration plus étroits.</target>
         <note>{0} is the maximum number of packages searched per feed.</note>
       </trans-unit>
       <trans-unit id="NuGetSearchSourceFailedWarning">
         <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
-        <target state="new">Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</target>
+        <target state="translated">Impossible d’effectuer une recherche dans la source NuGet « {0} ». Certaines intégrations peuvent être manquantes. Vérifiez la configuration et l’authentification de la source. Consultez les journaux CLI pour plus de détails.</target>
         <note>{0} is the redacted NuGet source name or URL.</note>
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
@@ -204,17 +204,17 @@
       </trans-unit>
       <trans-unit id="SourceFeed">
         <source>Package feed</source>
-        <target state="new">Package feed</target>
+        <target state="translated">Flux de package</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceGitPath">
         <source>Git path</source>
-        <target state="new">Git path</target>
+        <target state="translated">Chemin Git</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceGitRepository">
         <source>Git source</source>
-        <target state="new">Git source</target>
+        <target state="translated">Source Git</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceMarketplace">
@@ -224,42 +224,42 @@
       </trans-unit>
       <trans-unit id="SourceName">
         <source>Name</source>
-        <target state="new">Name</target>
+        <target state="translated">Nom</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOpenCodeV1Catalog">
         <source>OpenCode V1 catalog</source>
-        <target state="new">OpenCode V1 catalog</target>
+        <target state="translated">Catalogue OpenCode V1</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOpenCodeV2Catalog">
         <source>OpenCode V2 catalog</source>
-        <target state="new">OpenCode V2 catalog</target>
+        <target state="translated">Catalogue OpenCode V2</target>
         <note />
       </trans-unit>
       <trans-unit id="SourcePath">
         <source>Path</source>
-        <target state="new">Path</target>
+        <target state="translated">Chemin d’accès</target>
         <note />
       </trans-unit>
       <trans-unit id="SourcePatterns">
         <source>Package patterns</source>
-        <target state="new">Package patterns</target>
+        <target state="translated">Modèles de packages</target>
         <note />
       </trans-unit>
       <trans-unit id="SourcePlugins">
         <source>Plugins</source>
-        <target state="new">Plugins</target>
+        <target state="translated">Plug-ins</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceRef">
         <source>Git ref</source>
-        <target state="new">Git ref</target>
+        <target state="translated">Référence Git</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceTrustWarning">
         <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
-        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
+        <target state="translated">Utilisez uniquement des sources de confiance. Le contenu de ces sources peut exécuter du code sur votre ordinateur.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">

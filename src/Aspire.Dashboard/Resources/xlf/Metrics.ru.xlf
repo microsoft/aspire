@@ -4,42 +4,42 @@
     <body>
       <trans-unit id="MetricsAllInstrumentsTitle">
         <source>All instruments</source>
-        <target state="new">All instruments</target>
+        <target state="translated">Все инструменты</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsBackTo">
         <source>Back to {0}</source>
-        <target state="new">Back to {0}</target>
+        <target state="translated">Назад к {0}</target>
         <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
       </trans-unit>
       <trans-unit id="MetricsFilterResultsTitle">
         <source>Metrics matching "{0}"</source>
-        <target state="new">Metrics matching "{0}"</target>
+        <target state="translated">Метрики, соответствующие "{0}"</target>
         <note>{0} is the filter text</note>
       </trans-unit>
       <trans-unit id="MetricsGroupByLabel">
         <source>Group by</source>
-        <target state="new">Group by</target>
+        <target state="translated">Группировать по</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsGroupByTooltip">
         <source>Group instruments</source>
-        <target state="new">Group instruments</target>
+        <target state="translated">Сгруппировать инструменты</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsGroupMenuTitle">
         <source>Group metrics</source>
-        <target state="new">Group metrics</target>
+        <target state="translated">Сгруппировать метрики</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsGroupNone">
         <source>None</source>
-        <target state="new">None</target>
+        <target state="translated">Нет</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsGroupsLabel">
         <source>Metric groups</source>
-        <target state="new">Metric groups</target>
+        <target state="translated">Группы метрик</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsHeader">
@@ -49,27 +49,27 @@
       </trans-unit>
       <trans-unit id="MetricsInstrumentLimitReached">
         <source>Showing the first {0} of {1} instruments. Filter to narrow the list.</source>
-        <target state="new">Showing the first {0} of {1} instruments. Filter to narrow the list.</target>
+        <target state="translated">Отображение первых {0} {1} инструментов. Фильтр для сужения списка.</target>
         <note>{0} is the number of instruments shown, {1} is the number of instruments in the list.</note>
       </trans-unit>
       <trans-unit id="MetricsInstrumentNoDataTooltip">
         <source>No data has been recorded for this instrument yet</source>
-        <target state="new">No data has been recorded for this instrument yet</target>
+        <target state="translated">Для этого инструмента пока нет записанных данных</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsInstrumentTypeCounter">
         <source>Counter</source>
-        <target state="new">Counter</target>
+        <target state="translated">Счетчик</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsInstrumentTypeGauge">
         <source>Gauge</source>
-        <target state="new">Gauge</target>
+        <target state="translated">Датчик</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsInstrumentTypeHistogram">
         <source>Histogram</source>
-        <target state="new">Histogram</target>
+        <target state="translated">Гистограмма</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsInsturementDescriptionGridNameColumnHeader">
@@ -124,7 +124,7 @@
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
         <source>No metrics match the filter</source>
-        <target state="new">No metrics match the filter</target>
+        <target state="translated">Нет метрик, соответствующих фильтру</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">
@@ -134,27 +134,27 @@
       </trans-unit>
       <trans-unit id="MetricsOrganizeInstrument">
         <source>Instrument</source>
-        <target state="new">Instrument</target>
+        <target state="translated">Инструмент</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsOrganizeLandmark">
         <source>Organize metrics</source>
-        <target state="new">Organize metrics</target>
+        <target state="translated">Упорядочить метрики</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsOrganizeMeter">
         <source>Meter</source>
-        <target state="new">Meter</target>
+        <target state="translated">Единица измерения</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsOrganizeResource">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">Ресурс</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsOverviewNoData">
         <source>No data</source>
-        <target state="new">No data</target>
+        <target state="translated">Нет данных</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsPageTitle">
@@ -164,17 +164,17 @@
       </trans-unit>
       <trans-unit id="MetricsPinInstrument">
         <source>Pin metric</source>
-        <target state="new">Pin metric</target>
+        <target state="translated">Закрепить метрику</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsPinnedEmpty">
         <source>No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</source>
-        <target state="new">No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</target>
+        <target state="translated">Для этого ресурса нет закрепленных метрик. Закрепите метрику с карточки или диаграммы, чтобы она отображалась здесь.</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsPinnedHeader">
         <source>Pinned</source>
-        <target state="new">Pinned</target>
+        <target state="translated">Закреплено</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsSelectAResource">
@@ -189,42 +189,42 @@
       </trans-unit>
       <trans-unit id="MetricsShowAllInstruments">
         <source>Show all instruments</source>
-        <target state="new">Show all instruments</target>
+        <target state="translated">Показать все инструменты</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsSortByLabel">
         <source>Sort by</source>
-        <target state="new">Sort by</target>
+        <target state="translated">Сортировать по</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsSortByTooltip">
         <source>Sort instruments</source>
-        <target state="new">Sort instruments</target>
+        <target state="translated">Сортировать инструменты</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsSortMenuTitle">
         <source>Sort metrics</source>
-        <target state="new">Sort metrics</target>
+        <target state="translated">Сортировать метрики</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsSortName">
         <source>Name</source>
-        <target state="new">Name</target>
+        <target state="translated">Имя</target>
         <note>Sorts instruments by their name.</note>
       </trans-unit>
       <trans-unit id="MetricsSortValueAscending">
         <source>Value (low to high)</source>
-        <target state="new">Value (low to high)</target>
+        <target state="translated">Значение (от низкого к высокому)</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsSortValueDescending">
         <source>Value (high to low)</source>
-        <target state="new">Value (high to low)</target>
+        <target state="translated">Значение (от высокого к низкому)</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsUnpinInstrument">
         <source>Unpin metric</source>
-        <target state="new">Unpin metric</target>
+        <target state="translated">Открепить метрику</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsViewAttributesToolbar">

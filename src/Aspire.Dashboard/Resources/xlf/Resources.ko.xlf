@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="GraphPageTitle">
         <source>Graph</source>
-        <target state="new">Graph</target>
+        <target state="translated">그래프</target>
         <note />
       </trans-unit>
       <trans-unit id="HealthCheckStatusJustNowFormat">
@@ -24,172 +24,172 @@
       </trans-unit>
       <trans-unit id="HomeActivityBucketTooltip">
         <source>{0} · {1} requests, {2} failed</source>
-        <target state="new">{0} · {1} requests, {2} failed</target>
+        <target state="translated">{0} · 요청 {1}개, {2}개 실패</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
         <source>Requests per 30 seconds over the last 15 minutes</source>
-        <target state="new">Requests per 30 seconds over the last 15 minutes</target>
+        <target state="translated">지난 15분 동안 30초당 요청 수</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityHistoricalCaption">
         <source>Incoming requests · last 15 min of this run</source>
-        <target state="new">Incoming requests · last 15 min of this run</target>
+        <target state="translated">수신 요청 · 이번 실행의 최근 15분</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityHistoricalTitle">
         <source>Activity</source>
-        <target state="new">Activity</target>
+        <target state="translated">활동</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityLoading">
         <source>Loading activity…</source>
-        <target state="new">Loading activity…</target>
+        <target state="translated">활동을 로드하는 중…</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityNoRecordedRequests">
         <source>No requests were recorded in this run.</source>
-        <target state="new">No requests were recorded in this run.</target>
+        <target state="translated">이 실행에서 기록된 요청이 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWaiting">
         <source>Waiting for requests. Interact with your app to see live traffic.</source>
-        <target state="new">Waiting for requests. Interact with your app to see live traffic.</target>
+        <target state="translated">요청을 기다리는 중입니다. 앱과 상호 작용하여 실시간 트래픽을 확인합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindow">
         <source>Incoming requests · last 15 min</source>
-        <target state="new">Incoming requests · last 15 min</target>
+        <target state="translated">들어오는 요청 · 지난 15분</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindowEnd">
         <source>now</source>
-        <target state="new">now</target>
+        <target state="translated">지금</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindowStart">
         <source>15 min ago</source>
-        <target state="new">15 min ago</target>
+        <target state="translated">15분 전</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeBusiestResources">
         <source>Busiest resources</source>
-        <target state="new">Busiest resources</target>
+        <target state="translated">요청이 가장 많은 리소스</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeEndpointTooltip">
         <source>{0}: {1} ({2} requests)</source>
-        <target state="new">{0}: {1} ({2} requests)</target>
+        <target state="translated">{0}: {1}(요청 {2}개)</target>
         <note>{0} is the resource name, {1} is the endpoint label, and {2} is the request count.</note>
       </trans-unit>
       <trans-unit id="HomeErrorHotspots">
         <source>Error hotspots</source>
-        <target state="new">Error hotspots</target>
+        <target state="translated">오류 집중 영역</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeErrorHotspotsHint">
         <source>failed requests + error logs</source>
-        <target state="new">failed requests + error logs</target>
+        <target state="translated">실패한 요청 + 오류 로그</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeErrorLogCount">
         <source>{0} error logs</source>
-        <target state="new">{0} error logs</target>
+        <target state="translated">{0}개의 오류 로그</target>
         <note>{0} is the error log count.</note>
       </trans-unit>
       <trans-unit id="HomeErrorRate">
         <source>error rate</source>
-        <target state="new">error rate</target>
+        <target state="translated">오류 비율</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeFailedCount">
         <source>{0} failed</source>
-        <target state="new">{0} failed</target>
+        <target state="translated">{0}개 실패</target>
         <note>{0} is the failed request count.</note>
       </trans-unit>
       <trans-unit id="HomeFailedRequestCount">
         <source>{0} failed requests</source>
-        <target state="new">{0} failed requests</target>
+        <target state="translated">실패한 요청 {0}개</target>
         <note>{0} is the failed request count.</note>
       </trans-unit>
       <trans-unit id="HomeFinishedLabel">
         <source>Finished</source>
-        <target state="new">Finished</target>
+        <target state="translated">마침</target>
         <note>Legend label on the overview's health bar for resources that finished or exited without an error</note>
       </trans-unit>
       <trans-unit id="HomeHeadlineAllRunning">
         <source>All {0} resources are running</source>
-        <target state="new">All {0} resources are running</target>
+        <target state="translated">모든 {0}개의 리소스가 실행되고 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineAttention">
         <source>{0} of {1} resources need attention</source>
-        <target state="new">{0} of {1} resources need attention</target>
+        <target state="translated">{0}/{1} 리소스에 주의 필요</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineHealthy">
         <source>No resources need attention</source>
-        <target state="new">No resources need attention</target>
+        <target state="translated">주의가 필요한 리소스 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlinePending">
         <source>{0} of {1} resources are pending</source>
-        <target state="new">{0} of {1} resources are pending</target>
+        <target state="translated">{0} / {1}개 리소스가 대기 중입니다</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSingleAttention">
         <source>1 resource needs attention</source>
-        <target state="new">1 resource needs attention</target>
+        <target state="translated">리소스 1개에 주의 필요</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSinglePending">
         <source>1 resource is pending</source>
-        <target state="new">1 resource is pending</target>
+        <target state="translated">보류 중인 리소스 1개</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSingleRunning">
         <source>1 resource is running</source>
-        <target state="new">1 resource is running</target>
+        <target state="translated">리소스 1개 실행 중</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeInsightsLabel">
         <source>Insights</source>
-        <target state="new">Insights</target>
+        <target state="translated">인사이트</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeLiveActivity">
         <source>Live activity</source>
-        <target state="new">Live activity</target>
+        <target state="translated">라이브 활동</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeLogsLabel">
         <source>logs</source>
-        <target state="new">logs</target>
+        <target state="translated">로그</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeMetricsLabel">
         <source>metrics</source>
-        <target state="new">metrics</target>
+        <target state="translated">메트릭</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNeedsAttentionLabel">
         <source>Need attention</source>
-        <target state="new">Need attention</target>
+        <target state="translated">주의 필요</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNoFailedTraces">
         <source>No failed traces</source>
-        <target state="new">No failed traces</target>
+        <target state="translated">실패한 추적 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNoRecentErrors">
         <source>No errors logged</source>
-        <target state="new">No errors logged</target>
+        <target state="translated">기록된 오류 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNotStartedLabel">
         <source>Not started</source>
-        <target state="new">Not started</target>
+        <target state="translated">시작되지 않음</target>
         <note>Legend label on the overview's health bar for resources that haven't been started</note>
       </trans-unit>
       <trans-unit id="HomeP95Label">
@@ -199,152 +199,152 @@
       </trans-unit>
       <trans-unit id="HomeP95Latency">
         <source>p95 latency</source>
-        <target state="new">p95 latency</target>
+        <target state="translated">p95 지연 시간</target>
         <note />
       </trans-unit>
       <trans-unit id="HomePendingLabel">
         <source>Pending</source>
-        <target state="new">Pending</target>
+        <target state="translated">보류 중</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRecentErrorsTitle">
         <source>Recent errors</source>
-        <target state="new">Recent errors</target>
+        <target state="translated">최근 오류 수</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRecentFailedTracesTitle">
         <source>Recent failed traces</source>
-        <target state="new">Recent failed traces</target>
+        <target state="translated">최근 실패한 추적</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRequestCount">
         <source>{0} requests</source>
-        <target state="new">{0} requests</target>
+        <target state="translated">요청 {0}개</target>
         <note>{0} is the request count.</note>
       </trans-unit>
       <trans-unit id="HomeRequestCountShort">
         <source>{0} req</source>
-        <target state="new">{0} req</target>
+        <target state="translated">요청 {0}개</target>
         <note>{0} is the request count. This label is abbreviated to fit in the endpoint list.</note>
       </trans-unit>
       <trans-unit id="HomeRequestsPerMinute">
         <source>requests / min</source>
-        <target state="new">requests / min</target>
+        <target state="translated">요청/분</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeResourceActions">
         <source>Actions for {0}</source>
-        <target state="new">Actions for {0}</target>
+        <target state="translated">{0}에 대한 작업</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="HomeResourceColumn">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">리소스</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeResourceStatesLabel">
         <source>Resource states</source>
-        <target state="new">Resource states</target>
+        <target state="translated">리소스 상태</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRunningLabel">
         <source>Running</source>
-        <target state="new">Running</target>
+        <target state="translated">실행 중</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
         <source>Slowest endpoints</source>
-        <target state="new">Slowest endpoints</target>
+        <target state="translated">응답이 가장 느린 엔드포인트</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeStartedAt">
         <source>Started {0}</source>
-        <target state="new">Started {0}</target>
+        <target state="translated">시작 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeSummaryLandmark">
         <source>Summary</source>
-        <target state="new">Summary</target>
+        <target state="translated">요약</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeTelemetryLandmark">
         <source>Telemetry</source>
-        <target state="new">Telemetry</target>
+        <target state="translated">원격 분석</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeTracesLabel">
         <source>traces</source>
-        <target state="new">traces</target>
+        <target state="translated">추적</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeUnknownLabel">
         <source>Unknown</source>
-        <target state="new">Unknown</target>
+        <target state="translated">알 수 없음</target>
         <note>Legend label on the overview's health bar for resources whose state the dashboard can't tell</note>
       </trans-unit>
       <trans-unit id="HomeUnviewedErrors">
         <source>{0} unviewed error logs</source>
-        <target state="new">{0} unviewed error logs</target>
+        <target state="translated">확인하지 않은 오류 로그 {0}개</target>
         <note />
       </trans-unit>
       <trans-unit id="LayoutLabel">
         <source>Layout</source>
-        <target state="new">Layout</target>
+        <target state="translated">레이아웃</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParameterCount">
         <source>{0} parameter needs a value</source>
-        <target state="new">{0} parameter needs a value</target>
+        <target state="translated">{0} 매개 변수에 값이 필요합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersCardTitle">
         <source>Missing parameter values</source>
-        <target state="new">Missing parameter values</target>
+        <target state="translated">매개 변수 값이 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersCount">
         <source>{0} parameters need values</source>
-        <target state="new">{0} parameters need values</target>
+        <target state="translated">{0} 매개 변수에 값이 필요합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersPanelDescription">
         <source>Enter the missing values together, then apply them without leaving the resource overview.</source>
-        <target state="new">Enter the missing values together, then apply them without leaving the resource overview.</target>
+        <target state="translated">누락된 값을 한 번에 입력하고 리소스 개요를 나가지 않은 채 적용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersReview">
         <source>Review missing parameters</source>
-        <target state="new">Review missing parameters</target>
+        <target state="translated">누락된 매개 변수 검토</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersSaveToUserSecrets">
         <source>Save values to user secrets</source>
-        <target state="new">Save values to user secrets</target>
+        <target state="translated">사용자 비밀에 값 저장</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersSetValues">
         <source>Set parameter values</source>
-        <target state="new">Set parameter values</target>
+        <target state="translated">매개 변수 값 설정</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueRequired">
         <source>Value required</source>
-        <target state="new">Value required</target>
+        <target state="translated">값이 필요함</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueSet">
         <source>Value set</source>
-        <target state="new">Value set</target>
+        <target state="translated">값 설정</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersAllValuesSet">
         <source>All values are set</source>
-        <target state="new">All values are set</target>
+        <target state="translated">모든 값이 설정됨</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersPageTitle">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">매개 변수</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceActionCommandsText">
@@ -434,7 +434,7 @@
       </trans-unit>
       <trans-unit id="ResourceDisplayOrder">
         <source>Display order</source>
-        <target state="new">Display order</target>
+        <target state="translated">표시 순서</target>
         <note>Name of the property holding the default display order a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourceExpandAllChildren">
@@ -449,342 +449,342 @@
       </trans-unit>
       <trans-unit id="ResourceGraphGameExit">
         <source>Exit</source>
-        <target state="new">Exit</target>
+        <target state="translated">끝내기</target>
         <note>Text of the button that leaves the Aspire Outage game in the resource graph.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameExitLabel">
         <source>Exit Aspire Outage and return to the graph</source>
-        <target state="new">Exit Aspire Outage and return to the graph</target>
+        <target state="translated">Aspire Outage를 종료하고 그래프로 돌아가기</target>
         <note>Accessible label of the button that leaves the Aspire Outage game in the resource graph.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameHardCoreStopped">
         <source>Resources still stopped: {0}</source>
-        <target state="new">Resources still stopped: {0}</target>
+        <target state="translated">리소스가 여전히 중지됨: {0}</target>
         <note>Shown on the game over screen of Aspire Outage after hard core mode stopped real resources. {0} is the number of resources.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameHardCoreWarning">
         <source>Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</source>
-        <target state="new">Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</target>
+        <target state="translated">적을 파괴하면 실제로 해당 리소스가 중지됩니다. 중지된 리소스는 웨이브를 클리어하면 다시 시작되고, 패배하거나 종료하면 계속 중지된 상태로 유지됩니다.</target>
         <note>Warning shown when the hard core mode of the Aspire Outage game is selected.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameInstructions">
         <source>Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</source>
-        <target state="new">Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</target>
+        <target state="translated">Aspire Outage. 화살표 키 또는 A와 D 키로 이동하고, 스페이스바로 발사하며, P 키로 일시 정지, M 키로 음소거를 할 수 있습니다. 시작 화면에서 H 키를 누르면 일반 모드와 하드코어 모드 간에 전환할 수 있으며, Escape 키를 누르면 그래프로 돌아갈 수 있습니다.</target>
         <note>Accessible description of the Aspire Outage game in the resource graph. Aspire Outage is the name of the game. The key names refer to keyboard keys.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameModeHardCore">
         <source>Hard core</source>
-        <target state="new">Hard core</target>
+        <target state="translated">하드 코어</target>
         <note>Game mode of Aspire Outage in which destroying an enemy really stops the matching resource.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameModeNormal">
         <source>Normal</source>
-        <target state="new">Normal</target>
+        <target state="translated">보통</target>
         <note>Default game mode of Aspire Outage, which has no effect on resources.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGamePlay">
         <source>Play Aspire Outage</source>
-        <target state="new">Play Aspire Outage</target>
+        <target state="translated">Aspire Outage 플레이</target>
         <note>Tooltip and accessible name of the resource graph button that launches the game. Aspire Outage is the name of the game.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameSoundOff">
         <source>Sound: off</source>
-        <target state="new">Sound: off</target>
+        <target state="translated">소리: 끔</target>
         <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is off.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameSoundOn">
         <source>Sound: on</source>
-        <target state="new">Sound: on</target>
+        <target state="translated">소리: 켬</target>
         <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</note>
       </trans-unit>
       <trans-unit id="ResourceOverviewBrowseMeters">
         <source>Browse meters</source>
-        <target state="new">Browse meters</target>
+        <target state="translated">미터 찾아보기</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewConsoleTitle">
         <source>Console</source>
-        <target state="new">Console</target>
+        <target state="translated">콘솔</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewCountOfTotal">
         <source>{0} of {1}</source>
-        <target state="new">{0} of {1}</target>
+        <target state="translated">{0}/{1}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewEndpointAlsoAt">
         <source>{0}, also at {1}</source>
-        <target state="new">{0}, also at {1}</target>
+        <target state="translated">{0}, {1}에도 있음</target>
         <note>Tooltip of an endpoint's address on the resource overview. {0} is the address, {1} is the same endpoint's other address, such as its localhost address</note>
       </trans-unit>
       <trans-unit id="ResourceOverviewEndpointsTitle">
         <source>Endpoints</source>
-        <target state="new">Endpoints</target>
+        <target state="translated">엔드포인트</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewErrors">
         <source>Errors</source>
-        <target state="new">Errors</target>
+        <target state="translated">오류</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewExitCode">
         <source>Exit code</source>
-        <target state="new">Exit code</target>
+        <target state="translated">종료 코드</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewFailed">
         <source>Failed</source>
-        <target state="new">Failed</target>
+        <target state="translated">실패</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewFilterEnvironmentVariables">
         <source>Filter environment variables</source>
-        <target state="new">Filter environment variables</target>
+        <target state="translated">환경 변수 필터링</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewHideEmptyPanels">
         <source>Hide empty panels</source>
-        <target state="new">Hide empty panels</target>
+        <target state="translated">빈 패널 숨기기</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewInstruments">
         <source>Instruments</source>
-        <target state="new">Instruments</target>
+        <target state="translated">계측</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewInternalEndpoint">
         <source>Internal</source>
-        <target state="new">Internal</target>
+        <target state="translated">내부</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewLogsTitle">
         <source>Structured logs</source>
-        <target state="new">Structured logs</target>
+        <target state="translated">구조화된 로그</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewMeters">
         <source>Meters</source>
-        <target state="new">Meters</target>
+        <target state="translated">미터</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewMetricsTitle">
         <source>Metrics</source>
-        <target state="new">Metrics</target>
+        <target state="translated">메트릭</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoAttentionLogs">
         <source>No warnings or errors</source>
-        <target state="new">No warnings or errors</target>
+        <target state="translated">경고 또는 오류 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoConsoleLogs">
         <source>No console output</source>
-        <target state="new">No console output</target>
+        <target state="translated">콘솔 출력이 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoEndpoints">
         <source>No endpoints</source>
-        <target state="new">No endpoints</target>
+        <target state="translated">엔드포인트 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoEnvironmentVariables">
         <source>No environment variables</source>
-        <target state="new">No environment variables</target>
+        <target state="translated">환경 변수 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoHealthChecks">
         <source>No health checks</source>
-        <target state="new">No health checks</target>
+        <target state="translated">상태 검사 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoMatchingEnvironmentVariables">
         <source>No environment variables match the filter</source>
-        <target state="new">No environment variables match the filter</target>
+        <target state="translated">필터와 일치하는 환경 변수가 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoMetrics">
         <source>No metrics</source>
-        <target state="new">No metrics</target>
+        <target state="translated">메트릭 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoPinnedMetrics">
         <source>Pin the metrics you want to keep an eye on and they'll show up here.</source>
-        <target state="new">Pin the metrics you want to keep an eye on and they'll show up here.</target>
+        <target state="translated">계속 확인할 메트릭을 고정하면 여기에 표시됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoProperties">
         <source>No properties</source>
-        <target state="new">No properties</target>
+        <target state="translated">속성 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoRelationships">
         <source>No relationships</source>
-        <target state="new">No relationships</target>
+        <target state="translated">관계 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoTelemetry">
         <source>This resource hasn't sent telemetry</source>
-        <target state="new">This resource hasn't sent telemetry</target>
+        <target state="translated">이 리소스는 원격 분석을 보내지 않았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoTraces">
         <source>No traces</source>
-        <target state="new">No traces</target>
+        <target state="translated">추적 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoVolumes">
         <source>No volumes</source>
-        <target state="new">No volumes</target>
+        <target state="translated">볼륨 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNotFound">
         <source>Resource '{0}' was not found.</source>
-        <target state="new">Resource '{0}' was not found.</target>
+        <target state="translated">리소스 '{0}'을(를) 찾을 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Open console</source>
-        <target state="new">Open console</target>
+        <target state="translated">콘솔 열기</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">
         <source>Resource overview</source>
-        <target state="new">Resource overview</target>
+        <target state="translated">리소스 개요</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPanelsLabel">
         <source>Panels</source>
-        <target state="new">Panels</target>
+        <target state="translated">패널</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPropertiesTitle">
         <source>Properties</source>
-        <target state="new">Properties</target>
+        <target state="translated">속성</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewRelationshipGraph">
         <source>Relationship graph</source>
-        <target state="new">Relationship graph</target>
+        <target state="translated">관계 그래프</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewRelationshipsTitle">
         <source>Relationships</source>
-        <target state="new">Relationships</target>
+        <target state="translated">관계</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAllEnvironmentVariables">
         <source>Show all environment variables</source>
-        <target state="new">Show all environment variables</target>
+        <target state="translated">모든 환경 변수 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAllPanels">
         <source>Show all panels</source>
-        <target state="new">Show all panels</target>
+        <target state="translated">모든 패널 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAppModelEnvironmentVariables">
         <source>Show only environment variables from the app model</source>
-        <target state="new">Show only environment variables from the app model</target>
+        <target state="translated">앱 모델의 환경 변수만 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowLess">
         <source>Show less</source>
-        <target state="new">Show less</target>
+        <target state="translated">간단히 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowMore">
         <source>{0} more</source>
-        <target state="new">{0} more</target>
+        <target state="translated">{0}개 더</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewStatusTitle">
         <source>Status</source>
-        <target state="new">Status</target>
+        <target state="translated">상태</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewStopTime">
         <source>Stop time</source>
-        <target state="new">Stop time</target>
+        <target state="translated">중지 시간</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewTotal">
         <source>Total</source>
-        <target state="new">Total</target>
+        <target state="translated">합계</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewTracesTitle">
         <source>Traces</source>
-        <target state="new">Traces</target>
+        <target state="translated">추적</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewViewAll">
         <source>View all</source>
-        <target state="new">View all</target>
+        <target state="translated">모두 보기</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewWarnings">
         <source>Warnings</source>
-        <target state="new">Warnings</target>
+        <target state="translated">경고</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentLifetime">
         <source>Persistent</source>
-        <target state="new">Persistent</target>
+        <target state="translated">영구적</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentLifetimeDescription">
         <source>Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</source>
-        <target state="new">Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</target>
+        <target state="translated">AppHost가 중지되어도 자동으로 중지되지 않습니다. 이 수명은 데이터의 지속성을 보장하지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentType">
         <source>{0} (persistent)</source>
-        <target state="new">{0} (persistent)</target>
+        <target state="translated">{0} (영구적)</target>
         <note>{0} is the resource type, for example Container. Persistence describes the container lifetime, not durable data.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsAdd">
         <source>Add tag</source>
-        <target state="new">Add tag</target>
+        <target state="translated">태그 추가</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsAppHostDefined">
         <source>Defined by the AppHost. This tag cannot be removed.</source>
-        <target state="new">Defined by the AppHost. This tag cannot be removed.</target>
+        <target state="translated">AppHost에서 정의합니다. 이 태그는 제거할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsCreate">
         <source>Create tag "{0}"</source>
-        <target state="new">Create tag "{0}"</target>
+        <target state="translated">"{0}" 태그 만들기</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsInputLabel">
         <source>Add a tag to {0}</source>
-        <target state="new">Add a tag to {0}</target>
+        <target state="translated">{0}에 태그 추가</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsInputPlaceholder">
         <source>Tag name</source>
-        <target state="new">Tag name</target>
+        <target state="translated">태그 이름</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsLabel">
         <source>Tags</source>
-        <target state="new">Tags</target>
+        <target state="translated">태그</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsRemove">
         <source>Remove tag {0}</source>
-        <target state="new">Remove tag {0}</target>
+        <target state="translated">{0} 태그 제거</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsSuggestions">
         <source>Tags</source>
-        <target state="new">Tags</target>
+        <target state="translated">태그</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTraitDashboardTags">
         <source>Dashboard tags</source>
-        <target state="new">Dashboard tags</target>
+        <target state="translated">대시보드 태그</target>
         <note>Name of the property listing the tags a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourcesActionsColumnHeader">
@@ -884,7 +884,7 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsResourceTypeDisplayNameProperty">
         <source>Type display name</source>
-        <target state="new">Type display name</target>
+        <target state="translated">표시 이름 입력</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">

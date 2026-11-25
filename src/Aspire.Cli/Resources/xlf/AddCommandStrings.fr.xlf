@@ -94,7 +94,7 @@
       </trans-unit>
       <trans-unit id="IntegrationSourceExplanation">
         <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
-        <target state="new">One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</target>
+        <target state="translated">Une ou plusieurs sources d’intégration sont configurées. Une source d’intégration permet à une organisation de partager des intégrations pour personnaliser votre expérience de développement.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -129,7 +129,7 @@
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresIntegrationName">
         <source>An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</source>
-        <target state="new">An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</target>
+        <target state="translated">Un nom d’intégration est requis en mode non interactif. Spécifiez l’ID exact du package ou son nom convivial, par exemple « aspire add redis ».</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
