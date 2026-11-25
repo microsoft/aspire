@@ -396,6 +396,8 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         var longStatement = "SELECT " + string.Join(", ", Enumerable.Range(1, 40).Select(i => $"c{i}")) + " FROM wide_table";
         // The '\n' escape would occupy output positions 196-197, straddling the 197-character truncation point.
         var escapeAtTruncationStatement = "SELECT " + new string('x', 189) + "\nFROM t";
+        // The emoji's two UTF-16 code units would occupy output positions 196-197, straddling the 197-character truncation point.
+        var surrogatePairAtTruncationStatement = "SELECT " + new string('x', 189) + "\U0001F600 FROM t";
         var resourceSpans = new OtlpResourceSpansJson[]
         {
             new()
@@ -487,6 +489,24 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
                                         Value = new OtlpAnyValueJson { StringValue = escapeAtTruncationStatement }
                                     }
                                 ]
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "db00005",
+                                ParentSpanId = "root001",
+                                Name = "emoji",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(48)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(49)),
+                                Status = new OtlpSpanStatusJson { Code = 1 },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson
+                                    {
+                                        Key = "db.query.text",
+                                        Value = new OtlpAnyValueJson { StringValue = surrogatePairAtTruncationStatement }
+                                    }
+                                ]
                             }
                         ]
                     }
@@ -526,14 +546,15 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [
                 "Trace: abc1234 (http://localhost:18888/traces/detail/abc1234567890def)",
-                "Duration: 50ms  Spans: 5",
+                "Duration: 50ms  Spans: 6",
                 "",
                 "api",
                 $"└─ {SpanId("root001")} GET /orders OK     50ms",
                 $"   ├─ {SpanId("db00001")} postgres OK     20ms SELECT o.id, o.total\\n    FROM orders AS o\\n    WHERE o.customer_id = @p0",
                 $"   ├─ {SpanId("db00002")} legacy OK     10ms {longStatement[..197]}...",
                 $"   ├─ {SpanId("db00003")} quoted OK      5ms SELECT * FROM t WHERE name = 'a  b'",
-                $"   └─ {SpanId("db00004")} split OK      3ms SELECT {new string('x', 189)}...",
+                $"   ├─ {SpanId("db00004")} split OK      3ms SELECT {new string('x', 189)}...",
+                $"   └─ {SpanId("db00005")} emoji OK      1ms SELECT {new string('x', 189)}...",
             ],
             outputWriter.Logs.SkipWhile(l => !l.StartsWith("Trace:", StringComparison.Ordinal)));
     }
@@ -612,6 +633,87 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         };
 
         return JsonSerializer.Serialize(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+    }
+
+    [Fact]
+    public async Task TelemetryTracesCommand_TraceDetail_TruncatesLongSpanNames()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        // Span names are truncated to 47 characters before "...". The '[' and the emoji's two UTF-16
+        // code units straddle that truncation point.
+        var bracketName = new string('a', 46) + "[x] tail";
+        var surrogatePairName = new string('b', 46) + "\U0001F600 tail";
+        var resourceSpans = new OtlpResourceSpansJson[]
+        {
+            new()
+            {
+                Resource = TelemetryTestHelper.CreateOtlpResource("api", null),
+                ScopeSpans =
+                [
+                    new OtlpScopeSpansJson
+                    {
+                        Spans =
+                        [
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "root001",
+                                Name = bracketName,
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(50)),
+                                Status = new OtlpSpanStatusJson { Code = 1 }
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "child01",
+                                ParentSpanId = "root001",
+                                Name = surrogatePairName,
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(10)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(30)),
+                                Status = new OtlpSpanStatusJson { Code = 1 }
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        var traceJson = JsonSerializer.Serialize(new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans },
+            TotalCount = 1,
+            ReturnedCount = 1
+        }, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+            resources:
+            [
+                new ResourceInfoJson { Name = "api", InstanceId = null },
+            ],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/traces"] = traceJson
+            },
+            hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --trace-id abc1234567890def");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(
+            [
+                "Trace: abc1234 (http://localhost:18888/traces/detail/abc1234567890def)",
+                "Duration: 50ms  Spans: 2",
+                "",
+                "api",
+                $"└─ root001 {new string('a', 46)}[... OK     50ms",
+                $"   └─ child01 {new string('b', 46)}... OK     20ms",
+            ],
+            outputWriter.Logs.SkipWhile(l => !l.StartsWith("Trace:", StringComparison.Ordinal)));
     }
 
     [Fact]

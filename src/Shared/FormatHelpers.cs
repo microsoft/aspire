@@ -145,7 +145,13 @@ internal static class FormatHelpers
     /// Truncates text to at most <paramref name="maxLength"/> UTF-16 code units, including the ellipsis,
     /// without splitting surrogate pairs.
     /// </summary>
-    public static string TruncateText(string? text, int maxLength)
+    public static string TruncateText(string? text, int maxLength) => TruncateText(text, maxLength, Ellipsis);
+
+    /// <summary>
+    /// Truncates text to at most <paramref name="maxLength"/> UTF-16 code units, including
+    /// <paramref name="ellipsis"/>, without splitting surrogate pairs.
+    /// </summary>
+    public static string TruncateText(string? text, int maxLength, string ellipsis)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -157,13 +163,13 @@ internal static class FormatHelpers
             return text;
         }
 
-        var retainedLength = maxLength - Ellipsis.Length;
+        var retainedLength = maxLength - ellipsis.Length;
         if (retainedLength > 0 && char.IsHighSurrogate(text[retainedLength - 1]) && char.IsLowSurrogate(text[retainedLength]))
         {
             retainedLength--;
         }
 
-        return string.Concat(text.AsSpan(0, retainedLength), Ellipsis);
+        return string.Concat(text.AsSpan(0, retainedLength), ellipsis);
     }
 
     public static string CombineWithSeparator(string separator, params string?[] parts)
