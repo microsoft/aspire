@@ -1,0 +1,113 @@
+{
+  "run_id": 45513100784,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45513100784",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-25T00:52:18Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22547,
+    "title": "Dashboard: render header resource tabs as links and move narrow tabs into the nav menu",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/header-tabs-as-links",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22547",
+    "merged_at": "2026-11-24T23:48:57Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "55d2c657887c39a30ac2922404430c1d6812865b",
+    "failed_sha": "41786fb686ff54629beea96c028d24993df00715",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "19e1440f8f123e12c1f6a77671d482113efc5d3e",
+        "message": "Keep Azure DevOps logging commands unwrapped in CLI pipeline output (#21487) ## Description With `--pipeline-log-level debug`, `aspire publish`, `deploy` and `do` forward child-process output, such as `dotnet publish (stdout): ...`, through `ConsoleActivityLogger`. That logger renders each line with Spectre's `MarkupLine`, which hard-wraps at the console width: 160 columns when output is redirected in CI, or `ASPIRE_CONSOLE_WIDTH`. Once the timestamp, step tag and `[DBG]` prefix are added, a sin",
+        "html_url": "https://github.com/microsoft/aspire/commit/19e1440f8f123e12c1f6a77671d482113efc5d3e",
+        "pull_request": {
+          "number": 21487,
+          "title": "Keep Azure DevOps logging commands unwrapped in CLI pipeline output",
+          "url": "https://github.com/microsoft/aspire/pull/21487",
+          "merged_at": "2026-11-24T21:05:06Z"
+        }
+      },
+      {
+        "sha": "f88fb0b911eb9d95697617dd45a16fb34e6f8df2",
+        "message": "[ci] Archive CLI starter validation diagnostics before artifact upload (#22348) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `8848ddee8533bee493addca4155693c0a4d35ee8` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8.5/10 | ↑ Native macOS archive and routing tests passed 193/193; binary-xattr probe preserved log contents and restored the environment.<br>↓ New-head hosted Linux/Windows execu",
+        "html_url": "https://github.com/microsoft/aspire/commit/f88fb0b911eb9d95697617dd45a16fb34e6f8df2",
+        "pull_request": {
+          "number": 22348,
+          "title": "[ci] Archive CLI starter validation diagnostics before artifact upload",
+          "url": "https://github.com/microsoft/aspire/pull/22348",
+          "merged_at": "2026-11-24T21:15:23Z"
+        }
+      },
+      {
+        "sha": "d201e0173cff2a7e6c4c997e7df2e049e36cfe5f",
+        "message": "Regenerate resource designer files (#22450) ## Description Regenerate the checked-in CLI and dashboard resource designers to match their configured resource generators. This reorders generated accessors and updates the dashboard `Routes` constructor to match the public resource generator. Resource strings and accessor mappings are unchanged. ### Validation - Compared all 244 generated accessors with their `.resx` keys and previous mappings: passed. - `dotnet test --project tests\\Aspire.Cli.Tests",
+        "html_url": "https://github.com/microsoft/aspire/commit/d201e0173cff2a7e6c4c997e7df2e049e36cfe5f",
+        "pull_request": {
+          "number": 22450,
+          "title": "Regenerate resource designer files",
+          "url": "https://github.com/microsoft/aspire/pull/22450",
+          "merged_at": "2026-11-24T22:18:26Z"
+        }
+      },
+      {
+        "sha": "1fbded12b815fd7770929240e06296a813549440",
+        "message": "Keep dashboard resource ordering stable and protect saved customizations (#22471)",
+        "html_url": "https://github.com/microsoft/aspire/commit/1fbded12b815fd7770929240e06296a813549440",
+        "pull_request": {
+          "number": 22471,
+          "title": "Keep dashboard resource ordering stable and protect saved customizations",
+          "url": "https://github.com/microsoft/aspire/pull/22471",
+          "merged_at": "2026-11-24T23:48:08Z"
+        }
+      },
+      {
+        "sha": "41786fb686ff54629beea96c028d24993df00715",
+        "message": "Dashboard: render header resource tabs as links and move narrow tabs into the nav menu (#22547)",
+        "html_url": "https://github.com/microsoft/aspire/commit/41786fb686ff54629beea96c028d24993df00715",
+        "pull_request": {
+          "number": 22547,
+          "title": "Dashboard: render header resource tabs as links and move narrow tabs into the nav menu",
+          "url": "https://github.com/microsoft/aspire/pull/22547",
+          "merged_at": "2026-11-24T23:48:57Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "id": 138879198278,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45513100784/job/138879198278",
+      "classification": "flaky-test",
+      "reason": "Single bUnit WaitForFailedException timeout (render count 2, check count 1) in a timing-sensitive wait; no deterministic evidence",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "error": "Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.\n\nIf this test does not fail consistently, the reason may be that\nthe wait timeout is too short, and the runtime did not have enough\ntime to complete the necessary number of renders of the component under test.\nThis can happen on highly utilized or slower hardware, for example.\n\nTo determine if this is the cause, compare the check and render count(s) below\nand see if they match what is expected. If they do not,\nconsider increasing the timeout, either at the individual\nmethod call level, e.g. WaitForElement(\"div\", TimeSpan.FromSeconds(15)),\nor via the static TestContext.DefaultWaitTimeout property.\n\nCheck count: 1.\nComponent render count: 2.\nTotal render count across all components: 0.\n---- Assert.Equal() Failure: Strings differ\n                                 ↓ (pos 22)\nExpected: \"Localized:HomeActivityWaiting\"\nActual:   \"Localized:HomeActivityLoading\"\n                        ",
+      "stack_trace": "   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertionAsync[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 125\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 148\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.<>c__DisplayClass6_0.<Render_ActivityAndInsights_UseLocalizedText>b__0() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 148\n   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.<>c__DisplayClass6_0.<.ctor>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.<>c__DisplayClass32_0.<WrapSynchronousChecker>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226",
+      "standard_output": "Temporary workspace created at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/jbkmpb4j.tus\nDisposing temporary workspace at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/jbkmpb4j.tus\n",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "bUnit WaitForAssertion timed out with Loading state still shown, consistent with slow-runner timing",
+      "job_id": 138879198278,
+      "execution_id": "35980ca9-347c-43b4-a51c-94c802cd795a",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dashboard-components-messagebar-linkasaction-waitfor-timeout"
+  ]
+}
