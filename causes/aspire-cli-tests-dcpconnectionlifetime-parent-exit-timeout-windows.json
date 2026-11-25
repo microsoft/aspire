@@ -1,0 +1,15 @@
+{
+  "id": "aspire-cli-tests-dcpconnectionlifetime-parent-exit-timeout-windows",
+  "type": "main-repository-breakage",
+  "title": "DcpConnectionLifetimeTests.Session_WhenParentExits_StopsApiServerAndControllers times out on Windows",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync",
+  "occurrences": [
+    {
+      "run_id": 45706769734,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45706769734",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "observed_at": "2026-11-25T22:39:17Z",
+      "pr_number": 0
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "run_id": 45706769734,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45706769734",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-25T22:39:17Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22362,
+    "title": "Replace Pomelo MySQL EF Core provider with Microting fork",
+    "author": "bart-vmware",
+    "state": "closed",
+    "head_branch": "mysql-pomelo-to-microting",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22362",
+    "merged_at": "2026-11-25T21:42:15Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "8e5d6a8a0dd0d1bfea85668f92d27de06d173e8b",
+    "failed_sha": "0daae1db7edc3f7a977e931872b3edfb751d8d65",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "18e3cd4252be55d5077f22852a99673a52c42f8f",
+        "message": "Prevent aspire doctor from orphaning DCP processes (#21837) ## Description `aspire doctor` starts short-lived DCP API servers to check connectivity. If the CLI exits abruptly, managed cleanup cannot run and those API servers and their controllers can outlive the command. Bind each probe's DCP lifetime to the executing CLI process so DCP shuts down when its owner exits. - Pass `--monitor <CLI PID>` through the common launch path for both certificate modes, preserving normal shutdown, cancellation",
+        "html_url": "https://github.com/microsoft/aspire/commit/18e3cd4252be55d5077f22852a99673a52c42f8f",
+        "pull_request": {
+          "number": 21837,
+          "title": "Prevent aspire doctor from orphaning DCP processes",
+          "url": "https://github.com/microsoft/aspire/pull/21837",
+          "merged_at": "2026-11-25T21:34:44Z"
+        }
+      },
+      {
+        "sha": "63ac9c3a9d54aa08801056e96374ec07f336a4c1",
+        "message": "Make layered .NET container archives match SDK archive output (#22666) ## Description Adding `PublishWithContainerFiles` to a .NET project that publishes to an archive (`ContainerImageDestination.Archive`) changed the archive compared to the same project without container files. Code that consumes the archive couldn't treat both cases the same way. Without container files, the .NET SDK writes the archive itself. With container files, Aspire builds the SDK image into the local runtime, layers the",
+        "html_url": "https://github.com/microsoft/aspire/commit/63ac9c3a9d54aa08801056e96374ec07f336a4c1",
+        "pull_request": {
+          "number": 22666,
+          "title": "Make layered .NET container archives match SDK archive output",
+          "url": "https://github.com/microsoft/aspire/pull/22666",
+          "merged_at": "2026-11-25T21:36:53Z"
+        }
+      },
+      {
+        "sha": "814cbd3d53a0ef9a7740577b07c7ff34d47d31bd",
+        "message": "Use .slnx solution files in project templates (#22492) ## Description The `aspire`, `aspire-starter`, and `aspire-ts-cs-starter` templates now generate a `.slnx` solution file instead of a `.sln`. Earlier attempts were blocked for two reasons. The templates had to support SDKs older than .NET 10, which can't read `.slnx`, and the template engine didn't process conditionals inside `.slnx` files. Neither applies now: every template targets `net10.0`/`net11.0`, and the .NET 10 SDK supports conditio",
+        "html_url": "https://github.com/microsoft/aspire/commit/814cbd3d53a0ef9a7740577b07c7ff34d47d31bd",
+        "pull_request": {
+          "number": 22492,
+          "title": "Use .slnx solution files in project templates",
+          "url": "https://github.com/microsoft/aspire/pull/22492",
+          "merged_at": "2026-11-25T21:41:21Z"
+        }
+      },
+      {
+        "sha": "0daae1db7edc3f7a977e931872b3edfb751d8d65",
+        "message": "Replace Pomelo MySQL EF Core provider with Microting fork (#22362) ## Description `Pomelo.EntityFrameworkCore.MySql` has not been updated since 9.0.0 (EF Core 9), which forced `Aspire.Pomelo.EntityFrameworkCore.MySql` to pin EF Core 9 dependencies while the rest of the repo moves to newer versions. Switch to `Microting.EntityFrameworkCore.MySql`, the maintained fork, which targets EF Core 10. The package is renamed to match: - `Aspire.Pomelo.EntityFrameworkCore.MySql` -> `Aspire.Microting.Entity",
+        "html_url": "https://github.com/microsoft/aspire/commit/0daae1db7edc3f7a977e931872b3edfb751d8d65",
+        "pull_request": {
+          "number": 22362,
+          "title": "Replace Pomelo MySQL EF Core provider with Microting fork",
+          "url": "https://github.com/microsoft/aspire/pull/22362",
+          "merged_at": "2026-11-25T21:42:15Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 139543390126,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45706769734/job/139543390126",
+      "classification": "main-repository-breakage",
+      "reason": "Aspire.Cli.Tests on Windows failed with a test TimeoutException in DcpConnectionLifetimeTests; no independent transient evidence.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.Session_WhenParentExits_StopsApiServerAndControllers(delayHandoff: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync(Boolean abruptParentExit, Boolean delayHandoff, Boolean useSymlink, Boolean preventGracefulStop) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 187\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync(Boolean abruptParentExit, Boolean delayHandoff, Boolean useSymlink, Boolean preventGracefulStop) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 249\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.Session_WhenParentExits_StopsApiServerAndControllers(Boolean delayHandoff) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 29\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\zkqzaos3.z1m\nReady DCP process: PID=3044, start=1795644907691.\nReady DCP process: PID=1360, start=1795644910408.\n\n\n\n2026-11-25T22:15:08.995Z\tdebug\tdcp\tStarting DCP...\t{\"PID\": 3044, \"Exe\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"start-apiserver\", \"--monitor\", \"7300\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-rsod5wra.zhf\\\\kubeconfig\", \"-v=debug\", \"--container-runtime\", \"docker\"], \"Version\": \"{\\\"version\\\":\\\"0.27.5\\\",\\\"commitHash\\\":\\\"600bc96061e534129bc93402658a365dac7049b5\\\",\\\"buildTimestamp\\\":\\\"2026-11-20T01:08:32Z\\\"}\"}\n2026-11-25T22:15:08.995Z\tinfo\tdcp.start-apiserver.monitor\tStarted monitoring process\t{\"PID\": 7300}\n2026-11-25T22:15:09.978Z\tdebug\tdcp.start-apiserver\tExtensions directory does not exist, extensions will not be loaded from this directory..\t{\"Directory\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\ext\"}\n2026-11-25T22:15:09.980Z\tinfo\tdcp.start-apiserver.api-server\tStarting API server...\n2026-11-25T22:15:10.012Z\tdebug\tdcp.start-apiserver.api-server\tkubeconfig saved successfully\n2026-11-25T22:15:10.047Z\tdebug\tdcp\tAdding GroupVersion usvc-dev.developer.microsoft.com v1 to ResourceManager\n2026-11-25T22:15:10.107Z\tdebug\tdcp\tAdding GroupVersion usvc-dev.developer.microsoft.com v2 to ResourceManager\n2026-11-25T22:15:10.382Z\tinfo\tdcp.start-apiserver.api-server\tAPI server started\t{\"Address\": \"::1\", \"Port\": 64129}\n2026-11-25T22:15:10.382Z\tdebug\tdcp.start-apiserver\tAbout to launch host services\n2026-11-25T22:15:10.382Z\tinfo\tdcp.start-apiserver.dcp-host\tStarting DCP controller host\n2026-11-25T22:15:10.382Z\tinfo\tdcp.start-apiserver.dcp-host\tStarted all services\t{\"count\": 1}\n2026-11-25T22:15:10.411Z\tdebug\tdcp.start-apiserver.os-executor\tProcess started successfully\t{\"PID\": 1360, \"Command\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"run-controllers\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-rsod5wra.zhf\\\\kubeconfig\", \"--container-runtime\", \"docker\", \"-v=debug\", \"--notification-socket\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\dcp\\\\dcp-notify-sock-jlprjeqw\", \"--monitor\", \"3044\", \"--monitor-identity-time\", \"2026-11-25T22:15:07.691Z\"], \"CreationFlags\": 0, \"PID\": 1360}\n2026-11-25T22:15:10.411Z\tdebug\tdcp.start-apiserver.os-executor\tStarting waiting for process to exit\t{\"PID\": 1360}\n2026-11-25T22:15:10.678Z\tinfo\tdcp.start-apiserver.monitor\tMonitor process exited, shutting down\t{\"PID\": 7300}\n2026-11-25T22:15:10.678Z\tinfo\tdcp.start-apiserver\tShutting down...\n2026-11-25T22:15:10.678Z\tdebug\tdcp.start-apiserver\tInvoking BeforeApiSrvShutdown event handler.\t{\"ResourceCleanup\": \"Full\"}\n2026-11-25T22:15:10.678Z\tdebug\tdcp.start-apiserver.cleanup\tRunning before cleanup tasks...\n2026-11-25T22:15:10.678Z\tdebug\tdcp.start-apiserver.cleanup\tRunning before cleanup task...\t{\"Name\": \"SendCleanupStartedNotification\"}\n2026-11-25T22:15:10.678Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up resources...\n2026-11-25T22:15:10.688Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.developer.microsoft.com/v1, Resource=containerexecs\"}\n2026-11-25T22:15:10.688Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.developer.microsoft.com/v1, Resource=executablereplicasets\"}\n2026-11-25T22:15:10.688Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.developer.microsoft.com/v1, Resource=services\"}\n2026-11-25T22:15:10.688Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.developer.microsoft.com/v1, Resource=containernetworktunnelproxies\"}\n2026-11-25T22:15:10.688Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.dev",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "DcpConnectionLifetimeTests.Session_WhenParentExits timed out at TestLifetimeAsync with no infrastructure or transient evidence.",
+      "job_id": 139543390126,
+      "execution_id": "b9aac911-0bb0-408e-9ad6-b58ccd2ac495",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-dcpconnectionlifetime-parent-exit-timeout-windows"
+  ]
+}
