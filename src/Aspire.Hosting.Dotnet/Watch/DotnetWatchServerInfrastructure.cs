@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -144,9 +145,9 @@ internal static class DotnetWatchServerInfrastructure
 
     private static readonly HashSet<string> s_createdDirectories = new(StringComparer.Ordinal);
 
-    internal static string CreatePrivateDirectory()
+    internal static string CreatePrivateDirectory(ITemporaryStorage temporaryStorage)
     {
-        var directory = Directory.CreateTempSubdirectory("aspw-");
+        var directory = temporaryStorage.CreateTempSubdirectory("aspw-");
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(directory.FullName, PrivateDirectoryMode);

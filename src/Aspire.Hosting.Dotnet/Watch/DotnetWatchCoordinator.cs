@@ -85,7 +85,7 @@ internal static class DotnetWatchCoordinator
     private static readonly ConditionalWeakTable<DotnetProjectResource, WatchState> s_projectStates = new();
     private static readonly ConditionalWeakTable<DotnetProjectResource, WatchRegistration> s_registrations = new();
 
-    /// <summary>Temp-directory variables of the platform (what <see cref="Path.GetTempPath"/> reads).</summary>
+    /// <summary>Temp-directory variables of the platform (what <c>Path.GetTempPath()</c> reads).</summary>
     internal static string[] GetTempVariables(bool windows) => windows ? ["TMP", "TEMP"] : ["TMPDIR"];
 
     /// <summary>Whether watch was requested for this run (<c>AppHost:Run:WatchEnabled</c> in run mode).</summary>
@@ -524,6 +524,7 @@ internal static class DotnetWatchCoordinator
             Builder = builder;
             Id = Guid.NewGuid().ToString("N")[..12];
             builder.Services.TryAddSingleton<IDotnetWatchPreflight, DotnetWatchPreflight>();
+            builder.Services.TryAddSingleton<ITemporaryStorage, TemporaryStorage>();
 
             // Holds the Unix sockets and redirected temp directories. Deleted when the AppHost stops. Kept short:
             // Unix socket paths are limited to ~104 (macOS) / 108 (Linux) characters.
@@ -655,7 +656,14 @@ internal static class DotnetWatchCoordinator
         private string? _runDirectory;
         private string? _shortTempRoot;
         private ILogger? _logger;
-        public string RunDirectory => _runDirectory ?? Path.Combine(Path.GetTempPath(), $"aspw-{Id}");
+        // Preflight replaces this with the application's storage and allocates the run directory through it, before any
+        // server uses the directory.
+        private ITemporaryStorage _temporaryStorage = new TemporaryStorage();
+        public string RunDirectory => _runDirectory ?? Path.Combine(_temporaryStorage.GetTempPath(), $"aspw-{Id}");
+
+        // The watcher builds several roots through a temporary solution in its own temp directory: the system temp
+        // directory it inherits from the AppHost, wherever Aspire allocates its temporary storage.
+        private static string WatcherTempPath => TemporaryStorage.SystemTempPath;
 
         /// <summary>
         /// Path of the watch host, which proxies each replica and hosts the watcher. It ships in this package, so it's
@@ -682,7 +690,8 @@ internal static class DotnetWatchCoordinator
             {
                 return;
             }
-            _runDirectory ??= DotnetWatchServerInfrastructure.CreatePrivateDirectory();
+            _temporaryStorage = services.GetRequiredService<ITemporaryStorage>();
+            _runDirectory ??= DotnetWatchServerInfrastructure.CreatePrivateDirectory(_temporaryStorage);
 
             var evaluator = services.GetRequiredService<IDotnetWatchPreflight>();
             var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DotnetWatchCoordinator).FullName!);
@@ -844,7 +853,7 @@ internal static class DotnetWatchCoordinator
                             group[0].ProjectPath,
                             group[0].Metadata.BuildConfiguration,
                             group[0].BuildEnvironment,
-                            Path.GetTempPath(),
+                            WatcherTempPath,
                             cancellationToken).ConfigureAwait(false);
                         if (DotnetWatchProjectGraph.Compare(group[0].Graph!, defaultTempGraph).Kind !=
                             DotnetWatchGraphComparisonKind.Equivalent)
@@ -860,7 +869,7 @@ internal static class DotnetWatchCoordinator
                 foreach (var project in group)
                 {
                     var buildDirectory = server.TempDirectory ??
-                        (multipleRoots ? Path.GetTempPath() : Path.GetDirectoryName(project.ProjectPath)!);
+                        (multipleRoots ? WatcherTempPath : Path.GetDirectoryName(project.ProjectPath)!);
                     try
                     {
                         var buildGraph = await evaluator.EvaluateBuildAsync(project.ProjectPath, project.Metadata.BuildConfiguration,
@@ -1193,7 +1202,7 @@ internal static class DotnetWatchCoordinator
                             $"The observed watch graph became incompatible: {comparison.Describe()}. Restart the complete watch run.");
                     }
                     var build = await evaluator.EvaluateBuildAsync(project.ProjectPath, project.Metadata.BuildConfiguration, environment,
-                        server.TempDirectory ?? (multipleRoots ? Path.GetTempPath() : Path.GetDirectoryName(project.ProjectPath)!),
+                        server.TempDirectory ?? (multipleRoots ? WatcherTempPath : Path.GetDirectoryName(project.ProjectPath)!),
                         cancellationToken).ConfigureAwait(false);
                     var buildComparison = DotnetWatchProjectGraph.Compare(current, build);
                     if (buildComparison.Kind == DotnetWatchGraphComparisonKind.Equivalent)

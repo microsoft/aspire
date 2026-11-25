@@ -16,8 +16,8 @@ public class ServerHostTests
     [Fact]
     public async Task RejectsAMissingCommand()
     {
-        Assert.Equal(ServerHost.ExitUsage, await ServerHost.RunAsync(["/usr/bin/dotnet"]));
-        Assert.Equal(ServerHost.ExitUsage, await ServerHost.RunAsync(["--"]));
+        Assert.Equal(ServerHost.ExitUsage, await ServerHost.RunAsync(["/usr/bin/dotnet"], new WatchHost::Aspire.Shared.TemporaryStorage()));
+        Assert.Equal(ServerHost.ExitUsage, await ServerHost.RunAsync(["--"], new WatchHost::Aspire.Shared.TemporaryStorage()));
     }
 
     [Fact]

@@ -41,6 +41,7 @@
     <Compile Include="$(SharedDir)ProcessSupervisor.cs" Link="Shared\ProcessSupervisor.cs" />
     <Compile Include="$(SharedDir)ProcessSupervisorLogger.cs" Link="Shared\ProcessSupervisorLogger.cs" />
     <Compile Include="$(SharedDir)ProcessSupervisor.Windows.cs" Link="Shared\ProcessSupervisor.Windows.cs" />
+    <Compile Include="$(SharedDir)TemporaryStorage.cs" Link="Shared\TemporaryStorage.cs" />
   </ItemGroup>
 
 </Project>

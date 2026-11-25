@@ -16,7 +16,7 @@ if (ProcessSupervisor.IsSupervisor)
 return args switch
 {
     [DotnetWatchHostProtocol.ProxyCommand, .. var rest] => await ResourceProxy.RunAsync(rest).ConfigureAwait(false),
-    [DotnetWatchHostProtocol.ServerCommand, .. var rest] => await ServerHost.RunAsync(rest).ConfigureAwait(false),
+    [DotnetWatchHostProtocol.ServerCommand, .. var rest] => await ServerHost.RunAsync(rest, new TemporaryStorage()).ConfigureAwait(false),
     _ => Usage(),
 };
 

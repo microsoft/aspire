@@ -40,7 +40,7 @@ internal static class ServerHost
     internal const int ExitUsage = 64;
     internal const int ExitLaunchFailed = 69;
 
-    public static async Task<int> RunAsync(string[] args)
+    public static async Task<int> RunAsync(string[] args, ITemporaryStorage temporaryStorage)
     {
         if (args is not ["--", var fileName, .. var arguments])
         {
@@ -56,7 +56,7 @@ internal static class ServerHost
             watcher.ArgumentList.Add(argument);
         }
 
-        var directory = Directory.CreateTempSubdirectory("aspire-watch-host-");
+        var directory = temporaryStorage.CreateTempSubdirectory("aspire-watch-host-");
         var exitCodePath = Path.Combine(directory.FullName, "exit-code");
         var cleanupMarker = Environment.GetEnvironmentVariable(DotnetWatchHostProtocol.CleanupMarkerVariable);
         watcher.Environment.Remove(DotnetWatchHostProtocol.CleanupMarkerVariable);
