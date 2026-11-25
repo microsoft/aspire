@@ -256,6 +256,41 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
     }
 
+    [Fact]
+    public async Task AgentInit_WritesAgentInstructionsForWorkspaceRootAppHostWhenRunFromAnotherRepository()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var workingDirectoryAppHost = new FileInfo(Path.Combine(context.Project.FullName, "A.AppHost", "A.AppHost.csproj"));
+        var otherRepository = context.Workspace.CreateDirectory("other-repo");
+        var otherRepositoryAppHost = new FileInfo(Path.Combine(otherRepository.FullName, "B.AppHost", "B.AppHost.csproj"));
+        List<string> searchDirectories = [];
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(workingDirectoryAppHost),
+                FindAppHostProjectFilesAsyncCallback = (directory, _, _, _) =>
+                {
+                    searchDirectories.Add(directory.FullName);
+                    return Task.FromResult<List<FileInfo>>(directory.FullName == otherRepository.FullName
+                        ? [otherRepositoryAppHost]
+                        : [workingDirectoryAppHost]);
+                }
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --workspace-root \"{otherRepository.FullName}\" --agents copilot --scope project --skills none --mcp=false --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal([otherRepository.FullName], searchDirectories);
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("B.AppHost/B.AppHost.csproj", aspireSkillsPluginRegistered: false, newLine)}{newLine}",
+            await File.ReadAllTextAsync(Path.Combine(otherRepository.FullName, AgentInstructionsFile.FileName)));
+        Assert.False(File.Exists(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("9.0.302")]

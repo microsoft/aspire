@@ -330,22 +330,23 @@ internal static partial class ConfigurationHelper
         bool rejectSymbolicLinks = false, bool preserveOwnershipAndAcl = false,
         Func<CancellationToken, Task>? beforeReplace = null)
         // Serialize to text rather than to the stream so the final newline is added the same way as in the
-        // other settings writers.
+        // other settings writers. Encoding.UTF8.GetBytes writes no byte order mark, like File.WriteAllText.
         => WriteFileAtomicallyAsync(
             filePath,
-            () => EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject)),
+            () => Encoding.UTF8.GetBytes(EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject))),
             cancellationToken, rejectSymbolicLinks, preserveOwnershipAndAcl, beforeReplace);
 
     /// <summary>
-    /// Writes <paramref name="content"/> as UTF-8 without a byte order mark to a sibling staging file and only then
-    /// replaces <paramref name="filePath"/>, so a failed or cancelled write leaves the existing file intact.
+    /// Writes <paramref name="content"/> in <paramref name="encoding"/>, preceded by its byte order mark when it
+    /// has one, to a sibling staging file and only then replaces <paramref name="filePath"/>, so a failed or
+    /// cancelled write leaves the existing file intact.
     /// </summary>
-    internal static Task WriteTextFileAtomicallyAsync(string filePath, string content, CancellationToken cancellationToken)
-        => WriteFileAtomicallyAsync(filePath, () => content, cancellationToken,
+    internal static Task WriteTextFileAtomicallyAsync(string filePath, string content, Encoding encoding, CancellationToken cancellationToken)
+        => WriteFileAtomicallyAsync(filePath, () => [.. encoding.Preamble, .. encoding.GetBytes(content)], cancellationToken,
             rejectSymbolicLinks: false, preserveOwnershipAndAcl: false, beforeReplace: null);
 
     private static async Task WriteFileAtomicallyAsync(
-        string filePath, Func<string> getContent, CancellationToken cancellationToken,
+        string filePath, Func<byte[]> getContent, CancellationToken cancellationToken,
         bool rejectSymbolicLinks, bool preserveOwnershipAndAcl,
         Func<CancellationToken, Task>? beforeReplace)
     {
@@ -386,8 +387,7 @@ internal static partial class ConfigurationHelper
                     stream.SetLength(0);
                 }
 
-                // Encoding.UTF8.GetBytes writes no byte order mark, like File.WriteAllText.
-                await stream.WriteAsync(Encoding.UTF8.GetBytes(getContent()), cancellationToken);
+                await stream.WriteAsync(getContent(), cancellationToken);
             }
             if (!preserveOwnershipAndAcl && !OperatingSystem.IsWindows() && destinationMode is { } mode)
             {

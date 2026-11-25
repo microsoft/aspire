@@ -27,7 +27,19 @@ internal enum AgentInstructionsFileChange
     /// The file has a start marker without a matching, closed end marker, so the extent of the
     /// Aspire section is unknown and the file is left untouched.
     /// </summary>
-    SkippedMalformedSection
+    SkippedMalformedSection,
+
+    /// <summary>
+    /// The file is a symbolic link to a file outside the directory, which other repositories can share,
+    /// so it is left untouched rather than given this AppHost's start flow.
+    /// </summary>
+    SkippedExternalLinkTarget,
+
+    /// <summary>
+    /// The file is neither UTF-8 nor UTF-16 or UTF-32 with a byte order mark, so it can't be rewritten without
+    /// losing text and is left untouched.
+    /// </summary>
+    SkippedUnsupportedEncoding
 }
 
 /// <summary>
@@ -53,8 +65,8 @@ internal static class AgentInstructionsFile
 {
     internal const string FileName = "AGENTS.md";
 
-    // Matching uses only the marker prefixes so the explanatory text after them can change
-    // without orphaning sections written by earlier CLIs.
+    // Matching uses only the marker prefixes, followed by a token boundary (see FindMarker), so the
+    // explanatory text after them can change without orphaning sections written by earlier CLIs.
     internal const string SectionStartMarkerPrefix = "<!-- aspire:begin";
     internal const string SectionEndMarkerPrefix = "<!-- aspire:end";
 
@@ -157,10 +169,17 @@ internal static class AgentInstructionsFile
 
         // AGENTS.md is often a link to another agent's instructions file (AGENTS.md -> CLAUDE.md) so every
         // agent reads one file. Work on the link's final target so a dangling link gets its target created,
-        // and the link kept, instead of failing to read through it.
+        // and the link kept, instead of failing to read through it. A target outside the directory can be
+        // shared by several repositories, each of which would replace the others' AppHost commands, so only
+        // links that stay inside the directory are followed.
         if (new FileInfo(filePath).LinkTarget is not null &&
             File.ResolveLinkTarget(filePath, returnFinalTarget: true) is { } linkTarget)
         {
+            if (!IsInDirectory(linkTarget.FullName, directory))
+            {
+                return AgentInstructionsFileChange.SkippedExternalLinkTarget;
+            }
+
             filePath = linkTarget.FullName;
         }
 
@@ -172,7 +191,11 @@ internal static class AgentInstructionsFile
             return AgentInstructionsFileChange.Created;
         }
 
-        var existing = await File.ReadAllTextAsync(filePath, cancellationToken);
+        if (await ReadTextAsync(filePath, cancellationToken) is not (var existing, var encoding))
+        {
+            return AgentInstructionsFileChange.SkippedUnsupportedEncoding;
+        }
+
         var lineBreak = existing.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var section = CreateSection(relativeAppHostPath, aspireSkillsPluginRegistered, lineBreak);
 
@@ -185,25 +208,28 @@ internal static class AgentInstructionsFile
                 : existing.EndsWith('\n') ? lineBreak : lineBreak + lineBreak;
             // The file holds the user's own instructions, so it is replaced atomically: a failed or
             // cancelled write must not leave it truncated.
-            await ConfigurationHelper.WriteTextFileAtomicallyAsync(filePath, existing + separator + section + lineBreak, cancellationToken);
+            await ConfigurationHelper.WriteTextFileAtomicallyAsync(filePath, existing + separator + section + lineBreak, encoding, cancellationToken);
             return AgentInstructionsFileChange.Appended;
         }
 
-        // The end marker is written as "<!-- aspire:end -->". When it is unclosed, as in
+        // Both markers must be closed comments. When either is unclosed, as in
+        //   <!-- aspire:begin
+        //   Keep this team rule.
+        //   <!-- aspire:end -->
+        // or
         //   <!-- aspire:end
         //   Keep this team rule.
         //   <!-- unrelated note -->
         // the next "-->" belongs to another comment, so treat the section as malformed rather
-        // than deleting the user's text and that comment.
-        var endMarker = FindMarker(existing, SectionEndMarkerPrefix, start, fencedCodeBlocks);
+        // than deleting the user's text and that comment. The end marker is only searched for
+        // after the begin marker's "-->".
+        var startClose = FindCommentClose(existing, start, SectionStartMarkerPrefix);
+        var endMarker = startClose < 0
+            ? -1
+            : FindMarker(existing, SectionEndMarkerPrefix, startClose + CommentEnd.Length, fencedCodeBlocks);
         var endMarkerClose = endMarker < 0
             ? -1
-            : existing.IndexOf(CommentEnd, endMarker + SectionEndMarkerPrefix.Length, StringComparison.Ordinal);
-        if (endMarkerClose >= 0 &&
-            existing.AsSpan(endMarker + SectionEndMarkerPrefix.Length, endMarkerClose - endMarker - SectionEndMarkerPrefix.Length).Contains(CommentStart, StringComparison.Ordinal))
-        {
-            endMarkerClose = -1;
-        }
+            : FindCommentClose(existing, endMarker, SectionEndMarkerPrefix);
 
         // A second begin marker before the end marker means the first one is not the start of this section,
         // for example an unterminated section above a complete one. Pairing the first begin marker with the
@@ -229,7 +255,7 @@ internal static class AgentInstructionsFile
             return AgentInstructionsFileChange.Unchanged;
         }
 
-        await ConfigurationHelper.WriteTextFileAtomicallyAsync(filePath, updated, cancellationToken);
+        await ConfigurationHelper.WriteTextFileAtomicallyAsync(filePath, updated, encoding, cancellationToken);
         return AgentInstructionsFileChange.Updated;
     }
 
@@ -246,9 +272,15 @@ internal static class AgentInstructionsFile
     {
         var displayPath = Path.Combine(directory.FullName, FileName).EscapeMarkup();
         AgentInstructionsFileChange change;
+        string? externalLinkTarget = null;
         try
         {
             change = await WriteAsync(directory, appHostPath, aspireSkillsPluginRegistered, cancellationToken);
+            if (change is AgentInstructionsFileChange.SkippedExternalLinkTarget)
+            {
+                // WriteAsync followed the link to decide this, so it resolves again to name the target.
+                externalLinkTarget = File.ResolveLinkTarget(Path.Combine(directory.FullName, FileName), returnFinalTarget: true)?.FullName;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -274,6 +306,16 @@ internal static class AgentInstructionsFile
             case AgentInstructionsFileChange.SkippedMalformedSection:
                 interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture,
                     SharedCommandStrings.AgentInstructionsFileSkippedMalformedSection, displayPath, SectionEndMarker.EscapeMarkup()));
+                break;
+            case AgentInstructionsFileChange.SkippedExternalLinkTarget:
+                interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture,
+                    SharedCommandStrings.AgentInstructionsFileSkippedExternalLinkTarget, displayPath, (externalLinkTarget ?? string.Empty).EscapeMarkup()));
+                break;
+            case AgentInstructionsFileChange.SkippedUnsupportedEncoding:
+                interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture,
+                    SharedCommandStrings.AgentInstructionsFileSkippedUnsupportedEncoding, displayPath));
+                break;
+            case AgentInstructionsFileChange.Unchanged:
                 break;
         }
 
@@ -369,12 +411,58 @@ internal static class AgentInstructionsFile
         }
 
         return Path.GetRelativePath(PathNormalizer.ResolveSymlinks(directory), PathNormalizer.ResolveSymlinks(appHostPath));
+    }
 
-        // GetRelativePath returns an absolute path when the two have no common root, such as different drives.
-        static bool IsOutsideDirectory(string relativePath) =>
-            Path.IsPathRooted(relativePath) ||
-            relativePath == ".." ||
-            relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+    /// <summary>
+    /// Returns whether <paramref name="path"/> is <paramref name="directory"/> or lies below it.
+    /// </summary>
+    /// <remarks>
+    /// AppHost discovery and link targets use paths with links resolved, while the directory can be given through
+    /// a link (for example macOS /var -> /private/var), so both sides are resolved before comparing.
+    /// </remarks>
+    internal static bool IsInDirectory(string path, DirectoryInfo directory) =>
+        !IsOutsideDirectory(Path.GetRelativePath(PathNormalizer.ResolveSymlinks(directory.FullName), PathNormalizer.ResolveSymlinks(path)));
+
+    // GetRelativePath returns an absolute path when the two have no common root, such as different drives.
+    // It compares paths case-insensitively on Windows and macOS, matching their default file systems.
+    private static bool IsOutsideDirectory(string relativePath) =>
+        Path.IsPathRooted(relativePath) ||
+        relativePath == ".." ||
+        relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Reads <paramref name="filePath"/> and returns its text with the encoding to write it back in, or
+    /// <see langword="null"/> when the bytes can't be decoded without loss.
+    /// </summary>
+    /// <remarks>
+    /// A byte order mark selects UTF-8, UTF-16 or UTF-32 (https://www.unicode.org/faq/utf_bom.html#bom4), and the
+    /// returned encoding writes the same mark back. Without one the file must be valid UTF-8: decoding a file saved
+    /// in a legacy code page as UTF-8, such as Windows-1252 where e-acute is the single byte 0xE9, replaces those
+    /// bytes with U+FFFD, and writing the result back would destroy the team's text.
+    /// </remarks>
+    private static async Task<(string Text, Encoding Encoding)?> ReadTextAsync(string filePath, CancellationToken cancellationToken)
+    {
+        var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+        // UTF-32 LE is checked before UTF-16 LE because its mark starts with the UTF-16 LE mark.
+        Encoding encoding = bytes switch
+        {
+            [0xEF, 0xBB, 0xBF, ..] => new UTF8Encoding(encoderShouldEmitUTF8Identifier: true, throwOnInvalidBytes: true),
+            [0xFF, 0xFE, 0x00, 0x00, ..] => new UTF32Encoding(bigEndian: false, byteOrderMark: true, throwOnInvalidCharacters: true),
+            [0x00, 0x00, 0xFE, 0xFF, ..] => new UTF32Encoding(bigEndian: true, byteOrderMark: true, throwOnInvalidCharacters: true),
+            [0xFF, 0xFE, ..] => new UnicodeEncoding(bigEndian: false, byteOrderMark: true, throwOnInvalidBytes: true),
+            [0xFE, 0xFF, ..] => new UnicodeEncoding(bigEndian: true, byteOrderMark: true, throwOnInvalidBytes: true),
+            _ => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+        };
+
+        var preambleLength = encoding.Preamble.Length;
+        try
+        {
+            return (encoding.GetString(bytes, preambleLength, bytes.Length - preambleLength), encoding);
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -400,6 +488,19 @@ internal static class AgentInstructionsFile
     /// recognized at the start of a line, after at most three spaces as for a CommonMark HTML block
     /// (https://spec.commonmark.org/0.31.2/#html-blocks); four spaces make an indented code block.
     /// </para>
+    /// <para>
+    /// The marker token must also end at a boundary: whitespace, the "-->" that closes the comment, or the end
+    /// of the text. The text after the token can change between CLI versions, so all of
+    /// </para>
+    /// <code>
+    /// &lt;!-- aspire:begin (generated by the Aspire CLI; ...) --&gt;
+    /// &lt;!-- aspire:begin --&gt;
+    /// &lt;!-- aspire:begin--&gt;
+    /// </code>
+    /// <para>
+    /// are begin markers, while user comments such as <c>&lt;!-- aspire:beginner --&gt;</c> or
+    /// <c>&lt;!-- aspire:endnotes --&gt;</c> are not.
+    /// </para>
     /// </remarks>
     private static int FindMarker(string text, string prefix, int startIndex, List<(int Start, int End)> fencedCodeBlocks)
     {
@@ -411,6 +512,7 @@ internal static class AgentInstructionsFile
             if (markerIndex >= startIndex &&
                 markerIndex - lineStart <= 3 &&
                 text.AsSpan(markerIndex).StartsWith(prefix, StringComparison.Ordinal) &&
+                IsMarkerTokenBoundary(text.AsSpan(markerIndex + prefix.Length)) &&
                 !fencedCodeBlocks.Exists(block => markerIndex >= block.Start && markerIndex < block.End))
             {
                 return markerIndex;
@@ -420,6 +522,26 @@ internal static class AgentInstructionsFile
         }
 
         return -1;
+    }
+
+    private static bool IsMarkerTokenBoundary(ReadOnlySpan<char> afterToken) =>
+        afterToken.IsEmpty || char.IsWhiteSpace(afterToken[0]) || afterToken.StartsWith(CommentEnd, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Returns the index of the "-->" that closes the marker comment at <paramref name="markerIndex"/>, or -1
+    /// when the comment is unclosed, including when another "&lt;!--" opens before the next "-->": that "-->"
+    /// then closes the other comment, not the marker.
+    /// </summary>
+    private static int FindCommentClose(string text, int markerIndex, string prefix)
+    {
+        var searchStart = markerIndex + prefix.Length;
+        var close = text.IndexOf(CommentEnd, searchStart, StringComparison.Ordinal);
+        if (close < 0 || text.AsSpan(searchStart, close - searchStart).Contains(CommentStart, StringComparison.Ordinal))
+        {
+            return -1;
+        }
+
+        return close;
     }
 
     /// <summary>

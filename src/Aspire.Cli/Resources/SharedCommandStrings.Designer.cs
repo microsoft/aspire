@@ -583,11 +583,29 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Left {0} unchanged because its Aspire section has no end marker. Add &apos;{1}&apos; after the section, or remove the section, to let the Aspire CLI update it..
+        ///   Looks up a localized string similar to Left {0} unchanged because its Aspire section markers are incomplete. The section must start with one closed &apos;&lt;!-- aspire:begin --&gt;&apos; comment and end with &apos;{1}&apos;; fix or remove the section to let the Aspire CLI update it..
         /// </summary>
         internal static string AgentInstructionsFileSkippedMalformedSection {
             get {
                 return ResourceManager.GetString("AgentInstructionsFileSkippedMalformedSection", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Left {0} unchanged because it links to {1}, outside this directory, which other repositories can share. Add the Aspire section to that file yourself, or replace the link with a file in this directory..
+        /// </summary>
+        internal static string AgentInstructionsFileSkippedExternalLinkTarget {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileSkippedExternalLinkTarget", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Left {0} unchanged because it isn&apos;t valid UTF-8 and has no UTF-16 or UTF-32 byte order mark, so rewriting it could lose text. Save it as UTF-8 to let the Aspire CLI update it..
+        /// </summary>
+        internal static string AgentInstructionsFileSkippedUnsupportedEncoding {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileSkippedUnsupportedEncoding", resourceCulture);
             }
         }
         

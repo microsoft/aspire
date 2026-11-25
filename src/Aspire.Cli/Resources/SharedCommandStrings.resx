@@ -306,8 +306,16 @@
     <comment>{0} is the path of the AGENTS.md file.</comment>
   </data>
   <data name="AgentInstructionsFileSkippedMalformedSection" xml:space="preserve">
-    <value>Left {0} unchanged because its Aspire section has no end marker. Add '{1}' after the section, or remove the section, to let the Aspire CLI update it.</value>
+    <value>Left {0} unchanged because its Aspire section markers are incomplete. The section must start with one closed '&lt;!-- aspire:begin --&gt;' comment and end with '{1}'; fix or remove the section to let the Aspire CLI update it.</value>
     <comment>{0} is the path of the AGENTS.md file. {1} is the end marker comment.</comment>
+  </data>
+  <data name="AgentInstructionsFileSkippedExternalLinkTarget" xml:space="preserve">
+    <value>Left {0} unchanged because it links to {1}, outside this directory, which other repositories can share. Add the Aspire section to that file yourself, or replace the link with a file in this directory.</value>
+    <comment>{0} is the path of the AGENTS.md file. {1} is the path of the file the link points to.</comment>
+  </data>
+  <data name="AgentInstructionsFileSkippedUnsupportedEncoding" xml:space="preserve">
+    <value>Left {0} unchanged because it isn't valid UTF-8 and has no UTF-16 or UTF-32 byte order mark, so rewriting it could lose text. Save it as UTF-8 to let the Aspire CLI update it.</value>
+    <comment>{0} is the path of the AGENTS.md file.</comment>
   </data>
   <data name="AgentInstructionsFileWriteFailed" xml:space="preserve">
     <value>Failed to write {0}: {1}</value>

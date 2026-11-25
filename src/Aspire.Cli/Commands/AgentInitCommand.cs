@@ -269,22 +269,22 @@ internal sealed class AgentInitCommand : BaseCommand
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
-    private async Task<FileInfo?> FindAppHostAsync(CancellationToken cancellationToken)
+    private async Task<FileInfo?> FindAppHostAsync(DirectoryInfo searchDirectory, bool useSettings, CancellationToken cancellationToken)
     {
         // Discover the AppHost without the advisory configuration-source checks performed
         // by UseOrFindAppHostProjectFileAsync. Agent setup only consumes saved settings.
-        var appHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
+        var appHost = useSettings ? await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken) : null;
         if (appHost is null)
         {
             var candidates = await _projectLocator.FindAppHostProjectFilesAsync(
-                ExecutionContext.WorkingDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken, skipValidation: true);
+                searchDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken, skipValidation: true);
             appHost = candidates.Count switch
             {
                 1 => candidates[0],
                 > 1 when _hostEnvironment.SupportsInteractiveInput => await InteractionService.PromptForSelectionAsync(
                     InteractionServiceStrings.SelectAppHostToUse,
                     candidates,
-                    file => $"{file.Name.EscapeMarkup()} ({Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, file.FullName).EscapeMarkup()})",
+                    file => $"{file.Name.EscapeMarkup()} ({Path.GetRelativePath(searchDirectory.FullName, file.FullName).EscapeMarkup()})",
                     cancellationToken: cancellationToken),
                 // Without interactive input there is no way to choose between several AppHosts, and
                 // agent init has no AppHost option. The AppHost only supplies optional skill-source
@@ -340,7 +340,8 @@ internal sealed class AgentInitCommand : BaseCommand
         // runs discover the AppHost at most once because discovery can prompt for a selection.
         var discoverAppHost = configurationDirectory is null;
         Task<FileInfo?>? discoveredAppHost = null;
-        Task<FileInfo?> GetDiscoveredAppHostAsync() => discoveredAppHost ??= FindAppHostAsync(cancellationToken);
+        Task<FileInfo?> GetDiscoveredAppHostAsync() =>
+            discoveredAppHost ??= FindAppHostAsync(ExecutionContext.WorkingDirectory, useSettings: true, cancellationToken);
 
         var (agentsProvided, requestedAgents) = agentsBinding.Resolve();
         IReadOnlyList<IAgentClient> selectedClients;
@@ -514,7 +515,7 @@ internal sealed class AgentInitCommand : BaseCommand
             scope is not AgentConfigurationScope.Project || await WriteAgentInstructionsAsync(
                 workspaceRoot,
                 discoverAppHost ? null : configurationDirectory,
-                discoverAppHost ? GetDiscoveredAppHostAsync : null,
+                discoverAppHost ? () => FindWorkspaceAppHostAsync(workspaceRoot, GetDiscoveredAppHostAsync, cancellationToken) : null,
                 aspireSkillsRegistered,
                 cancellationToken);
 
@@ -820,7 +821,7 @@ internal sealed class AgentInitCommand : BaseCommand
         // Agents read AGENTS.md from the workspace root they are opened in, so the file goes there and
         // names the AppHost relative to it. The AppHost comes from the configuration the app was created
         // with (for example a solution's AppHost project chained from `aspire init`), then from the
-        // workspace root, and only standalone runs fall back to discovery.
+        // workspace root, and only standalone runs fall back to discovery within the workspace root.
         var appHostPath = (appConfigurationDirectory is null ? null : AgentInstructionsFile.GetConfiguredAppHostPath(appConfigurationDirectory))
             ?? AgentInstructionsFile.GetConfiguredAppHostPath(workspaceRoot)
             ?? (discoverAppHostAsync is null ? null : (await discoverAppHostAsync())?.FullName);
@@ -832,6 +833,26 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         return await AgentInstructionsFile.WriteAndReportAsync(InteractionService, workspaceRoot, appHostPath, aspireSkillsRegistered, cancellationToken);
+    }
+
+    // AGENTS.md describes the workspace root it is written to, but standalone discovery starts from the working
+    // directory, and saved settings can point anywhere. With `--workspace-root` naming another repository, that
+    // would describe the working directory's AppHost, so only an AppHost inside the workspace root is used.
+    private async Task<FileInfo?> FindWorkspaceAppHostAsync(
+        DirectoryInfo workspaceRoot, Func<Task<FileInfo?>> discoverAppHostAsync, CancellationToken cancellationToken)
+    {
+        if (AgentInstructionsFile.IsInDirectory(ExecutionContext.WorkingDirectory.FullName, workspaceRoot))
+        {
+            // Reuse the discovery that also supplies skill-source settings, so a run prompts for the AppHost at
+            // most once. Its candidates come from below the working directory, so they are in the workspace;
+            // only a saved setting can point outside it.
+            var appHost = await discoverAppHostAsync();
+            return appHost is not null && AgentInstructionsFile.IsInDirectory(appHost.FullName, workspaceRoot) ? appHost : null;
+        }
+
+        // Settings are read relative to the working directory, which is outside this workspace. The workspace
+        // root's own configuration has already been checked by the caller.
+        return await FindAppHostAsync(workspaceRoot, useSettings: false, cancellationToken);
     }
 
     private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(

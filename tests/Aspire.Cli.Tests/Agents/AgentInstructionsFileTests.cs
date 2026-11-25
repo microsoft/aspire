@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Text;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Hosting.Utils;
 
@@ -238,6 +242,51 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
         Assert.Equal(existing, await ReadFileAsync(workspace));
     }
 
+    [Fact]
+    public async Task WriteAsync_LeavesFileWithUnclosedBeginMarkerUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var existing = $"# Rules\n\n{AgentInstructionsFile.SectionStartMarkerPrefix}\nKeep this team rule.\n{AgentInstructionsFile.SectionEndMarkerPrefix} -->\n";
+        await File.WriteAllTextAsync(GetFilePath(workspace), existing);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.SkippedMalformedSection, change);
+        Assert.Equal(existing, await ReadFileAsync(workspace));
+    }
+
+    [Fact]
+    public async Task WriteAsync_AppendsSectionWhenCommentsOnlyStartWithMarkerTokens()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        const string existing = "# Rules\n\n<!-- aspire:beginner -->\nKeep this team rule.\n<!-- aspire:endnotes -->\n";
+        await File.WriteAllTextAsync(GetFilePath(workspace), existing);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Appended, change);
+        Assert.Equal(
+            existing + "\n" + AgentInstructionsFile.CreateSection("apphost.cs", false, "\n") + "\n",
+            await ReadFileAsync(workspace));
+    }
+
+    [Fact]
+    public async Task WriteAsync_ReplacesSectionWithBareMarkers()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        await File.WriteAllTextAsync(GetFilePath(workspace), "# Rules\n\n<!-- aspire:begin-->\nOld section.\n<!-- aspire:end -->\nMore rules.\n");
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Updated, change);
+        Assert.Equal(
+            $"# Rules\n\n{AgentInstructionsFile.CreateSection("apphost.cs", false, "\n")}\nMore rules.\n",
+            await ReadFileAsync(workspace));
+    }
+
     [Theory]
     [InlineData("src/App.AppHost/apphost.cs", "`aspire start --apphost src/App.AppHost/apphost.cs --non-interactive --isolated`")]
     [InlineData("src/My App/apphost.cs", "`aspire start --apphost 'src/My App/apphost.cs' --non-interactive --isolated`")]
@@ -261,6 +310,78 @@ public class AgentInstructionsFileTests(ITestOutputHelper outputHelper)
             """{ "appHost": { "path": "bad\u0000.cs" } }""");
 
         Assert.Null(AgentInstructionsFile.GetConfiguredAppHostPath(workspace.WorkspaceRoot));
+    }
+
+    [Fact]
+    public async Task WriteAndReportAsync_LeavesLinkTargetOutsideDirectoryUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var repository = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "repo"));
+        var shared = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "shared"));
+        var target = Path.Combine(shared.FullName, "AGENTS.md");
+        await File.WriteAllTextAsync(target, "# Shared rules\n");
+        var link = Path.Combine(repository.FullName, AgentInstructionsFile.FileName);
+        TestSymlinkHelper.TryCreateSymlink(link, target, isDirectory: false);
+        var interactionService = new TestInteractionService();
+
+        var succeeded = await AgentInstructionsFile.WriteAndReportAsync(
+            interactionService, repository, Path.Combine(repository.FullName, "apphost.cs"), false, CancellationToken.None);
+
+        Assert.True(succeeded);
+        Assert.Equal(AgentInstructionsFileChange.SkippedExternalLinkTarget,
+            await AgentInstructionsFile.WriteAsync(repository, Path.Combine(repository.FullName, "apphost.cs"), false, CancellationToken.None));
+        Assert.Equal("# Shared rules\n", await File.ReadAllTextAsync(target));
+        Assert.Equal(target, new FileInfo(link).LinkTarget);
+        var warning = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AgentInstructionsFileSkippedExternalLinkTarget, link, target),
+            warning.Message);
+    }
+
+    [Fact]
+    public async Task WriteAsync_KeepsUtf8ByteOrderMarkWhenAppending()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+        await File.WriteAllBytesAsync(GetFilePath(workspace), [.. encoding.Preamble, .. encoding.GetBytes("# R\u00E8gles\n")]);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Appended, change);
+        byte[] expected = [.. encoding.Preamble, .. encoding.GetBytes($"# R\u00E8gles\n\n{AgentInstructionsFile.CreateSection("apphost.cs", false, "\n")}\n")];
+        Assert.Equal(expected, await File.ReadAllBytesAsync(GetFilePath(workspace)));
+    }
+
+    [Fact]
+    public async Task WriteAsync_KeepsUtf16LittleEndianEncodingWhenAppending()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var encoding = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
+        await File.WriteAllBytesAsync(GetFilePath(workspace), [.. encoding.Preamble, .. encoding.GetBytes("# R\u00E8gles\r\n")]);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.Appended, change);
+        byte[] expected = [.. encoding.Preamble, .. encoding.GetBytes($"# R\u00E8gles\r\n\r\n{AgentInstructionsFile.CreateSection("apphost.cs", false, "\r\n")}\r\n")];
+        Assert.Equal(expected, await File.ReadAllBytesAsync(GetFilePath(workspace)));
+    }
+
+    [Fact]
+    public async Task WriteAsync_LeavesFileThatIsNotValidUtf8Unchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        // "# Caf\u00E9" saved as Windows-1252, where 0xE9 alone is not a valid UTF-8 sequence.
+        byte[] original = [.. "# Caf"u8, 0xE9, (byte)'\n'];
+        await File.WriteAllBytesAsync(GetFilePath(workspace), original);
+
+        var change = await AgentInstructionsFile.WriteAsync(workspace.WorkspaceRoot, appHost, false, CancellationToken.None);
+
+        Assert.Equal(AgentInstructionsFileChange.SkippedUnsupportedEncoding, change);
+        Assert.Equal(original, await File.ReadAllBytesAsync(GetFilePath(workspace)));
     }
 
     private static string GetFilePath(TemporaryWorkspace workspace) =>
