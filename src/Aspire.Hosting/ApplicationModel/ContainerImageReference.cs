@@ -60,13 +60,14 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
             {
                 if (!string.IsNullOrEmpty(buildOptionsContext.OutputPath))
                 {
-                    if (Resource.SupportsDotnetProgramPublishing() &&
-                        DotnetProgramPublishing.IsExplicitArchiveOutputPath(buildOptionsContext.OutputPath))
+                    var imageName = buildOptionsContext.LocalImageName ?? Resource.Name.ToLowerInvariant();
+                    if (Resource.SupportsDotnetProgramPublishing())
                     {
-                        return buildOptionsContext.OutputPath;
+                        // .NET SDK publishing follows the SDK's archive naming whether or not container
+                        // files are layered into the image afterwards.
+                        return DotnetProgramPublishing.GetArchiveOutputPath(buildOptionsContext.OutputPath, imageName);
                     }
 
-                    var imageName = buildOptionsContext.LocalImageName ?? Resource.Name.ToLowerInvariant();
                     var imageTag = buildOptionsContext.LocalImageTag;
                     return ResourceExtensions.GetContainerImageArchivePath(buildOptionsContext.OutputPath, imageName, imageTag);
                 }
