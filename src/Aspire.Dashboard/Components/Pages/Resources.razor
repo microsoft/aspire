@@ -35,7 +35,7 @@
                               ImmediateDelay="@FluentUIExtensions.InputDelay"
                               Name="resources-search"
                               AutoComplete="off"
-                              @bind-Value="PageViewModel.TextFilter"
+                              @bind-Value="PageViewModel.Filters.TextFilter"
                               Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
                               @bind-Value:after="HandleSearchFilterChangedAsync">
                     <StartTemplate>
@@ -55,9 +55,9 @@
                 }
 
                 <div>
-                    <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
-                                     ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
-                                     ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                    <ResourceFilters ResourceStates="@PageViewModel.Filters.ResourceStatesToVisibility"
+                                     ResourceTypes="@PageViewModel.Filters.ResourceTypesToVisibility"
+                                     ResourceHealthStates="@PageViewModel.Filters.ResourceHealthStatusesToVisibility"
                                      OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
                                      OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
                 </div>
@@ -69,9 +69,9 @@
                 <FluentPopover AnchorId="resourceFilterButton"
                                @bind-Opened="_isFilterPopupVisible"
                                Class="resources-filter-popup">
-                    <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
-                                     ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
-                                     ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                    <ResourceFilters ResourceStates="@PageViewModel.Filters.ResourceStatesToVisibility"
+                                     ResourceTypes="@PageViewModel.Filters.ResourceTypesToVisibility"
+                                     ResourceHealthStates="@PageViewModel.Filters.ResourceHealthStatusesToVisibility"
                                      OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
                                      OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
                 </FluentPopover>
@@ -125,7 +125,7 @@
                                                             </FluentButton>
                                                         }
                                                     </span>
-                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" ShowHiddenIndicator="true" />
+                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.Filters.TextFilter" FormatName="GetResourceName" ShowHiddenIndicator="true" />
                                                 </span>
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc, _resourceByName.Values))">
@@ -138,7 +138,7 @@
                                             <AspireTemplateColumn ColumnId="@SourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]" Tooltip="true" TooltipText="@(ctx => ResourceSourceViewModel.GetSourceViewModel(ctx.Resource)?.Tooltip)">
                                                 @if (ResourceSourceViewModel.GetSourceViewModel(context.Resource) is { } columnDisplay)
                                                 {
-                                                    <SourceColumnDisplay FilterText="@PageViewModel.TextFilter" Value="@columnDisplay.Value" ContentAfterValue="@columnDisplay.ContentAfterValue" ValueToVisualize="@columnDisplay.ValueToVisualize" Tooltip="@columnDisplay.Tooltip" />
+                                                    <SourceColumnDisplay FilterText="@PageViewModel.Filters.TextFilter" Value="@columnDisplay.Value" ContentAfterValue="@columnDisplay.ContentAfterValue" ValueToVisualize="@columnDisplay.ValueToVisualize" Tooltip="@columnDisplay.Tooltip" />
                                                 }
                                                 else
                                                 {
@@ -245,7 +245,7 @@
                     <ResourceDetails Resource="context"
                                      ResourceByName="_resourceByName"
                                      ShowSpecOnlyToggle="true"
-                                     ShowHiddenResources="@PageViewModel.ShowHiddenResources"
+                                     ShowHiddenResources="@PageViewModel.Filters.ShowHiddenResources"
                                      CommandSelected="@(command => ExecuteResourceCommandAsync(context!, command))"
                                      IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
                 </Details>
@@ -273,7 +273,7 @@
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Name="resources-search"
                           AutoComplete="off"
-                          @bind-Value="PageViewModel.TextFilter"
+                          @bind-Value="PageViewModel.Filters.TextFilter"
                           @bind-Value:after="HandleSearchFilterChangedAsync">
                 <StartTemplate>
                     <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />

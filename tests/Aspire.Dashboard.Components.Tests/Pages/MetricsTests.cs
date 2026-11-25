@@ -420,6 +420,88 @@ public partial class MetricsTests : DashboardTestContext
         }
     }
 
+    [Theory]
+    [InlineData("All instruments", "worker", "All instruments")]
+    [InlineData("Pinned", "worker", "Pinned")]
+    [InlineData("Pinned", "cache", "All instruments")]
+    [InlineData("shared-meter", "worker", "shared-meter")]
+    [InlineData("shared-meter", "All resources", "shared-meter")]
+    [InlineData("api-meter", "worker", "All instruments")]
+    public async Task ResourcesLayout_ChangingResourcePreservesAvailableMetricGroup(string group, string destination, string expectedGroup)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Render<FluentToastProvider>();
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddMetricsAsync(new AddContext(),
+        [
+            CreateMetrics("api", "shared-meter", "api-meter"),
+            CreateMetrics("worker", "shared-meter"),
+            CreateMetrics("cache", "shared-meter")
+        ]);
+        await Services.GetRequiredService<MetricPinStore>().SetPinnedAsync(new OtlpInstrumentKey("shared-meter", "requests"), ["api", "worker"], pinned: true);
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var resourceName = "api";
+        navigation.NavigateTo(DashboardUrls.MetricsUrl(resourceName));
+        var cut = Render<ResourcesLayout>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+            builder.Add(layout => layout.Body, RenderMetrics(resourceName));
+        });
+
+        cut.WaitForAssertion(() => Assert.Equal("All instruments", SelectedGroup()));
+        await cut.InvokeAsync(() => cut.FindAll(".metric-group")
+            .Single(link => link.QuerySelector(".metric-group-name")!.TextContent.Trim() == group).Click());
+        cut.WaitForAssertion(() => Assert.Equal(group, SelectedGroup()));
+
+        resourceName = destination == "All resources" ? null : destination;
+        var selector = resourceName is null ? ".resource-row-all .resource-row-link" : $"[data-resource-name='{resourceName}'] .resource-row-link";
+        var expectedUrl = expectedGroup switch
+        {
+            "All instruments" => DashboardUrls.MetricsUrl(resourceName, duration: 5),
+            "Pinned" => DashboardUrls.MetricsUrl(resourceName, duration: 5, pinned: true),
+            _ => DashboardUrls.MetricsUrl(resourceName, meter: expectedGroup, duration: 5)
+        };
+        cut.WaitForAssertion(() => Assert.Equal(expectedUrl, cut.Find(selector).GetAttribute("href")));
+        await cut.InvokeAsync(() => cut.Find(selector).Click());
+        Assert.Equal(expectedUrl, new Uri(navigation.Uri).PathAndQuery);
+
+        cut.Render(builder => builder.Add(layout => layout.Body, RenderMetrics(resourceName)));
+        cut.WaitForAssertion(() => Assert.Equal(expectedGroup, SelectedGroup()));
+
+        string SelectedGroup() => cut.Find(".metric-group[aria-current='page'] .metric-group-name").TextContent.Trim();
+
+        static Microsoft.AspNetCore.Components.RenderFragment RenderMetrics(string? resourceName) => builder =>
+        {
+            builder.OpenComponent<Metrics>(0);
+            builder.AddAttribute(1, nameof(Metrics.ResourceName), resourceName);
+            builder.CloseComponent();
+        };
+
+        static ResourceMetrics CreateMetrics(string name, params string[] meters)
+        {
+            var resource = CreateResource(name: name);
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            return new ResourceMetrics
+            {
+                Resource = resource,
+                ScopeMetrics =
+                {
+                    meters.Select(meter => new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: meter),
+                        Metrics = { CreateSumMetric(metricName: "requests", startTime: s_testTime.AddMinutes(1)) }
+                    })
+                }
+            };
+        }
+    }
+
     [Fact]
     public async Task ResourcesLayout_MultiSelectionInstrumentChart_ChangingViewKeepsActiveResource()
     {
@@ -1106,9 +1188,8 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task InitialLoad_HasSessionState_RedirectUsingState()
+    public async Task InitialLoad_HasSessionState_ShowsAllInstrumentsWithoutRedirect()
     {
-        // Arrange
         var testSessionStorage = new TestSessionStorage
         {
             OnGetAsync = key =>
@@ -1136,16 +1217,13 @@ public partial class MetricsTests : DashboardTestContext
             }
         };
 
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         MetricsSetupHelpers.SetupMetricsPage(this, sessionStorage: testSessionStorage);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        Render<FluentToastProvider>();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.MetricsUrl());
-
-        Uri? loadRedirect = null;
-        navigationManager.LocationChanged += (s, a) =>
-        {
-            loadRedirect = new Uri(a.Location);
-        };
+        navigationManager.NavigateTo("/metrics");
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
@@ -1182,21 +1260,22 @@ public partial class MetricsTests : DashboardTestContext
             }
         });
 
-        // Act
-        var cut = Render<Metrics>(builder =>
+        var cut = Render<ResourcesLayout>(builder =>
         {
-            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            builder.AddCascadingValue(viewport);
+            builder.Add(layout => layout.Body, bodyBuilder =>
+            {
+                bodyBuilder.OpenComponent<Metrics>(0);
+                bodyBuilder.CloseComponent();
+            });
         });
 
-        // Assert
-        Assert.NotNull(loadRedirect);
-        Assert.Equal("/metrics/resource/TestApp2", loadRedirect.AbsolutePath);
-
-        var query = HttpUtility.ParseQueryString(loadRedirect.Query);
-        Assert.Equal("test-meter", query["meter"]);
-        Assert.Equal("test-instrument", query["instrument"]);
-        Assert.Equal("720", query["duration"]);
-        Assert.Equal(MetricViewKind.Table.ToString(), query["view"]);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("/metrics", new Uri(navigationManager.Uri).PathAndQuery);
+            Assert.Equal("page", cut.Find(".metric-group-all").GetAttribute("aria-current"));
+            Assert.Equal(2, cut.FindComponents<MetricPinButton>().Count);
+        });
     }
 
     [Theory]
@@ -1463,7 +1542,8 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Empty(GetMetricGroups(cut));
-            Assert.Equal("No metrics match the filter", cut.Find(".metric-groups-empty").TextContent.Trim());
+            Assert.Equal("No metrics found", cut.Find(".metric-groups .aspire-pane-message").TextContent.Trim());
+            Assert.Equal("No metrics found", cut.Find(".metrics-content .aspire-pane-message").TextContent.Trim());
         });
 
         // Clearing the filter returns to the selected group.
@@ -1738,7 +1818,7 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task InitialLoad_WithPinnedInstruments_ShowsPinnedGroup()
+    public async Task InitialLoad_WithPinnedInstruments_ShowsAllInstruments()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
         await Services.GetRequiredService<MetricPinStore>().SetPinnedAsync(new OtlpInstrumentKey("test-meter", "test-instrument-b"), ["TestApp"], pinned: true);
@@ -1770,12 +1850,11 @@ public partial class MetricsTests : DashboardTestContext
             builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        // With no meter or instrument in the route, the page opens on the instruments the user chose to watch.
         cut.WaitForAssertion(() =>
         {
-            Assert.True(cut.Instance.PageViewModel.ShowPinned);
-            Assert.Equal("Pinned", cut.Find(".metric-group.selected .metric-group-name").TextContent);
-            Assert.Equal(["test-instrument-b"], GetCardNames(cut));
+            Assert.Equal("page", cut.Find(".metric-group-all").GetAttribute("aria-current"));
+            Assert.Equal(["test-instrument-a", "test-instrument-b"], GetCardNames(cut));
+            Assert.Equal(["Pinned 1", "test-meter 2"], GetMetricGroups(cut));
         });
     }
 
@@ -2120,7 +2199,11 @@ public partial class MetricsTests : DashboardTestContext
         });
         cut.WaitForState(() => cut.Instance.PageViewModel.Instruments?.Count == 3);
 
-        cut.Find(".metric-group-all").Click();
+        await cut.InvokeAsync(() => navigationManager.NavigateTo(DashboardUrls.MetricsUrl("TestApp", meter: "test-meter1")));
+        cut.WaitForAssertion(() => Assert.Equal("test-meter1", cut.Instance.PageViewModel.SelectedMeter));
+        var allLink = cut.Find(".metric-group-all");
+        Assert.Equal("/metrics/resource/TestApp", allLink.GetAttribute("href"));
+        allLink.Click();
 
         cut.WaitForAssertion(() =>
         {
@@ -2129,7 +2212,7 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Equal(["test-meter1: http.request.count", "test-meter1: memory.usage", "test-meter2: queue.length"], GetFilterResultsByMeter(cut));
             Assert.Equal("page", cut.Find(".metric-group-all").GetAttribute("aria-current"));
             Assert.Empty(cut.FindAll(".metric-group.selected:not(.metric-group-all)"));
-            Assert.Contains("all=true", navigationManager.Uri);
+            Assert.Equal("/metrics/resource/TestApp?duration=5", new Uri(navigationManager.Uri).PathAndQuery);
         });
     }
 

@@ -46,12 +46,12 @@
                         <FluentIcon Value="@icon" Color="Color.Custom" CustomColor="currentColor" />
                     </span>
                 }
-                <span class="meter-card-name" title="@instrument.Name">@instrument.Name</span>
+                <span class="meter-card-name" data-tooltip="@instrument.Name">@instrument.Name</span>
             </div>
 
             @if (!string.IsNullOrEmpty(instrument.Description))
             {
-                <div class="meter-card-description" title="@instrument.Description">@instrument.Description</div>
+                <div class="meter-card-description" data-tooltip="@instrument.Description">@instrument.Description</div>
             }
 
             <div class="meter-card-body">

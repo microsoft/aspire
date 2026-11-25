@@ -11,11 +11,12 @@ namespace Aspire.Dashboard.Model;
 
 public sealed class DefaultInstrumentUnitResolver(IStringLocalizer<ControlsStrings> loc) : IInstrumentUnitResolver
 {
-    public string ResolveDisplayedUnit(OtlpInstrumentSummary instrument, bool titleCase, bool pluralize)
+    public string ResolveDisplayedUnit(OtlpInstrumentSummary instrument, bool capitalize, bool pluralize)
     {
         if (!string.IsNullOrEmpty(instrument.Unit))
         {
             var (unit, isRateUnit) = OtlpUnits.GetUnit(instrument.Unit.TrimStart('{').TrimEnd('}'));
+            unit = unit.Replace('_', ' ').ToLowerInvariant();
 
             // Don't pluralize rate units, e.g. We want "Bytes per second", not "Bytes per seconds".
             if (pluralize && !isRateUnit)
@@ -23,9 +24,9 @@ public sealed class DefaultInstrumentUnitResolver(IStringLocalizer<ControlsStrin
                 unit = unit.Pluralize();
             }
 
-            if (titleCase)
+            if (capitalize && unit.Length > 0)
             {
-                unit = unit.Titleize();
+                unit = char.ToUpperInvariant(unit[0]) + unit[1..];
             }
 
             return unit;
@@ -35,24 +36,18 @@ public sealed class DefaultInstrumentUnitResolver(IStringLocalizer<ControlsStrin
         // but have a descriptive name that lets us infer the unit.
         if (instrument.Name.EndsWith(".count", StringComparison.Ordinal))
         {
-            return UntitleCase(loc[nameof(ControlsStrings.PlotlyChartCount)], titleCase);
+            return FormatLocalizedUnit(loc[nameof(ControlsStrings.PlotlyChartCount)], capitalize);
         }
         else if (instrument.Name.EndsWith(".length", StringComparison.Ordinal))
         {
-            return UntitleCase(loc[nameof(ControlsStrings.PlotlyChartLength)], titleCase);
+            return FormatLocalizedUnit(loc[nameof(ControlsStrings.PlotlyChartLength)], capitalize);
         }
         else
         {
-            return UntitleCase(loc[nameof(ControlsStrings.PlotlyChartValue)], titleCase);
+            return FormatLocalizedUnit(loc[nameof(ControlsStrings.PlotlyChartValue)], capitalize);
         }
 
-        static string UntitleCase(string value, bool titleCase)
-        {
-            if (!titleCase)
-            {
-                value = value.ToLower(CultureInfo.CurrentCulture);
-            }
-            return value;
-        }
+        static string FormatLocalizedUnit(string value, bool capitalize) =>
+            capitalize ? value : value.ToLower(CultureInfo.CurrentCulture);
     }
 }

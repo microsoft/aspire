@@ -1,6 +1,6 @@
 .meter-overview {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(286px, 1fr));
     gap: var(--spacingVerticalM);
     max-width: 1400px;
     /* The scroll container has no right padding, so without this the last column touches the edge. */
@@ -14,13 +14,10 @@
     min-width: 0;
     border: 1px solid var(--colorNeutralStroke2);
     border-radius: var(--aspire-radius-medium);
-    background-color: var(--colorNeutralBackground1);
-    transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .meter-card:hover {
-    border-color: var(--colorNeutralStroke1Hover);
-    box-shadow: var(--shadow4);
+    background-color: var(--colorNeutralBackground3);
 }
 
 .meter-card-link {
@@ -40,25 +37,21 @@
     outline-offset: 1px;
 }
 
-/* Keep the pin visible for keyboard navigation, but not when a mouse click leaves it focused after unpinning. */
 ::deep .meter-card-pin {
     position: absolute;
     top: 6px;
     right: 6px;
-    opacity: 0;
     transition: opacity 120ms ease;
 }
 
-.meter-card:hover ::deep .meter-card-pin,
-.meter-card:has(:focus-visible) ::deep .meter-card-pin,
-::deep .meter-card-pin.pinned {
-    opacity: 1;
+/* Keep the pin reachable by keyboard and on touchscreens. */
+@media (hover: hover) {
+    .meter-card:not(:hover, :has(:focus-visible)) ::deep .meter-card-pin:not(.pinned) {
+        opacity: 0;
+        pointer-events: none;
+    }
 }
 
-/* The card's source labels: the resource an instrument comes from, and its meter when a list mixes meters. They're
-   squared tags in the monospace font of identifiers elsewhere in the dashboard, small and grey so they stay
-   secondary to the instrument's name and value. The resource tag is outlined in the resource's color, the same
-   color the resource has everywhere else in the dashboard. */
 /* One line, leaving room for the pin button at the card's top right. The tags shrink, and cut their text, before
    the line wraps. */
 .meter-card-tags {
@@ -78,8 +71,6 @@
     border: 1px solid var(--colorNeutralStroke2);
     border-radius: var(--aspire-radius-small);
     background: transparent;
-    color: var(--colorNeutralForeground3);
-    font-family: var(--aspire-font-mono);
     font-size: var(--aspire-font-size-caption);
     line-height: 16px;
 }
@@ -93,6 +84,8 @@
 
 .meter-card-meter {
     overflow: hidden;
+    color: var(--colorNeutralForeground3);
+    font-family: var(--aspire-font-mono);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -107,6 +100,8 @@
 
 .meter-card-resource-name {
     overflow: hidden;
+    padding-block: 2px;
+    font-size: var(--aspire-font-size-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -123,7 +118,6 @@
 .meter-card-icon {
     display: inline-flex;
     flex: none;
-    color: var(--colorNeutralForeground3);
 }
 
 .meter-card-name {
@@ -185,6 +179,6 @@
     color: var(--colorNeutralForeground4);
 }
 
-.meter-card.no-data .meter-card-name {
+.meter-card.no-data .meter-card-header {
     color: var(--colorNeutralForeground3);
 }

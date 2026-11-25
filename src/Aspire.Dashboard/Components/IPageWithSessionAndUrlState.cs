@@ -122,11 +122,11 @@ public static class PageExtensions
     /// A value indicating whether there was a page redirect. Further page initialization should check the return value
     /// and wait until parameters are updated if there was a page redirect.
     /// </returns>
-    public static async Task<bool> InitializeViewModelAsync<TViewModel, TSerializableViewModel>(this IPageWithSessionAndUrlState<TViewModel, TSerializableViewModel> page) where TSerializableViewModel : class
+    public static async Task<bool> InitializeViewModelAsync<TViewModel, TSerializableViewModel>(this IPageWithSessionAndUrlState<TViewModel, TSerializableViewModel> page, bool restoreSessionState = true) where TSerializableViewModel : class
     {
         var relativePath = page.NavigationManager.ToBaseRelativePath(page.NavigationManager.Uri);
         var isLegacy = TryRemoveLegacyPrefix(ref relativePath);
-        if (string.Equals(page.BasePath, relativePath))
+        if (restoreSessionState && string.Equals(page.BasePath, relativePath))
         {
             var result = await page.SessionStorage.GetAsync<TSerializableViewModel>(page.SessionStorageKey).ConfigureAwait(false);
             if (result is { Success: true, Value: not null })

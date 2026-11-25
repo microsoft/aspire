@@ -42,6 +42,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private List<OtlpResource>? _aggregateResources;
     private Subscription? _resourcesSubscription;
     private Subscription? _metricsSubscription;
+    private MetricsPageState? _linkedMetricsState;
 
     public string BasePath => DashboardUrls.MetricsBasePath;
     public string SessionStorageKey => BrowserStorageKeys.MetricsPageState;
@@ -69,10 +70,6 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     [Parameter]
     [SupplyParameterFromQuery(Name = "pinned")]
     public bool? Pinned { get; set; }
-
-    [Parameter]
-    [SupplyParameterFromQuery(Name = "all")]
-    public bool? ShowAll { get; set; }
 
     [Parameter]
     [SupplyParameterFromQuery(Name = "total")]
@@ -213,10 +210,8 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     protected override async Task OnParametersSetAsync()
     {
-        if (await this.InitializeViewModelAsync())
-        {
-            return;
-        }
+        // The bare Metrics URL explicitly shows all instruments rather than restoring a previous selection.
+        await this.InitializeViewModelAsync(restoreSessionState: false);
 
         if (!_organizeStateLoaded)
         {
@@ -226,6 +221,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
         UpdateSubscription();
         UpdateTelemetryProperties();
+        RefreshResourceSelectionLinks();
     }
 
     public MetricsPageState ConvertViewModelToSerializable()
@@ -236,7 +232,6 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             MeterName = PageViewModel.SelectedMeter,
             InstrumentName = PageViewModel.SelectedInstrument?.Name,
             Pinned = PageViewModel.ShowPinned,
-            All = PageViewModel.ShowAll,
             ShowRunningTotal = PageViewModel.ShowRunningTotal,
             DurationMinutes = (int)PageViewModel.SelectedDuration.Id.TotalMinutes,
             ViewKind = PageViewModel.SelectedViewKind?.ToString()
@@ -281,13 +276,9 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         viewModel.SelectedViewKind = Enum.TryParse(typeof(MetricViewKind), ViewKindName, out var view) && view is MetricViewKind vk ? vk : null;
         viewModel.ShowRunningTotal = ShowRunningTotal is true;
 
-        if (viewModel.Instruments != null && Pinned is true)
+        if (Pinned is true)
         {
             viewModel.ShowPinned = true;
-        }
-        else if (viewModel.Instruments != null && ShowAll is true)
-        {
-            viewModel.ShowAll = true;
         }
         else if (viewModel.Instruments != null && !string.IsNullOrEmpty(MeterName))
         {
@@ -319,25 +310,55 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     }
 
     /// <summary>
-    /// Selects what to show when nothing is selected, so the page doesn't open on an empty pane. The pinned group
-    /// comes first when this resource reports pinned instruments, because the user chose them as the ones to watch.
-    /// Otherwise every instrument is shown, grouped by meter, so entering the page doesn't arbitrarily prioritize
-    /// one signal over the rest.
+    /// Shows all instruments when no specific group or instrument is selected.
     /// </summary>
-    private void SelectDefaultView(MetricsViewModel viewModel)
+    private static void SelectDefaultView(MetricsViewModel viewModel)
     {
-        if (viewModel.SelectedMeter is not null || viewModel.SelectedInstrument is not null || viewModel.ShowPinned || viewModel.ShowAll || viewModel.Instruments is not { Count: > 0 } instruments)
+        if (viewModel.SelectedMeter is not null || viewModel.SelectedInstrument is not null || viewModel.ShowPinned || viewModel.ShowAll || viewModel.Instruments is not { Count: > 0 })
         {
-            return;
-        }
-
-        if (PinStore.GetPinnedInstruments(instruments).Count > 0)
-        {
-            viewModel.ShowPinned = true;
             return;
         }
 
         viewModel.ShowAll = true;
+    }
+
+    private void RefreshResourceSelectionLinks()
+    {
+        if (ResourcesLayout is not { } layout)
+        {
+            return;
+        }
+
+        var state = ConvertViewModelToSerializable();
+        if (state != _linkedMetricsState)
+        {
+            _linkedMetricsState = state;
+            layout.SetSelectionUrlProvider(ResourceTab.Metrics, GetResourceSelectionUrl);
+        }
+    }
+
+    private string GetResourceSelectionUrl(string? resourceName, IReadOnlyList<string> resourceNames, bool sameScope)
+    {
+        var state = ConvertViewModelToSerializable();
+        if (!sameScope && ResourcesLayout is { } layout && (state.Pinned || state.MeterName is not null))
+        {
+            // A chart needs a single source, but a meter or the pinned group can span an aggregate selection.
+            var keys = resourceNames.Count == 0
+                ? layout.GetPaneTelemetryKeys()
+                : layout.GetSelectionTelemetryKeys(resourceName is null ? resourceNames : [resourceName]) ?? [];
+            var isAvailable = (state.InstrumentName is null || resourceName is not null) &&
+                keys.Any(key => TelemetryRepository.GetInstrumentSummaries(key).Any(i =>
+                    state.Pinned ? PinStore.IsPinned(i) :
+                    i.Parent.Name == state.MeterName && (state.InstrumentName is null || i.Name == state.InstrumentName)));
+            if (!isAvailable)
+            {
+                state = state with { Pinned = false, MeterName = null, InstrumentName = null };
+            }
+        }
+
+        return DashboardUrls.MetricsUrl(
+            resourceName, state.MeterName, state.InstrumentName, state.DurationMinutes, state.ViewKind,
+            pinned: state.Pinned, total: state.ShowRunningTotal);
     }
 
     private void UpdateInstruments(MetricsViewModel viewModel)
@@ -623,6 +644,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             SelectDefaultView(PageViewModel);
         }
 
+        RefreshResourceSelectionLinks();
         StateHasChanged();
     }
 
@@ -720,13 +742,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         public required MetricViewKind? SelectedViewKind { get; set; }
     }
 
-    public class MetricsPageState
+    public sealed record MetricsPageState
     {
         public string? ResourceName { get; set; }
         public string? MeterName { get; set; }
         public string? InstrumentName { get; set; }
         public bool Pinned { get; set; }
-        public bool All { get; set; }
         public bool ShowRunningTotal { get; set; }
         public int DurationMinutes { get; set; }
         public required string? ViewKind { get; set; }
@@ -823,7 +844,6 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             duration: serializable.DurationMinutes,
             view: serializable.ViewKind,
             pinned: serializable.Pinned,
-            all: serializable.All,
             total: serializable.ShowRunningTotal);
 
         return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
@@ -885,8 +905,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             meter: kind == MetricGroupKind.Meter ? meterName : null,
             duration: DurationMinutes,
             view: ViewKindName,
-            pinned: kind == MetricGroupKind.Pinned,
-            all: kind == MetricGroupKind.All);
+            pinned: kind == MetricGroupKind.Pinned);
 
         // Listing several resources keeps the selection in the URL, so the page keeps listing them all.
         return (IsAggregate ? ResourcesLayout?.AddSelectionToUrl(url) : ResourcesLayout?.AddPaneToUrl(url)) ?? url;
@@ -934,9 +953,11 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         if (_metricsSubscription is null || _metricsSubscription.ResourceKey != selectedResourceKey)
         {
             _metricsSubscription?.Dispose();
-            _metricsSubscription = TelemetryRepository.OnNewMetrics(selectedResourceKey, SubscriptionType.Read, async () =>
+            _metricsSubscription = TelemetryRepository.OnNewMetrics(selectedResourceKey, SubscriptionType.Read, () => InvokeAsync(() =>
             {
-                if (selectedResourceKey != null || IsAggregate)
+                // A notification can already be queued when the resource changes and replaces the subscription.
+                if (PageViewModel.SelectedResource.Id?.GetResourceKey() == selectedResourceKey &&
+                    (selectedResourceKey is not null || IsAggregate))
                 {
                     // If there are more instruments than before then update the UI.
                     var instruments = selectedResourceKey != null
@@ -949,10 +970,11 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
                         // Instruments can arrive after the page loads, e.g. when the resource has just started.
                         SelectDefaultView(PageViewModel);
-                        await InvokeAsync(StateHasChanged);
+                        RefreshResourceSelectionLinks();
+                        StateHasChanged();
                     }
                 }
-            });
+            }));
         }
     }
 
@@ -962,6 +984,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         if (ResourcesLayout is { } layout)
         {
             layout.ResourcesChanged -= OnLayoutResourcesChanged;
+            layout.ClearSelectionUrlProvider(GetResourceSelectionUrl);
         }
         _resourcesSubscription?.Dispose();
         _metricsSubscription?.Dispose();

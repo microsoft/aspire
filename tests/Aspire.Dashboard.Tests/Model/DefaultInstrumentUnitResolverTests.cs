@@ -12,15 +12,19 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class DefaultInstrumentUnitResolverTests
 {
     [Theory]
-    [InlineData("By/s", "instrument_name", "Bytes Per Second")]
-    [InlineData("connection", "instrument_name", "Connections")]
-    [InlineData("{connection}", "instrument_name", "Connections")]
-    [InlineData("", "instrument_name", "Localized:PlotlyChartValue")]
-    [InlineData("", "instrument_name.count", "Localized:PlotlyChartCount")]
-    [InlineData("", "instrument_name.length", "Localized:PlotlyChartLength")]
-    public void ResolveDisplayedUnit(string unit, string name, string expected)
+    [InlineData("By/s", "instrument_name", true, true, "Bytes per second")]
+    [InlineData("By/s", "instrument_name", false, true, "bytes per second")]
+    [InlineData("{match_attempts}", "aspnetcore.routing.match_attempts", true, true, "Match attempts")]
+    [InlineData("{match_attempts}", "aspnetcore.routing.match_attempts", false, true, "match attempts")]
+    [InlineData("{Match_Attempt}", "aspnetcore.routing.match_attempts", false, false, "match attempt")]
+    [InlineData("connection", "instrument_name", true, true, "Connections")]
+    [InlineData("{connection}", "instrument_name", true, true, "Connections")]
+    [InlineData("1", "instrument_name", true, true, "")]
+    [InlineData("", "instrument_name", true, true, "Localized:PlotlyChartValue")]
+    [InlineData("", "instrument_name.count", true, true, "Localized:PlotlyChartCount")]
+    [InlineData("", "instrument_name.length", true, true, "Localized:PlotlyChartLength")]
+    public void ResolveDisplayedUnit(string unit, string name, bool capitalize, bool pluralize, string expected)
     {
-        // Arrange
         var localizer = new TestStringLocalizer<ControlsStrings>();
         var resolver = new DefaultInstrumentUnitResolver(localizer);
         var context = TelemetryTestHelpers.CreateContext();
@@ -38,10 +42,8 @@ public sealed class DefaultInstrumentUnitResolverTests
             ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
         };
 
-        // Act
-        var result = resolver.ResolveDisplayedUnit(otlpInstrumentSummary, titleCase: true, pluralize: true);
+        var result = resolver.ResolveDisplayedUnit(otlpInstrumentSummary, capitalize, pluralize);
 
-        // Assert
         Assert.Equal(expected, result);
     }
 }

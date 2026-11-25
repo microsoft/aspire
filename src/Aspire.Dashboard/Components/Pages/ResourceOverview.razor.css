@@ -152,11 +152,6 @@
 }
 
 .overview-card-count {
-    padding: 0 6px;
-    border-radius: var(--aspire-radius-medium);
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-caption);
     font-weight: var(--aspire-font-weight-semibold);
 }
 

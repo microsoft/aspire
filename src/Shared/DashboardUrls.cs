@@ -305,7 +305,7 @@ internal static class DashboardUrls
         return url;
     }
 
-    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false, bool all = false)
+    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false)
     {
         var url = $"/{MetricsBasePath}";
         if (resource != null)
@@ -316,11 +316,6 @@ internal static class DashboardUrls
         {
             // The pinned group lists pinned instruments from every meter, so it replaces a meter selection.
             url = AddQueryString(url, "pinned", "true");
-        }
-        else if (all)
-        {
-            // Every instrument, grouped by meter. Like the pinned group, it replaces a meter selection.
-            url = AddQueryString(url, "all", "true");
         }
         else if (meter is not null)
         {

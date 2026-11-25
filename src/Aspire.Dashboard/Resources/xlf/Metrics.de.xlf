@@ -123,8 +123,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
-        <source>No metrics match the filter</source>
-        <target state="translated">Keine Metriken entsprechen dem Filter.</target>
+        <source>No metrics found</source>
+        <target state="needs-review-translation">Keine Metriken entsprechen dem Filter.</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">
