@@ -283,8 +283,9 @@ public sealed partial class SqliteTelemetryRepository
         query.Parameters.Add("LatestItemCount", Math.Max(context.LatestItemCount ?? int.MaxValue, 0));
         query.Parameters.Add("MaxLogCount", _otlpContext.Options.MaxLogCount);
 
-        // Return the aggregate and page display data together. Only attributes that affect the
-        // message column are aggregated, avoiding the extra materialization queries for every page.
+        // Return the aggregate and page display data together. CROSS JOIN keeps SQLite from
+        // reordering the attribute lookup to scan the entire attribute index instead of probing by page log ID.
+        // https://sqlite.org/lang_select.html#special_handling_of_cross_join
         var records = connection.Query<LogSummaryRecord>($"""
             WITH
             filtered_logs AS (
@@ -315,8 +316,8 @@ public sealed partial class SqliteTelemetryRepository
                     MAX(CASE WHEN a.attribute_key = 'gen_ai.system' THEN 1 ELSE 0 END) AS has_gen_ai_system,
                     MAX(CASE WHEN a.attribute_key = 'gen_ai.system' AND LENGTH(a.attribute_value) > 0 THEN 1 ELSE 0 END) AS has_non_empty_gen_ai_system,
                     MAX(CASE WHEN a.attribute_key = 'gen_ai.provider.name' AND LENGTH(a.attribute_value) > 0 THEN 1 ELSE 0 END) AS has_non_empty_gen_ai_provider
-                FROM telemetry_log_attributes a
-                JOIN paged_logs pl ON pl.log_id = a.log_id
+                FROM paged_logs pl
+                CROSS JOIN telemetry_log_attributes a ON a.log_id = pl.log_id
                 WHERE a.attribute_key IN (
                     'exception.stacktrace',
                     'exception.message',
@@ -678,12 +679,7 @@ public sealed partial class SqliteTelemetryRepository
 
         if (filter.Field == KnownStructuredLogFields.TimestampField)
         {
-            if (!DateTime.TryParse(filter.Value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeLocal, out var timestamp))
-            {
-                return "0 = 1";
-            }
-            parameters.Add(parameterName, timestamp.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond);
-            return BuildNumericPredicate($"l.timestamp_ticks / {TimeSpan.TicksPerMillisecond}", filter.Condition, parameterName);
+            return BuildTimestampFilterPredicate("l.timestamp_ticks", filter.Condition, filter.Value, parameters, parameterName);
         }
 
         var expression = GetLogFieldExpression(filter.Field, parameters, $"AttributeName{index}");
@@ -738,6 +734,32 @@ public sealed partial class SqliteTelemetryRepository
             FilterCondition.NotContains => $"{expression} NOT LIKE @{parameterName} ESCAPE '!'",
             _ => throw new ArgumentOutOfRangeException(nameof(condition), condition, null)
         };
+    }
+
+    private static string BuildTimestampFilterPredicate(string column, FilterCondition condition, string value, DynamicParameters parameters, string parameterName)
+    {
+        if (!DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeLocal, out var timestamp))
+        {
+            return "0 = 1";
+        }
+
+        var milliseconds = timestamp.Ticks / TimeSpan.TicksPerMillisecond;
+        // Move the millisecond truncation to the bound so range comparisons can seek the tick index.
+        // A strict lower bound or an inclusive upper bound moves to the start of the next millisecond.
+        if (condition is FilterCondition.GreaterThan or FilterCondition.LessThanOrEqual)
+        {
+            milliseconds++;
+            condition = condition == FilterCondition.GreaterThan ? FilterCondition.GreaterThanOrEqual : FilterCondition.LessThan;
+        }
+
+        if (condition is FilterCondition.GreaterThanOrEqual or FilterCondition.LessThan)
+        {
+            parameters.Add(parameterName, milliseconds * TimeSpan.TicksPerMillisecond);
+            return BuildNumericPredicate(column, condition, parameterName);
+        }
+
+        parameters.Add(parameterName, milliseconds);
+        return BuildNumericPredicate($"{column} / {TimeSpan.TicksPerMillisecond}", condition, parameterName);
     }
 
     private static string BuildNumericPredicate(string expression, FilterCondition condition, string parameterName)

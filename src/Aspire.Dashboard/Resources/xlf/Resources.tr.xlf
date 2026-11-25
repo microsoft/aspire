@@ -27,6 +27,11 @@
         <target state="translated">{0} · {1} istek, {2} başarısız</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceHint">
+        <source>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</source>
+        <target state="new">View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
         <source>Requests per 30 seconds over the last 15 minutes</source>
         <target state="translated">Son 15 dakika içinde 30 saniye başına istek</target>
@@ -251,6 +256,11 @@
         <source>Running</source>
         <target state="translated">Çalışıyor</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HomeSingleRequestCount">
+        <source>{0} request</source>
+        <target state="new">{0} request</target>
+        <note>{0} is the request count, which is one.</note>
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
         <source>Slowest endpoints</source>
