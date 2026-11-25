@@ -5,7 +5,6 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREPROJECTS001
 
-using System.IO.Compression;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
@@ -249,12 +248,7 @@ internal static class DotnetProgramPublishing
                     tempImageTag,
                     buildResult.LocalImageTag,
                     cancellationToken).ConfigureAwait(false);
-                var outputPath = IsExplicitArchiveOutputPath(buildResult.OutputPath!)
-                    ? buildResult.OutputPath!
-                    : ResourceExtensions.GetContainerImageArchivePath(
-                        buildResult.OutputPath!,
-                        buildResult.LocalImageName,
-                        buildResult.LocalImageTag);
+                var outputPath = GetArchiveOutputPath(buildResult.OutputPath!, buildResult.LocalImageName);
                 await PublishArchiveAsync(
                     normalizedArchivePath,
                     outputPath,
@@ -313,6 +307,22 @@ internal static class DotnetProgramPublishing
             (File.Exists(outputPath) || Path.HasExtension(outputPath));
     }
 
+    /// <summary>
+    /// Gets the archive path that the .NET SDK writes for <paramref name="outputPath"/>.
+    /// </summary>
+    /// <remarks>
+    /// Layered archives must land where the SDK writes non-layered archives, so consumers can find the
+    /// archive without knowing whether the resource has container files. The SDK names a directory's
+    /// archive <c>&lt;repository&gt;.tar.gz</c> even though it writes an uncompressed tar.
+    /// https://github.com/dotnet/sdk/blob/v10.0.400/src/Containers/Microsoft.NET.Build.Containers/LocalDaemons/ArchiveFileRegistry.cs
+    /// </remarks>
+    internal static string GetArchiveOutputPath(string outputPath, string repository)
+    {
+        return IsExplicitArchiveOutputPath(outputPath)
+            ? outputPath
+            : Path.Combine(outputPath, $"{repository}.tar.gz");
+    }
+
     private static async Task PublishArchiveAsync(
         string sourcePath,
         string destinationPath,
@@ -350,16 +360,10 @@ internal static class DotnetProgramPublishing
                 useAsync: true))
             {
                 tempFileCreated = true;
-                if (destinationPath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase) ||
-                    destinationPath.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
-                {
-                    using var gzip = new GZipStream(destination, CompressionLevel.Optimal);
-                    await source.CopyToAsync(gzip, cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
-                }
+
+                // The SDK writes an uncompressed tar regardless of the file extension, including the
+                // ".tar.gz" name it picks for directories. Match it so layering does not change the format.
+                await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
