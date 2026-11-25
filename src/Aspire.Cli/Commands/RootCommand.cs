@@ -209,6 +209,7 @@ internal sealed class RootCommand : BaseRootCommand
         ConfigCommand configCommand,
         TemplateManagementCommand templateManagementCommand,
         CompletionsCommand completionsCommand,
+        AdmireCommand admireCommand,
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
@@ -280,6 +281,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(configCommand);
         Subcommands.Add(templateManagementCommand);
         Subcommands.Add(completionsCommand);
+        Subcommands.Add(admireCommand);
         Subcommands.Add(cacheCommand);
         Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);

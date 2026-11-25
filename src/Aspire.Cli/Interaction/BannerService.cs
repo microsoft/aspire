@@ -31,6 +31,8 @@ internal sealed class BannerService : IBannerService
         "▀▀   ▀▀ ▀▀▀▀▀▀▀ ▀▀      ▀▀ ▀▀   ▀▀ ▀▀▀▀▀▀  ",
     ];
 
+    internal static IReadOnlyList<string> AspireLines => s_aspireLines;
+
     // Letter start positions for animation (A, S, P, I, R, E columns)
     private static readonly int[] s_letterPositions = [0, 8, 16, 24, 27, 34];
 

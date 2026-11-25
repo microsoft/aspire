@@ -22,7 +22,7 @@ internal sealed class IdentityVersionAction(CliExecutionContext executionContext
     public override int Invoke(ParseResult parseResult)
     {
         var version = executionContext.IdentityVersion;
-        var commit = executionContext.IdentityCommit;
+        var commit = GetCommit(executionContext);
 
         // IdentityVersion can itself carry a "+<sha>" build-metadata suffix: ASPIRE_CLI_VERSION /
         // the sidecar version field accept full informational versions like "13.4.5+73114e86" (see
@@ -34,16 +34,22 @@ internal sealed class IdentityVersionAction(CliExecutionContext executionContext
         var plusIndex = version.IndexOf('+');
         if (plusIndex > 0)
         {
-            if (string.IsNullOrEmpty(commit))
-            {
-                commit = version[(plusIndex + 1)..];
-            }
-
             version = version[..plusIndex];
         }
 
         var output = string.IsNullOrEmpty(commit) ? version : $"{version}+{commit}";
         parseResult.InvocationConfiguration.Output.WriteLine(output);
         return CliExitCodes.Success;
+    }
+
+    internal static string? GetCommit(CliExecutionContext executionContext)
+    {
+        if (!string.IsNullOrEmpty(executionContext.IdentityCommit))
+        {
+            return executionContext.IdentityCommit;
+        }
+
+        var plusIndex = executionContext.IdentityVersion.IndexOf('+');
+        return plusIndex > 0 ? executionContext.IdentityVersion[(plusIndex + 1)..] : null;
     }
 }

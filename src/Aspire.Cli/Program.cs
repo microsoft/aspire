@@ -719,6 +719,7 @@ public class Program
         builder.Services.AddTransient<ConfigCommand>();
         builder.Services.AddTransient<TemplateManagementCommand>();
         builder.Services.AddTransient<CompletionsCommand>();
+        builder.Services.AddTransient<AdmireCommand>();
         builder.Services.AddTransient<CacheCommand>();
         builder.Services.AddTransient<CertificatesCommand>();
         builder.Services.AddTransient<CertificatesCleanCommand>();
@@ -924,10 +925,11 @@ public class Program
 
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
 
-        // Show banner if explicitly requested OR on first run (unless suppressed by noLogo).
+        // Show the startup banner if explicitly requested or on first run, except when
+        // admire is already displaying its own logo.
         // Always require interactive output support — the animated banner uses Spectre.Console's Live display
         // which manipulates the cursor and fails when console handles are invalid (e.g., stdout is redirected).
-        if ((showBanner || (isFirstRun && !noLogo)) && hostEnvironment.SupportsInteractiveOutput && !HasProtocolOutput(args))
+        if ((showBanner || (isFirstRun && !noLogo && !RootCommand.MatchesCommandPath(args, "admire"))) && hostEnvironment.SupportsInteractiveOutput && !HasProtocolOutput(args))
         {
             var bannerService = serviceProvider.GetRequiredService<IBannerService>();
             await bannerService.DisplayBannerAsync(cancellationToken);

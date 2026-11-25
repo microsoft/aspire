@@ -2,6 +2,16 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../RootCommandStrings.resx">
     <body>
+      <trans-unit id="AdmireCommitFormat">
+        <source>Commit {0}</source>
+        <target state="new">Commit {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AdmireDescription">
+        <source>Display the Aspire logo</source>
+        <target state="new">Display the Aspire logo</target>
+        <note />
+      </trans-unit>
       <trans-unit id="BannerArgumentDescription">
         <source>Display the animated Aspire CLI welcome banner</source>
         <target state="translated">顯示動畫 Aspire CLI 的歡迎使用橫幅</target>
