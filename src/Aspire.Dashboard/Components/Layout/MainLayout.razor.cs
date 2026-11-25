@@ -157,36 +157,13 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         try
         {
-            var unsecuredEndpointsMessage = GetUnsecuredEndpointsMessage();
-
             // Run independent browser storage and JS interop reads concurrently so Blazor Server
             // pipelines them in a single round-trip wave instead of awaiting each sequentially.
-            var viewPreferencesTask = ViewPreferences.EnsureLoadedAsync();
-            var selectedRunTask = RestoreSelectedRunAsync();
-            var browserInfoTask = InitializeBrowserInfoAsync();
-            var dismissedSnapshotTask = unsecuredEndpointsMessage is not null
-                ? LocalStorage.ReadUnprotectedSnapshotAsync([
-                    // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
-                    BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey,
-                    BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey
-                ])
-                : null;
-
             await Task.WhenAll(
-                viewPreferencesTask,
-                selectedRunTask,
-                browserInfoTask,
-                dismissedSnapshotTask ?? Task.CompletedTask);
-
-            if (unsecuredEndpointsMessage is not null)
-            {
-                var dismissedSnapshot = await dismissedSnapshotTask!;
-                if (!IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey) &&
-                    !IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey))
-                {
-                    await ShowUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
-                }
-            }
+                ViewPreferences.EnsureLoadedAsync(),
+                RestoreSelectedRunAsync(),
+                InitializeBrowserInfoAsync(),
+                DisplayStartupMessagesAsync());
         }
         catch (JSDisconnectedException ex)
         {
@@ -198,10 +175,30 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private static bool IsDismissed(IUnprotectedLocalStorageSnapshot snapshot, string key)
+    private async Task DisplayStartupMessagesAsync()
     {
-        var result = snapshot.Get<bool>(key);
-        return result.Success && result.Value;
+        var unsecuredEndpointsMessage = GetUnsecuredEndpointsMessage();
+        if (unsecuredEndpointsMessage is null)
+        {
+            return;
+        }
+
+        // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
+        var dismissedSnapshot = await LocalStorage.ReadUnprotectedSnapshotAsync([
+            BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey,
+            BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey
+        ]);
+        if (!IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey) &&
+            !IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey))
+        {
+            await ShowUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
+        }
+
+        static bool IsDismissed(IUnprotectedLocalStorageSnapshot snapshot, string key)
+        {
+            var result = snapshot.Get<bool>(key);
+            return result.Success && result.Value;
+        }
     }
 
     private async Task RestoreSelectedRunAsync()
