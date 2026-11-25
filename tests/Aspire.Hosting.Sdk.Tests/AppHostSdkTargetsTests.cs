@@ -99,7 +99,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AppHostTargetsDefaultAspireHostingSDKVersionWhenSdkIsNotUsed()
+    public async Task AppHostPackageVersionIsAvailableInProjectBodyWhenSdkIsNotUsed()
     {
         // Simulates a Project Resource v2 / AddDotnetProject AppHost that uses the plain
         // Microsoft.NET.Sdk with an explicit Aspire.Hosting.AppHost PackageReference, and never
@@ -108,24 +108,27 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var project = await CreateRunHookProjectAsync(
             workspace.Path,
             aspireUseCliBundle: true,
-            extraProjectXml: null,
+            extraProjectXml: """
+              <PropertyGroup>
+                <VersionedDir>obj/aspire/$(AspireHostingSDKVersion)</VersionedDir>
+              </PropertyGroup>
+            """,
             includeBundlePaths: false);
 
-        // Remove the AspireHostingSDKVersion set by the test helper so this project matches a
-        // real non-SDK AppHost, where no component sets that property.
+        // Remove the test helper's explicit version so the project uses the package default.
         var projectXml = await File.ReadAllTextAsync(project.ProjectFile);
         projectXml = projectXml.Replace($"<AspireHostingSDKVersion>{AspireCliVersion}</AspireHostingSDKVersion>", string.Empty);
         await File.WriteAllTextAsync(project.ProjectFile, projectXml);
 
-        var properties = await GetTargetPropertiesAsync(
-            project,
-            "CollectPackageReferences",
-            "AspireHostingSDKVersion,IsAspireHost",
-            extraArguments: null,
-            environment: null);
+        var result = await RunDotNetWithArgumentsAsync(project.ProjectDirectory,
+            ["msbuild", "-nologo", "-getProperty:AspireHostingSDKVersion,IsAspireHost,VersionedDir"]);
 
-        Assert.Equal(AspireCliVersion, properties["AspireHostingSDKVersion"]);
-        Assert.Equal("true", properties["IsAspireHost"]);
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal(AspireCliVersion, properties.GetProperty("AspireHostingSDKVersion").GetString());
+        Assert.Equal("true", properties.GetProperty("IsAspireHost").GetString());
+        Assert.Equal($"obj/aspire/{AspireCliVersion}", properties.GetProperty("VersionedDir").GetString());
     }
 
     [Fact]
@@ -1641,9 +1644,15 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var projectDirectory = Path.Combine(workspace, "AppHost");
         Directory.CreateDirectory(projectDirectory);
 
-        var appHostPropsPath = SecurityElement.Escape(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.props"));
+        var appHostBuildDirectory = Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build");
+        const string appHostPropsFileName = "Aspire.Hosting.AppHost.props";
+        File.Copy(Path.Combine(appHostBuildDirectory, appHostPropsFileName), Path.Combine(projectDirectory, "Aspire.Hosting.AppHost.Common.props"), overwrite: true);
+        var appHostPropsFile = Path.Combine(projectDirectory, appHostPropsFileName);
+        var appHostProps = await File.ReadAllTextAsync(Path.Combine(appHostBuildDirectory, "Aspire.Hosting.AppHost.in.props"));
+        await File.WriteAllTextAsync(appHostPropsFile, appHostProps.Replace("@VERSION@", AspireCliVersion));
+        var appHostPropsPath = SecurityElement.Escape(appHostPropsFile);
         var appHostTargetsFile = Path.Combine(projectDirectory, "Aspire.Hosting.AppHost.targets");
-        var appHostTargets = await File.ReadAllTextAsync(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets"));
+        var appHostTargets = await File.ReadAllTextAsync(Path.Combine(appHostBuildDirectory, "Aspire.Hosting.AppHost.in.targets"));
         await File.WriteAllTextAsync(appHostTargetsFile, appHostTargets.Replace("@VERSION@", AspireCliVersion));
         var appHostTargetsPath = SecurityElement.Escape(appHostTargetsFile);
         var projectFile = Path.Combine(projectDirectory, $"AppHost{projectExtension}");
