@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Backport; Homebrew CI validation fix, engineering only",
+  "mergedAt": "2026-11-24T17:45:05Z",
+  "number": 22584,
+  "runDate": "2026-11-25T00:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Fix Homebrew cask style validation in CI"
+}

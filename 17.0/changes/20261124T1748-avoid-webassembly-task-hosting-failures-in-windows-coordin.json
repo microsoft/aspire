@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Windows AppHosts with Blazor WebAssembly resources no longer fail their coordinated build with MSB4060 before the browser debugger can start. Generated Windows builds now pass `-mt:false` on SDKs that support it.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧱",
+  "firstMergedAt": "2026-11-24T17:48:29Z",
+  "lastMergedAt": "2026-11-24T17:48:29Z",
+  "name": "Avoid WebAssembly task hosting failures in Windows coordinated builds",
+  "owner": "radical",
+  "prs": [
+    22576
+  ]
+}

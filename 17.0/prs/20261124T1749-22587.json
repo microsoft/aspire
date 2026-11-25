@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Backport; release pipeline WinGet submission rule, engineering only",
+  "mergedAt": "2026-11-24T17:49:01Z",
+  "number": 22587,
+  "runDate": "2026-11-25T00:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] fix(release): Allow WinGet submission from any release-pipeline branch, matching NuGet/npm/Homebrew"
+}

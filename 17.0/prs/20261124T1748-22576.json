@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Backport; fixes Windows coordinated build failure with Blazor WebAssembly",
+  "mergedAt": "2026-11-24T17:48:29Z",
+  "number": 22576,
+  "runDate": "2026-11-25T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Avoid unsupported WebAssembly task hosting in Windows coordinated builds"
+}
