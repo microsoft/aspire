@@ -284,7 +284,25 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TestConnectionAsync_WhenCanceledDuringStopRequest_PropagatesCancellationAfterCleanup()
+    public async Task TestConnectionAsync_WhenVersionResponseIsTruncated_ReturnsFailureAfterCleanup()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var server = new FakeDcpApiServer { TruncateVersionResponse = true };
+        var factory = CreateFakeDcpFactory(server);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
+        Assert.Equal(DoctorCommandStrings.DcpEphemeralCertificateConnectionFailedMessage, result.Message);
+        Assert.False(string.IsNullOrWhiteSpace(result.Details));
+        AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TestConnectionAsync_WhenCanceledDuringStopRequest_PropagatesCancellationAfterCleanup(bool probeThrows)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var stopRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -293,36 +311,43 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         {
             stopRequested.TrySetResult();
             await releaseStopRequest.Task.WaitAsync(cancellationToken);
-        });
+        })
+        {
+            TruncateVersionResponse = probeThrows
+        };
         var factory = CreateFakeDcpFactory(server);
         var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 
         var connection = checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, cancellation.Token);
 
-        // The probe has succeeded once teardown sends the stop request. Teardown uses its own token,
-        // so cancelling the caller here must not abort cleanup, yet must still reach the caller.
+        // The probe has finished (successfully or with an exception) once teardown sends the stop
+        // request. Cancelling the caller here must not abort cleanup, yet must reach the caller.
         await stopRequested.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         cancellation.Cancel();
         releaseStopRequest.SetResult();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection);
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection);
 
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
         AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
     }
 
-    [Fact]
-    public async Task TestConnectionAsync_WhenCanceledDuringProcessDisposal_PropagatesCancellationAfterCleanup()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TestConnectionAsync_WhenCanceledDuringProcessDisposal_PropagatesCancellationAfterCleanup(bool probeThrows)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        await using var server = new FakeDcpApiServer();
+        await using var server = new FakeDcpApiServer { TruncateVersionResponse = probeThrows };
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var factory = CreateFakeDcpFactory(server, onDispose: cancellation.Cancel);
         var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, cancellation.Token));
 
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
         AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
     }
 

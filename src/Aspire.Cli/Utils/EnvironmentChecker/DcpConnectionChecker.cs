@@ -43,29 +43,27 @@ internal sealed class DcpConnectionChecker(
 
         try
         {
-            EnvironmentCheckResult result;
-            var session = await DcpConnectionTestSession.StartAsync(
-                dcpDirectory,
-                useDeveloperCertificate,
-                certificateManager,
-                processExecutionFactory,
-                executionContext,
-                environment,
-                temporaryStorage,
-                logger,
-                timeoutCts.Token).ConfigureAwait(false);
-
-            await using (session)
+            try
             {
-                result = await ProbeAsync(session, useDeveloperCertificate, timeoutCts.Token).ConfigureAwait(false);
+                await using var session = await DcpConnectionTestSession.StartAsync(
+                    dcpDirectory,
+                    useDeveloperCertificate,
+                    certificateManager,
+                    processExecutionFactory,
+                    executionContext,
+                    environment,
+                    temporaryStorage,
+                    logger,
+                    timeoutCts.Token).ConfigureAwait(false);
+
+                return await ProbeAsync(session, useDeveloperCertificate, timeoutCts.Token).ConfigureAwait(false);
             }
-
-            // Session teardown deliberately ignores the caller's token so DCP is always stopped.
-            // Honor a cancellation that arrived during teardown only after cleanup has finished,
-            // instead of reporting a probe result the caller no longer wants.
-            cancellationToken.ThrowIfCancellationRequested();
-
-            return result;
+            finally
+            {
+                // Teardown ignores the caller's token so cancellation cannot interrupt cleanup.
+                // Honor cancellation even when the probe throws, after disposal has finished.
+                cancellationToken.ThrowIfCancellationRequested();
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

@@ -10,7 +10,7 @@ namespace Aspire.Cli.Tests.TestServices;
 
 /// <summary>
 /// Plain-HTTP loopback stand-in for the DCP API server used by the doctor connection probe.
-/// It answers <c>GET /version</c> successfully. By default it rejects the graceful stop request
+/// By default it answers <c>GET /version</c> successfully and rejects the graceful stop request
 /// (<c>PATCH /admin/execution</c>) so the checker falls back to its tree kill. When stop requests are
 /// accepted it behaves like DCP: the Content-Type must be exactly the merge-patch media type, otherwise
 /// it answers 415.
@@ -39,6 +39,8 @@ internal sealed class FakeDcpApiServer : IAsyncDisposable
     }
 
     public Uri Server { get; }
+
+    public bool TruncateVersionResponse { get; init; }
 
     /// <summary>Completes when a stop request is accepted.</summary>
     public Task StopAccepted => _stopAccepted.Task;
@@ -95,8 +97,11 @@ internal sealed class FakeDcpApiServer : IAsyncDisposable
                 }
 
                 var parts = requestLine.Split(' ');
+                // A 200 response declaring two body bytes but sending only "{" makes the probe
+                // throw HttpRequestException without preventing a later shutdown PATCH.
                 var response = parts switch
                 {
+                    ["GET", "/version", ..] when TruncateVersionResponse => "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{",
                     ["GET", "/version", ..] => "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
                     ["PATCH", "/admin/execution", ..] => await HandleStopRequestAsync(contentType),
                     _ => "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
