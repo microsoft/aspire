@@ -269,6 +269,84 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         AssertKilledAndCleanedUp(execution);
     }
 
+    [Fact]
+    public async Task TestConnectionAsync_WhenProbeSucceeds_StopsDcpAndReturnsSuccess()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var server = new FakeDcpApiServer();
+        var factory = CreateFakeDcpFactory(server);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+        Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
+        Assert.Equal(DoctorCommandStrings.DcpEphemeralCertificateConnectionSucceededMessage, result.Message);
+        AssertKilledAndCleanedUp(execution);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_WhenCanceledDuringStopRequest_PropagatesCancellationAfterCleanup()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stopRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStopRequest = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = new FakeDcpApiServer(async cancellationToken =>
+        {
+            stopRequested.TrySetResult();
+            await releaseStopRequest.Task.WaitAsync(cancellationToken);
+        });
+        var factory = CreateFakeDcpFactory(server);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        var connection = checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, cancellation.Token);
+
+        // The probe has succeeded once teardown sends the stop request. Teardown uses its own token,
+        // so cancelling the caller here must not abort cleanup, yet must still reach the caller.
+        await stopRequested.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        cancellation.Cancel();
+        releaseStopRequest.SetResult();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection);
+
+        AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_WhenCanceledDuringProcessDisposal_PropagatesCancellationAfterCleanup()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var server = new FakeDcpApiServer();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var factory = CreateFakeDcpFactory(server, onDispose: cancellation.Cancel);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, cancellation.Token));
+
+        AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
+    }
+
+    private static TestProcessExecutionFactory CreateFakeDcpFactory(FakeDcpApiServer server, Action? onDispose = null)
+    {
+        return new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, options) =>
+            {
+                Assert.NotNull(environment);
+                File.WriteAllText(Path.Combine(environment["DCP_SESSION_FOLDER"], "kubeconfig"), server.Kubeconfig);
+
+                return new TestProcessExecution(fileName, arguments, environment, options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)), () => 1)
+                {
+                    ExitsWhenKilled = true,
+                    DisposeCallback = onDispose
+                };
+            }
+        };
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

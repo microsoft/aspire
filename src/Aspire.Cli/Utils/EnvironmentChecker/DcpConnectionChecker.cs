@@ -43,7 +43,8 @@ internal sealed class DcpConnectionChecker(
 
         try
         {
-            await using var session = await DcpConnectionTestSession.StartAsync(
+            EnvironmentCheckResult result;
+            var session = await DcpConnectionTestSession.StartAsync(
                 dcpDirectory,
                 useDeveloperCertificate,
                 certificateManager,
@@ -54,34 +55,17 @@ internal sealed class DcpConnectionChecker(
                 logger,
                 timeoutCts.Token).ConfigureAwait(false);
 
-            var kubeconfig = await session.ReadKubeconfigAsync(timeoutCts.Token).ConfigureAwait(false);
-            using var handler = CreateHttpClientHandler(kubeconfig);
-            using var client = new HttpClient(handler)
+            await using (session)
             {
-                BaseAddress = kubeconfig.Server,
-                Timeout = s_connectionTimeout
-            };
-
-            if (!string.IsNullOrWhiteSpace(kubeconfig.Token))
-            {
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", kubeconfig.Token);
+                result = await ProbeAsync(session, useDeveloperCertificate, timeoutCts.Token).ConfigureAwait(false);
             }
 
-            using var response = await client.GetAsync(new Uri(kubeconfig.Server, "/version"), timeoutCts.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                return Failed(
-                    useDeveloperCertificate,
-                    details: string.Format(
-                        CultureInfo.CurrentCulture,
-                        DoctorCommandStrings.DcpApiServerReturnedHttpStatusMessageFormat,
-                        (int)response.StatusCode,
-                        response.StatusCode));
-            }
+            // Session teardown deliberately ignores the caller's token so DCP is always stopped.
+            // Honor a cancellation that arrived during teardown only after cleanup has finished,
+            // instead of reporting a probe result the caller no longer wants.
+            cancellationToken.ThrowIfCancellationRequested();
 
-            return useDeveloperCertificate
-                ? Passed(useDeveloperCertificate, DoctorCommandStrings.DcpDeveloperCertificateConnectionSucceededMessage)
-                : Passed(useDeveloperCertificate, DoctorCommandStrings.DcpEphemeralCertificateConnectionSucceededMessage);
+            return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -120,6 +104,38 @@ internal sealed class DcpConnectionChecker(
         {
             return Failed(useDeveloperCertificate, details: ex.Message);
         }
+    }
+
+    private static async Task<EnvironmentCheckResult> ProbeAsync(DcpConnectionTestSession session, bool useDeveloperCertificate, CancellationToken cancellationToken)
+    {
+        var kubeconfig = await session.ReadKubeconfigAsync(cancellationToken).ConfigureAwait(false);
+        using var handler = CreateHttpClientHandler(kubeconfig);
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = kubeconfig.Server,
+            Timeout = s_connectionTimeout
+        };
+
+        if (!string.IsNullOrWhiteSpace(kubeconfig.Token))
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", kubeconfig.Token);
+        }
+
+        using var response = await client.GetAsync(new Uri(kubeconfig.Server, "/version"), cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return Failed(
+                useDeveloperCertificate,
+                details: string.Format(
+                    CultureInfo.CurrentCulture,
+                    DoctorCommandStrings.DcpApiServerReturnedHttpStatusMessageFormat,
+                    (int)response.StatusCode,
+                    response.StatusCode));
+        }
+
+        return useDeveloperCertificate
+            ? Passed(useDeveloperCertificate, DoctorCommandStrings.DcpDeveloperCertificateConnectionSucceededMessage)
+            : Passed(useDeveloperCertificate, DoctorCommandStrings.DcpEphemeralCertificateConnectionSucceededMessage);
     }
 
     private static HttpClientHandler CreateHttpClientHandler(DcpKubeconfig kubeconfig)
