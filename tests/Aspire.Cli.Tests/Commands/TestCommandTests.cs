@@ -660,7 +660,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
     }
 
     private static ConsoleInteractionService CreateConsoleInteraction(TemporaryWorkspace workspace, StringBuilder stdout, StringBuilder stderr,
-        AnsiSupport ansi = AnsiSupport.No, ILoggerFactory? loggerFactory = null)
+        AnsiSupport ansi = AnsiSupport.No, ILoggerFactory? loggerFactory = null, bool nonInteractive = false)
     {
         IAnsiConsole CreateConsole(StringBuilder output)
         {
@@ -674,7 +674,9 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
             return console;
         }
         return new ConsoleInteractionService(new ConsoleEnvironment(CreateConsole(stdout), CreateConsole(stderr), TextReader.Null),
-            workspace.CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(),
+            workspace.CreateExecutionContext(), nonInteractive
+                ? new CliHostEnvironment(new ConfigurationBuilder().Build(), nonInteractive: true)
+                : TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
     }
 
@@ -793,7 +795,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         var dashboard = missingDashboard ? null : "http://localhost:1234/login?t=test";
         var codespaces = missingDashboard ? null : "https://example.app.github.dev/login?t=test";
 
-        TestCommand.RenderAppHostInformation(interaction, "AppHost [test].csproj", dashboard, codespaces, logPath, extension, interactive: true);
+        TestCommand.RenderAppHostInformation(interaction, "AppHost [test].csproj", dashboard, codespaces, logPath, extension);
 
         var expected = $"{TestCommandStrings.AppHost}: AppHost [test].csproj{Environment.NewLine}";
         if (!extension)
@@ -819,7 +821,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         var logPath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [test].log");
         const string dashboard = "http://localhost:1234/login?t=test";
 
-        TestCommand.RenderAppHostInformation(interaction, "AppHost.csproj", dashboard, null, logPath, false, interactive: true);
+        TestCommand.RenderAppHostInformation(interaction, "AppHost.csproj", dashboard, null, logPath, false);
 
         TerminalLinkAssert.ContainsLink(stdout.ToString(), new Uri(Path.GetFullPath(logPath)).AbsoluteUri, logPath);
         TerminalLinkAssert.ContainsLink(stdout.ToString(), dashboard, dashboard);
@@ -828,24 +830,24 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void AppHostInformationNeverLogsLoginLinksAndOnlyDisplaysTokensInteractively(bool interactive)
+    public void AppHostInformationDisplaysLoginLinksWithoutLoggingThem(bool nonInteractive)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
         var sink = new TestSink();
         using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
-        var interaction = CreateConsoleInteraction(workspace, stdout, stderr, loggerFactory: loggerFactory);
+        var interaction = CreateConsoleInteraction(workspace, stdout, stderr, loggerFactory: loggerFactory, nonInteractive: nonInteractive);
         var logPath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.log");
         const string dashboard = "http://localhost:1234/login?t=local-secret";
         const string codespaces = "https://example.app.github.dev/login?t=remote-secret";
 
-        TestCommand.RenderAppHostInformation(interaction, "AppHost.csproj", dashboard, codespaces, logPath, false, interactive);
+        TestCommand.RenderAppHostInformation(interaction, "AppHost.csproj", dashboard, codespaces, logPath, false);
 
         Assert.Equal(
             $"{TestCommandStrings.AppHost}: AppHost.csproj{Environment.NewLine}" +
-            $"{TestCommandStrings.Dashboard}: {(interactive ? dashboard : "http://localhost:1234/login")}{Environment.NewLine}" +
-            $"{TestCommandStrings.Dashboard}: {(interactive ? codespaces : "https://example.app.github.dev/login")}{Environment.NewLine}" +
+            $"{TestCommandStrings.Dashboard}: {dashboard}{Environment.NewLine}" +
+            $"{TestCommandStrings.Dashboard}: {codespaces}{Environment.NewLine}" +
             $"{TestCommandStrings.Logs}: {logPath}{Environment.NewLine}", stdout.ToString());
         Assert.Equal(
             [$"{TestCommandStrings.AppHost}: AppHost.csproj", $"{TestCommandStrings.Logs}: {MarkupHelpers.SafeFileLink(interaction, logPath)}"],
