@@ -120,3 +120,7 @@ resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
 var slotConfigNames_appSettingNames = union(stickyNames, [
   'OTEL_SERVICE_NAME'
 ])
+
+output resourceId string = webapp.id
+
+output resourceLocation string = toLower(replace(webapp.location, ' ', ''))
