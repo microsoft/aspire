@@ -3,8 +3,6 @@
 
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -459,21 +457,15 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
-        await using var dcpApiServer = FakeDcpApiServer.Start();
+        await using var dcpApiServer = new FakeDcpApiServer(acceptStopRequests: true);
         TestProcessExecution? execution = null;
+        Task? exitObserved = null;
         var processExecutionFactory = new TestProcessExecutionFactory
         {
             CreateExecutionWithFileNameCallback = (fileName, args, env, _, options) =>
             {
                 var kubeconfigPath = args[Array.IndexOf(args, "--kubeconfig") + 1];
-                File.WriteAllText(kubeconfigPath, $$"""
-                    apiVersion: v1
-                    kind: Config
-                    clusters:
-                    - name: dcp
-                      cluster:
-                        server: "{{dcpApiServer.Address}}"
-                    """);
+                File.WriteAllText(kubeconfigPath, dcpApiServer.Kubeconfig);
 
                 execution = new TestProcessExecution(
                     fileName,
@@ -483,9 +475,19 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
                     (_, _, _) => Task.FromResult((0, (string?)null)),
                     () => 1)
                 {
-                    // Like DCP, the fake process only exits on its own after the stop request is accepted.
-                    WaitForExitAsyncCallback = (_, cancellationToken) => dcpApiServer.StopAccepted.WaitAsync(cancellationToken)
+                    WaitForExitAsyncCallback = async (_, cancellationToken) =>
+                    {
+                        await dcpApiServer.StopAccepted.WaitAsync(cancellationToken);
+                        return 0;
+                    }
                 };
+
+                // Like DCP, the fake process only exits on its own after the stop request is accepted.
+                // The checker polls HasExited, so complete the fake's exit once the stop is accepted.
+                var startedExecution = execution;
+                exitObserved = dcpApiServer.StopAccepted.ContinueWith(
+                    _ => startedExecution.WaitForExitAsync(TestContext.Current.CancellationToken),
+                    TaskScheduler.Default).Unwrap();
                 return execution;
             }
         };
@@ -501,6 +503,8 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
         Assert.Equal(["application/merge-patch+json"], dcpApiServer.StopRequestContentTypes);
+        Assert.NotNull(exitObserved);
+        await exitObserved;
         Assert.NotNull(execution);
         Assert.True(execution.HasExited);
         Assert.Equal(0, execution.KillCount);
@@ -662,6 +666,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             factory,
             CreateExecutionContext(workspace),
             TestEnvironment.CreateWindows(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<DcpConnectionChecker>.Instance);
 
     private static DirectoryInfo CreateDcpDirectoryWithExecutable(TemporaryWorkspace workspace, string directoryName = "dcp")
@@ -681,138 +686,6 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             logsDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-logs"),
             logFilePath: "test.log",
             identityChannel: "local");
-
-    /// <summary>
-    /// Minimal HTTP/1.1 stand-in for the DCP API server. Like DCP, it only accepts the stop PATCH when
-    /// the Content-Type is exactly the merge-patch media type and answers 415 otherwise.
-    /// </summary>
-    private sealed class FakeDcpApiServer : IAsyncDisposable
-    {
-        private const string AcceptedStopMediaType = "application/merge-patch+json";
-        private const int StopExitCode = 0;
-
-        private readonly TcpListener _listener;
-        private readonly CancellationTokenSource _stopping = new();
-        private readonly TaskCompletionSource<int> _stopAccepted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly ConcurrentQueue<string> _stopRequestContentTypes = new();
-        private readonly Task _acceptLoop;
-
-        private FakeDcpApiServer()
-        {
-            _listener = new TcpListener(IPAddress.Loopback, 0);
-            _listener.Start();
-            Address = new Uri($"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}");
-            _acceptLoop = AcceptLoopAsync();
-        }
-
-        public Uri Address { get; }
-
-        public Task<int> StopAccepted => _stopAccepted.Task;
-
-        public string[] StopRequestContentTypes => _stopRequestContentTypes.ToArray();
-
-        public static FakeDcpApiServer Start() => new();
-
-        private async Task AcceptLoopAsync()
-        {
-            while (!_stopping.IsCancellationRequested)
-            {
-                TcpClient client;
-                try
-                {
-                    client = await _listener.AcceptTcpClientAsync(_stopping.Token).ConfigureAwait(false);
-                }
-                catch (Exception) when (_stopping.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                using (client)
-                {
-                    await HandleRequestAsync(client.GetStream()).ConfigureAwait(false);
-                }
-            }
-        }
-
-        private async Task HandleRequestAsync(NetworkStream stream)
-        {
-            var buffer = new List<byte>();
-            var readBuffer = new byte[4096];
-            int headerEnd;
-            while ((headerEnd = IndexOfHeaderTerminator(buffer)) < 0)
-            {
-                var read = await stream.ReadAsync(readBuffer, _stopping.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    return;
-                }
-
-                buffer.AddRange(readBuffer.AsSpan(0, read));
-            }
-
-            var headerLines = Encoding.ASCII.GetString(buffer.GetRange(0, headerEnd).ToArray()).Split("\r\n");
-            var requestLine = headerLines[0].Split(' ');
-            var headers = headerLines.Skip(1)
-                .Select(line => line.Split(':', 2))
-                .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim(), StringComparer.OrdinalIgnoreCase);
-
-            var contentLength = headers.TryGetValue("Content-Length", out var length) ? int.Parse(length, CultureInfo.InvariantCulture) : 0;
-            var bodyStart = headerEnd + 4;
-            while (buffer.Count - bodyStart < contentLength)
-            {
-                var read = await stream.ReadAsync(readBuffer, _stopping.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    return;
-                }
-
-                buffer.AddRange(readBuffer.AsSpan(0, read));
-            }
-
-            var statusLine = (requestLine[0], requestLine[1]) switch
-            {
-                ("GET", "/version") => "200 OK",
-                ("PATCH", "/admin/execution") => HandleStopRequest(headers.GetValueOrDefault("Content-Type")),
-                _ => "404 Not Found"
-            };
-
-            var response = Encoding.ASCII.GetBytes($"HTTP/1.1 {statusLine}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-            await stream.WriteAsync(response, _stopping.Token).ConfigureAwait(false);
-        }
-
-        private string HandleStopRequest(string? contentType)
-        {
-            _stopRequestContentTypes.Enqueue(contentType ?? string.Empty);
-            if (!string.Equals(contentType, AcceptedStopMediaType, StringComparison.Ordinal))
-            {
-                return "415 Unsupported Media Type";
-            }
-
-            _stopAccepted.TrySetResult(StopExitCode);
-            return "202 Accepted";
-        }
-
-        private static int IndexOfHeaderTerminator(List<byte> buffer)
-        {
-            for (var i = 0; i + 3 < buffer.Count; i++)
-            {
-                if (buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n')
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            _stopping.Cancel();
-            _listener.Stop();
-            await _acceptLoop.ConfigureAwait(false);
-            _stopping.Dispose();
-        }
-    }
 
     private static string CreateTestCertificatePem()
     {

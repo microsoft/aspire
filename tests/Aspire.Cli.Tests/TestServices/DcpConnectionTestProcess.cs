@@ -90,7 +90,7 @@ internal sealed class DcpConnectionTestProcess(
                 startInfo.StandardErrorEncoding = null;
                 startInfo.StandardOutputHandle = standardOutput;
                 startInfo.StandardErrorHandle = standardError;
-                var execution = new ProcessExecution(startInfo, NullLogger.Instance, options, new HostEnvironment());
+                var execution = new ProcessExecution(startInfo, NullLogger.Instance, options, new HostEnvironment(), new Aspire.Shared.TemporaryStorage());
                 return new DcpConnectionTestProcess(execution, (process, cancellationToken) =>
                     NotifyAsync(readinessName, "supervisor", ProcessTestIdentity.Capture(process.ProcessId), cancellationToken));
             }
@@ -101,10 +101,11 @@ internal sealed class DcpConnectionTestProcess(
             session = await DcpConnectionChecker.DcpConnectionTestSession.StartAsync(
                 dcpDirectory,
                 useDeveloperCertificate: false,
-                CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null),
+                CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), new Aspire.Shared.TemporaryStorage(), nssDbOverride: null),
                 recordingFactory,
                 CreateExecutionContext(workingDirectory),
                 new HostEnvironment(),
+                new Aspire.Shared.TemporaryStorage(),
                 NullLogger<DcpConnectionChecker>.Instance,
                 startup.Token);
         }

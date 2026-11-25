@@ -51,7 +51,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
     public async Task TestConnectionAsync_WhenProbeCompletes_StopsDcpBeforeCallerExits()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var factory = new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        var factory = new ProcessExecutionFactory(new HostEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         ProcessTestIdentity? identity = null;
         string? sessionDirectory = null;
         var recordingFactory = new TestProcessExecutionFactory
@@ -72,10 +72,11 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             }
         };
         var checker = new DcpConnectionChecker(
-            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null),
+            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), new Aspire.Shared.TemporaryStorage(), nssDbOverride: null),
             recordingFactory,
             DcpConnectionTestProcess.CreateExecutionContext(workspace.Path),
             new HostEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<DcpConnectionChecker>.Instance);
 
         try
