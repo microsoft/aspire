@@ -1339,6 +1339,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
+        _prefetchedLastSelectedResourcesTask = null;
+
         try
         {
             await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, resourceNames.ToList());

@@ -3209,11 +3209,16 @@ public class ResourcesLayoutTests : DashboardTestContext
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => fromStorage && key == BrowserStorageKeys.ResourcePaneMode ? (true, "Tags") : (false, null);
         string? storedGrouping = null;
+        string? storedPaneMode = null;
         storage.OnSetUnprotectedAsync = (key, value) =>
         {
             if (key == BrowserStorageKeys.ResourcePaneGrouping)
             {
                 storedGrouping = Assert.IsType<string>(value);
+            }
+            else if (key == BrowserStorageKeys.ResourcePaneMode)
+            {
+                storedPaneMode = Assert.IsType<string>(value);
             }
         };
         await Services.GetRequiredService<ResourceTagStore>().AddTagAsync("api", "Backend");
@@ -3224,6 +3229,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal("Backend", Assert.Single(cut.FindAll(".resource-tag-group")).GetAttribute("aria-label"));
             Assert.Equal(ResourcePaneMode.Resources, Services.GetRequiredService<ResourcePaneState>().Mode);
             Assert.Equal("Tags", storedGrouping);
+            Assert.Equal(nameof(ResourcePaneMode.Resources), storedPaneMode);
         });
     }
 
