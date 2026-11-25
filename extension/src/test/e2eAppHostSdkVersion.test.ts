@@ -67,6 +67,16 @@ suite('E2E AppHost SDK version selection', () => {
         assert.strictEqual(selectCompanionPackageVersion('17.0.1', []), '17.0.1');
     });
 
+    test('retains the exact pin for a PR SDK whose companion is missing instead of borrowing another build', () => {
+        const project = writeFixtureWithPackages([
+            'artifacts/nugets/Debug/Shipping/Aspire.AppHost.Sdk.17.0.1-pr.22586.g789ea272.nupkg',
+            'artifacts/nugets/Debug/Shipping/Aspire.Hosting.Blazor.17.0.1-ci.nupkg',
+            'artifacts/nugets/Debug/Shipping/Aspire.Hosting.Blazor.17.0.1.nupkg',
+        ], '17.0.1-pr.22586.g789ea272');
+
+        assert.strictEqual(project, createBrowserDebuggerAppHostProject('17.0.1-pr.22586.g789ea272', '17.0.1-pr.22586.g789ea272'));
+    });
+
     test('uses the repository build companion instead of a cached same-patch PR package', () => {
         const project = writeFixtureWithPackages([
             'artifacts/nugets/Debug/Shipping/Aspire.AppHost.Sdk.17.0.1.nupkg',
@@ -124,6 +134,13 @@ suite('E2E AppHost SDK version selection', () => {
             ],
         },
         {
+            scenario: 'a companion only in a nested source below the SDK',
+            packages: [
+                'artifacts/nugets/Debug/Shipping/Aspire.AppHost.Sdk.17.0.1.nupkg',
+                'artifacts/nugets/Debug/Shipping/nested/Aspire.Hosting.Blazor.17.0.1-ci.nupkg',
+            ],
+        },
+        {
             scenario: 'no local SDK',
             packages: [
                 'home/.aspire/hives/pr-unrelated/packages/Aspire.Hosting.Blazor.17.0.1-ci.nupkg',
@@ -145,7 +162,7 @@ suite('E2E AppHost SDK version selection', () => {
     }
 });
 
-function writeFixtureWithPackages(packagePaths: string[]): string {
+function writeFixtureWithPackages(packagePaths: string[], appHostSdkVersion = '17.0.1'): string {
     const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'unit');
     fs.mkdirSync(testArtifactsRoot, { recursive: true });
     const root = fs.mkdtempSync(path.join(testArtifactsRoot, 'companion-packages-'));
@@ -164,7 +181,6 @@ function writeFixtureWithPackages(packagePaths: string[]): string {
             'getAvailablePackageVersions',
             'getLocalPackageSourceDirectories',
             'getDirectoriesContainingPackages',
-            'getFilesRecursive',
             'comparePackageVersionsDescending',
         ]);
         const declarations = source.statements.filter((statement): statement is ts.FunctionDeclaration =>
@@ -174,7 +190,7 @@ function writeFixtureWithPackages(packagePaths: string[]): string {
         // Exercise the real discovery and writer against isolated package filenames, without
         // launching VS Code or downloading the CLI. Shipping and flat hive layouts mirror CI.
         runInNewContext(`${declarations.map(declaration => declaration.getText(source)).join('\n')}
-writeBrowserDebuggerAppHostProject('AppHost', '17.0.1');`, {
+writeBrowserDebuggerAppHostProject('AppHost', ${JSON.stringify(appHostSdkVersion)});`, {
             fs,
             path,
             os: { homedir: () => path.join(root, 'home') },

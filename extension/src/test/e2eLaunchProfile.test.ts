@@ -1125,16 +1125,16 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
         vm.runInNewContext(`${declarations.join('\n')}
             configureStandaloneBasePath('/app');
             replaceCounterHandler('Counter.razor');
-            writeBrowserDebuggerAppHostProject('AppHost', '13.6.0-test');`, {
+            writeBrowserDebuggerAppHostProject('AppHost', '13.6.0');`, {
             path,
             workspaceRoot: '/app',
             csharpFileHeader: '',
             createBrowserDebuggerAppHostProject,
             selectCompanionPackageVersion,
             getAvailableCompanionPackageVersions: (appHostSdkVersion: string, packageId: string) => {
-                assert.strictEqual(appHostSdkVersion, '13.6.0-test');
+                assert.strictEqual(appHostSdkVersion, '13.6.0');
                 requestedPackageIds.push(packageId);
-                return ['13.6.0-test-ci'];
+                return ['13.6.0-ci'];
             },
             console: { log: () => undefined },
             fs: {
@@ -1146,7 +1146,7 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
         assert.strictEqual(files.get(indexPath), '<html><head><base href="/standalone/" /></head></html>');
         // Release branding stabilizes the AppHost SDK while Aspire.Hosting.Blazor keeps its -ci suffix.
         assert.deepStrictEqual(requestedPackageIds, ['Aspire.Hosting.Blazor']);
-        assert.strictEqual(files.get(path.join('/app', 'AppHost', 'AppHost.csproj')), createBrowserDebuggerAppHostProject('13.6.0-test', '13.6.0-test-ci'));
+        assert.strictEqual(files.get(path.join('/app', 'AppHost', 'AppHost.csproj')), createBrowserDebuggerAppHostProject('13.6.0', '13.6.0-ci'));
         assert.strictEqual(files.get('Counter.razor'), `<button class="btn btn-primary" @onclick="IncrementCount" data-aspire-e2e-interactive="@(isInteractive ? "true" : "false")">Click me</button>
 @code {
     private int currentCount = 0;

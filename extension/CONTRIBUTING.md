@@ -176,7 +176,7 @@ The Windows shard launches VS Code with `__COMPAT_LAYER=DetectorsAppHealth` to c
 
 The browser debugger fixtures target the .NET version pinned by the repository's `global.json`. Their NuGet sources must include the matching daily feed because the standalone Blazor gateway is acquired as a .NET tool at run time.
 
-When release branding leaves `Aspire.Hosting.Blazor` prerelease, an exact AppHost SDK version match is preferred. Same-patch fallback is limited to the first local package directory containing that SDK version, with repository artifacts preceding cached hives.
+When release branding leaves `Aspire.Hosting.Blazor` prerelease, an exact AppHost SDK version match is preferred. For a stable SDK, same-patch fallback is limited to packages directly in the first local package directory containing that SDK version, with repository artifacts preceding cached hives. A prerelease SDK requires the exact companion version.
 
 The E2E workflow and PR installer stage a build's packages together in a flat hive directory. Unrelated hives cannot supply the fallback; a missing companion retains the AppHost version pin so restore reports the failure. PR builds version every package with the same `-pr.*` suffix as the SDK, so a same-patch `-pr.*` package is never used as the fallback, even when a stale one sits beside the SDK.
 

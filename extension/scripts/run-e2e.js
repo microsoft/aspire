@@ -2337,11 +2337,16 @@ function getApprovedFallbackPackageSources() {
   ];
 }
 
+// Discovery registers every directory containing packages as its own source, so read only the
+// files directly in each source. Recursing would attribute a nested source's packages to its
+// parent and let the companion fallback borrow from a different source than the SDK.
 function getAvailablePackageVersions(packageId, sourceDirectories = getLocalPackageSourceDirectories()) {
   const versions = [];
   for (const sourceDirectory of sourceDirectories) {
-    for (const packagePath of getFilesRecursive(sourceDirectory)) {
-      const packageName = path.basename(packagePath);
+    const packageNames = fs.readdirSync(sourceDirectory, { withFileTypes: true })
+      .filter(entry => entry.isFile())
+      .map(entry => entry.name);
+    for (const packageName of packageNames) {
       const escapedPackageId = packageId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const match = packageName.match(new RegExp(`^${escapedPackageId}\\.(.+)\\.nupkg$`));
       if (match) {
