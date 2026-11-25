@@ -141,6 +141,27 @@
           "execution_id": "35980ca9-347c-43b4-a51c-94c802cd795a"
         }
       ]
+    },
+    {
+      "run_id": 45526845710,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45526845710",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "observed_at": "2026-11-25T02:10:37Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Dashboard.Components.Tests.Pages.TerminalWindowTests.Initialize_SecuredModeAuthenticatedUser_ShowsTerminal(authMode: OpenIdConnect)",
+          "job_id": 138913022887,
+          "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+          "error": "Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.\n\nIf this test does not fail consistently, the reason may be that\nthe wait timeout is too short, and the runtime did not have enough\ntime to complete the necessary number of renders of the component under test.\nThis can happen on highly utilized or slower hardware, for example.\n\nTo determine if this is the cause, compare the check and render count(s) below\nand see if they match what is expected. If they do not,\nconsider increasing the timeout, either at the individual\nmethod call level, e.g. WaitForElement(\"div\", TimeSpan.FromSeconds(15)),\nor via the static TestContext.DefaultWaitTimeout property.\n\nCheck count: 1.\nComponent render count: 21.\nTotal render count across all components: 0.\n---- Assert.Equal() Failure: Values differ\nExpected: 1\nActual:   0",
+          "stack_trace": "   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertion[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 102\n   at Aspire.Dashboard.Components.Tests.Pages.TerminalWindowTests.Initialize_SecuredModeAuthenticatedUser_ShowsTerminal(FrontendAuthMode authMode) in /_/tests/Aspire.Dashboard.Components.Tests/Pages/TerminalWindowTests.cs:line 333\n   at System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)\n----- Inner Stack Trace -----\n   at Aspire.Dashboard.Components.Tests.Pages.TerminalWindowTests.<>c__DisplayClass13_0.<Initialize_SecuredModeAuthenticatedUser_ShowsTerminal>b__2() in /_/tests/Aspire.Dashboard.Components.Tests/Pages/TerminalWindowTests.cs:line 333\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "0336de91-cb46-46e4-8b6e-1aa2f29e2d9e"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/22538"
