@@ -243,12 +243,6 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
-        public static string MetricsBackTo {
-            get {
-                return ResourceManager.GetString("MetricsBackTo", resourceCulture);
-            }
-        }
-
         public static string MetricsInstrumentNoDataTooltip {
             get {
                 return ResourceManager.GetString("MetricsInstrumentNoDataTooltip", resourceCulture);

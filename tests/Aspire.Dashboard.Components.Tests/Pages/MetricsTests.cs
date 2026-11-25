@@ -2344,7 +2344,7 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task InstrumentChart_Back_ReturnsToGroupItWasOpenedFrom()
+    public async Task InstrumentChart_OnlyShowsPinButtonInTitleAndCanReturnViaGroupPicker()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
         await Services.GetRequiredService<MetricPinStore>().SetPinnedAsync(new OtlpInstrumentKey("test-meter2", "queue.length"), ["TestApp"], pinned: true);
@@ -2362,13 +2362,15 @@ public partial class MetricsTests : DashboardTestContext
 
         // Open the pinned instrument's chart, as clicking its card does.
         navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter2", instrument: "queue.length", duration: 5));
-        cut.WaitForAssertion(() =>
+        var chart = cut.WaitForComponent<ChartContainer>();
+        chart.WaitForAssertion(() =>
         {
-            Assert.Equal("queue.length", cut.Instance.PageViewModel.SelectedInstrument?.Name);
-            Assert.Equal("Back to Pinned", cut.Find(".metrics-chart-back").GetAttribute("aria-label"));
+            Assert.Equal("queue.length", chart.Find(".metrics-chart-title h3").TextContent);
+            var button = Assert.Single(chart.FindAll(".metrics-chart-title fluent-button"));
+            Assert.Equal("Unpin metric", button.GetAttribute("aria-label"));
         });
 
-        cut.Find(".metrics-chart-back").Click();
+        cut.Find(".metric-group.pinned").Click();
 
         cut.WaitForAssertion(() =>
         {

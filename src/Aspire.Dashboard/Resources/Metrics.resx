@@ -264,8 +264,4 @@
   <data name="MetricsShowAllInstruments" xml:space="preserve">
     <value>Show all instruments</value>
   </data>
-  <data name="MetricsBackTo" xml:space="preserve">
-    <value>Back to {0}</value>
-    <comment>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</comment>
-  </data>
 </root>

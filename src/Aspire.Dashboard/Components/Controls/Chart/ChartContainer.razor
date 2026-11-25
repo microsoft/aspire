@@ -14,17 +14,6 @@ else
     <div class="metrics-chart">
         <div class="metrics-chart-header">
             <div class="metrics-chart-title">
-                @if (BackLabel is not null && OnBackAsync is not null)
-                {
-                    @* Same square icon button style as the pin, so the title row's actions read as one set. *@
-                    <FluentButton Class="aspire-button metrics-chart-back"
-                                  Appearance="ButtonAppearance.Default"
-                                  IconOnly="true"
-                                  IconStart="@(new Icons.Regular.Size16.ChevronLeft())"
-                                  OnClick="@OnBackAsync"
-                                  data-tooltip="@BackLabel"
-                                  aria-label="@BackLabel" />
-                }
                 <h3>@_instrument.Summary.Name</h3>
                 <MetricPinButton InstrumentKey="@_instrument.Summary.GetKey()" ResourceNames="@PinResourceNames" Bordered="true" />
             </div>

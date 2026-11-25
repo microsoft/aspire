@@ -7,11 +7,6 @@
         <target state="translated">Wszystkie instrumenty</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsBackTo">
-        <source>Back to {0}</source>
-        <target state="translated">Wstecz do {0}</target>
-        <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
-      </trans-unit>
       <trans-unit id="MetricsFilterResultsTitle">
         <source>Metrics matching "{0}"</source>
         <target state="translated">Metryki pasujące do „{0}”</target>
