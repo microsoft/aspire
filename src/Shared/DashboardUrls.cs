@@ -134,6 +134,11 @@ internal static class DashboardUrls
     public const string ResourceSelectionQueryName = "resource";
 
     /// <summary>
+    /// The source of a metric chart when the sidebar selects several resources or all resources.
+    /// </summary>
+    public const string MetricsChartResourceQueryName = "chartResource";
+
+    /// <summary>
     /// The query string parameter that switches the dashboard's resource list between listing resources and grouping
     /// them by tag, for example <c>/resources?pane=tags</c>.
     /// </summary>
@@ -305,7 +310,7 @@ internal static class DashboardUrls
         return url;
     }
 
-    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false)
+    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false, string? chartResource = null)
     {
         var url = $"/{MetricsBasePath}";
         if (resource != null)
@@ -324,6 +329,10 @@ internal static class DashboardUrls
             if (instrument is not null)
             {
                 url = AddQueryString(url, "instrument", instrument);
+                if (chartResource is not null)
+                {
+                    url = AddQueryString(url, MetricsChartResourceQueryName, chartResource);
+                }
             }
         }
         if (duration != null)

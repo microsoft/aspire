@@ -35,10 +35,6 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
-    private List<SelectViewModel<ResourceTypeDetails>>? _selectionResourceViewModels;
-
-    // Exposed for tests, which wait for telemetry resource updates that the page processes asynchronously.
-    internal IReadOnlyList<SelectViewModel<ResourceTypeDetails>>? SelectionResourceViewModels => _selectionResourceViewModels;
     private List<OtlpResource>? _aggregateResources;
     private Subscription? _resourcesSubscription;
     private Subscription? _metricsSubscription;
@@ -52,12 +48,15 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     public string? ResourceName { get; set; }
 
     /// <summary>
-    /// Gets or sets the resources selected in the resource list when several resources are selected. The page
-    /// displays one of them at a time, and lets the user switch between them.
+    /// Gets or sets the resources selected in the resource list when several resources are selected.
     /// </summary>
     [Parameter]
     [SupplyParameterFromQuery(Name = DashboardUrls.ResourceSelectionQueryName)]
     public string[]? SelectedResourceNames { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = DashboardUrls.MetricsChartResourceQueryName)]
+    public string? ChartResourceName { get; set; }
 
     [Parameter]
     [SupplyParameterFromQuery(Name = "meter")]
@@ -229,6 +228,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         return new MetricsPageState
         {
             ResourceName = PageViewModel.SelectedResource.Id is not null ? PageViewModel.SelectedResource.Name : null,
+            ChartResourceName = PageViewModel.SelectedInstrument is { } instrument ? GetInstrumentResourceLabel(instrument) : null,
             MeterName = PageViewModel.SelectedMeter,
             InstrumentName = PageViewModel.SelectedInstrument?.Name,
             Pinned = PageViewModel.ShowPinned,
@@ -240,16 +240,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     public Task UpdateViewModelFromQueryAsync(MetricsViewModel viewModel)
     {
-        UpdateSelectionResources();
-        if (_selectionResourceViewModels is { Count: > 0 } selectionResources &&
-            ResourceName is not null && !selectionResources.Any(r => string.Equals(r.Name, ResourceName, StringComparisons.ResourceName)))
-        {
-            // The URL names a resource that isn't part of the multi-resource selection. Display the first selected
-            // resource instead. Without a named resource, the page lists the instruments of every selected resource.
-            PageViewModel.SelectedResource = selectionResources[0];
-            ResourceName = selectionResources[0].Name;
-            return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
-        }
+        UpdateAggregateResources();
 
         if (ResourcesLayout is null && ResourceName is null && TryGetSingleResource() is { } r)
         {
@@ -260,7 +251,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         }
 
         viewModel.SelectedDuration = _durations.SingleOrDefault(d => (int)d.Id.TotalMinutes == DurationMinutes) ?? _durations.Single(d => d.Id == s_defaultDuration);
-        viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _selectResource);
+        viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ScopeResourceName, canSelectGrouping: true, _selectResource);
 
         UpdateInstruments(viewModel);
 
@@ -275,10 +266,14 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         {
             viewModel.ShowPinned = true;
         }
+        else if (RequestedChartResourceName is { } chartResourceName)
+        {
+            SelectRequestedChart(viewModel, chartResourceName);
+        }
         else if (viewModel.Instruments != null && !string.IsNullOrEmpty(MeterName))
         {
             viewModel.SelectedMeter = viewModel.Instruments.FirstOrDefault(i => i.Parent.Name == MeterName)?.Parent.Name;
-            if (viewModel.SelectedMeter != null && !string.IsNullOrEmpty(InstrumentName))
+            if (viewModel.SelectedMeter is not null && !string.IsNullOrEmpty(InstrumentName) && viewModel.SelectedResource.Id?.ReplicaSetName is not null)
             {
                 viewModel.SelectedInstrument = viewModel.Instruments.FirstOrDefault(i => i.Parent.Name == MeterName && i.Name == InstrumentName);
             }
@@ -298,6 +293,33 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         {
             var apps = _resourceViewModels.Where(e => e != _selectResource).ToList();
             return apps.Count == 1 ? apps[0] : null;
+        }
+    }
+
+    private bool HasMultiResourceScope => SelectedResourceNames is { Length: > 1 };
+
+    private string? ScopeResourceName => HasMultiResourceScope ? null : ResourceName;
+
+    // Older chart links used /metrics/resource/{source}?resource=...&resource=... to name the chart source.
+    private string? RequestedChartResourceName => !string.IsNullOrEmpty(MeterName) && !string.IsNullOrEmpty(InstrumentName) && Pinned is not true
+        ? ChartResourceName ?? (HasMultiResourceScope ? ResourceName : null)
+        : null;
+
+    private void SelectRequestedChart(MetricsViewModel viewModel, string chartResourceName)
+    {
+        var resource = _resourceViewModels.GetResource(Logger, chartResourceName, canSelectGrouping: false, _selectResource);
+        viewModel.SelectedInstrument = resource.Id is { } id
+            ? viewModel.Instruments?.FirstOrDefault(i => i.ResourceView.Resource.ResourceKey == id.GetResourceKey() && i.Parent.Name == MeterName && i.Name == InstrumentName)
+            : null;
+        viewModel.SelectedMeter = viewModel.SelectedInstrument?.Parent.Name;
+        if (viewModel.SelectedInstrument is null)
+        {
+            Logger.LogDebug("Chart {MeterName}/{InstrumentName} for resource {ChartResourceName} is not available in the current resource scope.", MeterName, InstrumentName, chartResourceName);
+            SelectDefaultView(viewModel);
+        }
+        else
+        {
+            viewModel.ShowAll = false;
         }
     }
 
@@ -334,23 +356,33 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         var state = ConvertViewModelToSerializable();
         if (!sameScope && ResourcesLayout is { } layout && (state.Pinned || state.MeterName is not null))
         {
-            // A chart needs a single source, but a meter or the pinned group can span an aggregate selection.
             var keys = resourceNames.Count == 0
                 ? layout.GetPaneTelemetryKeys()
-                : layout.GetSelectionTelemetryKeys(resourceName is null ? resourceNames : [resourceName]) ?? [];
-            var isAvailable = (state.InstrumentName is null || resourceName is not null) &&
-                keys.Any(key => TelemetryRepository.GetInstrumentSummaries(key).Any(i =>
-                    state.Pinned ? PinStore.IsPinned(i) :
-                    i.Parent.Name == state.MeterName && (state.InstrumentName is null || i.Name == state.InstrumentName)));
-            if (!isAvailable)
+                : layout.GetSelectionTelemetryKeys(resourceNames) ?? [];
+            if (PageViewModel.SelectedInstrument is { } instrument)
             {
-                state = state with { Pinned = false, MeterName = null, InstrumentName = null };
+                // Keep the original chart source if it is still selected. Otherwise find the same metric
+                // in the new selection, using the selection order when several resources match.
+                var sourceKey = instrument.ResourceView.Resource.ResourceKey;
+                var match = (keys.Contains(sourceKey) ? TelemetryRepository.GetInstrumentSummary(sourceKey, instrument.Parent.Name, instrument.Name) : null)
+                    ?? keys.Where(key => key != sourceKey)
+                        .Select(key => TelemetryRepository.GetInstrumentSummary(key, instrument.Parent.Name, instrument.Name))
+                        .FirstOrDefault(candidate => candidate is not null);
+                state = match is not null
+                    ? state with { ChartResourceName = GetInstrumentResourceLabel(match) }
+                    : state with { MeterName = null, InstrumentName = null, ChartResourceName = null };
+            }
+            else if (!keys.Any(key => TelemetryRepository.GetInstrumentSummaries(key).Any(i =>
+                state.Pinned ? PinStore.IsPinned(i) : i.Parent.Name == state.MeterName)))
+            {
+                state = state with { Pinned = false, MeterName = null };
             }
         }
 
+        var scopeResourceName = resourceNames.Count == 1 ? resourceName : null;
         return DashboardUrls.MetricsUrl(
-            resourceName, state.MeterName, state.InstrumentName, state.DurationMinutes, state.ViewKind,
-            pinned: state.Pinned, total: state.ShowRunningTotal);
+            scopeResourceName, state.MeterName, state.InstrumentName, state.DurationMinutes, state.ViewKind,
+            pinned: state.Pinned, total: state.ShowRunningTotal, chartResource: scopeResourceName is null ? state.ChartResourceName : null);
     }
 
     private void UpdateInstruments(MetricsViewModel viewModel)
@@ -363,9 +395,9 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
         var selectedInstance = viewModel.SelectedResource.Id?.GetResourceKey();
         if (selectedInstance is null &&
-            ResourceName is not null &&
+            ScopeResourceName is { } resourceName &&
             ResourcesLayout is { } layout &&
-            ResourceViewModel.TryGetResourceByName(ResourceName, layout.ResourceByName, out _))
+            ResourceViewModel.TryGetResourceByName(resourceName, layout.ResourceByName, out _))
         {
             // A resource from the app model that hasn't sent telemetry has no metrics, rather than being unknown.
             viewModel.Instruments = [];
@@ -559,29 +591,26 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private MetricSortBy? OverviewSortBy => CanOrganize ? EffectiveSortBy : null;
 
-    private string? CurrentResourceName => PageViewModel.SelectedResource.Id is null ? null : PageViewModel.SelectedResource.Name;
+    private string? CurrentResourceName => ResourcesLayout is { } layout
+        ? layout.SelectedResourceName
+        : PageViewModel.SelectedResource.Id is not null ? PageViewModel.SelectedResource.Name : null;
 
     private ResourceKey? OverviewResourceKey => PageViewModel.SelectedResource.Id?.GetResourceKey();
 
-    private Func<OtlpInstrumentSummary, string>? ResourceLabelProvider => IsAggregate ? GetInstrumentResourceLabel : null;
-
-    /// <summary>
-    /// Updates the resources the user can pick from when several resources are selected in the resource list.
-    /// </summary>
-    private void UpdateSelectionResources()
+    private SelectViewModel<ResourceTypeDetails> GetSignalsResource()
     {
-        UpdateAggregateResources();
-        if (SelectedResourceNames is not { Length: > 1 } || ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } selectionKeys)
+        // Opening a chart from an aggregate list must not widen the Clear metrics action to all resources.
+        if (IsAggregate && !PageViewModel.ShowFilterResults && PageViewModel.SelectedInstrument is { } instrument)
         {
-            _selectionResourceViewModels = null;
-            return;
+            var key = instrument.ResourceView.Resource.ResourceKey;
+            return _resourceViewModels.FirstOrDefault(r => r.Id is { ReplicaSetName: not null } id && id.GetResourceKey() == key)
+                ?? PageViewModel.SelectedResource;
         }
 
-        // Groupings of replicas don't have a resource key. The resource list selects replicas individually.
-        _selectionResourceViewModels = _resourceViewModels
-            .Where(r => r.Id is { ReplicaSetName: not null } id && selectionKeys.Contains(id.GetResourceKey()))
-            .ToList();
+        return PageViewModel.SelectedResource;
     }
+
+    private Func<OtlpInstrumentSummary, string>? ResourceLabelProvider => IsAggregate ? GetInstrumentResourceLabel : null;
 
     private void UpdateResources()
     {
@@ -597,12 +626,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         {
             _resourceViewModels.Insert(0, _selectResource);
         }
-        else
+        else if (ResourcesLayout is null)
         {
             PageViewModel.SelectedResource = _resourceViewModels.Single();
         }
 
-        UpdateSelectionResources();
+        UpdateAggregateResources();
 
         UpdateSubscription();
     }
@@ -621,9 +650,9 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         // resource's telemetry can arrive after the page opened. The route then resolved to "None" and, because
         // nothing resolved it again, the page kept showing "Select a resource" for a valid deep link. Resolve the
         // route again once its resource is known, which also restores the meter and instrument it names.
-        if (ResourceName is not null &&
+        if (ScopeResourceName is { } resourceName &&
             PageViewModel.SelectedResource == _selectResource &&
-            _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _selectResource) != _selectResource)
+            _resourceViewModels.GetResource(Logger, resourceName, canSelectGrouping: true, _selectResource) != _selectResource)
         {
             await UpdateViewModelFromQueryAsync(PageViewModel);
             UpdateSubscription();
@@ -633,11 +662,25 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         {
             // Resources joining or leaving the pane change which instruments are listed.
             UpdateInstruments(PageViewModel);
-            SelectDefaultView(PageViewModel);
+            RefreshRequestedChart();
         }
 
         RefreshResourceSelectionLinks();
         StateHasChanged();
+    }
+
+    private void RefreshRequestedChart()
+    {
+        if (!PageViewModel.ShowPinned && RequestedChartResourceName is { } chartResourceName &&
+            (PageViewModel.SelectedInstrument is not { } instrument ||
+             _aggregateResources is { } resources && IsAggregate && !resources.Any(r => r.ResourceKey == instrument.ResourceView.Resource.ResourceKey)))
+        {
+            SelectRequestedChart(PageViewModel, chartResourceName);
+        }
+        else
+        {
+            SelectDefaultView(PageViewModel);
+        }
     }
 
     internal async Task HandleSelectedResourceChangedAsync()
@@ -732,6 +775,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     public sealed record MetricsPageState
     {
         public string? ResourceName { get; set; }
+        public string? ChartResourceName { get; set; }
         public string? MeterName { get; set; }
         public string? InstrumentName { get; set; }
         public bool Pinned { get; set; }
@@ -770,18 +814,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     public string GetUrlFromSerializableViewModel(MetricsPageState serializable)
     {
-        // In the resources layout, the resource list owns the selection, so a resource remembered in the session
-        // doesn't replace it. Without a single selected resource (all resources, or several), no resource is named
-        // and the page lists the instruments of every selected resource. A remembered name could also be stale,
-        // for example a replica from an earlier run.
-        //
-        // The exception is an open instrument chart in a multi-resource selection: the chart belongs to one of the
-        // selected resources, and changing its duration or view must keep showing it. Dropping the resource there
-        // would navigate back to the aggregate instrument list. The name is only kept while it's part of the
-        // selection, so a stale name still can't replace it.
-        var resourceName = ResourcesLayout is { } layout
-            ? (layout.IsMultiSelection ? GetSelectedChartResourceName(serializable) : layout.SelectedResourceName)
-            : serializable.ResourceName;
+        var resourceName = ResourcesLayout is { } layout ? layout.SelectedResourceName : serializable.ResourceName;
         var url = DashboardUrls.MetricsUrl(
             resource: resourceName,
             meter: serializable.MeterName,
@@ -789,32 +822,10 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             duration: serializable.DurationMinutes,
             view: serializable.ViewKind,
             pinned: serializable.Pinned,
-            total: serializable.ShowRunningTotal);
+            total: serializable.ShowRunningTotal,
+            chartResource: resourceName is null ? serializable.ChartResourceName : null);
 
         return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
-    }
-
-    private string? GetSelectedChartResourceName(MetricsPageState serializable)
-    {
-        if (serializable is not { InstrumentName: not null, ResourceName: { } name } ||
-            _selectionResourceViewModels is not { } selectionResources)
-        {
-            return null;
-        }
-
-        // A resource's display name changes when it gains a replica: the singleton "api" becomes the replica
-        // "api-<instance id>". The open chart's view model still has the old name, which is no longer part of the
-        // selection. When the state is the page's own, find the chart's resource by its telemetry key, which doesn't
-        // change, and use the selection entry's current name.
-        if (string.Equals(PageViewModel.SelectedResource.Name, name, StringComparisons.ResourceName) &&
-            PageViewModel.SelectedResource.Id is { ReplicaSetName: not null } id &&
-            selectionResources.FirstOrDefault(r => r.Id!.GetResourceKey() == id.GetResourceKey()) is { } current)
-        {
-            return current.Name;
-        }
-
-        // State restored from the session isn't the page's view model, so it's matched by name.
-        return selectionResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName)) ? name : null;
     }
 
     private async Task OnShowRunningTotalChangedAsync(bool showRunningTotal)
@@ -852,8 +863,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             view: ViewKindName,
             pinned: kind == MetricGroupKind.Pinned);
 
-        // Listing several resources keeps the selection in the URL, so the page keeps listing them all.
-        return (IsAggregate ? ResourcesLayout?.AddSelectionToUrl(url) : ResourcesLayout?.AddPaneToUrl(url)) ?? url;
+        return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
     }
 
     private void OnPinsChanged()
@@ -879,15 +889,16 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private string GetInstrumentUrl(OtlpInstrumentSummary instrument)
     {
-        // A card in a list of several resources opens the chart of the resource it came from.
+        // Opening a card in an aggregate list targets its source without changing the sidebar selection.
         var url = DashboardUrls.MetricsUrl(
-            resource: IsAggregate ? GetInstrumentResourceLabel(instrument) : PageViewModel.SelectedResource.Name,
+            resource: CurrentResourceName,
             meter: instrument.Parent.Name,
             instrument: instrument.Name,
             duration: DurationMinutes,
-            view: ViewKindName);
+            view: ViewKindName,
+            chartResource: IsAggregate ? GetInstrumentResourceLabel(instrument) : null);
 
-        return (IsAggregate ? ResourcesLayout?.AddSelectionToUrl(url) : ResourcesLayout?.AddPaneToUrl(url)) ?? url;
+        return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
     }
 
     private void UpdateSubscription()
@@ -914,7 +925,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
                         PageViewModel.Instruments = instruments;
 
                         // Instruments can arrive after the page loads, e.g. when the resource has just started.
-                        SelectDefaultView(PageViewModel);
+                        RefreshRequestedChart();
                         RefreshResourceSelectionLinks();
                         StateHasChanged();
                     }

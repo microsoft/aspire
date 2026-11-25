@@ -15,15 +15,13 @@
 <PageTitle>
     @{
         string? additionalText;
-        if (PageViewModel.SelectedResource.Id is { ReplicaSetName: { } replicaSetName })
+        if (PageViewModel.SelectedInstrument is { } selectedInstrument)
         {
-            additionalText = PageViewModel.SelectedInstrument is { } selectedInstrument
-                ? $"{replicaSetName} - {selectedInstrument.Name}"
-                : replicaSetName;
+            additionalText = $"{selectedInstrument.ResourceView.Resource.ResourceKey.Name} - {selectedInstrument.Name}";
         }
         else
         {
-            additionalText = null;
+            additionalText = PageViewModel.SelectedResource.Id?.ReplicaSetName;
         }
     }
 
@@ -108,12 +106,12 @@
                                         }
                                         @RenderSections(resultGroups, EffectiveGroupBy != MetricGroupBy.Meter)
                                     }
-                                    else if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
+                                    else if (PageViewModel is { SelectedMeter: { } selectedMeter, SelectedInstrument: { } chartInstrument })
                                     {
                                         <ChartContainer
-                                            ResourceKey="@(PageViewModel.SelectedResource.Id.GetResourceKey())"
-                                            MeterName="@(PageViewModel.SelectedMeter)"
-                                            InstrumentName="@(PageViewModel.SelectedInstrument.Name)"
+                                            ResourceKey="@(OverviewResourceKey ?? chartInstrument.ResourceView.Resource.ResourceKey)"
+                                            MeterName="@selectedMeter"
+                                            InstrumentName="@chartInstrument.Name"
                                             Duration="PageViewModel.SelectedDuration.Id"
                                             ActiveView="@(PageViewModel.SelectedViewKind ?? Metrics.MetricViewKind.Graph)"
                                             OnViewChangedAsync="@OnViewChangedAsync"
@@ -276,7 +274,7 @@
     {
         @if (ResourcesLayout is null)
         {
-            <ResourceSelect Resources="@(_selectionResourceViewModels ?? _resourceViewModels)"
+            <ResourceSelect Resources="@_resourceViewModels"
                             AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
                             @bind-SelectedResource="PageViewModel.SelectedResource"
                             @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
@@ -308,7 +306,7 @@
         <SignalsActionsDisplay IsPaused="@PauseManager.AreMetricsPaused(out _)"
                               OnPausedChanged="@PauseManager.SetMetricsPaused"
                               HandleClearSignal="ClearMetrics"
-                              SelectedResource="@PageViewModel.SelectedResource"/>
+                              SelectedResource="@GetSignalsResource()"/>
 
         <div class="toolbar-end">
             <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>

@@ -502,19 +502,21 @@ public partial class MetricsTests : DashboardTestContext
         }
     }
 
-    [Fact]
-    public async Task ResourcesLayout_MultiSelectionInstrumentChart_ChangingViewKeepsActiveResource()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResourcesLayout_AggregateMetricCard_PreservesSidebarSelection(bool multiSelection)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         MetricsSetupHelpers.SetupMetricsPage(this);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker")],
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker"), ModelTestHelpers.CreateResource("cache")],
             resourceChannelProvider: () => channel));
         Render<FluentToastProvider>();
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        foreach (var name in new[] { "api", "worker" })
+        foreach (var name in new[] { "api", "worker", "cache" })
         {
             // Without an instance ID, the telemetry resource's name matches the app model resource's name.
             var resource = CreateResource(name: name);
@@ -529,53 +531,94 @@ public partial class MetricsTests : DashboardTestContext
                         new ScopeMetrics
                         {
                             Scope = CreateScope(name: "test-meter"),
-                            Metrics = { CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1)) }
+                            Metrics = { CreateSumMetric(metricName: name == "cache" ? "other-instrument" : "test-instrument", startTime: s_testTime.AddMinutes(1)) }
                         }
                     }
                 }
             });
         }
 
-        // With api and worker selected, open api's instrument chart, as clicking its card in the aggregate list does.
+        string[] selectedResources = multiSelection ? ["api", "worker"] : [];
+        var expectedCardCount = multiSelection ? 2 : 3;
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "api", meter: "test-meter", instrument: "test-instrument", duration: 5, view: MetricViewKind.Graph.ToString())
-            + "&resource=api&resource=worker");
+        navigationManager.NavigateTo(DashboardUrls.AddResourceSelection("/metrics", selectedResources));
 
+        string? routeResourceName = null;
         var cut = Render<ResourcesLayout>(builder =>
         {
             builder.AddCascadingValue(viewport);
-            builder.Add(layout => layout.Body, bodyBuilder =>
-            {
-                bodyBuilder.OpenComponent<Metrics>(0);
-                bodyBuilder.AddAttribute(1, nameof(Metrics.ResourceName), "api");
-                bodyBuilder.CloseComponent();
-            });
+            builder.Add(layout => layout.Body, RenderMetrics(routeResourceName));
         });
 
         var page = cut.FindComponent<Metrics>();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.True(cut.Instance.IsMultiSelection);
-            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
-            Assert.Equal("test-instrument", page.Instance.PageViewModel.SelectedInstrument?.Name);
-        });
+        page.WaitForAssertion(() => Assert.Equal(expectedCardCount, page.FindAll(".meter-card-link").Count));
+        var cardUrl = page.FindAll(".meter-card-link")
+            .Single(card => card.QuerySelector(".meter-card-resource")?.GetAttribute("data-tooltip") == "api")
+            .GetAttribute("href")!;
+        AssertChartUrl(cardUrl, view: null);
+        navigationManager.NavigateTo(cardUrl);
 
-        var chart = cut.FindComponent<ChartContainer>();
+        var chart = page.WaitForComponent<ChartContainer>();
+        Assert.Equal("api", chart.Instance.ResourceKey.Name);
+        Assert.Equal(multiSelection, cut.Instance.IsMultiSelection);
+        Assert.Equal(!multiSelection, cut.Find(".resource-row-all").ClassList.Contains("selected"));
         await cut.InvokeAsync(() => chart.Instance.OnViewChangedAsync(MetricViewKind.Table));
 
-        // The chart stays open for api, and the selection is kept.
-        var uri = new Uri(navigationManager.Uri);
-        Assert.Equal("/metrics/resource/api", uri.AbsolutePath);
-        var query = HttpUtility.ParseQueryString(uri.Query);
-        Assert.Equal("test-instrument", query["instrument"]);
-        Assert.Equal(MetricViewKind.Table.ToString(), query["view"]);
-        Assert.Equal(["api", "worker"], query.GetValues("resource") ?? []);
-        cut.WaitForAssertion(() =>
+        var tableUrl = navigationManager.Uri;
+        AssertChartUrl(tableUrl, MetricViewKind.Table.ToString());
+        page.WaitForAssertion(() => Assert.Equal(MetricViewKind.Table, page.Instance.PageViewModel.SelectedViewKind));
+
+        var groupsUrl = page.Find(".metric-group-all").GetAttribute("href")!;
+        navigationManager.NavigateTo(groupsUrl);
+        page.WaitForAssertion(() => Assert.Equal(expectedCardCount, page.FindAll(".meter-card-link").Count));
+        Assert.Equal(selectedResources, HttpUtility.ParseQueryString(navigationManager.ToAbsoluteUri(groupsUrl).Query).GetValues("resource") ?? []);
+
+        navigationManager.NavigateTo(tableUrl);
+        page.WaitForComponent<ChartContainer>();
+        await SelectResourceAsync("worker", "/metrics/resource/worker?meter=test-meter&instrument=test-instrument&duration=5&view=Table");
+        Assert.Equal("worker", page.WaitForComponent<ChartContainer>().Instance.ResourceKey.Name);
+
+        await SelectResourceAsync("api", "/metrics/resource/api?meter=test-meter&instrument=test-instrument&duration=5&view=Table");
+        Assert.Equal("api", page.WaitForComponent<ChartContainer>().Instance.ResourceKey.Name);
+
+        // Cache reports the same meter but not the same instrument.
+        await SelectResourceAsync("cache", "/metrics/resource/cache?duration=5&view=Table");
+        page.WaitForAssertion(() =>
         {
-            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
-            Assert.Equal("test-instrument", page.Instance.PageViewModel.SelectedInstrument?.Name);
-            Assert.Equal(MetricViewKind.Table, page.Instance.PageViewModel.SelectedViewKind);
+            Assert.Empty(page.FindComponents<ChartContainer>());
+            Assert.Equal("All instruments", page.Find(".metric-group[aria-current='page'] .metric-group-name").TextContent.Trim());
         });
+
+        async Task SelectResourceAsync(string resourceName, string expectedUrl)
+        {
+            var selector = $"[data-resource-name='{resourceName}'] .resource-row-link";
+            cut.WaitForAssertion(() => Assert.Equal(expectedUrl, cut.Find(selector).GetAttribute("href")));
+            await cut.Find(selector).ClickAsync(new MouseEventArgs());
+            Assert.Equal(expectedUrl, new Uri(navigationManager.Uri).PathAndQuery);
+
+            // The test renderer doesn't have a router to supply the new path parameter.
+            routeResourceName = resourceName;
+            cut.Render(builder => builder.Add(layout => layout.Body, RenderMetrics(routeResourceName)));
+        }
+
+        static Microsoft.AspNetCore.Components.RenderFragment RenderMetrics(string? resourceName) => builder =>
+        {
+            builder.OpenComponent<Metrics>(0);
+            builder.AddAttribute(1, nameof(Metrics.ResourceName), resourceName);
+            builder.CloseComponent();
+        };
+
+        void AssertChartUrl(string url, string? view)
+        {
+            var uri = navigationManager.ToAbsoluteUri(url);
+            Assert.Equal("/metrics", uri.AbsolutePath);
+            var query = HttpUtility.ParseQueryString(uri.Query);
+            Assert.Equal("api", query["chartResource"]);
+            Assert.Equal("test-meter", query["meter"]);
+            Assert.Equal("test-instrument", query["instrument"]);
+            Assert.Equal(view, query["view"]);
+            Assert.Equal(selectedResources, query.GetValues("resource") ?? []);
+        }
     }
 
     [Fact]
@@ -618,16 +661,15 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         var page = cut.FindComponent<Metrics>();
-        cut.WaitForAssertion(() =>
+        page.WaitForAssertion(() =>
         {
             Assert.True(cut.Instance.IsMultiSelection);
-            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
-            Assert.Equal("test-instrument", page.Instance.PageViewModel.SelectedInstrument?.Name);
+            Assert.Equal("api", page.FindComponent<ChartContainer>().Instance.ResourceKey.Name);
         });
 
         // The second replica's telemetry renames the open chart's resource from "api" to "api-a".
         await AddMetricAsync(telemetryRepository, CreateResource(name: "api", instanceId: "b"));
-        cut.WaitForAssertion(() => Assert.Equal(["api-a", "worker"], page.Instance.SelectionResourceViewModels?.Select(r => r.Name) ?? []));
+        page.WaitForAssertion(() => Assert.Equal("api-a", page.Instance.ConvertViewModelToSerializable().ChartResourceName));
 
         // Build the URL a duration or view change navigates to. The page is rendered with a fixed route resource
         // here, without a router to update it, so the test checks the URL rather than navigating to it.
@@ -640,8 +682,9 @@ public partial class MetricsTests : DashboardTestContext
 
         // The chart stays open for the same replica, under its current name.
         var uri = new Uri(navigationManager.ToAbsoluteUri(url).ToString());
-        Assert.Equal("/metrics/resource/api-a", uri.AbsolutePath);
+        Assert.Equal("/metrics", uri.AbsolutePath);
         var query = HttpUtility.ParseQueryString(uri.Query);
+        Assert.Equal("api-a", query["chartResource"]);
         Assert.Equal("test-instrument", query["instrument"]);
         Assert.Equal(MetricViewKind.Table.ToString(), query["view"]);
         Assert.Equal(["api-a", "worker"], query.GetValues("resource") ?? []);
