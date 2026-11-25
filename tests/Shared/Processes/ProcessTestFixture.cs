@@ -50,7 +50,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
         }
 
         var targetFramework = $"net{RuntimeMajor}.0";
-        // MTP's entry point cannot re-enter guardian mode without launching another test run.
+        // MTP's entry point cannot re-enter supervisor mode without launching another test run.
         // Compile the production primitives into a minimal executable for this test runtime.
         string[] sources =
         [
@@ -115,7 +115,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
     {
         var startInfo = ProcessSupervisor.CreateStartInfo(command, completionPath, terminationTimeout);
         // Keep the production command handoff and owner identity, replacing only MTP's
-        // executable/argv with the standalone guardian entry point.
+        // executable/argv with the standalone supervisor entry point.
         startInfo.FileName = "dotnet";
         startInfo.ArgumentList.Clear();
         startInfo.ArgumentList.Add(_assemblyPath);
@@ -288,7 +288,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                 Environment.ExitCode = int.Parse(args[1], CultureInfo.InvariantCulture);
                 break;
             case "wait":
-                await NotifyReady(args[1], "runtime", Environment.ProcessId);
+                await NotifyReady(args[1], "target", Environment.ProcessId);
                 Block();
                 break;
             case "worker":
@@ -329,7 +329,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                     await started.WaitForConnectionAsync().DefaultTimeout();
                     using var reader = new StreamReader(started);
                     await reader.ReadLineAsync().DefaultTimeout();
-                    await NotifyReady(args[1], "runtime", Environment.ProcessId);
+                    await NotifyReady(args[1], "target", Environment.ProcessId);
                     if (args[0] == "tree-exit")
                     {
                         Environment.ExitCode = int.Parse(args[2], CultureInfo.InvariantCulture);
@@ -346,13 +346,13 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                 }
                 break;
             case "owner":
-                await using (var guardian = new ChildProcess(
+                await using (var supervisor = new ChildProcess(
                     Command("tree", args[1]),
                     NullLogger.Instance, new ChildProcessOptions { Lifetime = ChildProcessLifetime.OwnedTree, TemporaryStorage = new TemporaryStorage() }, OperatingSystem.IsWindows()))
                 {
-                    await guardian.StartAsync(CancellationToken.None);
-                    await using var scope = new ProcessScope(guardian, NullLogger.Instance, "test owner");
-                    await NotifyReady(args[1], "guardian", scope.ProcessId);
+                    await supervisor.StartAsync(CancellationToken.None);
+                    await using var scope = new ProcessScope(supervisor, NullLogger.Instance, "test owner");
+                    await NotifyReady(args[1], "supervisor", scope.ProcessId);
                     Block();
                 }
                 break;
@@ -365,31 +365,34 @@ public sealed class ProcessTestFixture : IAsyncLifetime
 internal sealed class ProcessTestReadiness : IDisposable
 {
     internal string Name { get; } = $"asp-p-{Guid.NewGuid():N}"[..18];
-    private readonly NamedPipeServerStream _runtime;
+    private readonly NamedPipeServerStream _target;
     private readonly NamedPipeServerStream _worker;
-    private readonly NamedPipeServerStream _guardian;
+    private readonly NamedPipeServerStream _supervisor;
 
     internal ProcessTestReadiness()
     {
-        _runtime = CreatePipe("runtime");
+        _target = CreatePipe("target");
         _worker = CreatePipe("worker");
-        _guardian = CreatePipe("guardian");
+        _supervisor = CreatePipe("supervisor");
     }
 
-    internal Task<ProcessTestIdentity> ReadRuntimeAsync() => ReadIdentityAsync(_runtime);
+    internal Task<ProcessTestIdentity> ReadTargetAsync() => ReadIdentityAsync(_target, TestConstants.LongTimeoutTimeSpan);
 
-    internal Task<ProcessTestIdentity> ReadGuardianAsync() => ReadIdentityAsync(_guardian);
+    internal Task<ProcessTestIdentity> ReadSupervisorAsync() => ReadIdentityAsync(_supervisor, TestConstants.LongTimeoutTimeSpan);
 
-    internal Task<ProcessTestIdentity[]> ReadTreeAsync() => Task.WhenAll(ReadIdentityAsync(_runtime), ReadIdentityAsync(_worker));
+    internal Task<ProcessTestIdentity[]> ReadTreeAsync() => ReadTreeAsync(TestConstants.LongTimeoutTimeSpan);
+
+    internal Task<ProcessTestIdentity[]> ReadTreeAsync(TimeSpan readinessTimeout) =>
+        Task.WhenAll(ReadIdentityAsync(_target, readinessTimeout), ReadIdentityAsync(_worker, readinessTimeout));
 
     private NamedPipeServerStream CreatePipe(string role) =>
         new($"{Name}-{role}", PipeDirection.In, 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
-    private static async Task<ProcessTestIdentity> ReadIdentityAsync(NamedPipeServerStream pipe)
+    private static async Task<ProcessTestIdentity> ReadIdentityAsync(NamedPipeServerStream pipe, TimeSpan readinessTimeout)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        timeout.CancelAfter(readinessTimeout);
         await pipe.WaitForConnectionAsync(timeout.Token);
         using var reader = new StreamReader(pipe, leaveOpen: true);
         // Each connection sends "PID:stable-start-time\n", e.g. "12345:1760000000000\n".
@@ -409,9 +412,9 @@ internal sealed class ProcessTestReadiness : IDisposable
 
     public void Dispose()
     {
-        _runtime.Dispose();
+        _target.Dispose();
         _worker.Dispose();
-        _guardian.Dispose();
+        _supervisor.Dispose();
     }
 }
 

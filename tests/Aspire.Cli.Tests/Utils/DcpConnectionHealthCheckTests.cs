@@ -3,13 +3,12 @@
 
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared;
@@ -170,26 +169,328 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, execution.DisposeCount);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TestConnectionAsync_WhenStartingDcp_MonitorsCurrentProcess(bool useDeveloperCertificate)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
+        var extensionsDirectory = dcpDirectory.CreateSubdirectory("ext");
+        var certificateManager = new TestCertificateManager { TrustResult = CertificateManager.TrustLevel.Full };
+        using var certificate = certificateManager.CreateAspNetCoreHttpsDevelopmentCertificate(
+            DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        certificateManager.Certificates.Add(certificate.Export(X509ContentType.Pfx));
+        var factory = new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, options) =>
+                new TestProcessExecution(fileName, arguments, environment, options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)), () => 1)
+                {
+                    StartReturnValue = false,
+                    ThrowOnHasExitedBeforeStart = true
+                }
+        };
+        var checker = CreateConnectionChecker(workspace, factory, certificateManager);
+
+        var result = await checker.TestConnectionAsync(dcpDirectory.FullName, useDeveloperCertificate, TestContext.Current.CancellationToken);
+
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+        var sessionDirectory = Assert.IsType<string>(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]);
+        var expectedArguments = new List<string>
+        {
+            "start-apiserver",
+            "--monitor",
+            Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
+            "--kubeconfig",
+            Path.Combine(sessionDirectory, "kubeconfig")
+        };
+        if (useDeveloperCertificate)
+        {
+            expectedArguments.AddRange(["--tls-cert-thumbprint", certificate.Thumbprint]);
+        }
+
+        Assert.Equal(expectedArguments, execution.Arguments);
+        Assert.Equal(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), execution.FileName);
+        Assert.Equal(extensionsDirectory.FullName, execution.EnvironmentVariables["DCP_EXTENSIONS_PATH"]);
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
+        Assert.False(execution.Started);
+        Assert.Equal(0, execution.KillCount);
+        Assert.Equal(1, execution.DisposeCount);
+        Assert.False(Directory.Exists(sessionDirectory));
+        Assert.NotNull(factory.LastProcessInvocationOptions);
+        Assert.False(factory.LastProcessInvocationOptions.Detached);
+        Assert.False(factory.LastProcessInvocationOptions.KillOnParentExit);
+        Assert.Equal(ChildProcessLifetime.CallerManaged, factory.LastProcessInvocationOptions.Lifetime);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TestConnectionAsync_WhenDeveloperCertificateIsUnavailable_ReturnsWarningWithoutStartingDcp(bool hasUntrustedCertificate)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var certificateManager = new TestCertificateManager();
+        using var certificate = certificateManager.CreateAspNetCoreHttpsDevelopmentCertificate(
+            DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        if (hasUntrustedCertificate)
+        {
+            certificateManager.Certificates.Add(certificate.Export(X509ContentType.Pfx));
+        }
+
+        var factory = new TestProcessExecutionFactory();
+        var checker = CreateConnectionChecker(workspace, factory, certificateManager);
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: true, TestContext.Current.CancellationToken);
+
+        Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
+        Assert.Equal(DcpConnectionHealthCheck.DeveloperCertificateCheckName, result.Name);
+        Assert.Equal(DoctorCommandStrings.DcpDeveloperCertificateUnavailableMessage, result.Message);
+        Assert.Empty(factory.CreatedExecutions);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_WhenCanceledAfterStart_KillsDcpTreeAndPropagatesCancellation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var factory = CreateDcpFactory(exitsWhenKilled: true);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        var connection = checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, cancellation.Token);
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+        Assert.True(execution.Started);
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection);
+
+        AssertKilledAndCleanedUp(execution);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_WhenProbeSucceeds_StopsDcpAndReturnsSuccess()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var server = new FakeDcpApiServer();
+        var factory = CreateFakeDcpFactory(server);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+        Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
+        Assert.Equal(DoctorCommandStrings.DcpEphemeralCertificateConnectionSucceededMessage, result.Message);
+        AssertKilledAndCleanedUp(execution);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_WhenVersionResponseIsTruncated_ReturnsFailureAfterCleanup()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var server = new FakeDcpApiServer { TruncateVersionResponse = true };
+        var factory = CreateFakeDcpFactory(server);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
+        Assert.Equal(DoctorCommandStrings.DcpEphemeralCertificateConnectionFailedMessage, result.Message);
+        Assert.False(string.IsNullOrWhiteSpace(result.Details));
+        AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TestConnectionAsync_WhenCanceledDuringStopRequest_PropagatesCancellationAfterCleanup(bool probeThrows)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stopRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStopRequest = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = new FakeDcpApiServer(async cancellationToken =>
+        {
+            stopRequested.TrySetResult();
+            await releaseStopRequest.Task.WaitAsync(cancellationToken);
+        })
+        {
+            TruncateVersionResponse = probeThrows
+        };
+        var factory = CreateFakeDcpFactory(server);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        var connection = checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, cancellation.Token);
+
+        // The probe has finished (successfully or with an exception) once teardown sends the stop
+        // request. Cancelling the caller here must not abort cleanup, yet must reach the caller.
+        await stopRequested.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        cancellation.Cancel();
+        releaseStopRequest.SetResult();
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection);
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TestConnectionAsync_WhenCanceledDuringProcessDisposal_PropagatesCancellationAfterCleanup(bool probeThrows)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var server = new FakeDcpApiServer { TruncateVersionResponse = probeThrows };
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var factory = CreateFakeDcpFactory(server, onDispose: cancellation.Cancel);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, cancellation.Token));
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        AssertKilledAndCleanedUp(Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions)));
+    }
+
+    private static TestProcessExecutionFactory CreateFakeDcpFactory(FakeDcpApiServer server, Action? onDispose = null)
+    {
+        return new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, options) =>
+            {
+                Assert.NotNull(environment);
+                File.WriteAllText(Path.Combine(environment["DCP_SESSION_FOLDER"], "kubeconfig"), server.Kubeconfig);
+
+                return new TestProcessExecution(fileName, arguments, environment, options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)), () => 1)
+                {
+                    ExitsWhenKilled = true,
+                    DisposeCallback = onDispose
+                };
+            }
+        };
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TestConnectionAsync_WhenStartThrows_ReturnsFailureAndDisposesExecution(bool timedOut)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var factory = new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, options) =>
+                new TestProcessExecution(fileName, arguments, environment, options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)), () => 1)
+                {
+                    StartException = timedOut ? new OperationCanceledException() : new InvalidOperationException("test-start-failure"),
+                    ThrowOnHasExitedBeforeStart = true
+                }
+        };
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
+        Assert.Equal(DoctorCommandStrings.DcpEphemeralCertificateConnectionFailedMessage, result.Message);
+        Assert.Equal(timedOut
+            ? string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DcpConnectionTimedOutMessageFormat, 20d)
+            : "test-start-failure", result.Details);
+        Assert.False(execution.Started);
+        Assert.Equal(0, execution.KillCount);
+        Assert.Equal(1, execution.DisposeCount);
+        Assert.False(Directory.Exists(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]));
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_WhenKubeconfigIsInvalid_KillsDcpTreeAndReturnsFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var factory = CreateDcpFactory(exitsWhenKilled: true, writeInvalidKubeconfig: true);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
+        Assert.Equal(DoctorCommandStrings.DcpKubeconfigMissingServerDetails, result.Details);
+        Assert.True(execution.Started);
+        AssertKilledAndCleanedUp(execution);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_WhenDcpSurvivesKill_LeavesDcpToMonitorAndReturnsFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var factory = CreateDcpFactory(exitsWhenKilled: false, writeInvalidKubeconfig: true);
+        var checker = CreateConnectionChecker(workspace, factory, new TestCertificateManager());
+
+        var result = await checker.TestConnectionAsync(workspace.Path, useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(factory.CreatedExecutions));
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
+        var sessionDirectory = Assert.IsType<string>(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]);
+        try
+        {
+            // Disposing a still-running ChildProcess would block on another kill attempt, and DCP
+            // owns its session folder until it exits through --monitor.
+            Assert.Equal(1, execution.KillCount);
+            Assert.True(execution.KilledEntireProcessTree);
+            Assert.Equal(0, execution.DisposeCount);
+            Assert.True(Directory.Exists(sessionDirectory));
+        }
+        finally
+        {
+            Directory.Delete(sessionDirectory, recursive: true);
+        }
+    }
+
+    // A doctor-only DCP instance owns no API objects, so when no graceful stop request can be
+    // delivered its whole process tree is killed and the doctor-owned session folder is removed.
+    private static void AssertKilledAndCleanedUp(TestProcessExecution execution)
+    {
+        var sessionDirectory = Assert.IsType<string>(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]);
+        Assert.Equal(1, execution.KillCount);
+        Assert.True(execution.KilledEntireProcessTree);
+        Assert.Equal(1, execution.DisposeCount);
+        Assert.False(Directory.Exists(sessionDirectory));
+    }
+
+    private static TestProcessExecutionFactory CreateDcpFactory(bool exitsWhenKilled, bool writeInvalidKubeconfig = false)
+    {
+        return new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, options) =>
+            {
+                Assert.NotNull(environment);
+                if (writeInvalidKubeconfig)
+                {
+                    File.WriteAllText(Path.Combine(environment["DCP_SESSION_FOLDER"], "kubeconfig"), "clusters:");
+                }
+
+                return new TestProcessExecution(fileName, arguments, environment, options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)), () => 1)
+                {
+                    ExitsWhenKilled = exitsWhenKilled
+                };
+            }
+        };
+    }
+
     [Fact]
     public async Task TestConnectionAsync_StopsDcpGracefullyInsteadOfKillingIt()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
-        await using var dcpApiServer = FakeDcpApiServer.Start();
+        await using var dcpApiServer = new FakeDcpApiServer(acceptStopRequests: true);
         TestProcessExecution? execution = null;
+        Task? exitObserved = null;
         var processExecutionFactory = new TestProcessExecutionFactory
         {
             CreateExecutionWithFileNameCallback = (fileName, args, env, _, options) =>
             {
                 var kubeconfigPath = args[Array.IndexOf(args, "--kubeconfig") + 1];
-                File.WriteAllText(kubeconfigPath, $$"""
-                    apiVersion: v1
-                    kind: Config
-                    clusters:
-                    - name: dcp
-                      cluster:
-                        server: "{{dcpApiServer.Address}}"
-                    """);
+                File.WriteAllText(kubeconfigPath, dcpApiServer.Kubeconfig);
 
                 execution = new TestProcessExecution(
                     fileName,
@@ -199,9 +500,19 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
                     (_, _, _) => Task.FromResult((0, (string?)null)),
                     () => 1)
                 {
-                    // Like DCP, the fake process only exits on its own after the stop request is accepted.
-                    WaitForExitAsyncCallback = (_, cancellationToken) => dcpApiServer.StopAccepted.WaitAsync(cancellationToken)
+                    WaitForExitAsyncCallback = async (_, cancellationToken) =>
+                    {
+                        await dcpApiServer.StopAccepted.WaitAsync(cancellationToken);
+                        return 0;
+                    }
                 };
+
+                // Like DCP, the fake process only exits on its own after the stop request is accepted.
+                // The checker polls HasExited, so complete the fake's exit once the stop is accepted.
+                var startedExecution = execution;
+                exitObserved = dcpApiServer.StopAccepted.ContinueWith(
+                    _ => startedExecution.WaitForExitAsync(TestContext.Current.CancellationToken),
+                    TaskScheduler.Default).Unwrap();
                 return execution;
             }
         };
@@ -217,6 +528,8 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
         Assert.Equal(["application/merge-patch+json"], dcpApiServer.StopRequestContentTypes);
+        Assert.NotNull(exitObserved);
+        await exitObserved;
         Assert.NotNull(execution);
         Assert.True(execution.HasExited);
         Assert.Equal(0, execution.KillCount);
@@ -369,6 +682,18 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         }, workspace.Path, options).Dispose();
     }
 
+    private static DcpConnectionChecker CreateConnectionChecker(
+        TemporaryWorkspace workspace,
+        TestProcessExecutionFactory factory,
+        CertificateManager certificateManager) =>
+        new(
+            certificateManager,
+            factory,
+            CreateExecutionContext(workspace),
+            TestEnvironment.CreateWindows(),
+            new Aspire.Shared.TemporaryStorage(),
+            NullLogger<DcpConnectionChecker>.Instance);
+
     private static DirectoryInfo CreateDcpDirectoryWithExecutable(TemporaryWorkspace workspace, string directoryName = "dcp")
     {
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory(directoryName);
@@ -386,138 +711,6 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             logsDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-logs"),
             logFilePath: "test.log",
             identityChannel: "local");
-
-    /// <summary>
-    /// Minimal HTTP/1.1 stand-in for the DCP API server. Like DCP, it only accepts the stop PATCH when
-    /// the Content-Type is exactly the merge-patch media type and answers 415 otherwise.
-    /// </summary>
-    private sealed class FakeDcpApiServer : IAsyncDisposable
-    {
-        private const string AcceptedStopMediaType = "application/merge-patch+json";
-        private const int StopExitCode = 0;
-
-        private readonly TcpListener _listener;
-        private readonly CancellationTokenSource _stopping = new();
-        private readonly TaskCompletionSource<int> _stopAccepted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly ConcurrentQueue<string> _stopRequestContentTypes = new();
-        private readonly Task _acceptLoop;
-
-        private FakeDcpApiServer()
-        {
-            _listener = new TcpListener(IPAddress.Loopback, 0);
-            _listener.Start();
-            Address = new Uri($"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}");
-            _acceptLoop = AcceptLoopAsync();
-        }
-
-        public Uri Address { get; }
-
-        public Task<int> StopAccepted => _stopAccepted.Task;
-
-        public string[] StopRequestContentTypes => _stopRequestContentTypes.ToArray();
-
-        public static FakeDcpApiServer Start() => new();
-
-        private async Task AcceptLoopAsync()
-        {
-            while (!_stopping.IsCancellationRequested)
-            {
-                TcpClient client;
-                try
-                {
-                    client = await _listener.AcceptTcpClientAsync(_stopping.Token).ConfigureAwait(false);
-                }
-                catch (Exception) when (_stopping.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                using (client)
-                {
-                    await HandleRequestAsync(client.GetStream()).ConfigureAwait(false);
-                }
-            }
-        }
-
-        private async Task HandleRequestAsync(NetworkStream stream)
-        {
-            var buffer = new List<byte>();
-            var readBuffer = new byte[4096];
-            int headerEnd;
-            while ((headerEnd = IndexOfHeaderTerminator(buffer)) < 0)
-            {
-                var read = await stream.ReadAsync(readBuffer, _stopping.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    return;
-                }
-
-                buffer.AddRange(readBuffer.AsSpan(0, read));
-            }
-
-            var headerLines = Encoding.ASCII.GetString(buffer.GetRange(0, headerEnd).ToArray()).Split("\r\n");
-            var requestLine = headerLines[0].Split(' ');
-            var headers = headerLines.Skip(1)
-                .Select(line => line.Split(':', 2))
-                .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim(), StringComparer.OrdinalIgnoreCase);
-
-            var contentLength = headers.TryGetValue("Content-Length", out var length) ? int.Parse(length, CultureInfo.InvariantCulture) : 0;
-            var bodyStart = headerEnd + 4;
-            while (buffer.Count - bodyStart < contentLength)
-            {
-                var read = await stream.ReadAsync(readBuffer, _stopping.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    return;
-                }
-
-                buffer.AddRange(readBuffer.AsSpan(0, read));
-            }
-
-            var statusLine = (requestLine[0], requestLine[1]) switch
-            {
-                ("GET", "/version") => "200 OK",
-                ("PATCH", "/admin/execution") => HandleStopRequest(headers.GetValueOrDefault("Content-Type")),
-                _ => "404 Not Found"
-            };
-
-            var response = Encoding.ASCII.GetBytes($"HTTP/1.1 {statusLine}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-            await stream.WriteAsync(response, _stopping.Token).ConfigureAwait(false);
-        }
-
-        private string HandleStopRequest(string? contentType)
-        {
-            _stopRequestContentTypes.Enqueue(contentType ?? string.Empty);
-            if (!string.Equals(contentType, AcceptedStopMediaType, StringComparison.Ordinal))
-            {
-                return "415 Unsupported Media Type";
-            }
-
-            _stopAccepted.TrySetResult(StopExitCode);
-            return "202 Accepted";
-        }
-
-        private static int IndexOfHeaderTerminator(List<byte> buffer)
-        {
-            for (var i = 0; i + 3 < buffer.Count; i++)
-            {
-                if (buffer[i] == '\r' && buffer[i + 1] == '\n' && buffer[i + 2] == '\r' && buffer[i + 3] == '\n')
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            _stopping.Cancel();
-            _listener.Stop();
-            await _acceptLoop.ConfigureAwait(false);
-            _stopping.Dispose();
-        }
-    }
 
     private static string CreateTestCertificatePem()
     {
