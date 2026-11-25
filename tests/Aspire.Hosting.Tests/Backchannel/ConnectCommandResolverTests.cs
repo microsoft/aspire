@@ -29,7 +29,7 @@ public class ConnectCommandResolverTests
 
         Assert.NotNull(connect);
         // Single quotes in the script are closed, escaped, and reopened for the host shell.
-        Assert.Equal("""podman exec db-abcdefgh sh -c 'PASSWORD="$DB_PASSWORD" exec client --port 5432 --label '\''it'\'''\''s'\'' "$@"' sh""", connect.Command);
+        Assert.Equal("""podman exec -i db-abcdefgh sh -c 'PASSWORD="$DB_PASSWORD" exec client --port 5432 --label '\''it'\'''\''s'\'' "$@"' sh""", connect.Command);
         Assert.Equal(ResourceSnapshotConnect.RunsInContainer, connect.Runs);
         Assert.Equal("client", connect.Tool);
         Assert.Equal("<query>", connect.Append);

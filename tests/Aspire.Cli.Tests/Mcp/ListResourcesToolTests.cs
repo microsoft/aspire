@@ -572,7 +572,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
     {
         var connect = new ResourceSnapshotConnect
         {
-            Command = "docker exec pg-abcdefgh sh -c 'PGPASSWORD=\"$POSTGRES_PASSWORD\" exec psql -w -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d postgres \"$@\"' sh",
+            Command = "docker exec -i pg-abcdefgh sh -c 'PGPASSWORD=\"$POSTGRES_PASSWORD\" exec psql -w -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d postgres \"$@\"' sh",
             Runs = "container",
             Tool = "psql",
             Append = "<psql options>, for example -c 'SELECT 1'"

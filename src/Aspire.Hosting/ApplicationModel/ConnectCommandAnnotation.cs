@@ -34,7 +34,7 @@ public enum ConnectCommandLocation
 /// </para>
 /// <para>
 /// For <see cref="ConnectCommandLocation.Container"/>, <see cref="Command"/> is a shell script that runs in the
-/// container. Tooling wraps it as <c>docker exec &lt;container&gt; sh -c '&lt;script&gt; "$@"' sh</c> (using the
+/// container. Tooling wraps it as <c>docker exec -i &lt;container&gt; sh -c '&lt;script&gt; "$@"' sh</c> (using the
 /// configured container runtime), so appended arguments are forwarded to the client. Read credentials from the
 /// container's environment variables, for example <c>"$POSTGRES_PASSWORD"</c>, so that only variable names are shown.
 /// </para>

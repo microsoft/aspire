@@ -397,7 +397,7 @@ Hosting integrations can declare how to reach their resource with the vendor's o
 
 ```json
 "connect": {
-  "command": "docker exec cache-abcdefgh sh -c '[ -n \"$REDIS_PASSWORD\" ] && export REDISCLI_AUTH=\"$REDIS_PASSWORD\"; exec redis-cli -h 127.0.0.1 -p 6379 \"$@\"' sh",
+  "command": "docker exec -i cache-abcdefgh sh -c '[ -n \"$REDIS_PASSWORD\" ] && export REDISCLI_AUTH=\"$REDIS_PASSWORD\"; exec redis-cli -h 127.0.0.1 -p 6379 \"$@\"' sh",
   "runs": "container",
   "tool": "redis-cli",
   "append": "<command>, for example INFO"
@@ -412,7 +412,7 @@ Hosting integrations can declare how to reach their resource with the vendor's o
 | `append` | What to append to the command, when the integration describes it. |
 | `note` | Additional guidance, when the integration provides it. |
 
-For `container`, the command uses the configured container runtime (`docker` or `podman`) and the container name, and wraps the integration's script in `sh -c '<script> "$@"' sh` so that appended arguments reach the client. Credentials are read from the container's own environment variables, so only variable names are shown. For `host`, the command uses the resource's published endpoint. Commands are POSIX shell command lines.
+For `container`, the command uses the configured container runtime (`docker` or `podman`) and the container name, and wraps the integration's script in `sh -c '<script> "$@"' sh` so that appended arguments reach the client. The command runs `exec -i` without a TTY, so input piped to it, such as a SQL script, reaches the client. Credentials are read from the container's own environment variables, so only variable names are shown. For `host`, the command uses the resource's published endpoint. Commands are POSIX shell command lines.
 
 A command can reference only literal text and the resource's own endpoint values, never parameters or connection strings, so it never contains a secret and is refreshed whenever the resource publishes an update. `connect` is omitted for resources without a declaration, before the referenced endpoints are allocated, when a command references an undefined endpoint, a target port that is not fixed, or browser origins, when the container runtime cannot be resolved, and for `container` declarations on resources that are not running as containers. Integration defaults never replace a command the AppHost declares with `WithConnectCommand`.
 

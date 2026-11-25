@@ -1,5 +1,5 @@
 ﻿{
-      "command": "docker exec pg-abcdefgh sh -c 'PGPASSWORD=\"$POSTGRES_PASSWORD\" exec psql -w -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d postgres \"$@\"' sh",
+      "command": "docker exec -i pg-abcdefgh sh -c 'PGPASSWORD=\"$POSTGRES_PASSWORD\" exec psql -w -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d postgres \"$@\"' sh",
       "runs": "container",
       "tool": "psql",
       "append": "<psql options>, for example -c 'SELECT 1'"

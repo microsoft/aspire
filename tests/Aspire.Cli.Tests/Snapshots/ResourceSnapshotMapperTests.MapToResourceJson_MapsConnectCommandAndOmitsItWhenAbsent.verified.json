@@ -1,5 +1,5 @@
 ﻿{
-    "command": "docker exec cache-abcdefgh sh -c 'exec redis-cli -p 6379 \"$@\"' sh",
+    "command": "docker exec -i cache-abcdefgh sh -c 'exec redis-cli -p 6379 \"$@\"' sh",
     "runs": "container",
     "tool": "redis-cli",
     "append": "<command>, for example INFO"

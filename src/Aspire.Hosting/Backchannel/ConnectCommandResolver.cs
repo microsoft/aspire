@@ -110,7 +110,7 @@ internal static class ConnectCommandResolver
     /// </summary>
     /// <remarks>
     /// For the script <c>exec redis-cli -p 6379</c> in container <c>cache-abcdefgh</c> this produces:
-    /// <code>docker exec cache-abcdefgh sh -c 'exec redis-cli -p 6379 "$@"' sh</code>
+    /// <code>docker exec -i cache-abcdefgh sh -c 'exec redis-cli -p 6379 "$@"' sh</code>
     /// <c>sh -c</c> binds the arguments after the script to <c>$0</c>, <c>$1</c>, ..., so the trailing <c>sh</c> fills
     /// <c>$0</c> and arguments appended by the caller reach the client through <c>"$@"</c>. The script is single-quoted
     /// for the host shell, so embedded single quotes are written as <c>'\''</c>.
@@ -119,7 +119,13 @@ internal static class ConnectCommandResolver
     internal static string FormatContainerCommand(string runtime, string containerName, string script)
     {
         var quotedScript = script.Replace("'", "'\\''", StringComparison.Ordinal);
-        return $"{runtime} exec {containerName} sh -c '{quotedScript} \"$@\"' sh";
+
+        // -i forwards stdin so interactive clients stay open and piped input (for example a SQL script read with
+        // psql -f -) reaches the client. -t is deliberately omitted: a TTY fails when stdin is not a terminal, as in
+        // agent pipelines, and translates output line endings to CRLF.
+        // See https://docs.docker.com/reference/cli/docker/container/exec/ and
+        // https://docs.podman.io/en/latest/markdown/podman-exec.1.html.
+        return $"{runtime} exec -i {containerName} sh -c '{quotedScript} \"$@\"' sh";
     }
 
     internal static bool CanResolveWithoutSecrets(object? valueProvider, IResource owner, out string? reason)

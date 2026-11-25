@@ -421,7 +421,7 @@ public class ResourceSnapshotMapperTests
             ResourceType = "Container",
             Connect = new ResourceSnapshotConnect
             {
-                Command = "docker exec cache-abcdefgh sh -c 'exec redis-cli -p 6379 \"$@\"' sh",
+                Command = "docker exec -i cache-abcdefgh sh -c 'exec redis-cli -p 6379 \"$@\"' sh",
                 Runs = "container",
                 Tool = "redis-cli",
                 Append = "<command>, for example INFO"
