@@ -127,6 +127,31 @@
         <target state="translated">Experimentální protokol aplikace v oznamovací oblasti vyžaduje --protocol-version 1 --format json --apphost s absolutní cestou k souboru, kladnou hodnotu --pid a kladnou hodnotu --started-at v milisekundách unixového času. Možnosti --all a --force nejsou povolené.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceTeardownMayContinue">
+        <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
+        <target state="new">Resources may still be stopping in the background. Use {0} to wait until they are torn down.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownNotConfirmed">
+        <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
+        <target state="new">Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownTimedOut">
+        <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
+        <target state="new">The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownUnsupported">
+        <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
+        <target state="new">{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesTornDown">
+        <source>The resources of {0} were torn down.</source>
+        <target state="new">The resources of {0} were torn down.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stop</source>
         <target state="translated">zastavit</target>
@@ -147,6 +172,21 @@
         <target state="translated">Možnosti {0} a {1} se nedají použít společně.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TimeoutInvalid">
+        <source>Timeout must be between 1 and {0} seconds.</source>
+        <target state="new">Timeout must be between 1 and {0} seconds.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutOptionDescription">
+        <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
+        <target state="new">Maximum time in seconds to wait for resources to be torn down (requires --wait)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutRequiresWait">
+        <source>The {0} option requires the {1} option.</source>
+        <target state="new">The {0} option requires the {1} option.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
         <source>an unknown version</source>
         <target state="translated">neznámé verze</target>
@@ -160,6 +200,16 @@
       <trans-unit id="VolumesRequiresForce">
         <source>The {0} option requires the {1} option.</source>
         <target state="translated">Možnost {0} vyžaduje možnost {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitOptionDescription">
+        <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
+        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitingForResourceTeardown">
+        <source>Waiting for the resources of {0} to be torn down...</source>
+        <target state="new">Waiting for the resources of {0} to be torn down...</target>
         <note />
       </trans-unit>
     </body>
