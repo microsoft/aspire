@@ -119,10 +119,10 @@
                        ShowResourcePrefix="@_isSubscribedToAll"/>
         </MainSection>
         <FooterSection>
-            @if (PauseText is not null)
+            @if (PausedAt is { } pausedAt)
             {
                 <div class="items-footer">
-                    <PauseWarning PauseText="@PauseText" />
+                    <PauseWarning PausedAt="@pausedAt" CaptureType="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsHeader)]" />
                 </div>
             }
         </FooterSection>

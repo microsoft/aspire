@@ -1,0 +1,144 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Serialization;
+using Aspire.Tests.Shared;
+using Microsoft.AspNetCore.Components.Server;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.JSInterop;
+
+namespace Aspire.Dashboard.Tests.Shared;
+
+/// <summary>
+/// The dashboard's <see cref="LocalBrowserStorage"/> over an in-memory browser <c>localStorage</c>, so tests cover the
+/// JSON the dashboard stores, including its source-generated serialization, like a browser does.
+/// </summary>
+internal sealed class InMemoryBrowserLocalStorage
+{
+    public InMemoryBrowserLocalStorage()
+    {
+        var jsRuntime = new TestJSRuntime { OnInvoke = HandleLocalStorageCall };
+        var circuitOptions = new CircuitOptions();
+#pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
+        circuitOptions.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
+#pragma warning restore ASPNETCORE9004
+        var services = new ServiceCollection();
+        services.AddServerSideBlazor();
+        services.AddSingleton(Options.Create(circuitOptions));
+        services.AddSingleton<IJSRuntime>(jsRuntime);
+        services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        Storage = new InterceptedLocalStorage(new LocalBrowserStorage(
+            jsRuntime,
+            scope.ServiceProvider.GetRequiredService<ProtectedLocalStorage>(),
+            NullLogger<LocalBrowserStorage>.Instance,
+            scope.ServiceProvider.GetRequiredService<IOptions<CircuitOptions>>()), this);
+    }
+
+    /// <summary>
+    /// Gets the raw items in local storage, keyed by storage key.
+    /// </summary>
+    public Dictionary<string, string> Items { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Gets or sets a value indicating whether reading local storage fails, as when the circuit is disconnected.
+    /// </summary>
+    public bool FailReads { get; set; }
+
+    public bool FailWrites { get; set; }
+
+    public ILocalStorage Storage { get; }
+    public int SnapshotReadCount { get; private set; }
+
+    /// <summary>
+    /// Gets or sets a function awaited after a read of local storage and before its result is returned, to simulate
+    /// a response that arrives after later calls have completed.
+    /// </summary>
+    public Func<Task>? OnAfterReadAsync { get; set; }
+
+    public Func<Task>? OnAfterWriteAsync { get; set; }
+
+    private static void RequireGeneratedMetadata(Type type)
+    {
+        // The framework still falls back to reflection under JIT, which would mask missing AOT metadata.
+        if (DashboardJsonSerializerContext.Default.GetTypeInfo(type) is null)
+        {
+            throw new InvalidOperationException($"Missing generated dashboard JSON metadata for '{type}'.");
+        }
+    }
+
+    private object? HandleLocalStorageCall((string Identifier, object?[]? Args) call)
+    {
+        lock (Items)
+        {
+            switch (call.Identifier)
+            {
+                case "localStorage.getItem":
+                    if (FailReads)
+                    {
+                        throw new JSException("Local storage is unavailable.");
+                    }
+                    return Items.GetValueOrDefault((string)call.Args![0]!);
+                case "getLocalStorageItems":
+                    SnapshotReadCount++;
+                    if (FailReads)
+                    {
+                        throw new JSException("Local storage is unavailable.");
+                    }
+                    return ((string[])call.Args![0]!).Select(key => Items.GetValueOrDefault(key)).ToArray();
+                case "localStorage.setItem":
+                    if (FailWrites)
+                    {
+                        throw new JSException("Local storage cannot be written.");
+                    }
+                    Items[(string)call.Args![0]!] = (string)call.Args[1]!;
+                    return null;
+                default:
+                    throw new NotSupportedException($"Unexpected JavaScript call '{call.Identifier}'.");
+            }
+        }
+    }
+
+    private sealed class InterceptedLocalStorage(ILocalStorage inner, InMemoryBrowserLocalStorage owner) : ILocalStorage
+    {
+        public Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key) => inner.GetUnprotectedAsync<TValue>(key);
+
+        public async Task SetUnprotectedAsync<TValue>(string key, TValue value)
+        {
+            await inner.SetUnprotectedAsync(key, value);
+            if (owner.OnAfterWriteAsync is { } afterWrite)
+            {
+                await afterWrite();
+            }
+        }
+
+        public async Task<StorageResult<TValue>> GetAsync<TValue>(string key)
+        {
+            RequireGeneratedMetadata(typeof(TValue));
+            var result = await inner.GetAsync<TValue>(key);
+            if (owner.OnAfterReadAsync is { } afterRead)
+            {
+                await afterRead();
+            }
+            return result;
+        }
+
+        public Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys) => inner.ReadUnprotectedSnapshotAsync(keys);
+
+        public async Task SetAsync<TValue>(string key, TValue value)
+        {
+            RequireGeneratedMetadata(value?.GetType() ?? typeof(TValue));
+            await inner.SetAsync(key, value);
+            if (owner.OnAfterWriteAsync is { } afterWrite)
+            {
+                await afterWrite();
+            }
+        }
+    }
+}

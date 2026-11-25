@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
@@ -19,6 +20,7 @@ internal interface ICliDownloader
 
 internal class CliDownloader(
     IEnvironment environment,
+    ITemporaryStorage temporaryStorage,
     ILogger<CliDownloader> logger,
     IInteractionService interactionService,
     IPackagingService packagingService) : ICliDownloader
@@ -32,10 +34,16 @@ internal class CliDownloader(
     {
         // Get the channel information from PackagingService
         var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
-        var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
+        var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparisons.ChannelName));
 
         if (channel is null)
         {
+            if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName)
+                && packagingService.GetStagingChannelUnavailableReason() is { } stagingReason)
+            {
+                throw new InvalidOperationException(stagingReason);
+            }
+
             throw new ArgumentException($"Unsupported channel '{channelName}'. Available channels: {string.Join(", ", channels.Select(c => c.Name))}");
         }
 
@@ -54,7 +62,7 @@ internal class CliDownloader(
         var checksumUrl = $"{baseUrl}/{checksumFilename}";
 
         // Create temp directory for download
-        var tempDir = Directory.CreateTempSubdirectory("aspire-cli-download").FullName;
+        var tempDir = temporaryStorage.CreateTempSubdirectory("aspire-cli-download").FullName;
 
         try
         {

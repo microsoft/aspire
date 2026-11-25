@@ -22,7 +22,7 @@ public partial class GitCommandRunnerTests
     {
         var runner = new GitCommandRunner(interactiveHost
             ? TestHelpers.CreateInteractiveHostEnvironment()
-            : TestHelpers.CreateNonInteractiveHostEnvironment(), _loggerFactory.CreateLogger<GitCommandRunner>());
+            : TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), _consoleEnvironment, _loggerFactory.CreateLogger<GitCommandRunner>());
         var info = runner.CreateStartInfo(Environment.CurrentDirectory, ["ls-remote", "--", "repository"], Enum.Parse<GitCommandMode>(mode));
 
         Assert.Equal(disabled

@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental
@@ -45,15 +46,20 @@ public static class DotnetProjectHostingExtensions
     /// Configuring a build environment causes Aspire to build this project separately from traversal groups.
     /// </para>
     /// <para>
+    /// IDE launches require support for <see cref="KnownLaunchConfigurationTypes.ProjectWithExternalBuild"/> so the
+    /// launcher can consume the same build context. Aspire rejects legacy project-only IDE sessions because they
+    /// cannot reliably locate output produced with project-specific build settings.
+    /// </para>
+    /// <para>
     /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
     /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
     /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
     /// </para>
     /// <para>
-    /// Do not use this API for secrets. Aspire must carry the value in IDE launch metadata and process environments,
-    /// and the value can appear in build diagnostics. Protected temporary MSBuild response files preserve
-    /// global-property semantics without exposing values in process command lines, but they are not a general-purpose
-    /// secret transport.
+    /// Do not use this API for secrets. Aspire carries the value in build process environments and, for
+    /// external-build-capable IDEs, launch metadata. The value can appear in build diagnostics. Protected temporary
+    /// MSBuild response files preserve global-property semantics without exposing values in process command lines,
+    /// but they are not a general-purpose secret transport.
     /// </para>
     /// </remarks>
     /// <example>
@@ -94,14 +100,20 @@ public static class DotnetProjectHostingExtensions
     /// File-based C# apps (<c>.cs</c>) do not support build-only environment variables.
     /// </para>
     /// <para>
+    /// IDE launches require support for <see cref="KnownLaunchConfigurationTypes.ProjectWithExternalBuild"/> so the
+    /// launcher can consume the same build context. Aspire rejects legacy project-only IDE sessions because they
+    /// cannot reliably locate output produced with project-specific build settings.
+    /// </para>
+    /// <para>
     /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
     /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
     /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
     /// </para>
     /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
-    /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
-    /// temporary MSBuild response files, and the values can appear in build diagnostics.
+    /// for secrets because Aspire carries the values in build process environments and, for external-build-capable
+    /// IDEs, launch metadata. Protected temporary MSBuild response files preserve global-property semantics without
+    /// exposing values in process command lines, but the values can appear in build diagnostics.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Raw Action delegate callbacks are not ATS-compatible.")]
@@ -137,14 +149,20 @@ public static class DotnetProjectHostingExtensions
     /// File-based C# apps (<c>.cs</c>) do not support build-only environment variables.
     /// </para>
     /// <para>
+    /// IDE launches require support for <see cref="KnownLaunchConfigurationTypes.ProjectWithExternalBuild"/> so the
+    /// launcher can consume the same build context. Aspire rejects legacy project-only IDE sessions because they
+    /// cannot reliably locate output produced with project-specific build settings.
+    /// </para>
+    /// <para>
     /// When publishing a container, do not use this API to set MSBuild properties that control the output artifact's
     /// identity, destination, format, or target platform. Aspire rejects those properties because downstream
     /// publishing steps use the values configured with <c>WithContainerBuildOptions</c>.
     /// </para>
     /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
-    /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
-    /// temporary MSBuild response files, and the values can appear in build diagnostics.
+    /// for secrets because Aspire carries the values in build process environments and, for external-build-capable
+    /// IDEs, launch metadata. Protected temporary MSBuild response files preserve global-property semantics without
+    /// exposing values in process command lines, but the values can appear in build diagnostics.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Raw Func delegate callbacks are not ATS-compatible.")]
@@ -414,6 +432,7 @@ public static class DotnetProjectHostingExtensions
                             projectMetadata.BuildConfiguration,
                             projectMetadata.BuildEnvironment,
                             buildWorkingDirectory,
+                            ctx.ExecutionContext.Services.GetRequiredService<IFileSystemService>().TempDirectory,
                             ctx.Logger,
                             cancellationToken),
                         ctx.CancellationToken).ConfigureAwait(false);

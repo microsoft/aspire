@@ -69,6 +69,8 @@ helpers), which write `scripts/recorder/vscode-settings.jsonc` into VS Code befo
 | Symptom | Cause | Fix |
 |---|---|---|
 | `recorder.cs probe` fails: "storage state file does not exist" | | Fixed: it runs without `state.json` (anonymous dashboards, VS Code) |
+| `probe` or `OpenAsync` times out waiting for network idle on a loaded dashboard | A Blazor circuit can keep long-polling requests open | Wait for DOM content loaded, then wait for the scene's controls before capture |
+| `recorder.cs` fails with "Directives currently cannot contain double quotes" | An older SDK rejects quoted file-based app property values | The recorder uses a whitespace-free, unquoted output-path expression that works with both supported SDK generations |
 | `timeout: command not found` | macOS has no `timeout` | Use the tool's own timeout |
 
 ## Recording native desktop apps (macOS menu bar, a remote Windows desktop)

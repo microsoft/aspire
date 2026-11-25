@@ -69,20 +69,36 @@ builder.AddProject<Projects.Api>("api")
     .WithTags("Backend", "API")
     .WithTrait("Owner", "Finance")
     .WithTrait("Owner", "Platform")
-    .WithDashboardPosition(-10);
+    .WithDisplayOrder(10);
 ```
 
 `WithTags` accepts a single tag or multiple tags using `params ReadOnlySpan<string>`,
 avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags.
-It uses the reserved trait `Aspire_Dashboard_Tag`. These tags participate in
-dashboard tag grouping but cannot be removed in the dashboard. User-added tags are
-stored separately in the application settings database, so restarting an AppHost
-does not lose customizations or copy declared tags from a different run.
+It uses the reserved trait `Aspire_Tag`, which is not dashboard-specific: it also
+appears as the `resource.trait.Aspire_Tag` property in `aspire describe --format json`.
+These tags participate in dashboard tag grouping but cannot be removed in the
+dashboard. User-added tags, metric pins, and drag-and-drop moves are saved per
+application in protected browser local storage, not in the run database. Old
+plaintext preferences aren't migrated, and saved preferences are unavailable if
+the Dashboard loses access to the keys used to protect them. Each application can
+save up to 50 tag assignments (one per resource and tag) and 50 metric pins (one
+per resource and instrument). Pins without matching telemetry and assignments for
+removed resources or tags now declared by the AppHost still count toward these
+limits. The dashboard has no way to clear those entries.
 
-`WithDashboardPosition` uses `Aspire_Dashboard_Position`; repeated calls replace the
-previous value. Lower positions appear first; defaults can change between runs until
-the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
-per application, independently of the run database.
+`WithDisplayOrder` stores its own annotation rather than a trait, and is transported
+as the `resource.displayOrder` resource property; repeated calls replace the previous
+value. The new dashboard resource pane uses it only when **Group resources** is
+set to **None**. Higher values appear first; unspecified values count as 0. Ties
+at 0 sort by type and name; other ties sort by name. Late arrivals follow the same
+rules.
+
+The Dashboard saves only explicit moves and replays them over the default order.
+A move uses its drop target when possible and falls back to the other neighbor.
+The Dashboard rejects a resource move if the moved resource or its drop target
+shares a saved key with another resource, even under a different parent. It
+keeps the latest move per item and any earlier moves needed as anchors for other
+moves. It saves up to 50 resource moves and 50 group moves across grouping modes.
 
 Traits are transported as list-valued resource properties named `resource.trait.<name>`,
 including in recorded snapshots. Trait names are case-sensitive; dashboard tags are
@@ -156,7 +172,7 @@ The Dashboard creates the directory with `Directory.CreateTempSubdirectory`, rem
         └── run.json
 ```
 
-All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
+All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. A Dashboard claims a run ID by taking its run lock and then creating a new run directory. If another Dashboard holds that lock or the directory already exists, such as when two AppHosts start in the same millisecond, the start time advances by one millisecond and the claim is retried. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
 
 - schema version
 - run ID
@@ -386,7 +402,8 @@ SQL values are parameterized. Schema SQL is compiled into the Dashboard assembly
 
 ## Failure behavior
 
-- A lock collision fails startup instead of allowing two writers to share a run database.
+- A run ID collision advances the run ID to the next millisecond instead of allowing two writers to share a run database.
+- A resume-mode lock collision fails startup instead of allowing two writers to share an application database.
 - An invalid persistence mode fails Dashboard option validation and lists the accepted values.
 - Incomplete or unreadable historical metadata is ignored during discovery.
 - A historical run that disappears between discovery and selection leaves the previous run selected.

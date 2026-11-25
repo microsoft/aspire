@@ -105,6 +105,7 @@ internal sealed class NuGetPackageCache(
     AspireCliTelemetry telemetry,
     IFeatures features,
     BundleNuGetService nuGetService,
+    INuGetClient nuGetClient,
     ILogger<NuGetPackageCache> logger) : INuGetPackageCache
 {
     public Task<NuGetPackageOperationConfiguration> CreateChannelConfigurationAsync(
@@ -198,6 +199,7 @@ internal sealed class NuGetPackageCache(
                 configuration.ExplicitConfigFile,
                 useCache, // Pass through the useCache parameter
                 new ProcessInvocationOptions { SuppressLogging = true },
+                nuGetClient,
                 cancellationToken
                 );
 
@@ -217,11 +219,7 @@ internal sealed class NuGetPackageCache(
                     collectedPackages.AddRange(result.Packages);
                 }
 
-                // The SDK combines per-feed pages. An aggregate page can be large even
-                // when every feed has returned a short final page.
-                continueFetching = result.Packages?
-                    .GroupBy(package => package.Source)
-                    .Any(page => page.Count() >= NuGetSearchLimits.PageSize) == true;
+                continueFetching = result.HasFullSourcePage;
                 skip += NuGetSearchLimits.PageSize;
             }
         } while (continueFetching && skip <= NuGetSearchLimits.MaxSkip);
@@ -281,6 +279,7 @@ internal sealed class NuGetPackageCache(
                 configuration.ExplicitConfigFile,
                 useCache, // Pass through the useCache parameter
                 new ProcessInvocationOptions { SuppressLogging = true },
+                nuGetClient,
                 cancellationToken
                 );
 

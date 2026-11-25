@@ -19,9 +19,9 @@ void main() throws Exception {
         var vault = builder.addAzureKeyVault("vault");
 
         // Existing registrations: configuration only, with literal or parameter IDs in any combination.
-        var existingEntra = builder.addExistingEntraApplication("existing-entra", tenantId, exampleClient);
-        builder.addExistingEntraApplication("existing-entra-literals", exampleTenant, exampleClient);
-        builder.addExistingEntraApplication("existing-entra-parameters", tenantId, clientId);
+        var existingEntra = builder.addExistingEntraIdApplication("existing-entra", tenantId, exampleClient);
+        builder.addExistingEntraIdApplication("existing-entra-literals", exampleTenant, exampleClient);
+        builder.addExistingEntraIdApplication("existing-entra-parameters", tenantId, clientId);
         existingEntra.withInstance("https://login.microsoftonline.com/");
         existingEntra.withSignInAudience(EntraIdSignInAudience.AZURE_ADMULTIPLE_ORGS);
         existingEntra.withAudience("api://example");
@@ -48,7 +48,7 @@ void main() throws Exception {
         fluentExistingEntra.asExistingApplication(exampleTenant, clientId);
 
         // An existing API registration is configuration only: its URI and scope IDs describe what the registration already defines.
-        var existingApi = builder.addExistingEntraApplication("existing-api", exampleTenant, exampleClient);
+        var existingApi = builder.addExistingEntraIdApplication("existing-api", exampleTenant, exampleClient);
         existingApi.withApplicationIdUri("api://contoso-orders");
         var ordersScope = new EntraIdScopeOptions();
         ordersScope.setId("33334444-aaaa-5555-bbbb-6666cccc7777");

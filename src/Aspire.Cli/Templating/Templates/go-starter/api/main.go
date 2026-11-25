@@ -1,36 +1,36 @@
-// Sample Go API for the Aspire starter template.
-//
-// Aspire injects:
-//   - ConnectionStrings__cache  → Redis connection string (set via WithReference(cache))
-//   - OTEL_EXPORTER_OTLP_*      → OTLP endpoint + headers (set via WithOtlpExporter)
-//   - PORT / ASPNETCORE_URLS    → host endpoint Aspire wants this app to listen on
+// Sample Go API using Aspire's injected telemetry and listen settings.
 package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
+	// {{#redis}}
 	"fmt"
+	// {{/redis}}
 	"log"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
+	// {{#redis}}
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
+	// {{/redis}}
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 )
 
+// {{#redis}}
 const cacheKey = "weatherforecast"
 const cacheTTL = 5 * time.Second
 
+var cache *redis.Client
+
+// {{/redis}}
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -41,25 +41,18 @@ func main() {
 	}
 	defer func() { _ = shutdownTelemetry(context.Background()) }()
 
-	cache := newRedisClient()
+	// {{#redis}}
+	if err := setupRedis(); err != nil {
+		log.Fatalf("cache: %v", err)
+	}
 	if cache != nil {
 		defer func() { _ = cache.Close() }()
 	}
-
-	meter := otel.Meter("aspired-api")
-	cacheRequests, err := meter.Int64Counter(
-		"aspired.api.cache.requests",
-		metric.WithDescription("Weather forecast cache lookups by result"),
-		metric.WithUnit("{request}"),
-	)
-	if err != nil {
-		log.Fatalf("counter: %v", err)
-	}
-
+	// {{/redis}}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/weatherforecast", weatherHandler(cache, cacheRequests))
-	mux.HandleFunc("/health", healthHandler(cache))
-	mux.HandleFunc("/", healthHandler(cache))
+	mux.HandleFunc("/api/weatherforecast", weatherHandler())
+	mux.HandleFunc("/health", healthHandler())
+	mux.Handle("/", http.FileServer(http.Dir("./static")))
 
 	addr := listenAddress()
 	srv := &http.Server{
@@ -81,63 +74,44 @@ func main() {
 	_ = srv.Shutdown(shutdownCtx)
 }
 
-// listenAddress resolves the address Aspire wants this service to bind to.
-// Falls back to :8080 for standalone runs.
+// listenAddress uses HOST and PORT, defaulting to loopback:8080 for standalone runs.
 func listenAddress() string {
+	host := os.Getenv("HOST")
+	if host == "" {
+		host = "localhost"
+	}
+
 	if port := os.Getenv("PORT"); port != "" {
-		return ":" + port
+		return net.JoinHostPort(host, port)
 	}
-	if urls := os.Getenv("ASPNETCORE_URLS"); urls != "" {
-		// "http://localhost:5000;https://localhost:5001" → ":5000"
-		first := strings.Split(urls, ";")[0]
-		if i := strings.LastIndex(first, ":"); i != -1 {
-			return first[i:]
-		}
-	}
-	return ":8080"
+	return net.JoinHostPort(host, "8080")
 }
 
-// newRedisClient returns nil if no Redis connection string is provided.
-func newRedisClient() *redis.Client {
-	connStr := os.Getenv("ConnectionStrings__cache")
-	if connStr == "" {
-		log.Println("ConnectionStrings__cache not set; running without cache")
+// {{#redis}}
+func setupRedis() error {
+	cacheURI := os.Getenv("CACHE_URI")
+	if cacheURI == "" {
+		log.Println("CACHE_URI not set; running without cache")
 		return nil
 	}
-	opts, err := redis.ParseURL(connStr)
+	opts, err := redis.ParseURL(cacheURI)
 	if err != nil {
-		// Fall back to assuming "host:port[,password=…]" Aspire-style.
-		opts = parseAspireRedisConnString(connStr)
+		return fmt.Errorf("parse CACHE_URI: %w", err)
 	}
-	return redis.NewClient(opts)
+
+	cache = redis.NewClient(opts)
+	if err := redisotel.InstrumentTracing(cache); err != nil {
+		_ = cache.Close()
+		return fmt.Errorf("instrument Redis tracing: %w", err)
+	}
+	if err := redisotel.InstrumentMetrics(cache); err != nil {
+		_ = cache.Close()
+		return fmt.Errorf("instrument Redis metrics: %w", err)
+	}
+	return nil
 }
 
-// parseAspireRedisConnString accepts the comma-separated key/value form Aspire
-// emits for Redis (e.g. "localhost:6379,password=…,ssl=true").
-func parseAspireRedisConnString(s string) *redis.Options {
-	opts := &redis.Options{}
-	for i, part := range strings.Split(s, ",") {
-		part = strings.TrimSpace(part)
-		if i == 0 {
-			opts.Addr = part
-			continue
-		}
-		k, v, ok := strings.Cut(part, "=")
-		if !ok {
-			continue
-		}
-		switch strings.TrimSpace(k) {
-		case "password":
-			opts.Password = strings.TrimSpace(v)
-		case "ssl":
-			if strings.EqualFold(strings.TrimSpace(v), "true") {
-				opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-			}
-		}
-	}
-	return opts
-}
-
+// {{/redis}}
 type forecast struct {
 	Date         string `json:"date"`
 	TemperatureC int    `json:"temperatureC"`
@@ -150,25 +124,19 @@ var summaries = []string{
 	"Warm", "Balmy", "Hot", "Sweltering", "Scorching",
 }
 
-func weatherHandler(cache *redis.Client, cacheRequests metric.Int64Counter) http.HandlerFunc {
-	hit := metric.WithAttributes(attribute.String("result", "hit"))
-	miss := metric.WithAttributes(attribute.String("result", "miss"))
-	skip := metric.WithAttributes(attribute.String("result", "skip"))
-
+func weatherHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// {{#redis}}
 		ctx := r.Context()
 
 		if cache != nil {
 			if cached, err := cache.Get(ctx, cacheKey).Result(); err == nil {
-				cacheRequests.Add(ctx, 1, hit)
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(cached))
 				return
 			}
-			cacheRequests.Add(ctx, 1, miss)
-		} else {
-			cacheRequests.Add(ctx, 1, skip)
 		}
+		// {{/redis}}
 
 		forecasts := make([]forecast, 5)
 		for i := range forecasts {
@@ -187,23 +155,26 @@ func weatherHandler(cache *redis.Client, cacheRequests metric.Int64Counter) http
 			return
 		}
 
+		// {{#redis}}
 		if cache != nil {
 			_ = cache.Set(ctx, cacheKey, body, cacheTTL).Err()
 		}
-
+		// {{/redis}}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(body)
 	}
 }
 
-func healthHandler(cache *redis.Client) http.HandlerFunc {
+func healthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// {{#redis}}
 		if cache != nil {
 			if err := cache.Ping(r.Context()).Err(); err != nil {
 				http.Error(w, fmt.Sprintf("cache unhealthy: %v", err), http.StatusServiceUnavailable)
 				return
 			}
 		}
+		// {{/redis}}
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("Healthy"))
 	}

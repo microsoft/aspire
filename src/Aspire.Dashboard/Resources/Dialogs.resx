@@ -279,8 +279,8 @@
   <data name="TextVisualizerDialogPlaintextFormat" xml:space="preserve">
     <value>Unformatted</value>
   </data>
-  <data name="TextVisualizerWordWrap" xml:space="preserve">
-    <value>Word wrap</value>
+  <data name="TextVisualizerWordWrapOff" xml:space="preserve">
+    <value>Disable word wrap</value>
   </data>
   <data name="TextVisualizerDialogJsonFormat" xml:space="preserve">
     <value>JSON</value>
@@ -715,9 +715,6 @@
   </data>
   <data name="SettingsDialogResourceListDensityCompact" xml:space="preserve">
     <value>Compact</value>
-  </data>
-  <data name="SettingsDialogResourceListDensitySpacious" xml:space="preserve">
-    <value>Spacious</value>
   </data>
   <data name="SettingsDialogTimeFormat" xml:space="preserve">
     <value>Time format</value>

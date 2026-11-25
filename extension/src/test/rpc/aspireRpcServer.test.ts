@@ -170,7 +170,8 @@ async function connectClient(
     const socket = tls.connect({
         port,
         host: 'localhost',
-        rejectUnauthorized: false,
+        // Trust exactly the server's per-session self-signed certificate rather than disabling validation.
+        ca: rpcServer.connectionInfo.cert,
     });
     await new Promise<void>((resolve, reject) => {
         socket.once('secureConnect', resolve);

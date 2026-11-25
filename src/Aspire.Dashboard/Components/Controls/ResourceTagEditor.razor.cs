@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
+using ToastNotificationService = Microsoft.FluentUI.AspNetCore.Components.INotificationService;
 
 namespace Aspire.Dashboard.Components.Controls;
 
@@ -20,6 +21,7 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
     private List<TagOption> _options = [];
     private string _text = string.Empty;
     private bool _isEditing;
+    private bool _addingTag;
     private int _activeIndex = -1;
     private FocusTarget _pendingFocus;
     private ElementReference _input;
@@ -44,11 +46,18 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
     [Inject]
     public required IStringLocalizer<Resources.Resources> Loc { get; init; }
 
+    [Inject]
+    public required IStringLocalizer<Resources.Layout> LayoutLoc { get; init; }
+
+    [Inject]
+    public required ToastNotificationService ToastService { get; init; }
+
     private string ListboxId => $"{_id}-listbox";
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         TagStore.Changed += OnTagsChanged;
+        await TagStore.EnsureLoadedAsync();
     }
 
     protected override void OnParametersSet()
@@ -83,7 +92,7 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
 
     private void OnTagsChanged()
     {
-        // Tags can change from another browser tab or the resource list, and the event can be raised on any thread.
+        // Tags can change from the resource list, or when tags saved by another tab are read, and the event can be raised on any thread.
         _ = InvokeAsync(() =>
         {
             UpdateTags();
@@ -141,7 +150,7 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
         _activeIndex = text is null || _options.Count == 0 ? -1 : 0;
     }
 
-    private void OnKeyDown(KeyboardEventArgs e)
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
     {
         switch (e.Key)
         {
@@ -154,11 +163,11 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
             case "Enter":
                 if (_activeIndex >= 0 && _activeIndex < _options.Count)
                 {
-                    AddTag(_options[_activeIndex].Tag);
+                    await AddTagAsync(_options[_activeIndex].Tag);
                 }
                 else if (ResourceTagStore.NormalizeTag(_text) is { } tag)
                 {
-                    AddTag(tag);
+                    await AddTagAsync(tag);
                 }
                 break;
             case "Escape":
@@ -169,17 +178,45 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
                 // Like other token inputs, Backspace in an empty input removes the last tag.
                 if (_tags.LastOrDefault(t => !IsAppHostTag(t)) is { } removableTag)
                 {
-                    RemoveTag(removableTag);
+                    await RemoveTagAsync(removableTag);
                 }
                 break;
         }
     }
 
-    private void AddTag(string tag)
+    private async Task AddTagAsync(string tag)
     {
+        if (_addingTag)
+        {
+            return;
+        }
+
+        var resourceName = ResourceName;
+        var text = _text;
         if (!IsAppHostTag(tag))
         {
-            TagStore.AddTag(ResourceName, tag);
+            _addingTag = true;
+            try
+            {
+                switch (await TagStore.AddTagAsync(resourceName, tag))
+                {
+                    case SettingUpdateResult.LimitReached:
+                        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Resources.ResourceTagsLimitReached), ResourceTagStore.MaxSavedTagAssignments]);
+                        return;
+                    case SettingUpdateResult.NotSaved:
+                        await ToastService.ShowWarningToastAsync(LayoutLoc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+                        return;
+                }
+            }
+            finally
+            {
+                _addingTag = false;
+            }
+        }
+
+        if (!_isEditing || !string.Equals(resourceName, ResourceName, StringComparisons.ResourceName) || _text != text)
+        {
+            return;
         }
         UpdateTags();
         _text = string.Empty;
@@ -187,21 +224,25 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
         UpdateOptions();
     }
 
-    private void RemoveTag(string tag)
+    private async Task RemoveTagAsync(string tag)
     {
         if (IsAppHostTag(tag))
         {
             return;
         }
-        TagStore.RemoveTag(ResourceName, tag);
-        UpdateTags();
-        UpdateOptions();
+        if (await TagStore.RemoveTagAsync(ResourceName, tag) == SettingUpdateResult.NotSaved)
+        {
+            await ToastService.ShowWarningToastAsync(LayoutLoc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+        }
     }
 
     private bool IsAppHostTag(string tag) => AppHostTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
 
-    private void UpdateTags() =>
+    private void UpdateTags()
+    {
+        ColorGenerator.TagInstance.ResolveAll(AvailableTags.Concat(AppHostTags).Concat(TagStore.GetAllTags()));
         _tags = AppHostTags.Concat(TagStore.GetTags(ResourceName)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
 
     public void Dispose()
     {

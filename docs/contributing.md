@@ -114,6 +114,32 @@ To test changes from a specific pull request locally, see [dogfooding-pull-reque
 
 To validate how the CLI resolves `Aspire.*` packages for **staging** and **stable** release-branch builds (including making an installed PR build behave like a staging build), see [cli-staging-validation.md](/docs/cli-staging-validation.md).
 
+The Go CLI E2E scenarios in `GoCodegenValidationTests` cover interactive initialization,
+non-interactive initialization in an empty directory and alongside an existing Go application,
+SDK refresh, and Go build/vet checks. `GoStarterTemplateTests.RestoreAndBuildGoStarterFromStablePackages`
+requires a stable-shaped local hive; normal prerelease PR archives skip that test.
+
+**Prerequisite:** use an already-built stable-shaped local-hive archive containing the CLI
+and matching packages at an unpublished stable version. Building one with
+`localhive --version 17.0.99 --archive` currently fails during packing with `NU5104`
+because stable component packages depend on prerelease .NET 11 packages. This also
+affects Linux; changing the RID does not avoid the package-version restriction.
+The test command below does not prepare that archive or validate a stable native bundle.
+
+Given such an archive, exercise both classes on Linux with Docker:
+
+```bash
+ASPIRE_E2E_ARCHIVE="/path/to/stable-shaped-localhive.tar.gz" \
+  dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj --no-launch-profile -- \
+    --filter-class "*.GoCodegenValidationTests" --filter-class "*.GoStarterTemplateTests" \
+    --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
+
+Use an unpublished stable version for the local hive. The stable starter test runs the CLI
+with a stable identity, an isolated NuGet cache and the hive as its package source. It checks
+the exact Go and Redis package pins, regenerates the SDK and compiles/vets it. The separate
+`CreateAndRunGoStarterProject` scenario verifies startup using the archive's normal channel.
+
 ### NuGet configuration in CLI unit tests
 
 Use `NuGetTestHelper.CreateClient()` or `CreateService()` for tests that compose real NuGet configuration, and `NuGetTestHelper.LoadSettings()` for native settings assertions. These helpers preserve directory-level configuration inheritance while replacing the runner's user-wide settings with a controlled baseline and excluding machine-wide settings by default. Supply `TestMachineWideSettings` explicitly when testing machine-wide policy.

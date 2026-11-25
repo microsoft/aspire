@@ -22,7 +22,7 @@ func main() {
 	rabbitmq2 := builder.AddRabbitMQ("messaging2")
 	rabbitmq2.WithPersistentLifetime()
 	rabbitmq2.WithDataVolume()
-	rabbitmq2.WithManagementPlugin(&aspire.WithManagementPluginOptions{Port: aspire.Float64Ptr(15673)})
+	rabbitmq2.WithManagementPlugin(&aspire.WithManagementPluginOptions{Port: aspire.IntPtr(15673)})
 	if err = rabbitmq2.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}

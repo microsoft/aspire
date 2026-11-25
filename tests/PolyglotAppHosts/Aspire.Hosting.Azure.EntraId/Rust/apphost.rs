@@ -24,9 +24,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vault = builder.add_azure_key_vault("vault")?;
 
     // Existing registrations: configuration only, with literal or parameter IDs in any combination.
-    let existing_entra = builder.add_existing_entra_application("existing-entra", serialize_handle(&tenant_id), json!(example_client))?;
-    builder.add_existing_entra_application("existing-entra-literals", json!(example_tenant), json!(example_client))?;
-    builder.add_existing_entra_application("existing-entra-parameters", serialize_handle(&tenant_id), serialize_handle(&client_id))?;
+    let existing_entra = builder.add_existing_entra_id_application("existing-entra", serialize_handle(&tenant_id), json!(example_client))?;
+    builder.add_existing_entra_id_application("existing-entra-literals", json!(example_tenant), json!(example_client))?;
+    builder.add_existing_entra_id_application("existing-entra-parameters", serialize_handle(&tenant_id), serialize_handle(&client_id))?;
     existing_entra
         .with_instance("https://login.microsoftonline.com/")?
         .with_sign_in_audience(EntraIdSignInAudience::AzureADMultipleOrgs)?
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fluent_existing_entra.as_existing_application(json!(example_tenant), serialize_handle(&client_id))?;
 
     // An existing API registration is configuration only: its URI and scope IDs describe what the registration already defines.
-    let existing_api = builder.add_existing_entra_application("existing-api", json!(example_tenant), json!(example_client))?;
+    let existing_api = builder.add_existing_entra_id_application("existing-api", json!(example_tenant), json!(example_client))?;
     existing_api.with_application_id_uri(Some("api://contoso-orders"))?;
     existing_api.with_scope(
         "orders.read",

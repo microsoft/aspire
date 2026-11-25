@@ -22,10 +22,30 @@
         <target state="translated">Geçerli çalışma ağacında çalışan AppHost bulunamadı. Bir AppHost’u doğrudan hedeflemek için '--apphost &lt;path&gt;' komutunu kullanın veya diğer çalışma ağaçlarındaki AppHost’ları eklemek için '--all' komutunu kullanın.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FetchingSource">
+        <source>Fetching {0} from {1} using Git...</source>
+        <target state="translated">{0}, Git kullanılarak {1} kaynağından getiriliyor...</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
+      <trans-unit id="FetchingSourceWithAuthentication">
+        <source>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</source>
+        <target state="translated">{0}, Git kullanılarak {1} kaynağından getiriliyor. Git kimlik doğrulaması yapmanızı isteyebilir.</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="translated">Ayrılmış AppHost sonuçları için çıkış biçimi</target>
         <note />
+      </trans-unit>
+      <trans-unit id="GitFetchConfigurationSource">
+        <source>configuration source</source>
+        <target state="translated">yapılandırma kaynağı</target>
+        <note>The content inserted into the Git-fetch notice.</note>
+      </trans-unit>
+      <trans-unit id="GitFetchTemplates">
+        <source>templates</source>
+        <target state="translated">şablonlar</target>
+        <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
@@ -124,12 +144,12 @@
       </trans-unit>
       <trans-unit id="NuGetSearchLimitWarning">
         <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
-        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <target state="translated">NuGet arama sonuçları, akış başına {0} paket sınırına ulaşıldığı için eksik olabilir. Daha dar tümleştirme kaynağı desenleri kullanın.</target>
         <note>{0} is the maximum number of packages searched per feed.</note>
       </trans-unit>
       <trans-unit id="NuGetSearchSourceFailedWarning">
         <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
-        <target state="new">Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</target>
+        <target state="translated">NuGet kaynak '{0}' aranamadı. Bazı tümleştirmeler eksik olabilir. Kaynak yapılandırmasını ve kimlik doğrulamasını denetleyin. Ayrıntılar için CLI günlüklerine bakın.</target>
         <note>{0} is the redacted NuGet source name or URL.</note>
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
@@ -182,9 +202,64 @@
         <target state="translated">{0} için AppHost seçin:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceFeed">
+        <source>Package feed</source>
+        <target state="translated">Paket akışı</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitPath">
+        <source>Git path</source>
+        <target state="translated">Git yolu</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitRepository">
+        <source>Git source</source>
+        <target state="translated">Git kaynağı</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceMarketplace">
+        <source>Marketplace</source>
+        <target state="translated">Market</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceName">
+        <source>Name</source>
+        <target state="translated">Ad</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV1Catalog">
+        <source>OpenCode V1 catalog</source>
+        <target state="translated">OpenCode V1 kataloğu</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV2Catalog">
+        <source>OpenCode V2 catalog</source>
+        <target state="translated">OpenCode V2 kataloğu</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePath">
+        <source>Path</source>
+        <target state="translated">Yol</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePatterns">
+        <source>Package patterns</source>
+        <target state="translated">Paket desenleri</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePlugins">
+        <source>Plugins</source>
+        <target state="translated">Eklentiler</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceRef">
+        <source>Git ref</source>
+        <target state="translated">Git başvurusu</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SourceTrustWarning">
         <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
-        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
+        <target state="translated">Yalnızca güvendiğiniz kaynakları kullanın. Bu kaynaklardan gelen içerik bilgisayarınızda kod çalıştırabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">

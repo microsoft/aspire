@@ -13,10 +13,11 @@ param api_containerimage string
 
 param env string
 
-resource api 'Microsoft.App/containerApps@2025-07-01' = {
+resource api 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'api'
   location: location
   properties: {
+    environmentId: infra_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       registries: [
@@ -26,7 +27,6 @@ resource api 'Microsoft.App/containerApps@2025-07-01' = {
         }
       ]
     }
-    environmentId: infra_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

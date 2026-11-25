@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -34,6 +36,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private DashboardDialogReference? _openPageDialog;
     private TerminalDock? _terminalDock;
+    private MobileNavMenu? _mobileNavMenu;
     private string? _pendingReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
@@ -106,14 +109,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [Inject]
     public required DashboardViewPreferences ViewPreferences { get; init; }
 
-    // The "Recordings" setting picks between the recordings icon and panel, and the "Live run" menu.
-    private bool UseRunMenu => ViewPreferences.RecordingsStyle == RecordingsStyle.Menu;
-
     [Inject]
     public required Aspire.Dashboard.Model.INotificationService NotificationService { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
+
+    [CascadingParameter]
+    public Task<AuthenticationState>? AuthenticationState { get; set; }
 
     private bool IsTerminalDockEnabled => !_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly;
 
@@ -121,6 +124,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        await DashboardAuthenticationState.EnsureAuthenticatedAsync(Options.CurrentValue, AuthenticationState);
+
         ViewPreferences.Changed += OnViewPreferencesChanged;
         await ViewPreferences.EnsureLoadedAsync();
 
@@ -215,7 +220,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             {
                 Title = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptTitle)],
                 Message = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptMessage)],
-                PrimaryAction = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptShare)],
+                // A native link, not a server-side window.open, so the browser doesn't popup-block it after the
+                // Blazor Server round trip.
+                LinkText = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptShare)],
+                LinkUrl = DashboardFeedbackDialog.DiscussionUrl,
+                LinkAsAction = true,
+                CloseOnLinkClick = true,
                 SecondaryAction = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptIgnore)]
             },
             MessageBarIntent.Info,
@@ -225,30 +235,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private async Task OnDashboardFeedbackMessageClosedAsync(MessageBarResult result)
     {
-        if (result.Data is false)
+        // Sharing feedback (true) or ignoring (false) stops the prompt permanently. Dismissing with the close button
+        // (null) only hides it for the current browser session.
+        if (result.Data is bool)
         {
             await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissed, true);
             return;
         }
 
         await SessionStorage.SetAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession, true);
-        if (result.Data is true)
-        {
-            await InvokeAsync(LaunchDashboardFeedbackAsync);
-        }
-    }
-
-    private async Task LaunchDashboardFeedbackAsync()
-    {
-        var parameters = new DialogParameters
-        {
-            Title = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackDialogTitle)],
-            PrimaryAction = string.Empty,
-            SecondaryAction = string.Empty,
-            Width = "min(640px, calc(100vw - 24px))"
-        };
-        var feedback = new DashboardFeedback { IsAppHost = DashboardClient.IsEnabled };
-        await DialogService.ShowDialogAsync<DashboardFeedbackDialog>(feedback, parameters);
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()
@@ -412,8 +407,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private Task LaunchHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.KeyboardShortcuts);
 
-    // The help dialog has a tab for AI agents, so launching the agents help opens it on that tab.
-    public Task LaunchAIAgentsAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.AIAgents);
+    private Task LaunchDocumentationHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.Documentation);
 
     private async Task LaunchHelpAsync(string? returnFocusElementId, HelpDialogTab tab)
     {
@@ -522,21 +516,73 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         _openPageDialog = await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
     }
 
-    // The logo and the app name open the overview of all resources. Unlike the Resources entry of the rail, they don't
-    // restore the last selected resources, so the stored selection is cleared first. The links keep "/" as their
-    // address, so opening them in a new tab, which has no stored selection, shows the same view.
-    private async Task GoToAllResourcesAsync()
+    // The logo and the app name open the dashboard's home, the table of every resource. Home has no selection, and
+    // going there is a fresh start, so the stored selection is cleared: the overview doesn't restore it afterwards.
+    // The links keep "/" as their address, so opening them in a new tab shows the same view.
+    internal async Task GoToAllResourcesAsync()
     {
-        if (DashboardClient.IsEnabled)
-        {
-            await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
-            NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
-        }
-        else
+        if (!DashboardClient.IsEnabled)
         {
             NavigationManager.NavigateTo(DashboardUrls.HomeUrl());
+            return;
+        }
+
+        // The resources layout holds a tab chosen while this navigation is in flight, and opens it once home is
+        // showing (see ResourcesLayout.OnHomeNavigationStarting).
+        HomeNavigationStarting?.Invoke();
+
+        // Navigate before awaiting the storage write, so nothing else, such as that tab, can navigate in between.
+        // Both go to the browser as interop calls, in order, so the selection is cleared before home loads.
+        var clearSelection = SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
+        NavigationManager.NavigateTo(DashboardUrls.HomeUrl());
+        await clearSelection;
+    }
+
+    /// <summary>
+    /// Raised when the brand starts a navigation to the dashboard's home, before the location changes.
+    /// </summary>
+    internal event Action? HomeNavigationStarting;
+
+    // The entries the current page lists at the top of the narrow layout's navigation menu, such as the resource views
+    // that the desktop header shows as tabs.
+    private Func<IEnumerable<MobileNavMenuEntry>>? _pageNavMenuEntries;
+
+    internal void SetPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>> entries)
+    {
+        _pageNavMenuEntries = entries;
+        RefreshPageNavMenu();
+    }
+
+    internal void RefreshPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
+        {
+            RefreshPageNavMenu();
         }
     }
+
+    // Only clears the entries if they're still the caller's, so a page being disposed doesn't remove the entries of the
+    // page that replaced it.
+    internal void ClearPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
+        {
+            _pageNavMenuEntries = null;
+            RefreshPageNavMenu();
+        }
+    }
+
+    private void RefreshPageNavMenu()
+    {
+        if (!_isDisposing && !ViewportInformation.IsDesktop && _isNavMenuOpen)
+        {
+            _mobileNavMenu?.RefreshPageEntries(_pageNavMenuEntries);
+        }
+    }
+
+    // Whether the dashboard's home, "/", is showing: the table of every resource.
+    private bool IsHome =>
+        NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(NavigationManager.Uri).GetLeftPart(UriPartial.Path)).Trim('/').Length == 0;
 
     private async Task LaunchRecordingsAsync()
     {

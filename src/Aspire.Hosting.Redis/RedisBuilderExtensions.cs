@@ -149,8 +149,12 @@ public static class RedisBuilderExtensions
                 }
                 else
                 {
+                    // Arguments added after this callback (for example by WithArgs) follow the script, where
+                    // `sh -c` binds them to positional parameters. Forward them to redis-server via "$@";
+                    // the argument after the script becomes $0, so pass a placeholder for it.
                     context.Args.Add("-c");
-                    context.Args.Add(string.Join(' ', additionalArgs));
+                    context.Args.Add(string.Join(' ', additionalArgs) + " \"$@\"");
+                    context.Args.Add("redis-server");
                 }
 
                 return Task.CompletedTask;
@@ -190,12 +194,13 @@ public static class RedisBuilderExtensions
         {
             redisBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                // If a TLS certificate is configured, ensure the Redis resource has an HTTPS endpoint and
-                // configure the environment variables to use it.
+                // Keep the primary endpoint for TLS clients and use the conventional target ports
+                // for both protocols without changing the configured host port.
                 redisBuilder
-                    .WithEndpoint(targetPort: 6380, name: RedisResource.SecondaryEndpointName)
+                    .WithEndpoint(targetPort: 6379, name: RedisResource.SecondaryEndpointName)
                     .WithEndpoint(RedisResource.PrimaryEndpointName, e =>
                     {
+                        e.TargetPort = 6380;
                         e.UriScheme = RedisResource.TlsRedisScheme;
                         e.TlsEnabled = true;
                     })

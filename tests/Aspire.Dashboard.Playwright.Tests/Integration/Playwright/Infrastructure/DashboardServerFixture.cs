@@ -2,14 +2,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Text.Json;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests.Shared;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.Playwright;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
@@ -135,6 +142,31 @@ public class DashboardServerFixture : IAsyncLifetime
         }));
 
         return result;
+    }
+
+    /// <summary>
+    /// Seeds protected resource tags in the page's local storage before the dashboard loads.
+    /// Each test uses a new browser context, so the tags don't leak into other tests.
+    /// </summary>
+    public async Task AddResourceTagsAsync(IPage page, Dictionary<string, List<string>> tagsByResource)
+    {
+        var applicationName = DashboardApp.Services.GetRequiredService<IOptions<DashboardOptions>>().Value.GetApplicationNameOrDefault();
+        var key = BrowserStorageKeys.ResourceTagsKey(applicationName);
+        string? protectedValue = null;
+        var jsRuntime = new TestJSRuntime
+        {
+            OnInvoke = call =>
+            {
+                Assert.Equal("localStorage.setItem", call.Identifier);
+                protectedValue = Assert.IsType<string>(call.Args![1]);
+                return null;
+            }
+        };
+        var storage = new ProtectedLocalStorage(jsRuntime, DashboardApp.Services.GetRequiredService<IDataProtectionProvider>());
+        await storage.SetAsync(key, tagsByResource);
+
+        Assert.NotNull(protectedValue);
+        await page.AddInitScriptAsync($"localStorage.setItem({JsonSerializer.Serialize(key)}, {JsonSerializer.Serialize(protectedValue)});");
     }
 
     public async ValueTask DisposeAsync()

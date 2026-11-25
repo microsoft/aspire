@@ -22,10 +22,30 @@
         <target state="translated">Запущенный AppHost в текущем рабочем дереве не найден. Используйте "--apphost &lt;path&gt;", чтобы выбрать один напрямую, или "--all", чтобы включить AppHost из других рабочих деревьев.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FetchingSource">
+        <source>Fetching {0} from {1} using Git...</source>
+        <target state="translated">Выполняется получение {0} из {1} с помощью Git...</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
+      <trans-unit id="FetchingSourceWithAuthentication">
+        <source>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</source>
+        <target state="translated">Получение {0} из {1} с помощью Git. Git может предложить вам пройти проверку подлинности.</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="translated">Формат вывода для результатов отсоединенного узла приложений</target>
         <note />
+      </trans-unit>
+      <trans-unit id="GitFetchConfigurationSource">
+        <source>configuration source</source>
+        <target state="translated">источник конфигурации</target>
+        <note>The content inserted into the Git-fetch notice.</note>
+      </trans-unit>
+      <trans-unit id="GitFetchTemplates">
+        <source>templates</source>
+        <target state="translated">шаблоны</target>
+        <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
@@ -124,12 +144,12 @@
       </trans-unit>
       <trans-unit id="NuGetSearchLimitWarning">
         <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
-        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <target state="translated">Результаты поиска NuGet могут быть неполными, поскольку для каждого канала достигнуто ограничение количества пакетов ({0}). Используйте более узкие шаблоны источников интеграции.</target>
         <note>{0} is the maximum number of packages searched per feed.</note>
       </trans-unit>
       <trans-unit id="NuGetSearchSourceFailedWarning">
         <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
-        <target state="new">Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</target>
+        <target state="translated">Не удалось выполнить поиск '{0}' источника NuGet. Некоторые интеграции могут отсутствовать. Проверьте конфигурацию источника и проверку подлинности. Дополнительные сведения см. в журналах CLI.</target>
         <note>{0} is the redacted NuGet source name or URL.</note>
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
@@ -182,9 +202,64 @@
         <target state="translated">Выберите хост приложений для {0}:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceFeed">
+        <source>Package feed</source>
+        <target state="translated">Канал пакетов</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitPath">
+        <source>Git path</source>
+        <target state="translated">Путь Git</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitRepository">
+        <source>Git source</source>
+        <target state="translated">Источник Git</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceMarketplace">
+        <source>Marketplace</source>
+        <target state="translated">Marketplace</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceName">
+        <source>Name</source>
+        <target state="translated">Имя</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV1Catalog">
+        <source>OpenCode V1 catalog</source>
+        <target state="translated">Каталог OpenCode версии 1</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV2Catalog">
+        <source>OpenCode V2 catalog</source>
+        <target state="translated">Каталог OpenCode версии 2</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePath">
+        <source>Path</source>
+        <target state="translated">Путь</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePatterns">
+        <source>Package patterns</source>
+        <target state="translated">Шаблоны пакетов</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePlugins">
+        <source>Plugins</source>
+        <target state="translated">Плагины</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceRef">
+        <source>Git ref</source>
+        <target state="translated">Ссылка Git</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SourceTrustWarning">
         <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
-        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
+        <target state="translated">Используйте только надежные источники. Содержимое из этих источников может запускать код на вашем компьютере.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">

@@ -14,6 +14,7 @@ import {
     CliPathResolver,
     tryExecuteCli,
     CliProbeExecutor,
+    cliVersionProbeTimeoutMs,
     isConfiguredCliPathRejectedForForwarding,
     resetRejectedConfiguredCliPathForForwarding,
 } from '../utils/cliPath';
@@ -1239,6 +1240,36 @@ suite('utils/cliPath tests', () => {
             }
         });
 
+        test('accepts a real CLI whose --version output is delayed by a startup stall', async function () {
+            // CI runner stalls have delayed a valid CLI's first write by ~5s, which the previous
+            // 5s probe budget rejected as an invalid CLI. 6s exceeds that old budget while staying
+            // well inside cliVersionProbeTimeoutMs.
+            const startupStallSeconds = 6;
+            // Leave headroom over the probe budget so a probe timeout fails the assertion rather
+            // than the Mocha test timeout.
+            const mochaHeadroomMs = 10_000;
+            this.timeout(cliVersionProbeTimeoutMs + mochaHeadroomMs);
+
+            const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-cli-probe-stall-'));
+            try {
+                let cliPath: string;
+                if (process.platform === 'win32') {
+                    cliPath = path.join(tempDirectory, 'aspire.cmd');
+                    // `ping -n N` waits about N-1 seconds between its N echo requests.
+                    fs.writeFileSync(cliPath, `@echo off\r\nping -n ${startupStallSeconds + 1} 127.0.0.1 >nul\r\nif "%~1"=="--version" (\r\n  echo 13.5.0-pr.e2e\r\n  exit /b 0\r\n)\r\nexit /b 1\r\n`);
+                }
+                else {
+                    cliPath = path.join(tempDirectory, 'aspire');
+                    fs.writeFileSync(cliPath, `#!/bin/sh\nsleep ${startupStallSeconds}\nif [ "$1" = "--version" ]; then\n  echo 13.5.0-pr.e2e\n  exit 0\nfi\nexit 1\n`, { mode: 0o755 });
+                }
+
+                assert.strictEqual(await tryExecuteCli(cliPath), true);
+            }
+            finally {
+                removeDirectorySafely(tempDirectory);
+            }
+        });
+
         test('probes Windows command shims through the quoted verbatim cmd.exe wrapper', async () => {
             const platformStub = sinon.stub(process, 'platform').value('win32');
             const originalComSpec = process.env.ComSpec;
@@ -1256,7 +1287,7 @@ suite('utils/cliPath tests', () => {
                 assert.deepStrictEqual(calls, [{
                     command: 'C:\\Windows\\System32\\cmd.exe',
                     args: ['/d', '/v:off', '/s', '/c', '""C:\\Users\\a&b\\.dotnet\\tools\\aspire.cmd" "--version""'],
-                    timeout: 5000,
+                    timeout: cliVersionProbeTimeoutMs,
                     windowsVerbatimArguments: true,
                 }]);
             }

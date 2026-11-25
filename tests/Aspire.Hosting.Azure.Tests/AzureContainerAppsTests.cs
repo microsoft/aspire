@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -1938,7 +1936,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         // This test fails on new default versions for ContainerApp so we check if autoConfigureDataProtection exists on the new Azure.Provisioning version.
         // Also, we need to ensure the new default version isn't newer than the preview version used to set autoConfigureDataProtection because
         // callers will get new APIs that may not work with the preview version we are using.
-        Assert.True(containerApp.ResourceVersion == "2025-07-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
+        Assert.True(containerApp.ResourceVersion == "2026-07-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
     }
 
     [Fact]
@@ -2904,9 +2902,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 #pragma warning restore CS0618
             .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
 
-#pragma warning disable ASPIRECOMPUTE002
         var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Equal(expected, await expression.GetValueAsync(default));
     }

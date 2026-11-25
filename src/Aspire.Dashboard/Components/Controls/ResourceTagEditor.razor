@@ -7,7 +7,7 @@
             @foreach (var tag in _tags)
             {
                 <li class="tag-chip" @key="tag">
-                    <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(tag)" />
+                    <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.TagInstance.GetColorVariableByKey(tag)" />
                     <span class="tag-chip-name">@tag</span>
                     @if (IsAppHostTag(tag))
                     {
@@ -23,7 +23,7 @@
                                 class="tag-chip-remove"
                                 data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
                                 aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
-                                @onclick="@(() => RemoveTag(tag))">
+                                @onclick="@(() => RemoveTagAsync(tag))">
                             <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Width="10px" Color="Color.Custom" CustomColor="currentColor" />
                         </button>
                     }
@@ -54,7 +54,7 @@
                    @bind="_text"
                    @bind:event="oninput"
                    @bind:after="UpdateOptions"
-                   @onkeydown="OnKeyDown"
+                   @onkeydown="OnKeyDownAsync"
                    @onfocusout="CloseEditor" />
 
             @if (_options.Count > 0)
@@ -71,7 +71,7 @@
                             aria-selected="@((index == _activeIndex).ToString().ToLowerInvariant())"
                             @key="@($"{option.IsNew}:{option.Tag}")"
                             @onmousedown:preventDefault="true"
-                            @onclick="@(() => AddTag(option.Tag))">
+                            @onclick="@(() => AddTagAsync(option.Tag))">
                             @if (option.IsNew)
                             {
                                 <FluentIcon Value="@(new Icons.Regular.Size12.Add())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground2)" />
@@ -79,7 +79,7 @@
                             }
                             else
                             {
-                                <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(option.Tag)" />
+                                <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="12px" Color="Color.Custom" CustomColor="@ColorGenerator.TagInstance.GetColorVariableByKey(option.Tag)" />
                                 <span class="tag-suggestion-text"><FluentHighlighter HighlightedText="@_text" Text="@option.Tag" /></span>
                             }
                         </li>

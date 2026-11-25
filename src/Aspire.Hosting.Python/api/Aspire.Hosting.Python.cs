@@ -18,6 +18,7 @@ namespace Aspire.Hosting
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath, params string[] scriptArgs) { throw null; }
 
+        [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
 
@@ -64,10 +65,14 @@ namespace Aspire.Hosting.Python
     public partial class PythonAppResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {
         public PythonAppResource(string name, string executablePath, string appDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public partial class UvicornAppResource : PythonAppResource
     {
         public UvicornAppResource(string name, string executablePath, string appDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

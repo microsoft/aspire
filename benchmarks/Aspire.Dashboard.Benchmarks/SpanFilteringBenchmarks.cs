@@ -21,22 +21,12 @@ namespace Aspire.Dashboard.Benchmarks;
 [Config(typeof(Config))]
 public class SpanFilteringBenchmarks
 {
-    private static readonly FieldTelemetryFilter[] s_noFilters = [];
-    private static readonly Func<OtlpResourceView, string> s_getResourceName = static source => source.Resource.ResourceName;
-
-    private readonly FieldTelemetryFilter[] _durationFilters =
-    [
-        new()
-        {
-            Field = KnownTraceFields.DurationField,
-            Condition = FilterCondition.GreaterThanOrEqual,
-            Value = "50"
-        }
-    ];
-
     private List<SpanWaterfallViewModel> _balancedTree = [];
     private List<SpanWaterfallViewModel> _collapsedTree = [];
     private List<SpanWaterfallViewModel> _deepChain = [];
+    private HashSet<string> _durationMatches = [];
+    private HashSet<string> _rootMatches = [];
+    private HashSet<string> _leafMatches = [];
 
     [GlobalSetup]
     public void Setup()
@@ -44,36 +34,39 @@ public class SpanFilteringBenchmarks
         _balancedTree = CreateBalancedTree(branchingFactor: 4, depth: 7);
         _collapsedTree = CreateBalancedTree(branchingFactor: 4, depth: 7, collapseEveryNthDepth: 3);
         _deepChain = CreateDeepChain(count: 10_000);
+        _durationMatches = _balancedTree.Where(vm => vm.Span.Duration.TotalMilliseconds >= 50).Select(vm => vm.Span.SpanId).ToHashSet(StringComparer.Ordinal);
+        _rootMatches = _balancedTree.Where(vm => vm.Span.Name == "root-span").Select(vm => vm.Span.SpanId).ToHashSet(StringComparer.Ordinal);
+        _leafMatches = _collapsedTree.Where(vm => vm.Span.Name == "leaf-match").Select(vm => vm.Span.SpanId).ToHashSet(StringComparer.Ordinal);
     }
 
     [Benchmark(Description = "Trace detail: no filters")]
     public int NoFilters()
     {
-        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, filter: string.Empty, typeFilter: null, s_noFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, contextFilterMatches: null, durationFilterMatches: null));
     }
 
     [Benchmark(Description = "Trace detail: duration >= 50ms")]
     public int DurationOnly()
     {
-        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, filter: string.Empty, typeFilter: null, _durationFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, contextFilterMatches: null, _durationMatches));
     }
 
     [Benchmark(Description = "Trace detail: no-match text filter")]
     public int ContextFilterNoMatchDeepChain()
     {
-        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_deepChain, filter: "missing-span-name", typeFilter: null, s_noFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_deepChain, contextFilterMatches: [], durationFilterMatches: null));
     }
 
     [Benchmark(Description = "Trace detail: root text filter")]
     public int ContextFilterRootMatch()
     {
-        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, filter: "root-span", typeFilter: null, s_noFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, _rootMatches, durationFilterMatches: null));
     }
 
     [Benchmark(Description = "Trace detail: hidden descendants")]
     public int ContextFilterCollapsedTree()
     {
-        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_collapsedTree, filter: "leaf-match", typeFilter: null, s_noFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_collapsedTree, _leafMatches, durationFilterMatches: null));
     }
 
     private static List<SpanWaterfallViewModel> CreateDeepChain(int count)

@@ -159,27 +159,10 @@ public static class GoHostingExtensions
             })
             .WithRequiredCommand("go", "https://go.dev/dl/")
             .WithOtlpExporter()
-            // Go doesn't support appending to its default trust on macOS and Windows: since Go 1.27 (for
-            // modules declaring go 1.27 or later), setting SSL_CERT_FILE or SSL_CERT_DIR there replaces the
-            // platform verifier with roots loaded from disk, and those platforms have no default cert files.
-            // Use System there so the bundle Go loads also contains the system roots. Linux keeps Append
-            // because Go still loads the default bundle file alongside SSL_CERT_DIR.
-            // See https://go.dev/doc/go1.27 and https://github.com/microsoft/aspire/issues/21198.
-            .WithCertificateTrustScope(OperatingSystem.IsMacOS() || OperatingSystem.IsWindows()
-                ? CertificateTrustScope.System
-                : CertificateTrustScope.Append)
-            .WithCertificateTrustConfiguration(ctx =>
-            {
-                // Linux still loads the default bundle file next to SSL_CERT_DIR, so Append works there.
-                if (ctx.Scope == CertificateTrustScope.Append && (OperatingSystem.IsMacOS() || OperatingSystem.IsWindows()))
-                {
-                    var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
-                    resourceLogger.GetLogger(ctx.Resource).LogWarning(
-                        "Certificate trust scope is set to 'Append', but since Go 1.27, Go on macOS and Windows trusts only the configured certificates instead of adding them to the system roots, so public certificate authorities will not be trusted. Use 'System' to trust both.");
-                }
-
-                return Task.CompletedTask;
-            })
+            // Go has no standard host flag. Bind locally in run mode to avoid exposing the app on
+            // network interfaces; published containers must listen on all interfaces.
+            .WithEnvironment("HOST", builder.ExecutionContext.IsPublishMode ? "0.0.0.0" : "localhost")
+            .ConfigureGoCertificateTrust()
             .WithVSCodeDebugging()
             .PublishAsDockerFile(containerBuilder =>
             {
@@ -332,38 +315,11 @@ public static class GoHostingExtensions
         if (builder.ExecutionContext.IsPublishMode &&
             builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
         {
-            var validationStepName = $"validate-go-dockerfile-package-path-{resource.Name}";
-
-            // The step is added to the pipeline instead of as a PipelineStepAnnotation on the container because
-            // WithDockerfile replaces the container's step annotation, which would drop this step (or throw when
-            // more than one exists) if the Dockerfile is configured again after this point.
-            builder.Pipeline.AddStep(new PipelineStep
-            {
-                Name = validationStepName,
-                Description = $"Warns when Go app '{resource.Name}' publishes an existing Dockerfile that ignores its package path.",
-                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
-                Resource = containerBuilder.Resource,
-                Action = context =>
-                {
-                    // A resource excluded from the manifest is never published, so there is nothing to warn about.
-                    if (!containerBuilder.Resource.IsExcludedFromPublish())
-                    {
-                        WarnIfExistingDockerfileIgnoresPackagePath(resource, containerBuilder.Resource, context.Logger);
-                    }
-
-                    return Task.CompletedTask;
-                }
-            });
-
-            // Deploy environments such as Azure Container Apps run the image build step without the aggregate
-            // Build step, so the image build must wait for this step itself to surface the warning before a
-            // potentially long build instead of after it.
-            containerBuilder.WithPipelineConfiguration(context =>
-            {
-                var validationStep = context.GetSteps(containerBuilder.Resource).FirstOrDefault(step => step.Name == validationStepName);
-
-                context.GetSteps(containerBuilder.Resource, WellKnownPipelineTags.BuildCompute).DependsOn(validationStep);
-            });
+            containerBuilder.AddPublishValidation(
+                $"validate-go-dockerfile-package-path-{resource.Name}",
+                $"Warns when Go app '{resource.Name}' publishes an existing Dockerfile that ignores its package path.",
+                [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                context => WarnIfExistingDockerfileIgnoresPackagePath(resource, containerBuilder.Resource, context.Logger));
         }
 
         // Ensure source resources (that provide container files) build before this Go image.
@@ -431,7 +387,9 @@ public static class GoHostingExtensions
 
             var tidy = builder.ApplicationBuilder
                 .AddResource(tidyResource)
+                .ConfigureGoCertificateTrust()
                 .WithArgs("mod", "tidy", "-e")
+                .WithParentRelationship(builder.Resource)
                 .ExcludeFromManifest();
 
             // Store the builder reference so WithModVendor/WithModDownload can chain after tidy.
@@ -480,6 +438,7 @@ public static class GoHostingExtensions
 
             var vendor = builder.ApplicationBuilder
                 .AddResource(vendorResource)
+                .ConfigureGoCertificateTrust()
                 .WithArgs("mod", "vendor")
                 .ExcludeFromManifest();
 
@@ -526,6 +485,7 @@ public static class GoHostingExtensions
 
             var download = builder.ApplicationBuilder
                 .AddResource(downloadResource)
+                .ConfigureGoCertificateTrust()
                 .WithArgs("mod", "download")
                 .ExcludeFromManifest();
 
@@ -574,6 +534,7 @@ public static class GoHostingExtensions
 
             var vet = builder.ApplicationBuilder
                 .AddResource(vetResource)
+                .ConfigureGoCertificateTrust()
                 .WithArgs("vet", "./...")
                 .ExcludeFromManifest();
 
@@ -963,6 +924,29 @@ public static class GoHostingExtensions
         }
 
         return parts;
+    }
+
+    private static IResourceBuilder<T> ConfigureGoCertificateTrust<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEnvironment, IResourceWithArgs
+    {
+        // Go 1.27 uses SSL_CERT_FILE and SSL_CERT_DIR as replacements for the platform verifier
+        // on macOS and Windows. Include system roots in the generated bundle on those platforms.
+        // Linux still loads its default bundle alongside SSL_CERT_DIR, so Append remains appropriate.
+        // See https://go.dev/doc/go1.27 and https://github.com/microsoft/aspire/issues/21198.
+        var usesSystemRoots = OperatingSystem.IsMacOS() || OperatingSystem.IsWindows();
+        return builder
+            .WithCertificateTrustScope(usesSystemRoots ? CertificateTrustScope.System : CertificateTrustScope.Append)
+            .WithCertificateTrustConfiguration(ctx =>
+            {
+                if (ctx.Scope == CertificateTrustScope.Append && usesSystemRoots)
+                {
+                    var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
+                    resourceLogger.GetLogger(ctx.Resource).LogWarning(
+                        "Certificate trust scope is set to 'Append', but since Go 1.27, Go on macOS and Windows trusts only the configured certificates instead of adding them to the system roots, so public certificate authorities will not be trusted. Use 'System' to trust both.");
+                }
+
+                return Task.CompletedTask;
+            });
     }
 
     /// <summary>

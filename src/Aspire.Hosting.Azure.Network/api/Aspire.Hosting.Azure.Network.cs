@@ -8,6 +8,13 @@
 //------------------------------------------------------------------------------
 namespace Aspire.Hosting
 {
+    public static partial class AzureInternalLoadBalancerExtensions
+    {
+        [AspireExport("withNetworkInternalLoadBalancer", MethodName = "withInternalLoadBalancer")]
+        public static ApplicationModel.IResourceBuilder<T> WithInternalLoadBalancer<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> virtualNetwork)
+            where T : Azure.IAzureInternalIngressResource { throw null; }
+    }
+
     public static partial class AzureNatGatewayExtensions
     {
         [AspireExport]
@@ -53,16 +60,16 @@ namespace Aspire.Hosting
 
     public static partial class AzureVirtualNetworkExtensions
     {
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addAzureVirtualNetwork dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> AddAzureVirtualNetwork(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> addressPrefix) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addAzureVirtualNetwork dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> AddAzureVirtualNetwork(this IDistributedApplicationBuilder builder, string name, string? addressPrefix = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSubnet dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> AddSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> addressPrefix, string? subnetName = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSubnet dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> AddSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> builder, string name, string addressPrefix, string? subnetName = null) { throw null; }
 
         [AspireExport]
@@ -112,6 +119,8 @@ namespace Aspire.Hosting.Azure
         public BicepOutputReference Id { get { throw null; } }
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
+
+        public System.Collections.Generic.IReadOnlyList<AzureSecurityRule> SecurityRules { get { throw null; } }
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
     }
@@ -249,6 +258,8 @@ namespace Aspire.Hosting.Azure
         public ApplicationModel.ParameterResource? AddressPrefixParameter { get { throw null; } }
 
         public BicepOutputReference Id { get { throw null; } }
+
+        public AzureNetworkSecurityGroupResource? NetworkSecurityGroup { get { throw null; } }
 
         public AzureVirtualNetworkResource Parent { get { throw null; } }
 

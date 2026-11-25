@@ -123,6 +123,24 @@ Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
 
+Explicit channel updates apply confirmed changes without a validation restore.
+Use `aspire update --channel <channel> --dry-run` to validate with temporary
+NuGet caches instead, without proposing or applying changes. Configuration
+conflicts still fail in either mode. Dry runs restore source files from adjacent
+backups; leftover backups require separate consent to replace. See the
+[update validation details](../../docs/specs/polyglot-integration-restore.md#shared-policy-previews-and-net-persistence).
+
+Validation restore output is saved to the CLI log and displayed when restore
+fails. The CLI attempts to remove credentials from package source URLs, but
+redaction is best effort, not a security guarantee. Check logs and error
+messages for sensitive information before sharing them.
+
+By default, CLI logs are stored under the user's Aspire home. On Unix, the CLI
+restricts log files and the log directory to the current user; on Windows, it
+relies on inherited filesystem ACLs. Logs remain accessible to processes running
+as the same user, and custom `--log-file` locations may have different directory
+and ACL properties.
+
 ## Configured template sources
 
 Register named local directories or Git repositories in the
@@ -324,9 +342,27 @@ An unavailable stop RPC or shutdown timeout fails without escalation. `--pid`
 cannot be combined with `--all` or `--force`. Without `--pid`, existing project-level
 stop behavior is unchanged.
 
-### Experimental desktop tray companion
+## Waiting for resources to be torn down
 
-The native macOS, Windows, and glibc Linux CLI bundles include the experimental Aspire menu
+By default, `aspire stop` returns once the AppHost process has exited. The AppHost's
+resources, such as containers, can still be stopping in the background at that point,
+so a start issued right away can find a container with a fixed name still running.
+Use `--wait` to return only after the resources have been torn down:
+
+```bash
+aspire stop --wait
+```
+
+With `--wait`, the AppHost tears its resources down before it exits and confirms when
+they are gone. The command waits up to 120 seconds for that confirmation; use
+`--timeout <seconds>` to change it (for example, `aspire stop --wait --timeout 300`).
+`--timeout` requires `--wait`. The command exits with code 17 if the wait times out and
+code 9 if the AppHost's Aspire version does not support waiting; the AppHost is stopped
+in both cases. `--wait` can be combined with `--pid`, `--all`, and `--force`.
+
+### Desktop tray companion (Preview)
+
+The native macOS, Windows, and glibc Linux CLI bundles include the Aspire menu
 bar or system tray companion:
 
 ```bash
@@ -353,7 +389,7 @@ its own lease for its lifetime. If readiness fails, the helper terminates and
 waits for its newly launched GUI process before releasing the launcher lease;
 an already-running companion is not terminated by a failed start.
 
-These commands are experimental and available on macOS, Windows, and glibc Linux (x64/ARM64).
+These commands are in preview and available on macOS, Windows, and glibc Linux (x64/ARM64).
 Starting the companion requires an interactive desktop and
 a native CLI, not a managed development build or `dotnet aspire.dll`. A missing
 bundle or tray payload fails explicitly; install a platform-matching bundle containing the

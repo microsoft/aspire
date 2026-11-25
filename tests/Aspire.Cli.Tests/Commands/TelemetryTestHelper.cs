@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Otlp.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -60,12 +61,16 @@ internal static class TelemetryTestHelper
     /// <param name="telemetryEndpoints">
     /// A dictionary mapping URL substrings (e.g. "/api/telemetry/logs") to their JSON response content.
     /// </param>
+    /// <param name="hostEnvironment">
+    /// The host environment to use. Defaults to the test default, where stdout is not an interactive terminal.
+    /// </param>
     internal static ServiceProvider CreateTelemetryTestServices(
         TemporaryWorkspace workspace,
         ITestOutputHelper outputHelper,
         TestOutputTextWriter outputWriter,
         ResourceInfoJson[] resources,
-        Dictionary<string, string> telemetryEndpoints)
+        Dictionary<string, string> telemetryEndpoints,
+        ICliHostEnvironment? hostEnvironment = null)
     {
         var resourcesJson = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
@@ -118,6 +123,10 @@ internal static class TelemetryTestHelper
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             options.OutputTextWriter = outputWriter;
             options.DisableAnsi = true;
+            if (hostEnvironment is not null)
+            {
+                options.CliHostEnvironmentFactory = _ => hostEnvironment;
+            }
         });
 
         // Register the handler as a singleton so it is disposed with the ServiceProvider,

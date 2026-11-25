@@ -138,6 +138,7 @@ export class AppHostLaunchService implements vscode.Disposable {
     // the launch failure store, telemetry, logs, tool results, or E2E state.
     private readonly _appHostPathAwaitingDebugStartByToken = new Map<number, string>();
     private readonly _launchTokensWithSpecificFailure = new Set<number>();
+    private readonly _launchTokensCanceledByProvider = new Set<number>();
     /**
      * Durable non-Run operations (deploy/publish/do) that have begun launch preparation but
      * whose root debug session has not started yet, keyed by launch token. A pending entry
@@ -292,6 +293,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._canceledDebugStartTokens.clear();
         this._appHostPathAwaitingDebugStartByToken.clear();
         this._launchTokensWithSpecificFailure.clear();
+        this._launchTokensCanceledByProvider.clear();
         this._pendingOperationByToken.clear();
         this._pendingExternalOperationByReservationId.clear();
         for (const expiry of this._pendingExternalOperationExpiryByReservationId.values()) {
@@ -336,6 +338,20 @@ export class AppHostLaunchService implements vscode.Disposable {
     }
 
     markLaunchAttemptFailureRecorded(configuration: vscode.DebugConfiguration): void {
+        const launchToken = this.getActiveDebugStartToken(configuration);
+        if (launchToken !== undefined) {
+            this._launchTokensWithSpecificFailure.add(launchToken);
+        }
+    }
+
+    markLaunchAttemptCanceled(configuration: vscode.DebugConfiguration): void {
+        const launchToken = this.getActiveDebugStartToken(configuration);
+        if (launchToken !== undefined) {
+            this._launchTokensCanceledByProvider.add(launchToken);
+        }
+    }
+
+    private getActiveDebugStartToken(configuration: vscode.DebugConfiguration): number | undefined {
         const launchToken = configuration[appHostLaunchTokenConfigKey];
         if (!isAspireDebugConfigurationExtensionOwned(configuration) ||
             typeof launchToken !== 'number' ||
@@ -352,7 +368,7 @@ export class AppHostLaunchService implements vscode.Disposable {
             return;
         }
 
-        this._launchTokensWithSpecificFailure.add(launchToken);
+        return launchToken;
     }
 
     trackAppHostDebugSession(owner: AppHostLaunchSession, appHostPath: string, debugSession: AspireResourceDebugSession): void {
@@ -1352,6 +1368,12 @@ export class AppHostLaunchService implements vscode.Disposable {
                 cancellationDisposable?.dispose();
             }
             if (!started) {
+                // VS Code returns false for both provider cancellation and real launch failures.
+                // The resolver receives a copy of the configuration, so correlate its explicit
+                // cancellation with this launch token rather than mutating the original object.
+                if (this._launchTokensCanceledByProvider.has(launchToken)) {
+                    throw new vscode.CancellationError();
+                }
                 // A false result means VS Code declined the launch before the
                 // debug session started (for example, no provider matched or
                 // an adapter gate rejected it). Surface it as an error so the
@@ -1373,7 +1395,8 @@ export class AppHostLaunchService implements vscode.Disposable {
             this.clearPendingOperation(launchToken);
             this.clearMatchingLaunching(canonicalAppHostPath, reservationId);
             const hasSpecificFailureForAttempt = this._launchTokensWithSpecificFailure.delete(launchToken);
-            if (!hasSpecificFailureForAttempt) {
+            const canceledByProvider = this._launchTokensCanceledByProvider.delete(launchToken);
+            if (!hasSpecificFailureForAttempt && !canceledByProvider) {
                 recordLaunchFailureForAppHostIdentity(appHostIdentity, {
                     stage: 'cliLaunch',
                     category: failureCategory,
@@ -1409,6 +1432,7 @@ export class AppHostLaunchService implements vscode.Disposable {
     private clearLaunchAttemptFailureCorrelation(launchToken: number): void {
         this._appHostPathAwaitingDebugStartByToken.delete(launchToken);
         this._launchTokensWithSpecificFailure.delete(launchToken);
+        this._launchTokensCanceledByProvider.delete(launchToken);
     }
 
     private getTrackedRunLaunches(): readonly TrackedRunLaunch[] {

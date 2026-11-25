@@ -2,23 +2,36 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using System.Web;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
+using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Model.Otlp;
+using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
+using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Sections;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Time.Testing;
+using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
+using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -41,12 +54,12 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Equal("1 of 2 resources need attention", cut.Find(".home-hero-headline").TextContent));
         Assert.Single(cut.FindAll(".home-activity"));
-        Assert.Single(cut.FindAll(".home-insights"));
+        Assert.Empty(cut.FindAll(".home-insights"));
         Assert.Single(cut.FindAll(".home-problems"));
         Assert.Empty(cut.FindAll(".resource-card, .home-resource-table"));
         Assert.Equal(graphEnabled ? ["Summary", "Graph"] : ["Summary"],
             outlet.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
-        Assert.IsType<Icons.Regular.Size20.DataBarVertical>(
+        Assert.IsType<Icons.Regular.Size20.DataUsage>(
             outlet.FindComponent<IconToggleGroup<GroupOverview>>().Instance.Options.Single(option => option.Value == GroupOverview.Summary).Icon);
     }
 
@@ -59,7 +72,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["api"])));
         cut.WaitForAssertion(() => Assert.Equal("1 resource is running", cut.Find(".home-hero-headline").TextContent));
         Assert.Single(cut.FindAll(".home-activity"));
-        Assert.Single(cut.FindAll(".home-insights"));
+        Assert.Empty(cut.FindAll(".home-insights"));
         Assert.Single(cut.FindAll(".home-problems"));
 
         await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["broken"])));
@@ -88,6 +101,46 @@ public class ApplicationSummaryTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_MissingParameters_HeadlineSaysSo()
+    {
+        // Missing values keep resources from starting, so "no resources need attention" would be wrong.
+        var cut = RenderSummary(missingParameters: true, resources:
+        [
+            ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.ValueMissing)
+        ]);
+        cut.WaitForAssertion(() => Assert.Equal("1 parameter needs a value", cut.Find(".home-hero-headline").TextContent));
+        Assert.Contains("state-warning", cut.Find(".home-hero").ClassList);
+    }
+
+    [Fact]
+    public void Render_MissingParametersAndBrokenResource_AttentionComesFirst()
+    {
+        var cut = RenderSummary(missingParameters: true);
+        cut.WaitForAssertion(() => Assert.Equal("1 of 2 resources need attention", cut.Find(".home-hero-headline").TextContent));
+        Assert.Contains("state-error", cut.Find(".home-hero").ClassList);
+    }
+
+    [Fact]
+    public void Render_StoppedResources_LegendNamesFinishedNotStartedAndUnknown()
+    {
+        var cut = RenderSummary(resources:
+        [
+            ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("job", state: KnownResourceState.Finished),
+            ModelTestHelpers.CreateResource("migrator", state: KnownResourceState.Exited),
+            ModelTestHelpers.CreateResource("worker", state: KnownResourceState.NotStarted),
+            ModelTestHelpers.CreateResource("mystery", state: KnownResourceState.Unknown)
+        ]);
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            [("1", "Running"), ("2", "Finished"), ("1", "Not started"), ("1", "Unknown")],
+            cut.FindAll(".home-legend-item").Select(item => (
+                item.QuerySelector(".home-legend-value")!.TextContent,
+                item.QuerySelector(".home-legend-value + span")!.TextContent))));
+    }
+
+    [Fact]
     public async Task Render_ActivityAndInsights_UseLocalizedText()
     {
         var loc = new TestStringLocalizer<ResourceStrings>();
@@ -96,7 +149,7 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         Assert.Equal(loc[nameof(ResourceStrings.HomeLiveActivity)], cut.Find("#home-activity-title").TextContent);
         Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWindow)], cut.Find(".home-activity-window").TextContent);
-        cut.WaitForAssertion(() => Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWaiting)], cut.Find(".home-chart-empty").TextContent));
+        await cut.WaitForAssertionAsync(() => Assert.Equal(loc[nameof(ResourceStrings.HomeActivityWaiting)], cut.Find(".home-chart-empty").TextContent));
         Assert.Equal(
             new[] { nameof(ResourceStrings.HomeLogsLabel), nameof(ResourceStrings.HomeTracesLabel), nameof(ResourceStrings.HomeMetricsLabel) }
                 .Select(key => $"0 {loc[key]}"),
@@ -110,19 +163,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Equal(
             new[] { nameof(ResourceStrings.HomeActivityWindowStart), nameof(ResourceStrings.HomeActivityWindowEnd) }.Select(key => loc[key].Value),
             cut.FindAll(".home-chart-axis span").Select(element => element.TextContent));
-        Assert.Equal(loc[nameof(ResourceStrings.HomeInsightsLabel)], cut.Find(".home-insights").GetAttribute("aria-label"));
-        Assert.Equal(
-            new[] { nameof(ResourceStrings.HomeSlowestEndpoints), nameof(ResourceStrings.HomeBusiestResources), nameof(ResourceStrings.HomeErrorHotspots) }
-                .Select(key => loc[key].Value),
-            cut.FindAll(".home-insight h2").Select(element => element.TextContent));
-        Assert.Equal(
-            new[] { nameof(ResourceStrings.HomeP95Label), nameof(ResourceStrings.HomeRequestsPerMinute), nameof(ResourceStrings.HomeErrorHotspotsHint) }
-                .Select(key => loc[key].Value),
-            cut.FindAll(".home-insight-hint").Select(element => element.TextContent));
-        Assert.Equal(
-            new[] { nameof(ResourceStrings.HomeNoRecentRequests), nameof(ResourceStrings.HomeNoRecentRequests), nameof(ResourceStrings.HomeNoRecentActivityErrors) }
-                .Select(key => loc[key].Value),
-            cut.FindAll(".home-insight .home-empty").Select(element => element.TextContent.Trim()));
+        Assert.Empty(cut.FindAll(".home-insights"));
 
         var now = Services.GetRequiredService<BrowserTimeProvider>().GetUtcNow().UtcDateTime.AddSeconds(-1);
         await Services.GetRequiredService<SqliteTelemetryRepository>().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
@@ -144,6 +185,15 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
+            Assert.Equal(loc[nameof(ResourceStrings.HomeInsightsLabel)], cut.Find(".home-insights").GetAttribute("aria-label"));
+            Assert.Equal(
+                new[] { nameof(ResourceStrings.HomeSlowestEndpoints), nameof(ResourceStrings.HomeBusiestResources), nameof(ResourceStrings.HomeErrorHotspots) }
+                    .Select(key => loc[key].Value),
+                cut.FindAll(".home-insight h2").Select(element => element.TextContent));
+            Assert.Equal(
+                new[] { nameof(ResourceStrings.HomeP95Label), nameof(ResourceStrings.HomeRequestsPerMinute), nameof(ResourceStrings.HomeErrorHotspotsHint) }
+                    .Select(key => loc[key].Value),
+                cut.FindAll(".home-insight-hint").Select(element => element.TextContent));
             var insights = cut.FindAll(".home-insight");
             Assert.Equal(loc[nameof(ResourceStrings.HomeRequestCountShort), "1"], insights[0].QuerySelector(".home-event-meta > span:last-child")!.TextContent);
             Assert.Equal(loc[nameof(ResourceStrings.HomeEndpointTooltip), "api", "Test span. Id: span", "1"],
@@ -155,25 +205,315 @@ public class ApplicationSummaryTests : DashboardTestContext
                 new[] { loc[nameof(ResourceStrings.HomeFailedRequestCount), "1"].Value, loc[nameof(ResourceStrings.HomeErrorLogCount), "0"].Value },
                 insights[2].QuerySelectorAll(".home-event-meta > span:not([aria-hidden])").Select(element => element.TextContent));
             var bucketStart = new DateTime(now.Ticks / ApplicationSummary.s_activityBucketSize.Ticks * ApplicationSummary.s_activityBucketSize.Ticks, DateTimeKind.Utc);
-            Assert.Equal(loc[nameof(ResourceStrings.HomeActivityBucketTooltip),
-                FormatHelpers.FormatTimeWithOptionalDate(Services.GetRequiredService<BrowserTimeProvider>(), bucketStart), "1", "1"],
+            var bucketSummary = loc[nameof(ResourceStrings.HomeActivityBucketTooltip),
+                FormatHelpers.FormatTimeWithOptionalDate(Services.GetRequiredService<BrowserTimeProvider>(), bucketStart), "1", "1"];
+            Assert.Equal($"{bucketSummary}\n\n{loc[nameof(ResourceStrings.HomeActivityBucketTraceHint)]}",
                 cut.Find(".home-chart-bar").GetAttribute("data-tooltip"));
+            Assert.Equal(loc[nameof(ResourceStrings.HomeSingleRequestCount), "1"], cut.Find(".home-chart-max").TextContent);
         });
     }
+
+    [Theory]
+    [InlineData(1, null)]
+    [InlineData(5, new[] { "api-TestId" })]
+    [InlineData(5, new[] { "api-TestId", "broken" })]
+    public async Task Render_ActivityColumns_LinkToSelectedInterval(int requestCount, string[]? resourceNames)
+    {
+        var bucketStart = new DateTime(2020, 1, 15, 12, 0, 0, DateTimeKind.Utc);
+        var bucketEnd = bucketStart + ApplicationSummary.s_activityBucketSize;
+        var times = Enumerable.Range(0, requestCount).Select(i => bucketStart.AddSeconds(i))
+            .Prepend(bucketStart.AddMilliseconds(-1)).Append(bucketEnd);
+        var cut = await RenderRecordingSummaryAsync(writer => writer.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource("api"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            times.Select((time, i) => CreateSpan($"trace-{i}", $"span-{i}", time, time.AddMilliseconds(5),
+                                kind: Span.Types.SpanKind.Server,
+                                status: new Status { Code = i == 1 ? Status.Types.StatusCode.Error : Status.Types.StatusCode.Ok }))
+                        }
+                    }
+                }
+            }
+        }));
+        var repository = Services.GetRequiredService<DashboardDataSource>().TelemetryRepository;
+        var resourceKeys = resourceNames is null ? null : repository.GetResources().Select(resource => resource.ResourceKey).ToList();
+        await cut.InvokeAsync(() => cut.Render(builder => builder
+            .Add(p => p.ResourceNames, resourceNames)
+            .Add(p => p.TelemetryResourceKeys, resourceKeys)));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(requestCount == 1 ? "1 request" : "5 requests", cut.Find(".home-chart-max").TextContent);
+            Assert.Equal(3, cut.FindAll(".home-chart-bar").Count);
+        });
+        var column = cut.FindAll(".home-chart-bar")[1];
+        Assert.Equal("a", column.LocalName);
+        Assert.Equal(column.GetAttribute("data-tooltip"), column.GetAttribute("aria-label"));
+        Assert.Equal("group", cut.Find(".home-chart-svg").GetAttribute("role"));
+
+        var uri = new Uri(new Uri("http://localhost"), column.GetAttribute("href"));
+        Assert.Equal("/traces", uri.AbsolutePath);
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        Assert.Equal(resourceNames, query.GetValues(DashboardUrls.ResourceSelectionQueryName));
+        var filters = TelemetryFilterFormatter.DeserializeFiltersFromString(query["filters"]!);
+        Assert.Collection(filters,
+            filter =>
+            {
+                Assert.Equal(KnownTraceFields.TimestampField, filter.Field);
+                Assert.Equal(FilterCondition.GreaterThanOrEqual, filter.Condition);
+                Assert.Equal("2020-01-15T12:00:00Z", filter.Value);
+            },
+            filter =>
+            {
+                Assert.Equal(KnownTraceFields.TimestampField, filter.Field);
+                Assert.Equal(FilterCondition.LessThan, filter.Condition);
+                Assert.Equal("2020-01-15T12:00:30Z", filter.Value);
+            });
+
+        var result = await repository.GetTraceSummariesAsync(new GetTracesRequest
+        {
+            ResourceKeys = resourceKeys ?? [],
+            StartIndex = 0,
+            Count = 100,
+            Filters = [.. filters]
+        }, CancellationToken.None);
+        Assert.Equal(requestCount, result.PagedResult.TotalItemCount);
+    }
+
+    [Fact]
+    public async Task Render_ActivityLinks_PreserveSingleQueryStringSelection()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourceOverview(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api-1", displayName: "api", state: KnownResourceState.Finished, resourceType: "Project"),
+                ModelTestHelpers.CreateResource("worker-1", displayName: "worker", state: KnownResourceState.Finished, resourceType: "Project")
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            isReadOnly: true),
+            configureServices: services => FluentUISetupHelpers.AddTelemetryRepositoryConfiguration(services, readOnly: true));
+
+        var apiTime = new DateTime(2020, 1, 15, 12, 0, 0, DateTimeKind.Utc);
+        await FluentUISetupHelpers.SeedTelemetryRepositoryAsync(this, writer => writer.AddTracesAsync(new AddContext(),
+            [CreateServerRequest("api", apiTime), CreateServerRequest("worker", apiTime + ApplicationSummary.s_activityBucketSize)]));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?resource=api");
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport).Add(p => p.Body, body =>
+        {
+            body.OpenComponent<ResourceOverview>(0);
+            body.CloseComponent();
+        }));
+
+        var summary = cut.WaitForComponent<ApplicationSummary>();
+        summary.WaitForAssertion(() =>
+        {
+            var link = Assert.Single(summary.FindAll(".home-chart-bar"));
+            var uri = new Uri(new Uri("http://localhost"), link.GetAttribute("href"));
+            Assert.Equal("/traces", uri.AbsolutePath);
+            var query = HttpUtility.ParseQueryString(uri.Query);
+            Assert.Equal("2020-01-15T12:00:00Z", TelemetryFilterFormatter.DeserializeFiltersFromString(query["filters"]!)[0].Value);
+            Assert.Equal("api", query[DashboardUrls.ResourceSelectionQueryName]);
+        });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Render_ActivityLinks_FollowTelemetrySourcesFilter(bool appHasRequests)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourceOverview(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api-1", displayName: "api", state: KnownResourceState.Finished, resourceType: "Project")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            isReadOnly: true),
+            configureServices: services => FluentUISetupHelpers.AddTelemetryRepositoryConfiguration(services, readOnly: true));
+
+        var apiTime = new DateTime(2020, 1, 15, 12, 0, 0, DateTimeKind.Utc);
+        var browserTime = apiTime + ApplicationSummary.s_activityBucketSize;
+        await FluentUISetupHelpers.SeedTelemetryRepositoryAsync(this, writer => writer.AddTracesAsync(new AddContext(),
+            appHasRequests ? [CreateServerRequest("api", apiTime), CreateServerRequest("browser", browserTime)] : [CreateServerRequest("browser", browserTime)]));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneKinds ? (true, string.Empty) : (false, null);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport).Add(p => p.Body, body =>
+        {
+            body.OpenComponent<ResourceOverview>(0);
+            body.CloseComponent();
+        }));
+
+        var summary = cut.WaitForComponent<ApplicationSummary>();
+        summary.WaitForAssertion(AssertAppScope);
+        await cut.Find("#resourcePaneFilterButton").ClickAsync(new());
+        var showGroup = cut.Find(".resource-filter-group-header");
+        if (showGroup.GetAttribute("aria-expanded") == "false")
+        {
+            await showGroup.ClickAsync(new());
+        }
+
+        await SetShowTelemetrySourcesAsync(true);
+        summary.WaitForAssertion(() =>
+        {
+            var links = summary.FindAll(".home-chart-bar");
+            Assert.Equal(appHasRequests ? 2 : 1, links.Count);
+            Assert.Equal("2020-01-15T12:00:30Z", GetBucketStart(links[^1].GetAttribute("href")!));
+        });
+
+        await SetShowTelemetrySourcesAsync(false);
+        summary.WaitForAssertion(AssertAppScope);
+
+        void AssertAppScope()
+        {
+            if (appHasRequests)
+            {
+                var link = Assert.Single(summary.FindAll(".home-chart-bar"));
+                Assert.Equal("2020-01-15T12:00:00Z", GetBucketStart(link.GetAttribute("href")!));
+            }
+            else
+            {
+                Assert.Equal("No requests were recorded in this run.", summary.Find(".home-chart-empty").TextContent);
+                Assert.Empty(summary.FindAll(".home-chart-bar"));
+            }
+        }
+
+        Task SetShowTelemetrySourcesAsync(bool shown) => cut.InvokeAsync(() => cut.FindComponents<FluentCheckbox>()
+            .Single(checkbox => checkbox.Instance.Label == "Telemetry sources").Instance.ValueChanged.InvokeAsync(shown));
+
+        static string GetBucketStart(string href)
+        {
+            var query = HttpUtility.ParseQueryString(new Uri(new Uri("http://localhost"), href).Query);
+            return TelemetryFilterFormatter.DeserializeFiltersFromString(query["filters"]!)[0].Value;
+        }
+    }
+
+    private static ResourceSpans CreateServerRequest(string resource, DateTime time) => new()
+    {
+        Resource = CreateResource(resource, "1"),
+        ScopeSpans =
+        {
+            new ScopeSpans
+            {
+                Scope = CreateScope(),
+                Spans = { CreateSpan($"trace-{resource}", $"span-{resource}", time, time.AddMilliseconds(5), kind: Span.Types.SpanKind.Server) }
+            }
+        }
+    };
 
     [Fact]
     public async Task Render_GraphSetting_ShowsTheResourceGraph()
     {
         var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
         module.Mode = JSRuntimeMode.Loose;
-        var cut = RenderSummary();
+        var cut = RenderSummary(resources:
+        [
+            ModelTestHelpers.CreateResource("worker", resourceType: KnownResourceTypes.Project, state: KnownResourceState.FailedToStart),
+            ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("z-cache", resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running)
+        ]);
 
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Graph));
 
         cut.WaitForAssertion(() => Assert.False(cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
         Assert.Empty(cut.FindAll(".home-hero"));
         Assert.Single(module.Invocations, invocation => invocation.Identifier == "initializeResourcesGraph");
-        Assert.Contains(module.Invocations, invocation => invocation.Identifier == "updateResourcesGraph");
+        cut.WaitForAssertion(() =>
+        {
+            var update = module.Invocations.Last(invocation => invocation.Identifier == "updateResourcesGraph");
+            var resources = Assert.IsType<List<ResourceDto>>(update.Arguments[0]);
+            Assert.Equal(["z-cache", "api", "worker"], resources.Select(resource => resource.Name));
+        });
+    }
+
+    [Fact]
+    public async Task Render_GraphSelectionChanges_UpdateResourcesImmediately()
+    {
+        var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        module.Mode = JSRuntimeMode.Loose;
+        var cut = RenderSummary();
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Graph));
+        cut.WaitForAssertion(() => Assert.Contains(module.Invocations, invocation => invocation.Identifier == "updateResourcesGraph"));
+
+        List<ResourceDto> GetGraphResources() =>
+            Assert.IsType<List<ResourceDto>>(module.Invocations.Last(invocation => invocation.Identifier == "updateResourcesGraph").Arguments[0]);
+
+        await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["api"])));
+        cut.WaitForAssertion(() => Assert.Equal(["api"], GetGraphResources().Select(resource => resource.Name)));
+
+        await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, null)));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "broken"], GetGraphResources().Select(resource => resource.Name).Order(StringComparer.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("api", false)]
+    [InlineData("no-matches", false)]
+    [InlineData("api", true)]
+    [InlineData("no-matches", true)]
+    public async Task GraphTagSelection_UsesGraphScopeInsteadOfSidebarSearch(string search, bool scoped)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api-1", displayName: "api"),
+                ModelTestHelpers.CreateResource("api-2", displayName: "api"),
+                ModelTestHelpers.CreateResource("api-hidden", displayName: "api", hidden: true),
+                ModelTestHelpers.CreateResource("cache"),
+                ModelTestHelpers.CreateResource("worker"),
+                ModelTestHelpers.CreateResource("other"),
+                ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter),
+                ModelTestHelpers.CreateResource("hidden-parameter", resourceType: KnownResourceTypes.Parameter, hidden: true)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        var tags = Services.GetRequiredService<ResourceTagStore>();
+        foreach (var name in new[] { "api", "worker", "other", "parameter", "hidden-parameter" })
+        {
+            await tags.AddTagAsync(name, "Backend");
+        }
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("cache"));
+        var layout = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        layout.WaitForAssertion(() => Assert.True(layout.Instance.IsLoaded));
+        var sidebarSearch = layout.FindComponent<FluentTextInput>();
+        await sidebarSearch.InvokeAsync(() => sidebarSearch.Instance.ValueChanged.InvokeAsync(search));
+        Assert.Equal(search == "api" ? ["api-1", "api-2"] : [],
+            layout.FindAll(".resource-tag-group .resource-row-name").Select(row => row.TextContent.Trim()));
+
+        var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        module.Mode = JSRuntimeMode.Loose;
+        var graph = Render<ApplicationSummary>(builder => builder
+            .AddCascadingValue(viewport)
+            .AddCascadingValue(layout.Instance)
+            .Add(p => p.ResourceNames, scoped ? ["api-1", "worker"] : null));
+        await graph.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Graph));
+        graph.WaitForAssertion(() =>
+        {
+            var update = module.Invocations.Last(invocation => invocation.Identifier == "updateResourcesGraph");
+            var nodes = Assert.IsType<List<ResourceDto>>(update.Arguments[0]);
+            Assert.Equal(scoped ? ["api-1", "worker"] : ["api-1", "api-2", "cache", "other", "worker"],
+                nodes.Select(resource => resource.Name));
+            Assert.Equal(scoped ? ["api-1", "worker"] : ["api-1", "api-2", "other", "worker"],
+                nodes.Where(resource => resource.Tags.Any(tag => tag.Name == "Backend")).Select(resource => resource.Name));
+        });
+
+        var initialize = Assert.Single(module.Invocations, invocation => invocation.Identifier == "initializeResourcesGraph");
+        var interop = Assert.IsType<DotNetObjectReference<ApplicationSummary.ApplicationSummaryInterop>>(initialize.Arguments[0]).Value;
+        await graph.InvokeAsync(() => interop.SelectTagGroup("bAcKeNd", new MouseEventArgs()));
+        layout.Render();
+
+        layout.WaitForAssertion(() => Assert.Equal(scoped ? ["api-1", "api-2", "parameter", "worker"] : ["api-1", "api-2", "other", "parameter", "worker"],
+            layout.Instance.SelectedResourceNames.Order(StringComparer.Ordinal)));
     }
 
     [Fact]
@@ -197,7 +537,7 @@ public class ApplicationSummaryTests : DashboardTestContext
     [InlineData(false, false)]
     [InlineData(true, true)]
     [InlineData(false, true)]
-    public void Render_LayoutToggleChangesViewsWithMissingParameters(bool isDesktop, bool missingParameters)
+    public async Task Render_LayoutToggleChangesViewsWithMissingParameters(bool isDesktop, bool missingParameters)
     {
         var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: !isDesktop);
         JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
@@ -217,15 +557,272 @@ public class ApplicationSummaryTests : DashboardTestContext
             Assert.Contains("parameter", outlet.Find(".missing-parameters-link").GetAttribute("href"));
         }
 
-        outlet.Find("[aria-label='Graph']").Click();
+        await outlet.InvokeAsync(() => outlet.Find("[aria-label='Graph']").ClickAsync());
         cut.WaitForAssertion(() => Assert.False(cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
         Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
         Assert.Equal("true", outlet.Find("[aria-label='Graph']").GetAttribute("aria-pressed"));
 
-        outlet.Find("[aria-label='Summary']").Click();
+        await outlet.InvokeAsync(() => outlet.Find("[aria-label='Summary']").ClickAsync());
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home-hero")));
         Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
         Assert.Equal("true", outlet.Find("[aria-label='Summary']").GetAttribute("aria-pressed"));
+    }
+
+    [Fact]
+    public async Task Recording_ActivityWindowEndsAtLastRequest()
+    {
+        // Much older than the activity window, which would be empty if it ended at the current time.
+        var requestTime = new DateTime(2020, 1, 15, 12, 0, 10, DateTimeKind.Utc);
+        var cut = await RenderRecordingSummaryAsync(writer => writer.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = TelemetryTestHelpers.CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope(),
+                        Spans =
+                        {
+                            TelemetryTestHelpers.CreateSpan(traceId: "1", spanId: "1", startTime: requestTime, endTime: requestTime.AddSeconds(1), kind: Span.Types.SpanKind.Server)
+                        }
+                    }
+                }
+            }
+        }));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("Activity", cut.Find("#home-activity-title").TextContent);
+            Assert.Empty(cut.FindAll(".home-live-dot"));
+            Assert.Single(cut.FindAll(".home-chart-bar"));
+            Assert.Equal(2, cut.FindAll(".home-chart-axis span").Count);
+        });
+    }
+
+    [Fact]
+    public async Task Recording_ManyErrorLogsAfterWindow_DoesNotHideErrorsInWindow()
+    {
+        var requestTime = new DateTime(2020, 1, 15, 12, 0, 10, DateTimeKind.Utc);
+        var cut = await RenderRecordingSummaryAsync(async writer =>
+        {
+            await writer.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = TelemetryTestHelpers.CreateResource(),
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = TelemetryTestHelpers.CreateScope(),
+                            Spans =
+                            {
+                                TelemetryTestHelpers.CreateSpan(traceId: "1", spanId: "1", startTime: requestTime, endTime: requestTime.AddSeconds(1), kind: Span.Types.SpanKind.Server)
+                            }
+                        }
+                    }
+                }
+            });
+
+            // More logs after the window than the activity summary reads, and one in the window.
+            var logTimes = Enumerable.Range(1, 501).Select(i => requestTime.AddHours(1).AddSeconds(i)).Prepend(requestTime);
+            await writer.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+            {
+                new ResourceLogs
+                {
+                    Resource = TelemetryTestHelpers.CreateResource(),
+                    ScopeLogs =
+                    {
+                        new ScopeLogs
+                        {
+                            Scope = TelemetryTestHelpers.CreateScope(),
+                            LogRecords =
+                            {
+                                logTimes.Select(time => TelemetryTestHelpers.CreateLogRecord(time: time, observedTime: time, severity: SeverityNumber.Error)),
+                                TelemetryTestHelpers.CreateLogRecord(time: requestTime, severity: SeverityNumber.Unspecified)
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var hotspot = cut.FindAll(".home-event-meta span").Select(span => span.TextContent);
+            Assert.Contains("1 error logs", hotspot);
+        }, DefaultWaitTimeout);
+    }
+
+    [Fact]
+    public async Task Recording_WithoutRequests_HidesActivityAxis()
+    {
+        var cut = await RenderRecordingSummaryAsync(_ => Task.CompletedTask);
+
+        cut.WaitForAssertion(() => Assert.Equal("No requests were recorded in this run.", cut.Find(".home-chart-empty").TextContent));
+        Assert.Empty(cut.FindAll(".home-chart-axis"));
+    }
+
+    [Fact]
+    public async Task Live_InitialScopeAndSelectionChangeLoadWithoutWaitingForLiveRefresh()
+    {
+        var holding = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ComponentFactories.Add(() =>
+        {
+            var summary = Activator.CreateInstance<ApplicationSummary>();
+            summary.TelemetryRefreshDelayAsync = (_, cancellationToken) =>
+            {
+                holding.TrySetResult();
+                return held.Task.WaitAsync(cancellationToken);
+            };
+            return summary;
+        });
+
+        // A scoped initial render must not show the request belonging to the unselected resource.
+        var context = await RenderLiveSummaryAsync(GroupOverview.Summary, resourceNames: ["missing"], resourceKeys: []);
+        var cut = context.Summary;
+        cut.WaitForAssertion(() => Assert.Equal("0", cut.Find(".home-activity-totals a:nth-child(2) strong").TextContent));
+
+        context.Timers.Advance(ApplicationSummary.s_activityBucketSize);
+        await holding.Task.WaitAsync(DefaultWaitTimeout);
+
+        await cut.InvokeAsync(() => cut.Render(builder => builder
+            .Add(p => p.ResourceNames, ["TestService-TestId"])
+            .Add(p => p.TelemetryResourceKeys, [new("TestService", "TestId")])));
+        cut.WaitForAssertion(() => Assert.Equal("1", cut.Find(".home-activity-totals a:nth-child(2) strong").TextContent));
+    }
+
+    [Fact]
+    public async Task Live_RequestsAgeOutOfActivityWindowWithoutNewTelemetry()
+    {
+        var context = await RenderLiveSummaryAsync(GroupOverview.Summary);
+        var cut = context.Summary;
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".home-chart-bar"));
+            Assert.All(cut.FindAll(".home-stat-value").Skip(1), stat => Assert.NotEqual("–", stat.TextContent));
+        }, DefaultWaitTimeout);
+        var requestRate = cut.Find(".home-stat-value").TextContent;
+
+        context.Clock.UtcNow += TimeSpan.FromMinutes(16);
+        context.Timers.Advance(TimeSpan.FromSeconds(30));
+
+        // The request rate, error rate and latency expire with the request, not only the chart.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".home-chart-bar"));
+            Assert.Equal(["–", "–"], cut.FindAll(".home-stat-value").Skip(1).Select(stat => stat.TextContent));
+            Assert.NotEqual(requestRate, cut.Find(".home-stat-value").TextContent);
+        }, DefaultWaitTimeout);
+    }
+
+    [Fact]
+    public async Task Live_GraphSkipsActivityAndSummaryLoadsImmediately()
+    {
+        JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        ComponentFactories.Add(() =>
+        {
+            var summary = Activator.CreateInstance<ApplicationSummary>();
+            summary.TelemetryRefreshDelayAsync = (_, token) => Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return summary;
+        });
+        var context = await RenderLiveSummaryAsync(GroupOverview.Graph);
+        context.Timers.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(0, Volatile.Read(ref context.RequestQueries.Count));
+
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await context.Summary.InvokeAsync(() => preferences.SetGroupOverviewAsync(GroupOverview.Summary));
+        await context.Summary.WaitForAssertionAsync(() => Assert.Single(context.Summary.FindAll(".home-chart-bar")));
+        Assert.Equal(1, Volatile.Read(ref context.RequestQueries.Count));
+    }
+
+    [Fact]
+    public async Task Live_DisposalStopsPeriodicRefresh()
+    {
+        var context = await RenderLiveSummaryAsync(GroupOverview.Summary);
+        context.Summary.WaitForAssertion(() => Assert.Single(context.Summary.FindAll(".home-chart-bar")), DefaultWaitTimeout);
+
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
+        var queries = Volatile.Read(ref context.RequestQueries.Count);
+        context.Timers.Advance(TimeSpan.FromSeconds(30));
+
+        // Longer than the delay before a queued refresh runs.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        Assert.Equal(queries, Volatile.Read(ref context.RequestQueries.Count));
+    }
+
+    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(GroupOverview overview, IReadOnlyList<string>? resourceNames = null, IReadOnlyList<ResourceKey>? resourceKeys = null)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var timers = new FakeTimeProvider();
+        var clock = new TestTimeProvider { Timers = timers };
+        var requestQueries = new QueryCounter();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("TestService-TestId", state: KnownResourceState.Running, resourceType: "Project")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services =>
+            {
+                services.AddSingleton<BrowserTimeProvider>(clock);
+                services.AddSingleton<ITelemetryRepository>(provider =>
+                {
+                    var inner = provider.GetRequiredService<SqliteTelemetryRepository>();
+                    return new TestTelemetryRepository(inner)
+                    {
+                        GetRequestSpansAsyncHandler = (request, token) =>
+                        {
+                            Interlocked.Increment(ref requestQueries.Count);
+                            return inner.GetRequestSpansAsync(request, token);
+                        }
+                    };
+                });
+            });
+
+        var requestTime = clock.GetUtcNow().UtcDateTime.AddSeconds(-1);
+        await Services.GetRequiredService<SqliteTelemetryRepository>().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = TelemetryTestHelpers.CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope(),
+                        Spans =
+                        {
+                            TelemetryTestHelpers.CreateSpan(traceId: "1", spanId: "1", startTime: requestTime, endTime: requestTime.AddMilliseconds(5), kind: Span.Types.SpanKind.Server)
+                        }
+                    }
+                }
+            }
+        });
+
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await preferences.EnsureLoadedAsync();
+        await preferences.SetGroupOverviewAsync(overview);
+        var cut = Render<ApplicationSummary>(builder => builder
+            .AddCascadingValue(viewport)
+            .Add(p => p.ResourceNames, resourceNames)
+            .Add(p => p.TelemetryResourceKeys, resourceKeys));
+        return new LiveSummaryContext(cut, clock, timers, requestQueries);
+    }
+
+    private async Task<IRenderedComponent<ApplicationSummary>> RenderRecordingSummaryAsync(Func<ITelemetryRepositoryWriter, Task> seed)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api", state: KnownResourceState.Finished, resourceType: "Project")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            isReadOnly: true),
+            configureServices: services => FluentUISetupHelpers.AddTelemetryRepositoryConfiguration(services, readOnly: true));
+        await FluentUISetupHelpers.SeedTelemetryRepositoryAsync(this, seed);
+
+        var cut = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Summary));
+        return cut;
     }
 
     private IRenderedComponent<ApplicationSummary> RenderSummary(ViewportInformation? viewport = null, bool missingParameters = false,
@@ -245,4 +842,11 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         return Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
     }
+
+    private sealed class QueryCounter
+    {
+        public int Count;
+    }
+
+    private sealed record LiveSummaryContext(IRenderedComponent<ApplicationSummary> Summary, TestTimeProvider Clock, FakeTimeProvider Timers, QueryCounter RequestQueries);
 }

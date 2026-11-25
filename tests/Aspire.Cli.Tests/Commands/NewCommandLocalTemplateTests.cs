@@ -9,6 +9,7 @@ using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
@@ -1431,6 +1432,54 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task RepositoryTemplate_NotifiesBeforeGitAndKeepsCachedCommitsQuiet(bool interactive, bool pinnedCommit)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var notified = false;
+        var gitCommands = TestGitCommandRunner.CreateForTemplateCheckout(async (_, destination, _, _) =>
+        {
+            Assert.True(notified);
+            Directory.CreateDirectory(Path.Combine(destination.FullName, ".git"));
+            await CreateTemplateAsync(workspace, Path.GetRelativePath(workspace.Path, Path.Combine(destination.FullName, "template")));
+        });
+        var source = new TemplateSource("template", "-repository", pinnedCommit ? TestGitCommandRunner.DefaultCommitSha : "main");
+        var fetchSource = $"-repository ({SharedCommandStrings.SourceGitPath}: template, {SharedCommandStrings.SourceRef}: {source.RepositoryRef})";
+        var fetchMessage = $"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
+            SharedCommandStrings.GitFetchTemplates, fetchSource)}[/]";
+        interaction.DisplayMessageCallback = (emoji, message, consoleOverride) =>
+        {
+            if (message == fetchMessage)
+            {
+                Assert.Equal(KnownEmojis.InboxTray, emoji);
+                Assert.Equal(ConsoleOutput.Error, consoleOverride);
+                if (!notified)
+                {
+                    Assert.Empty(gitCommands.Commands);
+                }
+                notified = true;
+            }
+        };
+        var services = CreateServices(workspace, interaction, interactive);
+        services.AddSingleton<IGitCommandRunner>(gitCommands);
+        using var provider = services.BuildServiceProvider();
+        var templates = provider.GetRequiredService<ITemplateProvider>();
+
+        var first = Assert.Single(await templates.GetTemplatesAsync(source));
+        var cached = Assert.Single(await templates.GetTemplatesAsync(source));
+
+        Assert.Same(first, cached);
+        Assert.Single(gitCommands.Commands, command => command.Arguments[0] == "fetch");
+        Assert.All(gitCommands.Commands, command => Assert.Equal(GitCommandMode.Captured, command.Mode));
+        await Verify(string.Join(Environment.NewLine, interaction.DisplayedMessages.Select(message => message.Message)), "txt")
+            .UseParameters(interactive, pinnedCommit);
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
@@ -1697,7 +1746,10 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
                 arguments.AddRange(["--template-repository-ref", reference]);
             }
 
-            var exitCode = await provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync().DefaultTimeout();
+            // Fresh checkouts run real git init/fetch/checkout, which take 23-27s on loaded Windows
+            // runners. The product bounds each Git phase at two minutes, so a 30s hang guard is too tight.
+            var exitCode = await provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync()
+                .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
             outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Generation '{label}' returned {exitCode} after {stopwatch.Elapsed}.");
 
             Assert.Equal(CliExitCodes.Success, exitCode);

@@ -39,6 +39,7 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
+    private readonly ITemporaryStorage _temporaryStorage;
     private readonly Func<string, string?> _commandResolver;
     private readonly Func<string, CancellationToken, Task<string?>> _versionResolver;
     private readonly Func<string, string, CancellationToken, Task<string?>> _toolchainResolver;
@@ -49,12 +50,14 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
         CliExecutionContext executionContext,
         IEnvironment environment,
         IProcessExecutionFactory processExecutionFactory,
+        ITemporaryStorage temporaryStorage,
         ILogger<GoAppHostToolingCheck> logger)
         : this(
             projectLocator,
             languageDiscovery,
             executionContext,
             environment,
+            temporaryStorage,
             PathLookupHelper.FindFullPathFromPath,
             (path, cancellationToken) => RunProbeAsync(processExecutionFactory, CreateVersionProbeStartInfo(path), s_probeTimeout, logger, cancellationToken),
             (path, workingDirectory, cancellationToken) => RunProbeAsync(processExecutionFactory, CreateToolchainProbeStartInfo(path, workingDirectory), s_probeTimeout, logger, cancellationToken))
@@ -66,6 +69,7 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
         IEnvironment environment,
+        ITemporaryStorage temporaryStorage,
         Func<string, string?> commandResolver,
         Func<string, CancellationToken, Task<string?>> versionResolver,
         Func<string, string, CancellationToken, Task<string?>> toolchainResolver)
@@ -74,6 +78,7 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
         _languageDiscovery = languageDiscovery;
         _executionContext = executionContext;
         _environment = environment;
+        _temporaryStorage = temporaryStorage;
         _commandResolver = commandResolver;
         _versionResolver = versionResolver;
         _toolchainResolver = toolchainResolver;
@@ -206,12 +211,12 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
                 $"Install Go {MinimumGoVersion} or later, or put the {requiredToolchain} toolchain on PATH, then rerun 'aspire doctor'.");
         }
 
-        // With the default GOTOOLCHAIN=auto, `go run` downloads the toolchain that go.mod requires.
+        // With GOTOOLCHAIN=auto, Go checks PATH before downloading the required toolchain.
         return CreateVersionResult(
             appHostFile,
             version,
             EnvironmentCheckStatus.Warning,
-            $"Go {version} is installed. Go downloads the Go {MinimumGoVersion} toolchain the first time the AppHost runs, which needs network access.",
+            $"Go {version} is installed. Go uses a newer toolchain from PATH or downloads the Go {MinimumGoVersion} toolchain the first time the AppHost runs. Downloading requires network access.",
             $"Install Go {MinimumGoVersion} or later to avoid the download, then rerun 'aspire doctor'.");
     }
 
@@ -228,7 +233,7 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
         // so ask go for the effective value. Run it in a fresh empty directory, never the AppHost's: go
         // commands that read a go.mod or go.work can switch toolchains and download one, which doctor must
         // not do. A pinned GOTOOLCHAIN=<name> is not modelled; the check validates the Go on PATH.
-        var probeDirectory = Directory.CreateTempSubdirectory("aspire-go-doctor-");
+        var probeDirectory = _temporaryStorage.CreateTempSubdirectory("aspire-go-doctor-");
 
         try
         {

@@ -371,6 +371,13 @@
     <value>Resource actions for {0}</value>
     <comment>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</comment>
   </data>
+  <data name="ResourcesGraphTagActionsButton" xml:space="preserve">
+    <value>Tag actions for {0}</value>
+    <comment>Accessible label and tooltip for the cog on a graph tag label. {0} is the tag name.</comment>
+  </data>
+  <data name="ResourcesGraphTagNoCommands" xml:space="preserve">
+    <value>No commands for this group</value>
+  </data>
   <data name="ResourcesHideTypes" xml:space="preserve">
     <value>Hide resource types</value>
   </data>
@@ -556,6 +563,10 @@
   <data name="ResourceOverviewInternalEndpoint" xml:space="preserve">
     <value>Internal</value>
   </data>
+  <data name="ResourceOverviewEndpointAlsoAt" xml:space="preserve">
+    <value>{0}, also at {1}</value>
+    <comment>Tooltip of an endpoint's address on the resource overview. {0} is the address, {1} is the same endpoint's other address, such as its localhost address</comment>
+  </data>
   <data name="ResourceOverviewCountOfTotal" xml:space="preserve">
     <value>{0} of {1}</value>
   </data>
@@ -592,8 +603,17 @@
   <data name="HomePendingLabel" xml:space="preserve">
     <value>Pending</value>
   </data>
-  <data name="HomeInactiveLabel" xml:space="preserve">
-    <value>Inactive</value>
+  <data name="HomeFinishedLabel" xml:space="preserve">
+    <value>Finished</value>
+    <comment>Legend label on the overview's health bar for resources that finished or exited without an error</comment>
+  </data>
+  <data name="HomeNotStartedLabel" xml:space="preserve">
+    <value>Not started</value>
+    <comment>Legend label on the overview's health bar for resources that haven't been started</comment>
+  </data>
+  <data name="HomeUnknownLabel" xml:space="preserve">
+    <value>Unknown</value>
+    <comment>Legend label on the overview's health bar for resources whose state the dashboard can't tell</comment>
   </data>
   <data name="HomeTelemetryLandmark" xml:space="preserve">
     <value>Telemetry</value>
@@ -638,6 +658,9 @@
     <value>{0} · {1} requests, {2} failed</value>
     <comment>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</comment>
   </data>
+  <data name="HomeActivityBucketTraceHint" xml:space="preserve">
+    <value>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</value>
+  </data>
   <data name="HomeActivityLoading" xml:space="preserve">
     <value>Loading activity…</value>
   </data>
@@ -660,9 +683,6 @@
     <value>p95</value>
     <comment>Abbreviation for the 95th percentile.</comment>
   </data>
-  <data name="HomeNoRecentRequests" xml:space="preserve">
-    <value>No requests in the last 15 minutes</value>
-  </data>
   <data name="HomeEndpointTooltip" xml:space="preserve">
     <value>{0}: {1} ({2} requests)</value>
     <comment>{0} is the resource name, {1} is the endpoint label, and {2} is the request count.</comment>
@@ -678,6 +698,10 @@
     <value>{0} requests</value>
     <comment>{0} is the request count.</comment>
   </data>
+  <data name="HomeSingleRequestCount" xml:space="preserve">
+    <value>{0} request</value>
+    <comment>{0} is the request count, which is one.</comment>
+  </data>
   <data name="HomeFailedCount" xml:space="preserve">
     <value>{0} failed</value>
     <comment>{0} is the failed request count.</comment>
@@ -687,9 +711,6 @@
   </data>
   <data name="HomeErrorHotspotsHint" xml:space="preserve">
     <value>failed requests + error logs</value>
-  </data>
-  <data name="HomeNoRecentActivityErrors" xml:space="preserve">
-    <value>No errors in the last 15 minutes</value>
   </data>
   <data name="HomeFailedRequestCount" xml:space="preserve">
     <value>{0} failed requests</value>
@@ -704,6 +725,10 @@
   </data>
   <data name="ResourceTagsAdd" xml:space="preserve">
     <value>Add tag</value>
+  </data>
+  <data name="ResourceTagsLimitReached" xml:space="preserve">
+    <value>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</value>
+    <comment>{0} is the maximum number of user-added resource tag assignments.</comment>
   </data>
   <data name="ResourceTagsInputPlaceholder" xml:space="preserve">
     <value>Tag name</value>
@@ -721,9 +746,9 @@
     <value>Dashboard tags</value>
     <comment>Name of the property listing the tags a resource declares in the AppHost.</comment>
   </data>
-  <data name="ResourceTraitDashboardPosition" xml:space="preserve">
-    <value>Dashboard position</value>
-    <comment>Name of the property holding the default position a resource declares in the AppHost.</comment>
+  <data name="ResourceDisplayOrder" xml:space="preserve">
+    <value>Display order</value>
+    <comment>Name of the property holding the default display order a resource declares in the AppHost.</comment>
   </data>
   <data name="ResourceTagsCreate" xml:space="preserve">
     <value>Create tag "{0}"</value>
@@ -766,5 +791,14 @@
   </data>
   <data name="MissingParametersSetValues" xml:space="preserve">
     <value>Set parameter values</value>
+  </data>
+  <data name="HomeActivityHistoricalTitle" xml:space="preserve">
+    <value>Activity</value>
+  </data>
+  <data name="HomeActivityHistoricalCaption" xml:space="preserve">
+    <value>Incoming requests · last 15 min of this run</value>
+  </data>
+  <data name="HomeActivityNoRecordedRequests" xml:space="preserve">
+    <value>No requests were recorded in this run.</value>
   </data>
 </root>

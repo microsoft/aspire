@@ -2,7 +2,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .notification-center-empty {
@@ -12,7 +12,7 @@
     justify-content: center;
     padding: 40px 16px;
     color: var(--colorNeutralForeground3);
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .notifications-dismiss {
@@ -22,7 +22,7 @@
 
 ::deep .notifications-dismiss-all {
     padding: 0 2px;
-    font-size: 14px;
+    font-size: var(--aspire-font-size-body);
     line-height: 20px;
 }
 

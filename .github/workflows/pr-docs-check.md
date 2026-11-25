@@ -45,7 +45,9 @@ if: >-
 # The prompt reserves the final calls for completion, queues the notification
 # before terminal PR creation, and prohibits retrying deterministic failures.
 # Keep the cap as a backstop; incomplete output still fails outcome validation.
-max-turns: 50
+# Raised from 50 to 80 after large docs PRs hit "Maximum LLM invocations
+# exceeded (50 / 50)" (#21157).
+max-turns: 80
 
 checkout:
   # Check out aspire.dev EXACTLY ONCE, as the current workspace, because that is
@@ -134,6 +136,7 @@ jobs:
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
           owner: microsoft
           repositories: aspire.dev
+          permission-pull-requests: read
       - name: Resolve drafted PR base
         id: drafted-pr-base
         if: needs.safe_outputs.outputs.created_pr_url != ''
@@ -283,6 +286,8 @@ safe-outputs:
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire.dev
+            # Reads the drafted PR base and requests the SME reviewer.
+            permission-pull-requests: write
         - name: Resolve drafted PR base
           id: drafted-pr-base
           if: needs.safe_outputs.outputs.created_pr_url != ''
@@ -326,6 +331,9 @@ safe-outputs:
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire
+            # Lists, minimizes, and creates comments on the source pull request.
+            permission-issues: write
+            permission-pull-requests: write
         - name: Post status comment on source PR
           uses: actions/github-script@v9.0.0
           env:
@@ -571,6 +579,10 @@ pre-agent-steps:
       repositories: |
         aspire
         aspire.dev
+      # Reads source PR and linked issue metadata, and aspire.dev branches.
+      permission-contents: read
+      permission-issues: read
+      permission-pull-requests: read
   - name: Resolve and check out target aspire.dev branch
     id: resolve-target
     env:
@@ -1063,7 +1075,7 @@ needed, create a draft PR with the actual documentation changes.
 
 ## Execution budget and completion
 
-Keep research bounded within the 50-invocation limit. Read the prepared
+Keep research bounded within the 80-invocation limit. Read the prepared
 `.pr-docs-check/` inputs together, batch related searches and file reads, and
 start finalizing by invocation 35 so editing and both safe outputs have room.
 Do not repeat searches once you have enough evidence for the smallest accurate

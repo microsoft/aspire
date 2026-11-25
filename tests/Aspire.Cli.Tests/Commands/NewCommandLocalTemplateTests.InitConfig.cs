@@ -10,14 +10,70 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared.Telemetry;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
 
 public partial class NewCommandLocalTemplateTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task InitConfigSources_DetectedSourceTemplatesAppearOnlyAfterAcceptance(bool accept)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateSearchTemplateAsync(workspace, "enterprise", "enterprise", "Enterprise", "Enterprise");
+        await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("Hello");
+        interaction.ConfirmCallback = (_, _) => accept;
+        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
+        {
+            var options = choices.Cast<object>().ToArray();
+            Assert.Equal(accept
+                ? ["Enterprise (enterprise) - enterprise", "Personal (personal) - personal"]
+                : new[] { "Personal (personal) - personal" },
+                options.Select(formatter).TakeLast(accept ? 2 : 1));
+            return options[accept ? ^2 : ^1];
+        };
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (source, _) =>
+            {
+                Assert.Equal(ConfigSourceService.MicrosoftRepository, source.Repository);
+                return Task.FromResult(("version-1", JsonNode.Parse($$"""
+                    {
+                      "templateSources": {
+                        "enterprise": { "path": {{JsonSerializer.Serialize(Path.Combine(workspace.Path, "enterprise"))}} }
+                      }
+                    }
+                    """)!.AsObject()));
+            }
+        };
+        var services = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true);
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        services.AddSingleton<IInternalMicrosoftDetector>(new TestConfigSourceDetector { IsInternal = true });
+        using var provider = services.BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["personal"] = Path.Combine(workspace.Path, "personal") });
+        var globalPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
+        var originalGlobal = await File.ReadAllTextAsync(globalPath);
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(accept ? 1 : 0, git.Calls);
+        Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
+        Assert.Equal(accept ? "Enterprise: Hello" : "Personal: Hello",
+            await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
+    }
+
     [Theory]
     [InlineData("new --help")]
     [InlineData("template source list --help")]
@@ -162,7 +218,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, selectionCount);
         Assert.Equal(1, git.Calls);
         Assert.Equal(
-            [new SelectionChoiceGroup("source:enterprise", "Team [templates]"), new SelectionChoiceGroup("source:personal", "Team [templates]")],
+            [new SelectionChoiceGroup("source:enterprise", "Team [templates]") { Style = new Style(Color.Green) },
+                new SelectionChoiceGroup("source:personal", "Team [templates]") { Style = new Style(Color.Green) }],
             Assert.Single(interaction.GroupedSelectionPromptCalls).TakeLast(2).Select(choice => choice.Group));
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
         var projectConfig = Path.Combine(workspace.Path, "out", AspireConfigFile.FileName);
@@ -178,14 +235,15 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
         var interaction = new TestInteractionService();
+        interaction.ConfirmCallback = (prompt, _) =>
+        {
+            Assert.Equal(ConfigSourceStrings.NewUseSourcePrompt, prompt);
+            return false;
+        };
         interaction.SetupStringPromptResponse("Hello");
         var selectionCount = 0;
-        interaction.PromptForSelectionCallback = (prompt, choices, formatter, _) =>
+        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
-            if (prompt == ConfigSourceStrings.UseSourcePrompt)
-            {
-                return ConfigSourceStrings.Decline;
-            }
             var options = choices.Cast<object>().ToArray();
             selectionCount++;
             Assert.Equal(

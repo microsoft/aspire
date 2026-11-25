@@ -414,7 +414,7 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
   else
     log "Building bundle (aspire-managed + DCP)..."
     set +e
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "${PACK_VERSION_ARGS[@]}" "/p:TargetRid=$BUNDLE_RID"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipCliArtifacts=true "${PACK_VERSION_ARGS[@]}" "/p:TargetRid=$BUNDLE_RID"
     rc=$?
     set -e
   fi

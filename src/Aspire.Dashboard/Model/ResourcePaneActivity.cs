@@ -9,7 +9,7 @@ namespace Aspire.Dashboard.Model;
 internal sealed record ResourcePaneActivitySnapshot(
     ResourcePaneActivity Activity, DateTime WindowStart, DateTime WindowEnd, DateTime Refreshed, bool Sampled);
 
-internal sealed record ResourcePaneActivity(int Count, int FailedCount, TimeSpan? P95, int DurationSampleCount, DateTime LatestStartTime)
+internal sealed record ResourcePaneActivity(int TraceCount, int FailedTraceCount, TimeSpan? P95, int DurationSampleCount, DateTime LatestStartTime)
 {
     internal static IReadOnlyDictionary<ResourceKey, ResourcePaneActivity> Summarize(GetRequestSpansResponse response) =>
         response.Items.GroupBy(span => span.Resource.ResourceKey).ToDictionary(group => group.Key, group =>
@@ -23,8 +23,8 @@ internal sealed record ResourcePaneActivity(int Count, int FailedCount, TimeSpan
                 ? (TimeSpan?)durations[(int)Math.Ceiling(durations.Length * 0.95) - 1]
                 : null;
             return new ResourcePaneActivity(
-                group.Count(),
-                group.Count(span => span.Status == OtlpSpanStatusCode.Error),
+                group.Select(span => span.TraceId).Distinct(StringComparers.OtlpTraceId).Count(),
+                group.Where(span => span.Status == OtlpSpanStatusCode.Error).Select(span => span.TraceId).Distinct(StringComparers.OtlpTraceId).Count(),
                 p95,
                 durations.Length,
                 group.Max(span => span.StartTime));

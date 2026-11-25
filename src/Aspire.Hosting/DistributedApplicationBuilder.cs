@@ -391,7 +391,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         // Core things
         // Create and register the directory service (first, so it can be used by other services)
-        _directoryService = new FileSystemService(_innerBuilder.Configuration);
+        // The builder allocates temporary storage before the service provider exists, so it creates the
+        // shared instance here and registers the same instance for later consumers.
+        var temporaryStorage = new TemporaryStorage();
+        _innerBuilder.Services.AddSingleton<ITemporaryStorage>(temporaryStorage);
+        _directoryService = new FileSystemService(_innerBuilder.Configuration, temporaryStorage);
         _innerBuilder.Services.AddSingleton<IFileSystemService>(sp =>
         {
             _directoryService.SetLogger(sp.GetRequiredService<ILogger<FileSystemService>>());
@@ -582,9 +586,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddEventingSubscriber<DevcontainerPortForwardingEventingSubscriber>();
 
             // Required command validation for resources
-#pragma warning disable ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
-#pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
             _innerBuilder.Services.TryAddEventingSubscriber<DotnetBuildCommandEventingSubscriber>();
 
@@ -610,6 +612,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
             _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<AppHostLocalStateStore>();
+            _innerBuilder.Services.AddSingleton<PersistentPortAllocationStore>();
+            _innerBuilder.Services.AddSingleton<PersistentPortAllocator>();
             _innerBuilder.Services.AddSingleton<ContainerNetworkEndpointProvisioner>();
             _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
             _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
@@ -637,6 +642,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, WslcContainerRuntime>(KnownContainerRuntimes.Wslc);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<ContainerRuntimeReadiness>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();

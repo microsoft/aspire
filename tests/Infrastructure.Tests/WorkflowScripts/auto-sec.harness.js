@@ -27,6 +27,23 @@ const vm = require('node:vm');
 
 const gate = require(path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'auto-sec', 'auto-sec.js'));
 
+// Model the generated agent-job steps that publication conditions reference:
+//   if: always() && steps.redact_secrets.outcome == 'success' && steps.auto_sec_scrub.outcome == 'success'
+//       && steps.validate_recovery_envelopes.outcome == 'success' ...
+// The guard replaces redaction with a withheld-telemetry echo, so it always succeeds.
+// The recovery validators run after the scrub under the same publication guard, so
+// they succeed only when publication is authorized and are skipped otherwise.
+function generatedStepOutcomes(scrubOutcome, scrubOutputs) {
+    const published = scrubOutcome === 'success' && scrubOutputs?.publication_ready === 'true';
+    const validator = { outcome: published ? 'success' : 'skipped' };
+    return {
+        auto_sec_scrub: { outcome: scrubOutcome, outputs: scrubOutputs },
+        redact_secrets: { outcome: 'success' },
+        validate_recovery_envelopes: validator,
+        validate_final_recovery_envelopes: validator,
+    };
+}
+
 function reviveDates(value) {
     if (value && typeof value === 'object' && typeof value.now === 'string') {
         return { ...value, now: new Date(value.now) };
@@ -631,7 +648,7 @@ async function main() {
                 // so a failed scrub would expose the original unconditional publishers.
                 // Expressions come only from the trusted workflow fixture, never agent data.
                 const publications = (request.publicationConditions ?? []).filter(condition => vm.runInNewContext(condition, {
-                    steps: { auto_sec_scrub: { outcome: failures.length > 0 ? 'failure' : 'success', outputs: stepOutputs } },
+                    steps: generatedStepOutcomes(failures.length > 0 ? 'failure' : 'success', stepOutputs),
                     always: () => true,
                     success: () => failures.length === 0,
                 }, { timeout: 1000 }));
@@ -671,7 +688,7 @@ async function main() {
         }
         case 'publication-decisions': {
             const publications = request.conditions.filter(condition => vm.runInNewContext(condition, {
-                steps: { auto_sec_scrub: { outcome: request.outcome, outputs: request.stepOutputs } },
+                steps: generatedStepOutcomes(request.outcome, request.stepOutputs),
                 always: () => true,
                 success: () => request.outcome === 'success',
             }, { timeout: 1000 }));

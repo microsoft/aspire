@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class MigrationStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal MigrationStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The following migrations will be applied:.
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AvailableMigrationsHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Apply these migrations?.
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfirmApplyPrompt", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Migrating to apphost.mts.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MigratingStatus", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Migration cancelled. No changes were made..
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MigrationCancelled", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Migrated &apos;{0}&apos; to &apos;{1}&apos;..
         /// </summary>
@@ -104,7 +104,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MigrationSucceededFormat", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No automatic migrations apply. This AppHost still uses Aspire.AppHost.Sdk (ASPIRE012), which is obsolete. See https://aka.ms/aspire/diagnostics/aspire012 for how to migrate..
+        /// </summary>
+        internal static string NoAutomaticMigrationsAppHostSdkObsolete {
+            get {
+                return ResourceManager.GetString("NoAutomaticMigrationsAppHostSdkObsolete", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Nothing to migrate. The current project is already using the latest recommended Aspire conventions..
         /// </summary>
@@ -113,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NothingToMigrate", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Migration completed, but regenerating the SDK code failed. Run &apos;aspire restore&apos; to regenerate it..
         /// </summary>
@@ -122,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("RegenerateFailedWarning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Regenerating SDK code.
         /// </summary>
@@ -131,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("RegeneratingStatus", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Migrate &apos;{0}&apos; to &apos;{1}&apos; (rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json)..
         /// </summary>

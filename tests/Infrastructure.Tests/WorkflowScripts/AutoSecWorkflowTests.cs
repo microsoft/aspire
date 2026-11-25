@@ -1772,7 +1772,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
             ["outputLines"] = new JsonArray(
                 new JsonObject { ["type"] = "create_pull_request", ["branch"] = "auto-sec/security-updates", ["title"] = "Automated dependency updates", ["body"] = PublicTextBody.Replace("\r\n", "\n") }.ToJsonString(),
                 new JsonObject { ["type"] = "approve_dependabot_pr", ["pr_number"] = 101, ["head_sha"] = headSha, ["note"] = "fixes alert 42" }.ToJsonString(),
-                new JsonObject { ["type"] = "missing_tool", ["tool"] = "alerts", ["reason"] = "alert 42 needs a tool" }.ToJsonString(),
+                new JsonObject { ["type"] = "report_missing_tool", ["tool"] = "alerts", ["reason"] = "alert 42 needs a tool" }.ToJsonString(),
                 new JsonObject { ["type"] = "noop", ["message"] = "alerts=2 dependabot-pr=1 auto-sec-pr=1 blocked=0 code-findings-out-of-scope=5" }.ToJsonString()),
             ["patchFiles"] = new JsonObject { ["aw-auto-sec-security-updates.patch"] = PublicTextPatch.Replace("\r\n", "\n") },
             ["workFiles"] = new JsonObject
@@ -3505,6 +3505,9 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
     [InlineData("unexpected-private-action")]
     [InlineData("missing-gateway-mask")]
     [InlineData("late-mcp-cli-mount")]
+    [InlineData("rate-limit-same-line")]
+    [InlineData("rate-limit-separate-line")]
+    [InlineData("rate-limit-extra-property")]
     public async Task PublicationGuardRejectsUnexpectedCompilerLayout(string scenario)
     {
         var workflow = PublicationGuardFixture.ReplaceLineEndings("\n");
@@ -3529,6 +3532,12 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
             "missing-gateway-mask" => workflow.Replace("echo \"::add-mask::${MCP_GATEWAY_AGENT_ID}\"", "echo renamed-mask", StringComparison.Ordinal),
             "late-mcp-cli-mount" => workflow.Replace("name: Stop MCP Gateway", "name: Mount MCP servers as CLIs", StringComparison.Ordinal)
                 .Replace("        run: bash stop-gateway.sh", "        uses: actions/github-script@example", StringComparison.Ordinal),
+            "rate-limit-same-line" => InsertTamperedRateLimit(workflow, step => step.Replace("            await fetchAndLogRateLimit",
+                "            console.log(require('fs').readFileSync('/tmp/gh-aw/agent-stdio.log', 'utf8')); await fetchAndLogRateLimit", StringComparison.Ordinal)),
+            "rate-limit-separate-line" => InsertTamperedRateLimit(workflow, step => step.Replace("            await fetchAndLogRateLimit",
+                "            console.log(require('fs').readFileSync('/tmp/gh-aw/agent-stdio.log', 'utf8'));\n            await fetchAndLogRateLimit", StringComparison.Ordinal)),
+            "rate-limit-extra-property" => InsertTamperedRateLimit(workflow, step => step.Replace("        continue-on-error: true\n",
+                "        continue-on-error: true\n        env:\n          NODE_OPTIONS: --require /tmp/gh-aw/agent/hook.js\n", StringComparison.Ordinal)),
             _ => throw new InvalidOperationException(),
         };
         var result = await RunHarnessAsync(new JsonObject { ["mode"] = "publication-guard", ["workflow"] = workflow });
@@ -3540,6 +3549,55 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         {
             Assert.StartsWith("auto-sec publication guard:", result["error"]!.GetValue<string>());
         }
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PublicationGuardLeavesGeneratedRateLimitLoggersUnchanged()
+    {
+        var start = RateLimitStep("agent_start");
+        var end = RateLimitStep("agent_end");
+        var workflow = PublicationGuardFixture.ReplaceLineEndings("\n")
+            .Replace("      - name: Execute GitHub Copilot CLI\n", start + "      - name: Execute GitHub Copilot CLI\n", StringComparison.Ordinal)
+            .Replace("      - name: Detect agent errors\n", end + "      - name: Detect agent errors\n", StringComparison.Ordinal);
+
+        var result = await RunHarnessAsync(new JsonObject { ["mode"] = "publication-guard", ["workflow"] = workflow });
+
+        var guarded = result["value"]!.GetValue<string>();
+        Assert.Contains(start, guarded, StringComparison.Ordinal);
+        Assert.Contains(end, guarded, StringComparison.Ordinal);
+    }
+
+    // Mirrors the generated gh-aw v1.2.2 logger step that the guard audits line for line.
+    private static string RateLimitStep(string operation)
+    {
+        string[] condition = operation == "agent_end" ? ["        if: always()"] : [];
+        string[] lines =
+        [
+            $"      - name: Log GitHub rate limits at {operation.Replace('_', ' ')}",
+            .. condition,
+            "        continue-on-error: true",
+            "        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0",
+            "        with:",
+            "          github-token: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}",
+            "          script: |",
+            "            const path = require('path');",
+            "            const actionsDir = path.join(process.env.RUNNER_TEMP, 'gh-aw', 'actions');",
+            "            const { setupGlobals } = require(path.join(actionsDir, 'setup_globals.cjs'));",
+            "            setupGlobals(core, github, context, exec, io, getOctokit);",
+            "            const { fetchAndLogRateLimit } = require(path.join(actionsDir, 'github_rate_limit_logger.cjs'));",
+            $"            await fetchAndLogRateLimit(github, '{operation}', true);",
+            "",
+        ];
+        return string.Join('\n', lines);
+    }
+
+    private static string InsertTamperedRateLimit(string workflow, Func<string, string> tamper)
+    {
+        var step = RateLimitStep("agent_end");
+        var tampered = tamper(step);
+        Assert.NotEqual(step, tampered);
+        return workflow.Replace("      - name: Detect agent errors\n", tampered + "      - name: Detect agent errors\n", StringComparison.Ordinal);
     }
 
     private const string PublicationGuardFixture = """

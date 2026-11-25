@@ -13,7 +13,7 @@ func main() {
 	}
 
 	adminPassword := builder.AddParameter("seq-admin-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
-	seq := builder.AddSeq("seq", adminPassword, &aspire.AddSeqOptions{Port: aspire.Float64Ptr(5341)})
+	seq := builder.AddSeq("seq", adminPassword, &aspire.AddSeqOptions{Port: aspire.IntPtr(5341)})
 
 	seq.WithDataVolume()
 	seq.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("seq-data"), IsReadOnly: aspire.BoolPtr(false)})

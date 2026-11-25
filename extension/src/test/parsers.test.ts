@@ -7,6 +7,7 @@ import { AppHostResourceParser, getParserForDocument, getSupportedLanguageIds, g
 import { __resetTreeSitterForTests, initializeTreeSitter } from '../editor/parsers/treeSitter';
 // Import parsers so they self-register
 import '../editor/parsers/csharpAppHostParser';
+import '../editor/parsers/goAppHostParser';
 import '../editor/parsers/javaAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
 import '../editor/parsers/rustAppHostParser';
@@ -31,6 +32,7 @@ suite('AppHostResourceParser registry', () => {
         assert.ok(ids.includes('javascript'), 'Should support javascript');
         assert.ok(ids.includes('rust'), 'Should support rust');
         assert.ok(ids.includes('java'), 'Should support java');
+        assert.ok(ids.includes('go'), 'Should support go');
     });
 
     test('initializes Tree-sitter once for concurrent callers', async () => {

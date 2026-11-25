@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECONNECTIONSTRINGS001
-
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -237,12 +235,12 @@ internal sealed class AzureAppServiceWebsiteContext(
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
-#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+#pragma warning disable ASPIREAZURE005 // IBicepOutputReferenceProvider is experimental.
         if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
         {
             return ProcessValue(providedOutput, secretType, parent, isSlot);
         }
-#pragma warning restore ASPIREAZURE003
+#pragma warning restore ASPIREAZURE005
 
         if (value is IAzureKeyVaultSecretReference vaultSecretReference)
         {
@@ -1099,6 +1097,45 @@ internal sealed class AzureAppServiceWebsiteContext(
     {
         if (stickyConfigNames.Count == 0)
         {
+            return;
+        }
+
+        // A site can only have one slotConfigNames resource, so merge into one added by user customization if present.
+        var existingSlotConfigNames = Infra.GetProvisionableResources()
+            .OfType<SlotConfigNames>()
+            .FirstOrDefault(s => ReferenceEquals(s.Parent, parentWebSite));
+
+        if (existingSlotConfigNames is not null)
+        {
+            var appSettingNames = (IBicepValue)existingSlotConfigNames.AppSettingNames;
+            if (appSettingNames.Kind == BicepValueKind.Expression)
+            {
+                // The list is backed by an expression (e.g. a parameter), so compose it with Bicep union().
+                var mergedNames = new ProvisioningVariable($"{existingSlotConfigNames.BicepIdentifier}_appSettingNames", typeof(string[]))
+                {
+                    Value = new FunctionCallExpression(
+                        new IdentifierExpression("union"),
+                        appSettingNames.Compile(),
+                        new ArrayExpression([.. stickyConfigNames.Select(n => new StringLiteralExpression(n))]))
+                };
+                Infra.Add(mergedNames);
+                existingSlotConfigNames.AppSettingNames = mergedNames;
+                return;
+            }
+
+            var existingNames = existingSlotConfigNames.AppSettingNames
+                .Where(n => ((IBicepValue)n).Kind == BicepValueKind.Literal)
+                .Select(n => n.Value)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var stickyConfig in stickyConfigNames)
+            {
+                if (existingNames.Add(stickyConfig))
+                {
+                    existingSlotConfigNames.AppSettingNames.Add(stickyConfig);
+                }
+            }
+
             return;
         }
 

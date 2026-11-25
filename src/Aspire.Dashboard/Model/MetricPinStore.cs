@@ -3,147 +3,135 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.Model;
 
 /// <summary>
-/// Stores pinned metric instruments in the application settings database, independently of individual runs.
+/// Stores pinned metric instruments, independently of individual runs.
 /// </summary>
 /// <remarks>
-/// Pins are keyed by meter and instrument name, not by resource. Pinning <c>http.server.request.duration</c>
-/// once pins it for every service that reports it, which matches how the same instrument is compared across
-/// services, and keeps pins valid when resources are renamed or replicas get new instance names.
+/// <para>
+/// An instrument is pinned for a resource (see <see cref="MetricPin"/>). Pinning applies to the resources of the current
+/// selection: pinning <c>http.server.request.duration</c> while two services are selected pins it for both, and
+/// unpinning it unpins it for both. Pins are keyed by resource name rather than by replica, so a resource's replicas
+/// share them and they stay valid when replicas get new instance names.
+/// </para>
+/// <para>
+/// Pins describe the application rather than a single run, so they're kept in protected browser local storage under a key
+/// scoped to the application name. The store is scoped to a circuit. Reads are synchronous and return nothing until
+/// <see cref="EnsureLoadedAsync"/> has read the stored pins, which raises <see cref="Changed"/>. Changes are merged
+/// with pins saved by other tabs of the same browser rather than replacing them.
+/// </para>
 /// </remarks>
 public sealed class MetricPinStore
 {
-    private const string SettingsName = "pinned metrics";
+    internal const int MaxSavedPins = 50;
 
-    private readonly Lock _lock = new();
-    private readonly List<OtlpInstrumentKey> _pins = [];
-    private readonly DashboardSettingsDatabase _database;
-    private bool _loaded;
+    private readonly LocalStorageSetting<List<MetricPin>> _setting;
+    private readonly ILogger<MetricPinStore> _logger;
 
-    public MetricPinStore(IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
-        : this(DashboardSettingsDatabase.GetDatabasePath(options.Value), logger)
+    public MetricPinStore(ILocalStorage localStorage, LocalStorageLocks locks, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
-    }
-
-    internal MetricPinStore(string? databasePath, ILogger logger)
-    {
-        _database = new DashboardSettingsDatabase(databasePath, logger);
+        _logger = logger;
+        _setting = new(localStorage, locks, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
+            NormalizePins, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
     }
 
     /// <summary>
-    /// Raised after pins change. Handlers may run on any thread.
+    /// Raised after pins are loaded or change. Handlers may run on any thread.
     /// </summary>
     public event Action? Changed;
 
     /// <summary>
-    /// Gets the pinned instruments in the order they were pinned.
+    /// Reads the stored pins, once per circuit.
     /// </summary>
-    public IReadOnlyList<OtlpInstrumentKey> GetPins()
-    {
-        lock (_lock)
-        {
-            EnsureLoaded();
-            return [.. _pins];
-        }
-    }
+    public Task EnsureLoadedAsync() => _setting.EnsureLoadedAsync();
 
     /// <summary>
-    /// Gets the pinned instruments among <paramref name="instruments"/>, in the order they were pinned.
-    /// Pins for instruments that aren't in the list, such as ones only another resource reports, are skipped.
+    /// Gets the pins in the order they were made.
+    /// </summary>
+    public IReadOnlyList<MetricPin> GetPins() => _setting.Read(pins => pins.ToArray());
+
+    /// <summary>
+    /// Gets the instruments among <paramref name="instruments"/> that are pinned for the resource reporting them, in the
+    /// order they were pinned. A resource's replicas report the same instrument, and each of them is pinned with it.
     /// </summary>
     public List<OtlpInstrumentSummary> GetPinnedInstruments(IEnumerable<OtlpInstrumentSummary> instruments)
     {
-        // The same instrument can come from several resources, and each of them is pinned along with it.
-        var instrumentsByKey = instruments.ToLookup(i => i.GetKey());
-        return [.. GetPins().SelectMany(key => instrumentsByKey[key])];
-    }
-
-    public bool IsPinned(OtlpInstrumentKey key)
-    {
-        lock (_lock)
-        {
-            EnsureLoaded();
-            return _pins.Contains(key);
-        }
+        var candidates = instruments.ToList();
+        return [.. GetPins().SelectMany(pin => candidates.Where(pin.Matches))];
     }
 
     /// <summary>
-    /// Pins or unpins an instrument. Returns <see langword="false"/> if the change couldn't be saved,
-    /// in which case the pins are unchanged.
+    /// Gets whether <paramref name="instrument"/> is pinned for the resource reporting it.
     /// </summary>
-    public bool SetPinned(OtlpInstrumentKey key, bool pinned)
+    public bool IsPinned(OtlpInstrumentSummary instrument) => _setting.Read(pins => pins.Any(pin => pin.Matches(instrument)));
+
+    /// <summary>
+    /// Gets whether <paramref name="key"/> is pinned for any of <paramref name="resourceNames"/>, such as the resources
+    /// of the current selection.
+    /// </summary>
+    public bool IsPinned(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames) =>
+        _setting.Read(pins => pins.Any(pin => resourceNames.Any(name => pin.Matches(name, key))));
+
+    /// <summary>
+    /// Pins or unpins an instrument for each of <paramref name="resourceNames"/>. A pin operation is rejected if
+    /// the new pins would exceed the saved pin limit.
+    /// </summary>
+    internal Task<SettingUpdateResult> SetPinnedAsync(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
     {
-        lock (_lock)
+        return _setting.UpdateAsync(pins =>
         {
-            EnsureLoaded();
-            if (_pins.Contains(key) == pinned)
+            var changed = false;
+            foreach (var name in resourceNames)
             {
-                return true;
-            }
-            if (!Save(key, pinned))
-            {
-                return false;
+                changed |= pinned
+                    ? AddPin(pins, new MetricPin(name, key.MeterName, key.InstrumentName))
+                    : pins.RemoveAll(pin => pin.Matches(name, key)) > 0;
+                if (pinned && pins.Count > MaxSavedPins)
+                {
+                    // TODO: If users hit this limit, let them remove saved pins without matching telemetry.
+                    // Those pins count toward the limit but can't be removed in the dashboard.
+                    // The candidate value is discarded, so none of the pins in this selection are saved.
+                    _logger.LogWarning("Cannot pin the instrument for the selection because it would exceed the limit of {Limit} saved metric pins.", MaxSavedPins);
+                    return SettingUpdateResult.LimitReached;
+                }
             }
 
-            if (pinned)
-            {
-                _pins.Add(key);
-            }
-            else
-            {
-                _pins.Remove(key);
-            }
+            return changed ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged;
+        });
+    }
+
+    private static bool AddPin(List<MetricPin> pins, MetricPin pin)
+    {
+        if (pins.Any(existing => existing.Matches(pin.ResourceName, pin.GetInstrumentKey())))
+        {
+            return false;
         }
 
-        Changed?.Invoke();
+        pins.Add(pin);
         return true;
     }
 
-    private void EnsureLoaded()
+    // Drop incomplete and repeated pins. A pin without a resource name can't be attributed to a resource.
+    private static List<MetricPin> NormalizePins(List<MetricPin>? stored)
     {
-        if (_loaded)
+        var pins = new List<MetricPin>();
+        foreach (var pin in stored ?? [])
         {
-            return;
-        }
-        _loaded = true;
-
-        _database.Load(SettingsName, connection =>
-        {
-            using var command = connection.CreateCommand();
-            // pin_id is the rowid, which increases with each insert, so ordering by it lists pins in the
-            // order they were pinned.
-            command.CommandText = """
-                CREATE TABLE IF NOT EXISTS metric_pins (
-                    pin_id INTEGER NOT NULL PRIMARY KEY,
-                    meter_name TEXT NOT NULL,
-                    instrument_name TEXT NOT NULL,
-                    UNIQUE (meter_name, instrument_name)
-                );
-                SELECT meter_name, instrument_name FROM metric_pins ORDER BY pin_id;
-                """;
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
+            if (pins.Count == MaxSavedPins)
             {
-                _pins.Add(new OtlpInstrumentKey(reader.GetString(0), reader.GetString(1)));
+                break;
             }
-        });
-    }
 
-    private bool Save(OtlpInstrumentKey key, bool pinned)
-    {
-        return _database.TrySave(SettingsName, connection =>
-        {
-            using var command = connection.CreateCommand();
-            command.CommandText = pinned
-                ? "INSERT OR IGNORE INTO metric_pins (meter_name, instrument_name) VALUES ($meter, $instrument);"
-                : "DELETE FROM metric_pins WHERE meter_name = $meter AND instrument_name = $instrument;";
-            command.Parameters.AddWithValue("$meter", key.MeterName);
-            command.Parameters.AddWithValue("$instrument", key.InstrumentName);
-            command.ExecuteNonQuery();
-        });
+            if (!string.IsNullOrEmpty(pin.ResourceName) && !string.IsNullOrEmpty(pin.MeterName) && !string.IsNullOrEmpty(pin.InstrumentName))
+            {
+                AddPin(pins, pin);
+            }
+        }
+
+        return pins;
     }
 }

@@ -584,6 +584,20 @@ internal static class TelemetryCommandHelpers
     }
 
     /// <summary>
+    /// Gets the dashboard URL to link from each row of human-readable output, or <see langword="null"/>
+    /// when stdout is not an interactive terminal.
+    /// </summary>
+    /// <remarks>
+    /// Without terminal hyperlink support, a row link is printed as <c>text (url)</c>. A reader of
+    /// redirected output (a script or an agent) cannot click it, and the URL often doubles the row's
+    /// size, so rows show only the text. <c>--format Json</c> still includes the dashboard URLs.
+    /// </remarks>
+    internal static string? GetRowLinkDashboardUrl(ICliHostEnvironment hostEnvironment, string? dashboardUrl)
+    {
+        return hostEnvironment.SupportsInteractiveOutput ? dashboardUrl : null;
+    }
+
+    /// <summary>
     /// Creates a Spectre Console hyperlink markup for a trace detail in the Dashboard.
     /// </summary>
     /// <param name="interactionService">The interaction service to determine link support.</param>

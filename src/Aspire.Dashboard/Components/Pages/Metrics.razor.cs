@@ -36,6 +36,9 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
     private List<SelectViewModel<ResourceTypeDetails>>? _selectionResourceViewModels;
+
+    // Exposed for tests, which wait for telemetry resource updates that the page processes asynchronously.
+    internal IReadOnlyList<SelectViewModel<ResourceTypeDetails>>? SelectionResourceViewModels => _selectionResourceViewModels;
     private List<OtlpResource>? _aggregateResources;
     private Subscription? _resourcesSubscription;
     private Subscription? _metricsSubscription;
@@ -164,6 +167,9 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         _metricGroupsPaneSize = string.Create(CultureInfo.InvariantCulture, $"{clampedPercent}%");
         _metricsContentPaneSize = string.Create(CultureInfo.InvariantCulture, $"{100 - clampedPercent}%");
     }
+
+    // Pins are read before parameters are applied, so the default view can open the pinned group.
+    protected override Task OnInitializedAsync() => PinStore.EnsureLoadedAsync();
 
     protected override void OnInitialized()
     {
@@ -372,6 +378,14 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             ? _resources.Where(resource => keys.Contains(resource.ResourceKey)).ToList()
             : null;
     }
+
+    // Pinning applies to the resources of the current selection, every resource when all of them are selected,
+    // including those that haven't sent telemetry yet. Pins are kept by resource name (see MetricPinStore), so the
+    // replicas of a selected resource share them. Without the resource list, the selection is the resource picked on
+    // the page.
+    private IReadOnlyList<string> GetPinResourceNames() =>
+        ResourcesLayout?.GetSelectionPinResourceNames(SelectedResourceNames)
+            ?? (PageViewModel.SelectedResource.Id is { ReplicaSetName: { } replicaSetName } ? [replicaSetName] : []);
 
     private string GetInstrumentResourceLabel(OtlpInstrumentSummary instrument) =>
         OtlpHelpers.GetResourceName(instrument.ResourceView.Resource, _resources);
@@ -663,12 +677,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
-    private string? PauseText => PauseManager.AreMetricsPaused(out var startTime)
-        ? string.Format(
-            CultureInfo.CurrentCulture,
-            Loc[nameof(Dashboard.Resources.Metrics.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
-        : null;
+    private DateTime? PausedAt => PauseManager.AreMetricsPaused(out var startTime) ? startTime : null;
 
     public sealed class MetricsViewModel
     {
@@ -799,8 +808,13 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         // doesn't replace it. Without a single selected resource (all resources, or several), no resource is named
         // and the page lists the instruments of every selected resource. A remembered name could also be stale,
         // for example a replica from an earlier run.
+        //
+        // The exception is an open instrument chart in a multi-resource selection: the chart belongs to one of the
+        // selected resources, and changing its duration or view must keep showing it. Dropping the resource there
+        // would navigate back to the aggregate instrument list. The name is only kept while it's part of the
+        // selection, so a stale name still can't replace it.
         var resourceName = ResourcesLayout is { } layout
-            ? (layout.IsMultiSelection ? null : layout.SelectedResourceName)
+            ? (layout.IsMultiSelection ? GetSelectedChartResourceName(serializable) : layout.SelectedResourceName)
             : serializable.ResourceName;
         var url = DashboardUrls.MetricsUrl(
             resource: resourceName,
@@ -813,6 +827,29 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             total: serializable.ShowRunningTotal);
 
         return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
+    }
+
+    private string? GetSelectedChartResourceName(MetricsPageState serializable)
+    {
+        if (serializable is not { InstrumentName: not null, ResourceName: { } name } ||
+            _selectionResourceViewModels is not { } selectionResources)
+        {
+            return null;
+        }
+
+        // A resource's display name changes when it gains a replica: the singleton "api" becomes the replica
+        // "api-<instance id>". The open chart's view model still has the old name, which is no longer part of the
+        // selection. When the state is the page's own, find the chart's resource by its telemetry key, which doesn't
+        // change, and use the selection entry's current name.
+        if (string.Equals(PageViewModel.SelectedResource.Name, name, StringComparisons.ResourceName) &&
+            PageViewModel.SelectedResource.Id is { ReplicaSetName: not null } id &&
+            selectionResources.FirstOrDefault(r => r.Id!.GetResourceKey() == id.GetResourceKey()) is { } current)
+        {
+            return current.Name;
+        }
+
+        // State restored from the session isn't the page's view model, so it's matched by name.
+        return selectionResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName)) ? name : null;
     }
 
     private async Task OnShowRunningTotalChangedAsync(bool showRunningTotal)

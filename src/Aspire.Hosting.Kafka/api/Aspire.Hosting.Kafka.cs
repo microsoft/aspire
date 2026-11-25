@@ -41,11 +41,17 @@ namespace Aspire.Hosting
 
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
     public sealed partial class KafkaUIContainerResource : ApplicationModel.ContainerResource
     {
         public KafkaUIContainerResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

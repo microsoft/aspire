@@ -51,10 +51,7 @@ public static class AspireAzureProjectOpenAIExtensions
         var settings = new ProjectOpenAIComponent().AddClient(builder, DefaultConfigSectionName, configureSettings, configureClientBuilder, connectionName, serviceKey: null);
         builder.Services.TryAddSingleton<OpenAIClient>(static sp => sp.GetRequiredService<ProjectOpenAIClient>());
 
-        return new(builder, connectionName, null, settings.DisableTracing, settings.EnableSensitiveTelemetryData)
-        {
-            DisableMetrics = settings.DisableMetrics
-        };
+        return new(builder, connectionName, null, settings.DisableTracing, settings.DisableMetrics, settings.EnableSensitiveTelemetryData);
     }
 
     /// <summary>
@@ -85,10 +82,7 @@ public static class AspireAzureProjectOpenAIExtensions
         var settings = new ProjectOpenAIComponent().AddClient(builder, DefaultConfigSectionName, configureSettings, configureClientBuilder, name, serviceKey: name);
         builder.Services.TryAddKeyedSingleton<OpenAIClient>(name, static (sp, key) => sp.GetRequiredKeyedService<ProjectOpenAIClient>(key));
 
-        return new(builder, name, name, settings.DisableTracing, settings.EnableSensitiveTelemetryData)
-        {
-            DisableMetrics = settings.DisableMetrics
-        };
+        return new(builder, name, name, settings.DisableTracing, settings.DisableMetrics, settings.EnableSensitiveTelemetryData);
     }
 
     private sealed class ProjectOpenAIComponent : AzureComponent<AzureProjectOpenAISettings, ProjectOpenAIClient, ProjectOpenAIClientOptions>

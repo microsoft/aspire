@@ -8,8 +8,8 @@
 .telemetry-help-message {
     margin: 0;
     color: var(--colorNeutralForeground3);
-    font-size: 13px;
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: var(--lineHeightBase300);
     text-align: center;
 }
