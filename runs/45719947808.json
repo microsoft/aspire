@@ -1,0 +1,139 @@
+{
+  "run_id": 45719947808,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45719947808",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-25T23:49:00Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22673,
+    "title": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3146232",
+    "author": "dotnet-oneloc-localization[bot]",
+    "state": "closed",
+    "head_branch": "locfiles/d9980952-0d42-49cb-be59-6f0e95ff5b37",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22673",
+    "merged_at": "2026-11-25T23:15:30Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "8e5d6a8a0dd0d1bfea85668f92d27de06d173e8b",
+    "failed_sha": "73366433f663623357ad8126e40683c3a11019a5",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "18e3cd4252be55d5077f22852a99673a52c42f8f",
+        "message": "Prevent aspire doctor from orphaning DCP processes (#21837) ## Description `aspire doctor` starts short-lived DCP API servers to check connectivity. If the CLI exits abruptly, managed cleanup cannot run and those API servers and their controllers can outlive the command. Bind each probe's DCP lifetime to the executing CLI process so DCP shuts down when its owner exits. - Pass `--monitor <CLI PID>` through the common launch path for both certificate modes, preserving normal shutdown, cancellation",
+        "html_url": "https://github.com/microsoft/aspire/commit/18e3cd4252be55d5077f22852a99673a52c42f8f",
+        "pull_request": {
+          "number": 21837,
+          "title": "Prevent aspire doctor from orphaning DCP processes",
+          "url": "https://github.com/microsoft/aspire/pull/21837",
+          "merged_at": "2026-11-25T21:34:44Z"
+        }
+      },
+      {
+        "sha": "63ac9c3a9d54aa08801056e96374ec07f336a4c1",
+        "message": "Make layered .NET container archives match SDK archive output (#22666) ## Description Adding `PublishWithContainerFiles` to a .NET project that publishes to an archive (`ContainerImageDestination.Archive`) changed the archive compared to the same project without container files. Code that consumes the archive couldn't treat both cases the same way. Without container files, the .NET SDK writes the archive itself. With container files, Aspire builds the SDK image into the local runtime, layers the",
+        "html_url": "https://github.com/microsoft/aspire/commit/63ac9c3a9d54aa08801056e96374ec07f336a4c1",
+        "pull_request": {
+          "number": 22666,
+          "title": "Make layered .NET container archives match SDK archive output",
+          "url": "https://github.com/microsoft/aspire/pull/22666",
+          "merged_at": "2026-11-25T21:36:53Z"
+        }
+      },
+      {
+        "sha": "814cbd3d53a0ef9a7740577b07c7ff34d47d31bd",
+        "message": "Use .slnx solution files in project templates (#22492) ## Description The `aspire`, `aspire-starter`, and `aspire-ts-cs-starter` templates now generate a `.slnx` solution file instead of a `.sln`. Earlier attempts were blocked for two reasons. The templates had to support SDKs older than .NET 10, which can't read `.slnx`, and the template engine didn't process conditionals inside `.slnx` files. Neither applies now: every template targets `net10.0`/`net11.0`, and the .NET 10 SDK supports conditio",
+        "html_url": "https://github.com/microsoft/aspire/commit/814cbd3d53a0ef9a7740577b07c7ff34d47d31bd",
+        "pull_request": {
+          "number": 22492,
+          "title": "Use .slnx solution files in project templates",
+          "url": "https://github.com/microsoft/aspire/pull/22492",
+          "merged_at": "2026-11-25T21:41:21Z"
+        }
+      },
+      {
+        "sha": "0daae1db7edc3f7a977e931872b3edfb751d8d65",
+        "message": "Replace Pomelo MySQL EF Core provider with Microting fork (#22362) ## Description `Pomelo.EntityFrameworkCore.MySql` has not been updated since 9.0.0 (EF Core 9), which forced `Aspire.Pomelo.EntityFrameworkCore.MySql` to pin EF Core 9 dependencies while the rest of the repo moves to newer versions. Switch to `Microting.EntityFrameworkCore.MySql`, the maintained fork, which targets EF Core 10. The package is renamed to match: - `Aspire.Pomelo.EntityFrameworkCore.MySql` -> `Aspire.Microting.Entity",
+        "html_url": "https://github.com/microsoft/aspire/commit/0daae1db7edc3f7a977e931872b3edfb751d8d65",
+        "pull_request": {
+          "number": 22362,
+          "title": "Replace Pomelo MySQL EF Core provider with Microting fork",
+          "url": "https://github.com/microsoft/aspire/pull/22362",
+          "merged_at": "2026-11-25T21:42:15Z"
+        }
+      },
+      {
+        "sha": "73366433f663623357ad8126e40683c3a11019a5",
+        "message": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3146232 (#22673) This is the pull request automatically created by the OneLocBuild task in the build process to check-in localized files generated based upon translation source files (.lcl files) handed-back from the downstream localization pipeline. If there are issues in translations, visit https://aka.ms/icxLocBug and log bugs for fixes. The OneLocBuild wiki is https://aka.ms/onelocbuild and the localization proce",
+        "html_url": "https://github.com/microsoft/aspire/commit/73366433f663623357ad8126e40683c3a11019a5",
+        "pull_request": {
+          "number": 22673,
+          "title": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3146232",
+          "url": "https://github.com/microsoft/aspire/pull/22673",
+          "merged_at": "2026-11-25T23:15:30Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 139576473328,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45719947808/job/139576473328",
+      "classification": "main-repository-breakage",
+      "reason": "DcpConnectionLifetimeTests parent-exit test deterministically times out in TestLifetimeAsync on Windows, same as the recorded main breakage.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "id": 139576474028,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45719947808/job/139576474028",
+      "classification": "flaky-test",
+      "reason": "bUnit WaitForFailedException on a localized waiting/loading text assertion under heavy CPU load; one test failed of 1594.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.Session_WhenParentExits_StopsApiServerAndControllers(delayHandoff: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync(Boolean abruptParentExit, Boolean delayHandoff, Boolean useSymlink, Boolean preventGracefulStop) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 187\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync(Boolean abruptParentExit, Boolean delayHandoff, Boolean useSymlink, Boolean preventGracefulStop) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 249\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.Session_WhenParentExits_StopsApiServerAndControllers(Boolean delayHandoff) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 29\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\wdevlzq0.a0w\nReady DCP process: PID=5084, start=1795649109555.\nReady DCP process: PID=8380, start=1795649111118.\n\n\n\n2026-11-25T23:25:09.760Z\tdebug\tdcp\tStarting DCP...\t{\"PID\": 5084, \"Exe\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"start-apiserver\", \"--monitor\", \"1400\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-511qqndi.kau\\\\kubeconfig\", \"-v=debug\", \"--container-runtime\", \"docker\"], \"Version\": \"{\\\"version\\\":\\\"0.27.5\\\",\\\"commitHash\\\":\\\"600bc96061e534129bc93402658a365dac7049b5\\\",\\\"buildTimestamp\\\":\\\"2026-11-20T01:08:32Z\\\"}\"}\n2026-11-25T23:25:09.768Z\tinfo\tdcp.start-apiserver.monitor\tStarted monitoring process\t{\"PID\": 1400}\n2026-11-25T23:25:10.783Z\tdebug\tdcp.start-apiserver\tExtensions directory does not exist, extensions will not be loaded from this directory..\t{\"Directory\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\ext\"}\n2026-11-25T23:25:10.786Z\tinfo\tdcp.start-apiserver.api-server\tStarting API server...\n2026-11-25T23:25:10.792Z\tdebug\tdcp.start-apiserver.api-server\tkubeconfig saved successfully\n2026-11-25T23:25:10.881Z\tdebug\tdcp\tAdding GroupVersion usvc-dev.developer.microsoft.com v1 to ResourceManager\n2026-11-25T23:25:10.889Z\tdebug\tdcp\tAdding GroupVersion usvc-dev.developer.microsoft.com v2 to ResourceManager\n2026-11-25T23:25:11.112Z\tinfo\tdcp.start-apiserver.api-server\tAPI server started\t{\"Address\": \"::1\", \"Port\": 49310}\n2026-11-25T23:25:11.112Z\tdebug\tdcp.start-apiserver\tAbout to launch host services\n2026-11-25T23:25:11.112Z\tinfo\tdcp.start-apiserver.dcp-host\tStarting DCP controller host\n2026-11-25T23:25:11.112Z\tinfo\tdcp.start-apiserver.dcp-host\tStarted all services\t{\"count\": 1}\n2026-11-25T23:25:11.120Z\tdebug\tdcp.start-apiserver.os-executor\tProcess started successfully\t{\"PID\": 8380, \"Command\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"run-controllers\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-511qqndi.kau\\\\kubeconfig\", \"--container-runtime\", \"docker\", \"-v=debug\", \"--notification-socket\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\dcp\\\\dcp-notify-sock-dlclxkdd\", \"--monitor\", \"5084\", \"--monitor-identity-time\", \"2026-11-25T23:25:09.555Z\"], \"CreationFlags\": 0, \"PID\": 8380}\n2026-11-25T23:25:11.120Z\tdebug\tdcp.start-apiserver.os-executor\tStarting waiting for process to exit\t{\"PID\": 8380}\n2026-11-25T23:25:11.433Z\tinfo\tdcp.start-apiserver.monitor\tMonitor process exited, shutting down\t{\"PID\": 1400}\n2026-11-25T23:25:11.433Z\tinfo\tdcp.start-apiserver\tShutting down...\n2026-11-25T23:25:11.433Z\tdebug\tdcp.start-apiserver\tInvoking BeforeApiSrvShutdown event handler.\t{\"ResourceCleanup\": \"Full\"}\n2026-11-25T23:25:11.433Z\tdebug\tdcp.start-apiserver.cleanup\tRunning before cleanup tasks...\n2026-11-25T23:25:11.433Z\tdebug\tdcp.start-apiserver.cleanup\tRunning before cleanup task...\t{\"Name\": \"SendCleanupStartedNotification\"}\n2026-11-25T23:25:11.433Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up resources...\n2026-11-25T23:25:11.441Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.developer.microsoft.com/v1, Resource=containerexecs\"}\n2026-11-25T23:25:11.441Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.developer.microsoft.com/v1, Resource=executablereplicasets\"}\n2026-11-25T23:25:11.441Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.developer.microsoft.com/v1, Resource=services\"}\n2026-11-25T23:25:11.441Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.developer.microsoft.com/v1, Resource=containernetworktunnelproxies\"}\n2026-11-25T23:25:11.441Z\tdebug\tdcp.start-apiserver.cleanup\tCleaning up a resource...\t{\"Resource\": \"usvc-dev.dev",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Timeout in TestLifetimeAsync matches recorded main breakage mechanism.",
+      "job_id": 139576473328,
+      "execution_id": "a05b00a8-ba69-427b-8a6a-f32cb965d3a7",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "error": "Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.\n\nIf this test does not fail consistently, the reason may be that\nthe wait timeout is too short, and the runtime did not have enough\ntime to complete the necessary number of renders of the component under test.\nThis can happen on highly utilized or slower hardware, for example.\n\nTo determine if this is the cause, compare the check and render count(s) below\nand see if they match what is expected. If they do not,\nconsider increasing the timeout, either at the individual\nmethod call level, e.g. WaitForElement(\"div\", TimeSpan.FromSeconds(15)),\nor via the static TestContext.DefaultWaitTimeout property.\n\nCheck count: 1.\nComponent render count: 2.\nTotal render count across all components: 0.\n---- Assert.Equal() Failure: Strings differ\n                                 ↓ (pos 22)\nExpected: \"Localized:HomeActivityWaiting\"\nActual:   \"Localized:HomeActivityLoading\"\n                        ",
+      "stack_trace": "   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertionAsync[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 125\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 152\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.<>c__DisplayClass6_0.<Render_ActivityAndInsights_UseLocalizedText>b__0() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 152\n   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.<>c__DisplayClass6_0.<.ctor>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.<>c__DisplayClass32_0.<WrapSynchronousChecker>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226",
+      "standard_output": "Temporary workspace created at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/olfnt3er.pq2\nDisposing temporary workspace at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/olfnt3er.pq2\n",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "bUnit wait timed out with render count 2 on a loaded runner; matches known flaky mechanism.",
+      "job_id": 139576474028,
+      "execution_id": "ced6cc69-4ed0-41ec-8b5c-ec1659948ea5",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-dcpconnectionlifetime-parent-exit-timeout-windows",
+    "dashboard-applicationsummary-activity-localized-waiting-loading"
+  ]
+}
