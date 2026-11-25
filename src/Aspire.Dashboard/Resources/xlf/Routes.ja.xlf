@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="NotAuthorized">
         <source>Not authorized</source>
-        <target state="new">Not authorized</target>
+        <target state="translated">承認されていません</target>
         <note />
       </trans-unit>
       <trans-unit id="NotFoundDescription">

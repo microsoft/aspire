@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerShowChangePerIntervalLabel">
         <source>Show change per interval</source>
-        <target state="new">Show change per interval</target>
+        <target state="translated">サイクル間隔ごとの変更を表示する</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerUnitPerInterval">
         <source>{0} per interval</source>
-        <target state="new">{0} per interval</target>
+        <target state="translated">間隔ごとの {0}</target>
         <note>{0} is the instrument's unit, e.g. "Requests"</note>
       </trans-unit>
       <trans-unit id="ClearAllResources">
@@ -169,12 +169,12 @@
       </trans-unit>
       <trans-unit id="OverviewGraphAccessibleLabel">
         <source>Resource graph. The resource list shows the same resources in an accessible format</source>
-        <target state="new">Resource graph. The resource list shows the same resources in an accessible format</target>
+        <target state="translated">リソース グラフ。リソース リストには、同じリソースがアクセシブル形式で表示されます</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterDeleteValueAction">
         <source>Delete value</source>
-        <target state="new">Delete value</target>
+        <target state="translated">値を削除する</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
@@ -204,7 +204,7 @@
       </trans-unit>
       <trans-unit id="SummaryDetailsViewCloseViewWithShortcut">
         <source>Close (Esc)</source>
-        <target state="new">Close (Esc)</target>
+        <target state="translated">閉じます (Esc)</target>
         <note>Tooltip of a close button that the Escape key also triggers. Esc is the label of the Escape key on keyboards.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
@@ -729,7 +729,7 @@
       </trans-unit>
       <trans-unit id="VolumeMountTypeReadOnlyTitle">
         <source>Read-only</source>
-        <target state="new">Read-only</target>
+        <target state="translated">読み取り専用</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumePathColumnHeader">
@@ -739,12 +739,12 @@
       </trans-unit>
       <trans-unit id="VolumeRevealFailed">
         <source>Couldn't open '{0}'. It may not exist on this machine.</source>
-        <target state="new">Couldn't open '{0}'. It may not exist on this machine.</target>
+        <target state="translated">'{0}' を開けませんでした。このマシンに存在しない可能性があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumeRevealInFileExplorer">
         <source>Reveal in file explorer</source>
-        <target state="new">Reveal in file explorer</target>
+        <target state="translated">エクスプローラーで表示する</target>
         <note />
       </trans-unit>
     </body>

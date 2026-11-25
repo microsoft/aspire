@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="GraphPageTitle">
         <source>Graph</source>
-        <target state="new">Graph</target>
+        <target state="translated">Grafo</target>
         <note />
       </trans-unit>
       <trans-unit id="HealthCheckStatusJustNowFormat">
@@ -24,172 +24,172 @@
       </trans-unit>
       <trans-unit id="HomeActivityBucketTooltip">
         <source>{0} · {1} requests, {2} failed</source>
-        <target state="new">{0} · {1} requests, {2} failed</target>
+        <target state="translated">{0} · {1} richieste, {2} non riuscite</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
         <source>Requests per 30 seconds over the last 15 minutes</source>
-        <target state="new">Requests per 30 seconds over the last 15 minutes</target>
+        <target state="translated">Richieste ogni 30 secondi negli ultimi 15 minuti</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityHistoricalCaption">
         <source>Incoming requests · last 15 min of this run</source>
-        <target state="new">Incoming requests · last 15 min of this run</target>
+        <target state="translated">Richieste in arrivo · ultimi 15 minuti di questa esecuzione</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityHistoricalTitle">
         <source>Activity</source>
-        <target state="new">Activity</target>
+        <target state="translated">Attività</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityLoading">
         <source>Loading activity…</source>
-        <target state="new">Loading activity…</target>
+        <target state="translated">Caricamento dell'attività in corso...</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityNoRecordedRequests">
         <source>No requests were recorded in this run.</source>
-        <target state="new">No requests were recorded in this run.</target>
+        <target state="translated">Non sono state registrate richieste nell'esecuzione.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWaiting">
         <source>Waiting for requests. Interact with your app to see live traffic.</source>
-        <target state="new">Waiting for requests. Interact with your app to see live traffic.</target>
+        <target state="translated">In attesa di richieste. Interagisci con l'app per visualizzare il traffico in tempo reale.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindow">
         <source>Incoming requests · last 15 min</source>
-        <target state="new">Incoming requests · last 15 min</target>
+        <target state="translated">Richieste in ingresso: ultimi 15 minuti</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindowEnd">
         <source>now</source>
-        <target state="new">now</target>
+        <target state="translated">adesso</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWindowStart">
         <source>15 min ago</source>
-        <target state="new">15 min ago</target>
+        <target state="translated">15 minuti fa</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeBusiestResources">
         <source>Busiest resources</source>
-        <target state="new">Busiest resources</target>
+        <target state="translated">Risorse più occupate</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeEndpointTooltip">
         <source>{0}: {1} ({2} requests)</source>
-        <target state="new">{0}: {1} ({2} requests)</target>
+        <target state="translated">{0}: {1} ({2} richieste)</target>
         <note>{0} is the resource name, {1} is the endpoint label, and {2} is the request count.</note>
       </trans-unit>
       <trans-unit id="HomeErrorHotspots">
         <source>Error hotspots</source>
-        <target state="new">Error hotspots</target>
+        <target state="translated">Punti critici degli errori</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeErrorHotspotsHint">
         <source>failed requests + error logs</source>
-        <target state="new">failed requests + error logs</target>
+        <target state="translated">richieste non riuscite + log degli errori</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeErrorLogCount">
         <source>{0} error logs</source>
-        <target state="new">{0} error logs</target>
+        <target state="translated">{0} log degli errori</target>
         <note>{0} is the error log count.</note>
       </trans-unit>
       <trans-unit id="HomeErrorRate">
         <source>error rate</source>
-        <target state="new">error rate</target>
+        <target state="translated">frequenza errori</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeFailedCount">
         <source>{0} failed</source>
-        <target state="new">{0} failed</target>
+        <target state="translated">{0} non riuscito</target>
         <note>{0} is the failed request count.</note>
       </trans-unit>
       <trans-unit id="HomeFailedRequestCount">
         <source>{0} failed requests</source>
-        <target state="new">{0} failed requests</target>
+        <target state="translated">{0} richieste non riuscite</target>
         <note>{0} is the failed request count.</note>
       </trans-unit>
       <trans-unit id="HomeFinishedLabel">
         <source>Finished</source>
-        <target state="new">Finished</target>
+        <target state="translated">Operazione completata</target>
         <note>Legend label on the overview's health bar for resources that finished or exited without an error</note>
       </trans-unit>
       <trans-unit id="HomeHeadlineAllRunning">
         <source>All {0} resources are running</source>
-        <target state="new">All {0} resources are running</target>
+        <target state="translated">Tutte le {0} risorse sono in esecuzione</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineAttention">
         <source>{0} of {1} resources need attention</source>
-        <target state="new">{0} of {1} resources need attention</target>
+        <target state="translated">{0} di {1} risorse richiedono attenzione</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineHealthy">
         <source>No resources need attention</source>
-        <target state="new">No resources need attention</target>
+        <target state="translated">Nessuna risorsa richiede attenzione</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlinePending">
         <source>{0} of {1} resources are pending</source>
-        <target state="new">{0} of {1} resources are pending</target>
+        <target state="translated">{0} di {1} risorse sono in sospeso</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSingleAttention">
         <source>1 resource needs attention</source>
-        <target state="new">1 resource needs attention</target>
+        <target state="translated">1 risorsa richiede attenzione</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSinglePending">
         <source>1 resource is pending</source>
-        <target state="new">1 resource is pending</target>
+        <target state="translated">1 risorsa è in sospeso</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeHeadlineSingleRunning">
         <source>1 resource is running</source>
-        <target state="new">1 resource is running</target>
+        <target state="translated">1 risorsa è in esecuzione</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeInsightsLabel">
         <source>Insights</source>
-        <target state="new">Insights</target>
+        <target state="translated">Informazioni dettagliate</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeLiveActivity">
         <source>Live activity</source>
-        <target state="new">Live activity</target>
+        <target state="translated">Attività live</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeLogsLabel">
         <source>logs</source>
-        <target state="new">logs</target>
+        <target state="translated">log</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeMetricsLabel">
         <source>metrics</source>
-        <target state="new">metrics</target>
+        <target state="translated">metriche</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNeedsAttentionLabel">
         <source>Need attention</source>
-        <target state="new">Need attention</target>
+        <target state="translated">Richiede attenzione</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNoFailedTraces">
         <source>No failed traces</source>
-        <target state="new">No failed traces</target>
+        <target state="translated">Nessuna traccia con errori</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNoRecentErrors">
         <source>No errors logged</source>
-        <target state="new">No errors logged</target>
+        <target state="translated">Nessun errore registrato</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNotStartedLabel">
         <source>Not started</source>
-        <target state="new">Not started</target>
+        <target state="translated">Operazione non avviata</target>
         <note>Legend label on the overview's health bar for resources that haven't been started</note>
       </trans-unit>
       <trans-unit id="HomeP95Label">
@@ -199,92 +199,92 @@
       </trans-unit>
       <trans-unit id="HomeP95Latency">
         <source>p95 latency</source>
-        <target state="new">p95 latency</target>
+        <target state="translated">Latenza p95</target>
         <note />
       </trans-unit>
       <trans-unit id="HomePendingLabel">
         <source>Pending</source>
-        <target state="new">Pending</target>
+        <target state="translated">In sospeso</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRecentErrorsTitle">
         <source>Recent errors</source>
-        <target state="new">Recent errors</target>
+        <target state="translated">Errori recenti</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRecentFailedTracesTitle">
         <source>Recent failed traces</source>
-        <target state="new">Recent failed traces</target>
+        <target state="translated">Tracce recenti con errori</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRequestCount">
         <source>{0} requests</source>
-        <target state="new">{0} requests</target>
+        <target state="translated">{0} richieste</target>
         <note>{0} is the request count.</note>
       </trans-unit>
       <trans-unit id="HomeRequestCountShort">
         <source>{0} req</source>
-        <target state="new">{0} req</target>
+        <target state="translated">{0} rich.</target>
         <note>{0} is the request count. This label is abbreviated to fit in the endpoint list.</note>
       </trans-unit>
       <trans-unit id="HomeRequestsPerMinute">
         <source>requests / min</source>
-        <target state="new">requests / min</target>
+        <target state="translated">Richieste/min</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeResourceActions">
         <source>Actions for {0}</source>
-        <target state="new">Actions for {0}</target>
+        <target state="translated">Azioni per {0}</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="HomeResourceColumn">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">Risorsa</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeResourceStatesLabel">
         <source>Resource states</source>
-        <target state="new">Resource states</target>
+        <target state="translated">Stati delle risorse</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeRunningLabel">
         <source>Running</source>
-        <target state="new">Running</target>
+        <target state="translated">In esecuzione</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
         <source>Slowest endpoints</source>
-        <target state="new">Slowest endpoints</target>
+        <target state="translated">Endpoint più lenti</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeStartedAt">
         <source>Started {0}</source>
-        <target state="new">Started {0}</target>
+        <target state="translated">Ora di inizio: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeSummaryLandmark">
         <source>Summary</source>
-        <target state="new">Summary</target>
+        <target state="translated">Riepilogo</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeTelemetryLandmark">
         <source>Telemetry</source>
-        <target state="new">Telemetry</target>
+        <target state="translated">Telemetria</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeTracesLabel">
         <source>traces</source>
-        <target state="new">traces</target>
+        <target state="translated">tracce</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeUnknownLabel">
         <source>Unknown</source>
-        <target state="new">Unknown</target>
+        <target state="translated">Sconosciuto</target>
         <note>Legend label on the overview's health bar for resources whose state the dashboard can't tell</note>
       </trans-unit>
       <trans-unit id="HomeUnviewedErrors">
         <source>{0} unviewed error logs</source>
-        <target state="new">{0} unviewed error logs</target>
+        <target state="translated">{0} log degli errori non visualizzati</target>
         <note />
       </trans-unit>
       <trans-unit id="LayoutLabel">
@@ -294,57 +294,57 @@
       </trans-unit>
       <trans-unit id="MissingParameterCount">
         <source>{0} parameter needs a value</source>
-        <target state="new">{0} parameter needs a value</target>
+        <target state="translated">{0} parametro richiede un valore</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersCardTitle">
         <source>Missing parameter values</source>
-        <target state="new">Missing parameter values</target>
+        <target state="translated">Valori dei parametri mancanti</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersCount">
         <source>{0} parameters need values</source>
-        <target state="new">{0} parameters need values</target>
+        <target state="translated">{0} parametri richiedono valori</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersPanelDescription">
         <source>Enter the missing values together, then apply them without leaving the resource overview.</source>
-        <target state="new">Enter the missing values together, then apply them without leaving the resource overview.</target>
+        <target state="translated">Inserire tutti insieme i valori mancanti, quindi applicarli senza uscire dalla panoramica delle risorse.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersReview">
         <source>Review missing parameters</source>
-        <target state="new">Review missing parameters</target>
+        <target state="translated">Rivedere i parametri mancanti</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersSaveToUserSecrets">
         <source>Save values to user secrets</source>
-        <target state="new">Save values to user secrets</target>
+        <target state="translated">Salvare i valori nei segreti utente</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersSetValues">
         <source>Set parameter values</source>
-        <target state="new">Set parameter values</target>
+        <target state="translated">Imposta valori di parametro</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueRequired">
         <source>Value required</source>
-        <target state="new">Value required</target>
+        <target state="translated">Valore obbligatorio</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueSet">
         <source>Value set</source>
-        <target state="new">Value set</target>
+        <target state="translated">Valore impostato</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersAllValuesSet">
         <source>All values are set</source>
-        <target state="new">All values are set</target>
+        <target state="translated">Tutti i valori sono impostati</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersPageTitle">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">Parametri</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceActionCommandsText">
@@ -434,7 +434,7 @@
       </trans-unit>
       <trans-unit id="ResourceDisplayOrder">
         <source>Display order</source>
-        <target state="new">Display order</target>
+        <target state="translated">Ordine di visualizzazione</target>
         <note>Name of the property holding the default display order a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourceExpandAllChildren">
@@ -449,57 +449,57 @@
       </trans-unit>
       <trans-unit id="ResourceGraphGameExit">
         <source>Exit</source>
-        <target state="new">Exit</target>
+        <target state="translated">Esci</target>
         <note>Text of the button that leaves the Aspire Outage game in the resource graph.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameExitLabel">
         <source>Exit Aspire Outage and return to the graph</source>
-        <target state="new">Exit Aspire Outage and return to the graph</target>
+        <target state="translated">Esci da Aspire Outage e torna al grafico</target>
         <note>Accessible label of the button that leaves the Aspire Outage game in the resource graph.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameHardCoreStopped">
         <source>Resources still stopped: {0}</source>
-        <target state="new">Resources still stopped: {0}</target>
+        <target state="translated">Risorse ancora arrestate: {0}</target>
         <note>Shown on the game over screen of Aspire Outage after hard core mode stopped real resources. {0} is the number of resources.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameHardCoreWarning">
         <source>Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</source>
-        <target state="new">Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</target>
+        <target state="translated">Distruggere un nemico interrompe veramente la sua produzione di risorse. Le risorse bloccate si riattivano quando viene completata l'ondata, e rimangono disattivate se si perde o si esce.</target>
         <note>Warning shown when the hard core mode of the Aspire Outage game is selected.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameInstructions">
         <source>Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</source>
-        <target state="new">Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</target>
+        <target state="translated">Aspire Outage. Usa i tasti freccia oppure A e D per muoverti, BARRA SPAZIATRICE per sparare, P per mettere in pausa, M per disattivare l’audio, H per passare dalla modalità normale alla modalità hardcore nella schermata iniziale e ESC per tornare al grafico.</target>
         <note>Accessible description of the Aspire Outage game in the resource graph. Aspire Outage is the name of the game. The key names refer to keyboard keys.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameModeHardCore">
         <source>Hard core</source>
-        <target state="new">Hard core</target>
+        <target state="translated">Hardcore</target>
         <note>Game mode of Aspire Outage in which destroying an enemy really stops the matching resource.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameModeNormal">
         <source>Normal</source>
-        <target state="new">Normal</target>
+        <target state="translated">Normale</target>
         <note>Default game mode of Aspire Outage, which has no effect on resources.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGamePlay">
         <source>Play Aspire Outage</source>
-        <target state="new">Play Aspire Outage</target>
+        <target state="translated">Riprodurre Aspire Outage</target>
         <note>Tooltip and accessible name of the resource graph button that launches the game. Aspire Outage is the name of the game.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameSoundOff">
         <source>Sound: off</source>
-        <target state="new">Sound: off</target>
+        <target state="translated">Suono: disattivato</target>
         <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is off.</note>
       </trans-unit>
       <trans-unit id="ResourceGraphGameSoundOn">
         <source>Sound: on</source>
-        <target state="new">Sound: on</target>
+        <target state="translated">Suono: attivato</target>
         <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</note>
       </trans-unit>
       <trans-unit id="ResourceOverviewBrowseMeters">
         <source>Browse meters</source>
-        <target state="new">Browse meters</target>
+        <target state="translated">Esplora i contatori</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewConsoleTitle">
@@ -509,282 +509,282 @@
       </trans-unit>
       <trans-unit id="ResourceOverviewCountOfTotal">
         <source>{0} of {1}</source>
-        <target state="new">{0} of {1}</target>
+        <target state="translated">{0} di {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewEndpointAlsoAt">
         <source>{0}, also at {1}</source>
-        <target state="new">{0}, also at {1}</target>
+        <target state="translated">{0}, anche in {1}</target>
         <note>Tooltip of an endpoint's address on the resource overview. {0} is the address, {1} is the same endpoint's other address, such as its localhost address</note>
       </trans-unit>
       <trans-unit id="ResourceOverviewEndpointsTitle">
         <source>Endpoints</source>
-        <target state="new">Endpoints</target>
+        <target state="translated">Endpoint</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewErrors">
         <source>Errors</source>
-        <target state="new">Errors</target>
+        <target state="translated">Errori</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewExitCode">
         <source>Exit code</source>
-        <target state="new">Exit code</target>
+        <target state="translated">Codice di uscita</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewFailed">
         <source>Failed</source>
-        <target state="new">Failed</target>
+        <target state="translated">Esito negativo</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewFilterEnvironmentVariables">
         <source>Filter environment variables</source>
-        <target state="new">Filter environment variables</target>
+        <target state="translated">Filtrare le variabili di ambiente</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewHideEmptyPanels">
         <source>Hide empty panels</source>
-        <target state="new">Hide empty panels</target>
+        <target state="translated">Nascondi i pannelli vuoti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewInstruments">
         <source>Instruments</source>
-        <target state="new">Instruments</target>
+        <target state="translated">Strumenti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewInternalEndpoint">
         <source>Internal</source>
-        <target state="new">Internal</target>
+        <target state="translated">Interno</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewLogsTitle">
         <source>Structured logs</source>
-        <target state="new">Structured logs</target>
+        <target state="translated">Log strutturati</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewMeters">
         <source>Meters</source>
-        <target state="new">Meters</target>
+        <target state="translated">Contatori</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewMetricsTitle">
         <source>Metrics</source>
-        <target state="new">Metrics</target>
+        <target state="translated">Metriche</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoAttentionLogs">
         <source>No warnings or errors</source>
-        <target state="new">No warnings or errors</target>
+        <target state="translated">Nessun avviso o errore</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoConsoleLogs">
         <source>No console output</source>
-        <target state="new">No console output</target>
+        <target state="translated">Nessun output della console</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoEndpoints">
         <source>No endpoints</source>
-        <target state="new">No endpoints</target>
+        <target state="translated">Nessun endpoint</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoEnvironmentVariables">
         <source>No environment variables</source>
-        <target state="new">No environment variables</target>
+        <target state="translated">Nessuna variabile di ambiente</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoHealthChecks">
         <source>No health checks</source>
-        <target state="new">No health checks</target>
+        <target state="translated">Nessun controllo di integrità</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoMatchingEnvironmentVariables">
         <source>No environment variables match the filter</source>
-        <target state="new">No environment variables match the filter</target>
+        <target state="translated">Nessuna variabile di ambiente corrisponde al filtro</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoMetrics">
         <source>No metrics</source>
-        <target state="new">No metrics</target>
+        <target state="translated">Nessuna metrica</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoPinnedMetrics">
         <source>Pin the metrics you want to keep an eye on and they'll show up here.</source>
-        <target state="new">Pin the metrics you want to keep an eye on and they'll show up here.</target>
+        <target state="translated">Aggiungere in alto le metriche che si vuole tenere sotto controllo; verranno visualizzate qui.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoProperties">
         <source>No properties</source>
-        <target state="new">No properties</target>
+        <target state="translated">Nessuna proprietà</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoRelationships">
         <source>No relationships</source>
-        <target state="new">No relationships</target>
+        <target state="translated">Nessuna relazione</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoTelemetry">
         <source>This resource hasn't sent telemetry</source>
-        <target state="new">This resource hasn't sent telemetry</target>
+        <target state="translated">Questa risorsa non ha inviato telemetria</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoTraces">
         <source>No traces</source>
-        <target state="new">No traces</target>
+        <target state="translated">Senza traccia</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoVolumes">
         <source>No volumes</source>
-        <target state="new">No volumes</target>
+        <target state="translated">Nessun volume</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNotFound">
         <source>Resource '{0}' was not found.</source>
-        <target state="new">Resource '{0}' was not found.</target>
+        <target state="translated">Non è possibile trovare la risorsa '{0}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Open console</source>
-        <target state="new">Open console</target>
+        <target state="translated">Apri console</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">
         <source>Resource overview</source>
-        <target state="new">Resource overview</target>
+        <target state="translated">Panoramica della risorsa</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPanelsLabel">
         <source>Panels</source>
-        <target state="new">Panels</target>
+        <target state="translated">Pannelli</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPropertiesTitle">
         <source>Properties</source>
-        <target state="new">Properties</target>
+        <target state="translated">Proprietà</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewRelationshipGraph">
         <source>Relationship graph</source>
-        <target state="new">Relationship graph</target>
+        <target state="translated">Grafo delle relazioni</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewRelationshipsTitle">
         <source>Relationships</source>
-        <target state="new">Relationships</target>
+        <target state="translated">Relazioni</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAllEnvironmentVariables">
         <source>Show all environment variables</source>
-        <target state="new">Show all environment variables</target>
+        <target state="translated">Mostra tutte le variabili di ambiente</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAllPanels">
         <source>Show all panels</source>
-        <target state="new">Show all panels</target>
+        <target state="translated">Mostra tutti i pannelli</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAppModelEnvironmentVariables">
         <source>Show only environment variables from the app model</source>
-        <target state="new">Show only environment variables from the app model</target>
+        <target state="translated">Mostra solo variabili di ambiente dal modello di app</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowLess">
         <source>Show less</source>
-        <target state="new">Show less</target>
+        <target state="translated">Mostra meno</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowMore">
         <source>{0} more</source>
-        <target state="new">{0} more</target>
+        <target state="translated">Altri {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewStatusTitle">
         <source>Status</source>
-        <target state="new">Status</target>
+        <target state="translated">Stato</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewStopTime">
         <source>Stop time</source>
-        <target state="new">Stop time</target>
+        <target state="translated">Ora di arresto</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewTotal">
         <source>Total</source>
-        <target state="new">Total</target>
+        <target state="translated">Totale</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewTracesTitle">
         <source>Traces</source>
-        <target state="new">Traces</target>
+        <target state="translated">Tracce</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewViewAll">
         <source>View all</source>
-        <target state="new">View all</target>
+        <target state="translated">Visualizza tutto</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewWarnings">
         <source>Warnings</source>
-        <target state="new">Warnings</target>
+        <target state="translated">Avvisi</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentLifetime">
         <source>Persistent</source>
-        <target state="new">Persistent</target>
+        <target state="translated">Persistente</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentLifetimeDescription">
         <source>Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</source>
-        <target state="new">Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</target>
+        <target state="translated">Non viene arrestato automaticamente quando AppHost si arresta. Questa durata non garantisce la persistenza dei dati.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePersistentType">
         <source>{0} (persistent)</source>
-        <target state="new">{0} (persistent)</target>
+        <target state="translated">{0} (persistente)</target>
         <note>{0} is the resource type, for example Container. Persistence describes the container lifetime, not durable data.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsAdd">
         <source>Add tag</source>
-        <target state="new">Add tag</target>
+        <target state="translated">Aggiungi tag</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsAppHostDefined">
         <source>Defined by the AppHost. This tag cannot be removed.</source>
-        <target state="new">Defined by the AppHost. This tag cannot be removed.</target>
+        <target state="translated">Definito da AppHost. Non è possibile rimuovere questo tag.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsCreate">
         <source>Create tag "{0}"</source>
-        <target state="new">Create tag "{0}"</target>
+        <target state="translated">Crea tag "{0}"</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsInputLabel">
         <source>Add a tag to {0}</source>
-        <target state="new">Add a tag to {0}</target>
+        <target state="translated">Aggiungere un tag a {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsInputPlaceholder">
         <source>Tag name</source>
-        <target state="new">Tag name</target>
+        <target state="translated">Nome tag</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsLabel">
         <source>Tags</source>
-        <target state="new">Tags</target>
+        <target state="translated">Tag</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsRemove">
         <source>Remove tag {0}</source>
-        <target state="new">Remove tag {0}</target>
+        <target state="translated">Rimuovi tag {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTagsSuggestions">
         <source>Tags</source>
-        <target state="new">Tags</target>
+        <target state="translated">Tag</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTraitDashboardTags">
         <source>Dashboard tags</source>
-        <target state="new">Dashboard tags</target>
+        <target state="translated">Tag del dashboard</target>
         <note>Name of the property listing the tags a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourcesActionsColumnHeader">
@@ -884,7 +884,7 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsResourceTypeDisplayNameProperty">
         <source>Type display name</source>
-        <target state="new">Type display name</target>
+        <target state="translated">Digitare il nome visualizzato</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">

@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
         <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
-        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <target state="translated">Nelze změnit '{0}', protože zdrojová '{1}' kanálu je zakázána nebo jsou mapování zdroje nebo jeho balíčků zděděna či vlastněna uživatelem. Místo toho aktualizujte konfiguraci NuGet ručně.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
         <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
-        <target state="needs-review-translation">Nelze použít '{0}' kanálu pro '{1}', protože MSBuild přepisuje konfiguraci NuGet: {2}. Odebráním těchto přepsání povolíte explicitní aktualizace kanálu. Aktualizace bez explicitního kanálu zůstávají podporovány.</target>
+        <target state="translated">Nelze použít '{0}' kanálu pro '{1}', protože MSBuild přepisuje konfiguraci NuGet: {2}. Pokud chcete povolit aktualizace kanálu, odeberte tato přepsání. Aktualizace bez příkazového řádku nebo nakonfigurovaného kanálu zůstávají podporovány.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -94,7 +94,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredChannelNotFoundFormat">
         <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
-        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <target state="translated">Nelze použít kanál {0} z konfigurace Aspire. {1}</target>
         <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -124,49 +124,49 @@
       </trans-unit>
       <trans-unit id="DryRunBackupRecoveryFormat">
         <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
-        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <target state="translated">Soubor {0} se nepodařilo obnovit. Jeho záloha pro obnovení se zachovala v umístění {1}. Než to zkusíte znovu, obnovte soubor ze zálohy ručně.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
         <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
-        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <target state="translated">Zkušební spuštění se zrušilo. Stávající zálohy se nenahradily. Než to zkusíte znovu, obnovte původní soubory z uvedených záloh nebo tyto zálohy přesuňte jinam.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunExistingBackupsFormat">
         <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
 {0}</source>
-        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+        <target state="translated">Zálohy z dřívějšího zkušebního spuštění už existují. Pokud je budete potřebovat k obnovení, před nahrazením si je uschovejte:
 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunOptionDescription">
         <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
-        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <target state="translated">Pomocí dočasných mezipamětí NuGet ověří aktualizaci projektu .NET AppHost na výslovně zadaný kanál. Žádné změny nenavrhne ani neprovede.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
         <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
-        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <target state="translated">Chcete stávající zálohy nahradit aktuálním obsahem souborů? Tím zahodíte předchozí kopie určené k obnovení.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
         <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
-        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <target state="translated">Přepínač --dry-run vyžaduje výslovné zadání jiné než výchozí hodnoty pomocí přepínačů --channel nebo --quality a nelze ho kombinovat s přepínačem --self ani --migrate.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresDotNet">
         <source>--dry-run is supported only for .NET AppHosts.</source>
-        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <target state="translated">Přepínač --dry-run se podporuje jen u projektů .NET AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunSuccessful">
         <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
-        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <target state="translated">Aktualizace kanálu se úspěšně ověřila. Původní soubory se obnovily. Aktualizace se neprovedla.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunValidating">
         <source>Validating the channel update...</source>
-        <target state="new">Validating the channel update...</target>
+        <target state="translated">Ověřuje se aktualizace kanálu...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -211,7 +211,7 @@
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
         <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
-        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <target state="translated">Obnovení ověření pro aktualizaci kanálu {0} se pro projekt {1} nezdařilo. Aktualizace nebyla použita. Podrobnosti najdete ve výstupu obnovení.</target>
         <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
@@ -501,7 +501,7 @@
       </trans-unit>
       <trans-unit id="UsingConfiguredChannelFormat">
         <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
-        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <target state="translated">Používá se kanál {0} z konfigurace Aspire. Pokud chcete kanál přepsat, předejte parametr --channel.</target>
         <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">

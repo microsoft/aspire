@@ -9,17 +9,17 @@
       </trans-unit>
       <trans-unit id="ConfigurationArrayIndexInvalid">
         <source>Configuration key '{0}' requires a non-negative integer array index.</source>
-        <target state="new">Configuration key '{0}' requires a non-negative integer array index.</target>
+        <target state="translated">Yapılandırma anahtarı '{0}' negatif olmayan bir tamsayı dizisi dizini gerektirir.</target>
         <note>{0} is the configuration key.</note>
       </trans-unit>
       <trans-unit id="ConfigurationArrayIndexOutOfRange">
         <source>Array index {0} in configuration key '{1}' is out of range. Edit an existing element or append at index {2}.</source>
-        <target state="new">Array index {0} in configuration key '{1}' is out of range. Edit an existing element or append at index {2}.</target>
+        <target state="translated">'{1}' yapılandırma anahtarındaki dizi dizini {0} aralık dışında. Mevcut bir öğeyi düzenleyin veya dizin {2} ekleyin.</target>
         <note>{0} is the requested index, {1} is the configuration key, and {2} is the array length.</note>
       </trans-unit>
       <trans-unit id="ConfigurationArrayRequired">
         <source>Configuration key '{0}' requires an array, but the existing value is not an array.</source>
-        <target state="new">Configuration key '{0}' requires an array, but the existing value is not an array.</target>
+        <target state="translated">Yapılandırma anahtarı '{0}' bir dizi gerektiriyor, ancak mevcut değer bir dizi değil.</target>
         <note>{0} is the configuration key.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeyDeletedGlobally">
@@ -34,7 +34,7 @@
       </trans-unit>
       <trans-unit id="ConfigurationKeyInvalid">
         <source>Configuration key '{0}' is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices.</source>
-        <target state="new">Configuration key '{0}' is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices.</target>
+        <target state="translated">Yapılandırma anahtarı '{0}' geçersiz. İç içe özellikler için nokta, dizi dizinleri için negatif olmayan bir tamsayı içeren köşeli parantezler kullanın.</target>
         <note>{0} is the configuration key.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeySetGlobally">
@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
         <source>The configuration key to delete. Use dots for nested properties and [index] for array elements.</source>
-        <target state="needs-review-translation">Silinecek yapılandırma anahtarı</target>
+        <target state="translated">Silinecek yapılandırma anahtarı. İç içe özellikler için nokta, dizi öğeleri için [index] kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -89,7 +89,7 @@
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
         <source>The configuration key to retrieve. Use dots for nested properties and [index] for array elements.</source>
-        <target state="needs-review-translation">Getirilecek yapılandırma anahtarı</target>
+        <target state="translated">Alınacak yapılandırma anahtarı. İç içe özellikler için nokta, dizi öğeleri için [index] kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -189,7 +189,7 @@
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
         <source>The configuration key to set. Use dots for nested properties and [index] to create or edit array elements.</source>
-        <target state="needs-review-translation">Ayarlanacak yapılandırma anahtarı</target>
+        <target state="translated">Ayarlanacak yapılandırma anahtarı. İç içe özellikler için nokta, dizi öğeleri oluşturmak veya düzenlemek için [index] kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
