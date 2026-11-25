@@ -75,12 +75,11 @@ child.once('exit', (code, signal) => {
     clearTimeout(deadline);
     clearTimeout(grace);
     const clientExitCode = code ?? (signal ? 128 + constants.signals[signal] : 1);
-    // An external kill/OOM during cleanup is not acknowledged cancellation.
-    // `docker buildx` and `docker build` run Buildx as a CLI plugin. When the
-    // plugin dies from a signal, Docker exits 255: it propagates
+    // An external kill/OOM is not acknowledged cancellation, before or during
+    // deadline cleanup. `docker buildx` and `docker build` run Buildx as a CLI
+    // plugin. When the plugin dies from a signal, Docker exits 255: it propagates
     // syscall.WaitStatus.ExitStatus(), which is -1 for a signaled process. See
     // https://github.com/docker/cli/blob/v28.0.4/cmd/docker/docker.go#L366-L376
-    // Treat 255 during deadline cleanup as unconfirmed cancellation as well.
-    const killedDuringCleanup = clientExitCode === 137 || (deadlineReached && clientExitCode === 255);
-    process.exit(forcedKill || killedDuringCleanup ? 137 : cancellationExitCode || (deadlineReached ? 124 : clientExitCode));
+    const killed = clientExitCode === 137 || clientExitCode === 255;
+    process.exit(forcedKill || killed ? 137 : cancellationExitCode || (deadlineReached ? 124 : clientExitCode));
 });

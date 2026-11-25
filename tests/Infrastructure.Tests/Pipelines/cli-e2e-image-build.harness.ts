@@ -56,12 +56,15 @@ function stubDocker(): void {
             process.on('SIGTERM', () => process.kill(process.pid, 'SIGKILL'));
             setInterval(() => {}, 1000);
             return;
+        case 'plugin-kill':
         case 'cleanup-plugin-kill': {
             // Model the Docker CLI/Buildx plugin boundary: the plugin dies from
-            // SIGKILL during deadline cleanup and Docker reports exit 255.
+            // SIGKILL (before the deadline, or during deadline cleanup) and
+            // Docker reports exit 255.
             const plugin = spawn('bash', ['-c', `
                 trap 'kill -KILL $$' TERM
                 echo "$$" > "$IMAGE_BUILD_TEST_ROOT/child-pid"
+                ${scenario === 'plugin-kill' ? 'kill -KILL $$' : ''}
                 while true; do sleep 1; done
             `], { stdio: 'inherit' });
             process.on('SIGTERM', () => {});
@@ -164,7 +167,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
         assert.ifError(result.error);
         const output = result.stdout + result.stderr;
         const expectedStatus = scenario === 'fallback-failure' ? 42
-            : ['forced-kill', 'cleanup-kill', 'cleanup-plugin-kill'].includes(scenario) ? 137
+            : ['forced-kill', 'cleanup-kill', 'plugin-kill', 'cleanup-plugin-kill'].includes(scenario) ? 137
             : ['cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario) ? 143 : 0;
         assert.equal(result.status, expectedStatus, output);
         const trace = fs.readFileSync(path.join(workspace, 'trace'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
@@ -194,7 +197,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
             ]);
         } else {
             const expectedArgs = ['build', '-f', 'Dockerfile with spaces', '-t', 'test:primary'];
-            const noFallback = ['success', 'forced-kill', 'cleanup-kill', 'cleanup-plugin-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario);
+            const noFallback = ['success', 'forced-kill', 'cleanup-kill', 'plugin-kill', 'cleanup-plugin-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario);
             assert.deepEqual(trace.map(entry => entry.args), [
                 [...expectedArgs, '--build-arg', mirrorArg, '.'],
                 ...(noFallback ? [] : [[...expectedArgs, '.']])
@@ -209,7 +212,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
                 assert.match(output, /exceeded 5s; retrying with default Ubuntu apt sources/);
                 assert.ok(Date.now() - started < 15000, output);
             }
-            if (['forced-kill', 'cleanup-kill', 'cleanup-plugin-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario)) {
+            if (['forced-kill', 'cleanup-kill', 'plugin-kill', 'cleanup-plugin-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario)) {
                 assert.match(output, /not retrying after cancellation or timeout execution failure/);
             }
             if (scenario === 'external-cancel' || scenario === 'cleanup-cancel') {
@@ -219,9 +222,14 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
                 assert.match(output, /Deadline cleanup started; sending external TERM to supervisor/);
                 assert.match(output, /Image build exceeded 5s/);
             }
+            if (scenario === 'plugin-kill' || scenario === 'cleanup-plugin-kill') {
+                assert.match(output, /Buildx plugin exited from SIGKILL/);
+            }
             if (scenario === 'cleanup-plugin-kill') {
                 assert.match(output, /Image build exceeded 5s/);
-                assert.match(output, /Buildx plugin exited from SIGKILL/);
+            }
+            if (scenario === 'plugin-kill') {
+                assert.doesNotMatch(output, /Image build exceeded/);
             }
         }
         const childPath = path.join(workspace, 'child-pid');
