@@ -728,7 +728,7 @@ internal sealed partial class MacTrayApplication
                     scene.Targets.Where(target => target.Tooltip is not null && !target.HitBounds.IsEmpty).Select(target => target.Tooltip!))
                 && _panelTooltipOwners.Count == _panelTooltips.Count && _panelTooltips.Any(tooltip => tooltip.Text == "Documentation")
                 && scene.Accessibility.Single(element => element.Target?.Kind == PanelTargetKind.Quit) is
-                    { Name: "Quit", Description: "Quit the tray. AppHosts keep running.", Target.Tooltip: "Quit the tray. AppHosts keep running." },
+                    { Name: "Quit", Description: "Quit", Target.Tooltip: "Quit" },
                 "Every visible icon button must have exactly one native tooltip.");
             var captures = new List<string>();
             if (captureDirectory is not null)

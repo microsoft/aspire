@@ -197,6 +197,7 @@ internal static class FluentUISetupHelpers
         IDashboardRunStore? dashboardRunStore = null)
     {
         context.Services.AddFluentUIComponents();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.DomFunctions.focus", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextInput.attachImmediateEvent", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextMasked.applyNumberMask", _ => true).SetVoidResult();

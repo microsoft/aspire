@@ -20,7 +20,7 @@ public sealed partial class SqliteTelemetryRepository
         // Keep the count, selected trace IDs, and their spans in one snapshot so eviction
         // cannot remove a selected trace between queries.
         using var transaction = connection.BeginTransaction(deferred: true);
-        var query = BuildTraceQuery(context);
+        var query = BuildTraceQuery(connection, transaction, context);
         var aggregate = connection.QuerySingle<TraceAggregateRecord>($"""
             SELECT COUNT(*) AS TotalItemCount, COALESCE(MAX(t.duration_ticks), 0) AS MaxDurationTicks
             {query.FromAndWhere};
@@ -60,7 +60,7 @@ public sealed partial class SqliteTelemetryRepository
     {
         using var connection = _database.OpenConnection();
         using var interrupt = connection.RegisterInterrupt(cancellationToken);
-        var query = BuildTraceQuery(context);
+        var query = BuildTraceQuery(connection, transaction: null, context);
         query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
         query.Parameters.Add("Count", Math.Max(context.Count, 0));
         query.Parameters.Add("LatestItemCount", Math.Max(context.LatestItemCount ?? int.MaxValue, 0));
@@ -142,7 +142,7 @@ public sealed partial class SqliteTelemetryRepository
         var firstRecord = records[0];
         var summaries = records
             .Where(record => record.TraceId is not null)
-            .GroupBy(record => record.TraceId!, StringComparer.Ordinal)
+            .GroupBy(record => record.TraceId!, StringComparers.OtlpTraceId)
             .Select(group =>
             {
                 var trace = group.First();
@@ -180,10 +180,11 @@ public sealed partial class SqliteTelemetryRepository
             new(resourceName, instanceId, uninstrumentedPeer, _otlpContext);
     }
 
-    private static TraceQuery BuildTraceQuery(GetTracesRequest context)
+    private static TraceQuery BuildTraceQuery(SqliteConnection connection, SqliteTransaction? transaction, GetTracesRequest context)
     {
         var sql = new StringBuilder("FROM telemetry_traces t WHERE 1 = 1");
         var parameters = new DynamicParameters();
+        string? resourcePredicate = null;
         if (context.ResourceKeys.Count > 0)
         {
             var resourcePredicates = new List<string>(context.ResourceKeys.Count);
@@ -191,17 +192,16 @@ public sealed partial class SqliteTelemetryRepository
             {
                 var key = context.ResourceKeys[index];
                 parameters.Add($"ResourceName{index}", key.Name);
-                var resourcePredicate = $"r.resource_name = @ResourceName{index} COLLATE NOCASE";
+                var predicate = $"r.resource_name = @ResourceName{index} COLLATE NOCASE";
                 if (key.InstanceId is not null)
                 {
                     parameters.Add($"InstanceId{index}", key.InstanceId);
-                    resourcePredicate += $" AND r.instance_id = @InstanceId{index} COLLATE NOCASE";
+                    predicate += $" AND r.instance_id = @InstanceId{index} COLLATE NOCASE";
                 }
-                resourcePredicates.Add($"({resourcePredicate})");
+                resourcePredicates.Add($"({predicate})");
             }
-            sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr JOIN telemetry_resources r ON r.resource_id = tr.resource_id WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND (");
-            sql.AppendJoin(" OR ", resourcePredicates);
-            sql.Append("))");
+            resourcePredicate = string.Join(" OR ", resourcePredicates);
+            sql.Append(CultureInfo.InvariantCulture, $" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr JOIN telemetry_resources r ON r.resource_id = tr.resource_id WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND ({resourcePredicate}))");
         }
         if (!string.IsNullOrWhiteSpace(context.TraceNameFilterText))
         {
@@ -210,6 +210,9 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         var positivePredicates = new List<string>();
+        var timestampBoundCount = 0;
+        var hasTimestampLowerBound = false;
+        var hasTimestampUpperBound = false;
         var filterIndex = 0;
         foreach (var filter in context.Filters.Where(filter => filter.Enabled))
         {
@@ -239,9 +242,46 @@ public sealed partial class SqliteTelemetryRepository
             else
             {
                 positivePredicates.Add(BuildSpanFieldPredicate(fieldFilter, parameters, filterIndex++, invertNegative: false));
+                if (fieldFilter.Field == KnownTraceFields.TimestampField)
+                {
+                    switch (fieldFilter.Condition)
+                    {
+                        case FilterCondition.GreaterThan:
+                        case FilterCondition.GreaterThanOrEqual:
+                            hasTimestampLowerBound = true;
+                            timestampBoundCount++;
+                            break;
+                        case FilterCondition.LessThan:
+                        case FilterCondition.LessThanOrEqual:
+                            hasTimestampUpperBound = true;
+                            timestampBoundCount++;
+                            break;
+                    }
+                }
             }
         }
-        if (positivePredicates.Count > 0)
+        if (hasTimestampLowerBound && hasTimestampUpperBound && timestampBoundCount == positivePredicates.Count)
+        {
+            // "All resources" can also arrive as explicit keys. Check coverage using resource metadata so that
+            // only a selection that excludes trace sources takes the trace-first path.
+            var excludesTraceSources = resourcePredicate is not null && connection.QuerySingle<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM telemetry_resources r WHERE r.has_traces = 1 AND ({resourcePredicate}) IS NOT TRUE);
+                """, parameters, transaction);
+            if (excludesTraceSources)
+            {
+                // After filtering traces by resource, seek the time range by trace ID. The matching span
+                // can come from any resource on the trace, not just from the selection.
+                sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_spans s WHERE s.trace_id = t.trace_id AND ");
+            }
+            else
+            {
+                // For broad searches, seek by resource ID and time range before looking up the matching traces.
+                sql.Append(" AND t.trace_id IN (SELECT s.trace_id FROM telemetry_spans s WHERE s.resource_id IN (SELECT resource_id FROM telemetry_resources) AND ");
+            }
+            sql.AppendJoin(" AND ", positivePredicates);
+            sql.Append(')');
+        }
+        else if (positivePredicates.Count > 0)
         {
             sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id JOIN telemetry_span_kinds sk ON sk.kind = s.kind JOIN telemetry_span_statuses ss ON ss.status = s.status LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND ");
             sql.AppendJoin(" AND ", positivePredicates);
@@ -343,6 +383,11 @@ public sealed partial class SqliteTelemetryRepository
                 _ => filter.Condition
             }
             : filter.Condition;
+        if (filter.Field == KnownTraceFields.TimestampField)
+        {
+            return BuildTimestampFilterPredicate("s.start_time_ticks", condition, filter.Value, parameters, parameterName);
+        }
+
         parameters.Add(
             parameterName,
             condition is FilterCondition.Contains or FilterCondition.NotContains
@@ -358,18 +403,8 @@ public sealed partial class SqliteTelemetryRepository
             KnownTraceFields.KindField => "sk.kind_name",
             KnownTraceFields.StatusField => "ss.status_name",
             KnownSourceFields.NameField => "sc.scope_name",
-            KnownTraceFields.TimestampField => "s.start_time_ticks / 10000",
             _ => null
         };
-        if (filter.Field == KnownTraceFields.TimestampField)
-        {
-            if (!DateTime.TryParse(filter.Value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeLocal, out var date))
-            {
-                return "0 = 1";
-            }
-            parameters.Add(parameterName, date.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond);
-            return BuildNumericPredicate(expression!, condition, parameterName);
-        }
         if (expression is not null)
         {
             return BuildStringPredicate(expression, condition, parameterName);
@@ -405,7 +440,10 @@ public sealed partial class SqliteTelemetryRepository
         using var transaction = connection.BeginTransaction(deferred: true);
         var query = BuildSpanQuery(context);
         var totalCount = connection.QuerySingle<int>($"SELECT COUNT(*) {query.FromAndWhere};", query.Parameters, transaction);
-        query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
+        var hiddenItemCount = context.LatestItemCount is { } latestItemCount
+            ? Math.Max(totalCount - Math.Max(latestItemCount, 0), 0)
+            : 0;
+        query.Parameters.Add("StartIndex", (long)Math.Max(context.StartIndex, 0) + hiddenItemCount);
         query.Parameters.Add("Count", Math.Max(context.Count, 0));
         var identities = connection.Query<SpanIdentityRecord>($"""
             SELECT s.trace_id AS TraceId, s.span_id AS SpanId
@@ -413,8 +451,8 @@ public sealed partial class SqliteTelemetryRepository
             ORDER BY t.first_span_timestamp_ticks, t.trace_id, s.start_time_ticks, s.span_id
             LIMIT @Count OFFSET @StartIndex;
             """, query.Parameters, transaction).AsList();
-        var traces = identities.Select(identity => identity.TraceId).Distinct(StringComparer.Ordinal)
-            .ToDictionary(traceId => traceId, traceId => MaterializeTrace(connection, traceId, transaction)!, StringComparer.Ordinal);
+        var traces = identities.Select(identity => identity.TraceId).Distinct(StringComparers.OtlpTraceId)
+            .ToDictionary(traceId => traceId, traceId => MaterializeTrace(connection, traceId, transaction)!, StringComparers.OtlpTraceId);
         return new GetSpansResponse
         {
             PagedResult = new PagedResult<OtlpSpan>
@@ -470,6 +508,7 @@ public sealed partial class SqliteTelemetryRepository
             )
             SELECT
                 a.TotalItemCount,
+                p.trace_id AS TraceId,
                 p.resource_id AS ResourceId,
                 p.name AS Name,
                 p.start_time_ticks AS StartTimeTicks,
@@ -498,6 +537,7 @@ public sealed partial class SqliteTelemetryRepository
                 .Select(record => new RequestSpanSummary
                 {
                     Resource = GetCachedResource(record.ResourceId!.Value)!,
+                    TraceId = record.TraceId!,
                     Name = record.Name!,
                     StartTime = new DateTime(record.StartTimeTicks!.Value, DateTimeKind.Utc),
                     Duration = TimeSpan.FromTicks(record.EndTimeTicks!.Value - record.StartTimeTicks.Value),
@@ -823,7 +863,7 @@ public sealed partial class SqliteTelemetryRepository
             """, new { TraceIds = traceIds }, transaction).AsList();
         if (records.Count == 0)
         {
-            return new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
+            return new Dictionary<string, OtlpTrace>(StringComparers.OtlpTraceId);
         }
 
         var spanAttributes = connection.Query<TraceOwnedAttributeRecord>("""
@@ -876,8 +916,8 @@ public sealed partial class SqliteTelemetryRepository
         var outgoingLinks = linkRecords.ToLookup(record => (record.SourceTraceId, record.SourceSpanId));
         var incomingLinks = linkRecords.ToLookup(record => (record.TraceId, record.SpanId));
 
-        var traces = new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
-        foreach (var traceRecords in records.GroupBy(record => record.TraceId, StringComparer.Ordinal))
+        var traces = new Dictionary<string, OtlpTrace>(StringComparers.OtlpTraceId);
+        foreach (var traceRecords in records.GroupBy(record => record.TraceId, StringComparers.OtlpTraceId))
         {
             var traceId = traceRecords.Key;
             var firstRecord = traceRecords.First();
@@ -977,6 +1017,7 @@ public sealed partial class SqliteTelemetryRepository
     internal sealed class RequestSpanRecord
     {
         public required int TotalItemCount { get; init; }
+        public string? TraceId { get; init; }
         public long? ResourceId { get; init; }
         public string? Name { get; init; }
         public long? StartTimeTicks { get; init; }

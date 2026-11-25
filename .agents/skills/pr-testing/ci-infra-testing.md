@@ -562,9 +562,10 @@ eyeballing — e.g. `eng/scripts/verify-cli-tool-nupkg.ps1`, `verify-cli-archive
 itself a finding.
 
 **Build behavior changed → read the binlog, not just the console.** CI build jobs emit
-MSBuild binlogs via `/bl:` — e.g. `BuildAndArchive.binlog`, `BuildCli.binlog`,
-`BundlePayload.binlog` under `artifacts/log/...` (`run-tests.yml`,
-`build-cli-native-archives.yml`) and `SendToHelix.binlog` on the AzDO Helix path. Download
+MSBuild binlogs via `/bl:` — e.g. `BuildAndArchive.binlog` from `run-tests.yml`,
+`BuildNativeBundle.binlog` from `build-cli-native-archives.yml`, and child-build
+`PublishAndPackageCli.binlog` from `eng/Bundle.proj`, under `artifacts/log/...`.
+The AzDO Helix path emits `SendToHelix.binlog`. Download
 the binlog and confirm the change took effect: the target/task ran, the property/condition
 evaluated as intended, and the right items were (or were not) included.
 

@@ -54,14 +54,6 @@
   <data name="FailedDiscoverNuGetConfig" xml:space="preserve">
     <value>Failed to discover NuGet.config files.</value>
   </data>
-  <data name="CommandFailedWithExitCodeFormat" xml:space="preserve">
-    <value>Command '{0}' failed with exit code {1}.</value>
-    <comment>{0} is the command line that was run. {1} is the process exit code.</comment>
-  </data>
-  <data name="CommandFailedWithExitCodeAndOutputFormat" xml:space="preserve">
-    <value>Command '{0}' failed with exit code {1}:</value>
-    <comment>{0} is the command line that was run. {1} is the process exit code. The command's own output follows on indented lines.</comment>
-  </data>
   <data name="ChannelUpdateRequiresAmbientNuGetConfigurationFormat" xml:space="preserve">
     <value>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</value>
   </data>
@@ -129,7 +121,7 @@
     <value>   Mapping: {0}</value>
   </data>
   <data name="FallbackParsingWarning" xml:space="preserve">
-    <value>Note: Update plan generated using fallback parsing because MSBuild could not evaluate the AppHost project. Dependency analysis may have reduced accuracy.</value>
+    <value>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</value>
   </data>
   <data name="UpdateChannelStepDescriptionFormat" xml:space="preserve">
     <value>Update aspire.config.json channel from '{0}' to '{1}'</value>

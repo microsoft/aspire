@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
@@ -84,36 +83,6 @@ public class AzureBicepProvisionerTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddAzureInfrastructure("infrastructure", _ => { })
                 .WithParameter(bicepParameterName);
-    }
-
-    [Fact]
-    public async Task NestedChildResourcesShouldGetUpdated()
-    {
-        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var cosmos = builder.AddAzureCosmosDB("cosmosdb");
-        var db = cosmos.AddCosmosDatabase("db");
-        var entries = db.AddContainer("entries", "/id");
-
-        using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-
-        await app.StartAsync(cts.Token);
-
-        var rns = app.Services.GetRequiredService<ResourceNotificationService>();
-        await foreach (var resourceEvent in rns.WatchAsync(cts.Token).WithCancellation(cts.Token))
-        {
-            if (resourceEvent.Resource == entries.Resource)
-            {
-                var parentProperty = resourceEvent.Snapshot.Properties.FirstOrDefault(x => x.Name == KnownProperties.Resource.ParentName)?.Value?.ToString();
-                Assert.Equal("db", parentProperty);
-                return;
-            }
-        }
-
-        Assert.Fail();
     }
 
     [Fact]

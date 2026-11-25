@@ -159,7 +159,7 @@ echo "→ Building a stabilized Release CLI bundle for use as the smoke driver"
         -p:StabilizePackageVersion=true \
         "-p:BundleVersion=$APPHOST_SDK_VERSION" \
         "-p:TargetRid=$RUNTIME_IDENTIFIER" \
-        -p:SkipNativeBuild=true \
+        -p:SkipCliArtifacts=true \
         --nologo -v quiet
     "$DOTNET" publish "$ASPIRE_CLI_PROJECT" \
         -c Release -r "$RUNTIME_IDENTIFIER" --self-contained \

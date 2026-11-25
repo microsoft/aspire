@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFramework>$(AspireTerminalHostTargetFramework)</TargetFramework>
     <!-- Match the supported CLI bundle RIDs. -->
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -51,6 +51,7 @@
     <Compile Include="..\Shared\ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
     <Compile Include="..\Shared\RequestIdTypeInfoResolver.cs" Link="Shared\RequestIdTypeInfoResolver.cs" />
     <Compile Include="..\Shared\SocketPermissionHelper.cs" Link="Shared\SocketPermissionHelper.cs" />
+    <Compile Include="$(SharedDir)TemporaryStorage.cs" Link="Shared/TemporaryStorage.cs" />
     <Compile Include="..\Shared\SocketDirectoryNames.cs" Link="Shared\SocketDirectoryNames.cs" />
     <Compile Include="..\Shared\TerminalHost\*.cs" Link="Shared\%(Filename)%(Extension)" />
   </ItemGroup>

@@ -42,7 +42,8 @@ CI. Two compilations in the same checkout can agree while still differing from C
 The explicit seed preserves the canonical schedule regardless of checkout context.
 
 `validate-agentic-workflows.yml` recompiles with the pinned gh-aw version, checks
-for generated-file drift, runs `gh aw lint --shellcheck` as a blocking lint gate,
+for generated-file drift, runs `gh aw lint --shellcheck` on the generated workflows
+as a blocking lint gate,
 and runs the `Category=AgenticWorkflow` contracts in `Infrastructure.Tests`.
 Class-level traits group generated-workflow, validation trigger/drift, and shared
 process-runner tests without including unrelated negative-test diagnostics.
@@ -89,6 +90,23 @@ their canonical safe-output JSON remains compiler-managed.
 Node 20 action. There is no supported Node 24 upgrade for that dependency;
 replacing it requires a separate migration of its authentication and locking
 behavior, rather than merely changing an action pin.
+
+## Milestone changelog fetch diagnostics
+
+`milestone-changelog.md` retries PR-list requests up to four times, waiting
+15, 30, and 60 seconds between attempts. HTTP 5xx errors and the
+`unexpected end of JSON input` diagnostic are retryable. When `gh` succeeds
+but returns invalid or empty JSON, validation also retries, even if stderr
+contains warnings. Other command failures and valid JSON of the wrong type
+fail immediately.
+
+Each failed attempt logs the output filename, command and validation exit codes,
+stderr from both tools, and the first 4096 bytes of the response with its total
+byte count. Response previews are bounded because PR bodies can be large.
+Diagnostic lines are prefixed and legacy `##[` command markers are escaped so
+response text is not interpreted as GitHub Actions workflow commands.
+Successful requests also replay any `gh` warnings;
+their complete JSON is kept in the normal data files rather than printed.
 
 ## Auto-sec dependency reconciliation
 
@@ -222,6 +240,8 @@ contents stop reconciliation before the agent can propose a duplicate fix.
   Alert collection suppresses its own diagnostics. Pre-scrub error detection and
   secret-redaction parsers are withheld because they can re-emit private log data;
   their transcript-derived classifications are unavailable, not reported as zero.
+  The generated GitHub rate-limit loggers stay unchanged because they only report
+  API quota counters and read no agent-written data.
   GitHub still records actual execution failures and exit statuses. Unsupported
   execution layouts fail compilation rather than silently losing this boundary.
 
@@ -229,9 +249,6 @@ Prerequisites:
 - The `auto-sec` label must exist.
 - The Aspire bot App needs pull request write access, and contents write access to
   push the `auto-sec` branch.
-
-Because the compiler's Windows build mis-handles redaction paths, compile this
-workflow on Linux or WSL.
 
 After compiling `auto-sec`, run
 `node .github/workflows/auto-sec/publication-guard.js`. The pinned compiler emits

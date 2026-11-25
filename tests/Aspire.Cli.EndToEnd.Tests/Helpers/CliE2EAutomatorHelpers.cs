@@ -778,90 +778,6 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
-    /// Waits for the current <c>aspire update</c> invocation to return to the shell, declining the optional
-    /// post-update CLI self-update confirmation if it appears.
-    /// </summary>
-    /// <remarks>
-    /// After the project update step, <c>aspire update</c> asks
-    /// "An update is available for the Aspire CLI. Would you like to update it now? [Y/n]" whenever a newer CLI is
-    /// published on the selected channel. <c>features.updateNotificationsEnabled</c> does not gate this prompt, and
-    /// whether it appears depends on what has been published relative to the CLI under test, so callers must handle
-    /// both outcomes.
-    /// </remarks>
-    internal static async Task WaitForAspireUpdateCompletionAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter,
-        TimeSpan? timeout = null)
-    {
-        const string CliSelfUpdatePromptText = "An update is available for the Aspire CLI";
-
-        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
-        // The prompt that preceded the `aspire update` command shows the previous sequence number, e.g.
-        //   [7 OK] $ aspire update --channel stable
-        // and the command finishes at "[8 OK] $ " or "[8 ERR:1] $ ".
-        var commandPromptText = $"[{counter.Value - 1} OK] $ ";
-        var successPromptText = $"[{counter.Value} OK] $";
-        var errorPromptText = $"[{counter.Value} ERR:";
-        var sawCliSelfUpdatePrompt = false;
-        var sawError = false;
-
-        await auto.WaitUntilAsync(snapshot =>
-        {
-            // Only consider output after the line where this `aspire update` was typed. Earlier update runs in
-            // the same terminal may have left the same CLI self-update prompt on screen. If the command line has
-            // scrolled off screen, anything older has scrolled off too, so the whole screen is current.
-            var firstLine = 0;
-            for (var lineIndex = snapshot.Height - 1; lineIndex >= 0; lineIndex--)
-            {
-                if (snapshot.GetLineTrimmed(lineIndex).Contains(commandPromptText, StringComparison.Ordinal))
-                {
-                    firstLine = lineIndex;
-                    break;
-                }
-            }
-
-            for (var lineIndex = firstLine; lineIndex < snapshot.Height; lineIndex++)
-            {
-                var line = snapshot.GetLineTrimmed(lineIndex);
-                if (line.Contains(successPromptText, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-
-                if (line.Contains(errorPromptText, StringComparison.Ordinal))
-                {
-                    sawError = true;
-                    return true;
-                }
-
-                if (line.Contains(CliSelfUpdatePromptText, StringComparison.Ordinal))
-                {
-                    sawCliSelfUpdatePrompt = true;
-                    return true;
-                }
-            }
-
-            return false;
-        }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ or CLI self-update prompt (fail-fast on error)");
-
-        if (sawError)
-        {
-            throw new InvalidOperationException(
-                $"Command failed with non-zero exit code (detected ERR prompt at sequence {counter.Value}). Check the terminal recording for details.");
-        }
-
-        if (sawCliSelfUpdatePrompt)
-        {
-            // Do not send Enter: the Spectre.Console [Y/n] confirmation accepts a single character, and an extra
-            // Enter can reach bash after aspire exits, running a blank command that desyncs the prompt counter.
-            // See .agents/skills/cli-e2e-testing/troubleshooting.md.
-            await auto.TypeAsync("n");
-        }
-
-        await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
-    }
-
-    /// <summary>
     /// Clears the terminal screen by running the <c>clear</c> command and waiting for the prompt.
     /// </summary>
     internal static async Task ClearScreenAsync(
@@ -1237,11 +1153,71 @@ internal static class CliE2EAutomatorHelpers
             return;
         }
 
-        var containerWorkspace = $"/workspace/{workspace.WorkspaceRoot.Name}";
-
-        await auto.TypeAsync(BuildAspireDiagnosticsCaptureCommand(containerWorkspace) + "echo done");
+        await auto.TypeAsync(BuildAspireDiagnosticsCaptureCommand(GetContainerWorkspacePath(workspace)) + "echo done");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(15));
+    }
+
+    /// <summary>
+    /// Gets the path at which the workspace is mounted inside the Docker test container.
+    /// </summary>
+    internal static string GetContainerWorkspacePath(TemporaryWorkspace workspace)
+        => $"/workspace/{workspace.WorkspaceRoot.Name}";
+
+    /// <summary>
+    /// The file, under <see cref="DiagnosticsDirectoryName"/>, that records the process table and shell jobs
+    /// captured by <see cref="SuspendHungCommandAndCaptureDiagnosticsAsync"/>.
+    /// </summary>
+    internal const string HungCommandProcessesFileName = "hung-command-processes.txt";
+
+    /// <summary>
+    /// Returns the shell to a usable state when its foreground command stopped making progress, capturing the
+    /// process table and Aspire diagnostics for that command before killing it.
+    /// </summary>
+    /// <remarks>
+    /// When a CLI command hangs, the command typed by <see cref="CaptureAspireDiagnosticsAsync"/> is queued behind
+    /// the hung process and never runs, so the uploaded artifacts contain no CLI logs for the failure. Ctrl+Z
+    /// suspends the foreground job (keeping its process tree alive) and returns control to bash. The process
+    /// snapshot is written before the suspended jobs are killed so it shows which command and child processes
+    /// were stuck and for how long. If the shell was already idle, Ctrl+Z is a no-op and only the capture runs.
+    /// </remarks>
+    /// <param name="auto">The terminal automator.</param>
+    /// <param name="diagnosticsDestination">
+    /// The shell path under which <see cref="DiagnosticsDirectoryName"/> is written, or <see langword="null"/> to
+    /// only recover the shell.
+    /// </param>
+    /// <param name="timeout">How long to wait for the shell to run the capture command.</param>
+    internal static async Task SuspendHungCommandAndCaptureDiagnosticsAsync(
+        this Hex1bTerminalAutomator auto,
+        string? diagnosticsDestination,
+        TimeSpan? timeout = null)
+    {
+        await auto.Ctrl().KeyAsync(Hex1b.Input.Hex1bKey.Z);
+
+        var capture = diagnosticsDestination is null
+            ? string.Empty
+            : BuildHungCommandSnapshotCommand(diagnosticsDestination) + BuildAspireDiagnosticsCaptureCommand(diagnosticsDestination);
+
+        // The prompt counter is unreliable after a hang (the hung command's prompt was never consumed), so wait for
+        // a unique marker instead. The marker is split in the typed command so the echoed command line cannot match.
+        var markerId = Guid.NewGuid().ToString("N");
+        // Each job runs in its own process group, so signal the whole group to also stop pipeline members and children.
+        await auto.TypeAsync(capture + $"for pgid in $(jobs -p); do kill -KILL -- -$pgid; done 2>/dev/null; echo \"hung-command-\"\"recovered-{markerId}\"");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync($"hung-command-recovered-{markerId}", timeout: timeout ?? TimeSpan.FromSeconds(15));
+    }
+
+    private static string BuildHungCommandSnapshotCommand(string destinationExpression)
+    {
+        var diag = $"{destinationExpression}/{DiagnosticsDirectoryName}";
+
+        // procps is not guaranteed in every test image, so fall back to reading /proc directly.
+        return
+            $"mkdir -p \"{diag}\"; " +
+            "{ date -u; jobs -l; " +
+            "ps -eo pid,ppid,pgid,stat,etime,args 2>/dev/null || " +
+            "for p in /proc/[0-9]*; do echo \"${p#/proc/} $(tr '\\0' ' ' < \"$p/cmdline\" 2>/dev/null)\"; done; " +
+            $"}} > \"{diag}/{HungCommandProcessesFileName}\" 2>&1; ";
     }
 
     /// <summary>

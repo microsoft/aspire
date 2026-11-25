@@ -52,6 +52,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IFeatures _features;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly CliExecutionContext _executionContext;
+    private readonly ITemporaryStorage _temporaryStorage;
     private readonly ILogger<GuestAppHostProject> _logger;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly TimeProvider _timeProvider;
@@ -88,6 +89,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         CliExecutionContext executionContext,
         IEnvironment environment,
         AppHostConfigurationProjector appHostConfigurationProjector,
+        ITemporaryStorage temporaryStorage,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
         ProfilingTelemetry profilingTelemetry,
@@ -110,6 +112,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _executionContext = executionContext;
         _environment = environment;
         _appHostConfigurationProjector = appHostConfigurationProjector;
+        _temporaryStorage = temporaryStorage;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _profilingTelemetry = profilingTelemetry;
@@ -623,6 +626,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchProfileEnvironmentVariables,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
+            if (context.Isolated)
+            {
+                launchSettingsEnvVars["DcpPublisher__RandomizePorts"] = "true";
+            }
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
             if (appHostServerProject is NativeAppHostServerProject)
@@ -1101,7 +1108,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     internal async Task<bool> InstallIntegrationHostPackageAsync(string name, string npmPath, string hostDir, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var resultDirectory = Directory.CreateTempSubdirectory("aspire-integration-install-");
+        var resultDirectory = _temporaryStorage.CreateTempSubdirectory("aspire-integration-install-");
         try
         {
             var exitCodePath = Path.Combine(resultDirectory.FullName, "exit-code");

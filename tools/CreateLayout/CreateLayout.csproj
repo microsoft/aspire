@@ -14,6 +14,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The SDK embeds producer framework values for standalone artifact discovery. -->
+    <AssemblyMetadata Include="Aspire.Managed.TargetFramework" Value="$(DefaultTargetFramework)" />
+    <AssemblyMetadata Include="Aspire.Dashboard.TargetFramework" Value="$(AspireDashboardTargetFramework)" />
+    <AssemblyMetadata Include="Aspire.TerminalHost.TargetFramework" Value="$(AspireTerminalHostTargetFramework)" />
+    <AssemblyMetadata Include="Aspire.Hosting.Native.Server.TargetFramework" Value="$(AspireNativeServerTargetFramework)" />
     <Compile Include="$(SharedDir)WindowsTrayPayload.cs" Link="WindowsTrayPayload.cs" />
     <Compile Include="$(SharedDir)LinuxTrayPayload.cs" Link="LinuxTrayPayload.cs" />
     <Compile Include="$(SharedDir)TerminalHostPayload.cs" Link="TerminalHostPayload.cs" />

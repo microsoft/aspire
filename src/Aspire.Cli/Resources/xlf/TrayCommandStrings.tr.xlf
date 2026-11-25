@@ -4,12 +4,12 @@
     <body>
       <trans-unit id="BundleRequired">
         <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
-        <target state="needs-review-translation">Deneysel Aspire tepsisi kiralanan ve sürüm bilgisi olan bir CLI paketi gerektirir. Kullanılabilir paket bulunamadı. Tepsi yardımcı bileşenini içeren bir Windows veya macOS Aspire paketi yükleyin.</target>
+        <target state="translated">Aspire tepsisi kiralanan ve sürüm bilgisi olan bir CLI paketi gerektirir. Kullanılabilir paket bulunamadı. Masaüstünüz için tepsi yardımcı bileşenini içeren bir Aspire paketi yükleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the desktop tray companion (Preview)</source>
-        <target state="needs-review-translation">Windows veya macOS tepsi yardımcı bileşenini yönetin (Deneysel)</target>
+        <target state="translated">Masaüstü tepsisi yardımcı bileşenini yönetin (Önizleme)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
@@ -24,12 +24,12 @@
       </trans-unit>
       <trans-unit id="NativeCliRequired">
         <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="needs-review-translation">Deneysel tepsinin başlatılması yerel bir Aspire CLI yürütülebilir dosyasının yüklü olmasını gerektirir. Yönetilen geliştirme derlemeleri ve 'dotnet aspire.dll' desteklenmiyor.</target>
+        <target state="translated">Tepsinin başlatılması yerel bir Aspire CLI yürütülebilir dosyasının yüklü olmasını gerektirir. Yönetilen geliştirme derlemeleri ve 'dotnet aspire.dll' desteklenmiyor.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
         <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
-        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <target state="translated">Masaüstü ortamında sistem tepsisi ana bilgisayarı bulunmadığından sistem tepsisi simgesi henüz görünmez. GNOME'da veya masaüstü ortamınızın sistem tepsisi modülünde bir AppIndicator uzantısını etkinleştirin. Sistem tepsisi desteği kullanılabilir olur olmaz simge görünür.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailed">
@@ -39,12 +39,12 @@
       </trans-unit>
       <trans-unit id="PayloadMissing">
         <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray and tray/Aspire.png). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="needs-review-translation">CLI paketi bu platformun tepsi yardımcı bileşenini içermiyor (Windows: tray/aspire-tray.exe ve tray/Aspire.ico; macOS: tray/Aspire Tray.app). Eşleşen bir yerel Aspire paketi yükleyin veya eksik bir ayıklama işlemini onarmak için 'aspire setup --force' komutunu çalıştırın.</target>
+        <target state="translated">CLI paketi bu platformun tepsi yardımcı bileşenini içermiyor (Windows: tray/aspire-tray.exe ve tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray ve tray/Aspire.png). Eşleşen bir yerel Aspire paketi yükleyin veya eksik bir ayıklama işlemini onarmak için 'aspire setup --force' komutunu çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
         <source>Start or restore the tray icon (Preview)</source>
-        <target state="needs-review-translation">Tepsi simgesini başlatın veya geri yükleyin (Deneysel)</target>
+        <target state="translated">Tepsi simgesini başlatın veya geri yükleyin (Önizleme)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="StopDescription">
         <source>Stop the tray without stopping AppHosts (Preview)</source>
-        <target state="needs-review-translation">AppHost’ları durdurmadan tepsiyi durdurun (Deneysel)</target>
+        <target state="translated">AppHost’ları durdurmadan tepsiyi durdurun (Önizleme)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
         <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
-        <target state="needs-review-translation">Deneysel Aspire tepsisi, Windows ve macOS x64/ARM64 yüklemelerini destekler. Linux desteklenmiyor.</target>
+        <target state="translated">Aspire sistem tepsisi, Windows, macOS ve glibc Linux x64/ARM64 yüklemelerini destekler. Linux için StatusNotifierItem desteği, GTK 3 ve AppIndicator kitaplığı olan bir grafik masaüstü cihaz gerekir.</target>
         <note />
       </trans-unit>
     </body>

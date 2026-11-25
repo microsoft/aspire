@@ -34,9 +34,8 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
 
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Disable update notifications so the post-command CLI update banner doesn't add
-        // noise. This does not suppress the self-update confirmation that `aspire update`
-        // may show after the project update; WaitForAspireUpdateCompletionAsync handles it.
+        // Disable update notifications to prevent the CLI self-update prompt
+        // from appearing after "Update successful!" and blocking the test.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -91,7 +90,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         // Stable channel does not prompt for NuGet.config creation because it maps
         // Aspire* to nuget.org and there is no existing config.
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForAspireUpdateCompletionAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the PackageVersion for Aspire.Hosting.AppHost was removed
         {
@@ -150,9 +149,8 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
 
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Disable update notifications so the post-command CLI update banner doesn't add
-        // noise. This does not suppress the self-update confirmation that `aspire update`
-        // may show after the project update; WaitForAspireUpdateCompletionAsync handles it.
+        // Disable update notifications to prevent the CLI self-update prompt
+        // from appearing after "Update successful!" and blocking the test.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -200,7 +198,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForAspireUpdateCompletionAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Now the csproj is on the latest stable SDK. Discover that version from the
         // migrated csproj so we can write a matching orphan PackageVersion entry.
@@ -241,7 +239,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForAspireUpdateCompletionAsync(counter, TimeSpan.FromSeconds(120));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
 
         // Verify the orphan PackageVersion was removed from Directory.Packages.props.
         {

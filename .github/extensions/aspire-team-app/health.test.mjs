@@ -12,6 +12,25 @@ import {
   loadHealthDashboard,
 } from "./health.mjs";
 
+test("GitHub Health preserves a 403 provider diagnostic", async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return {
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      headers: new Headers({ "retry-after": "120" }),
+      json: async () => ({ message: "You have exceeded a secondary rate limit." }),
+    };
+  };
+  await assert.rejects(
+    loadGitHubRepositoryHealth({ token: "token", repository: "microsoft/aspire", fetchImpl }),
+    { message: "GitHub API 403 Forbidden - You have exceeded a secondary rate limit.; Retry-After: 120" },
+  );
+  assert.equal(calls, 1);
+});
+
 test("loadGitHubRepositoryHealth finds the last success and explains a failing Dependabot auto-merge", async () => {
   const cursors = [];
   const fetchImpl = async (_url, options) => {

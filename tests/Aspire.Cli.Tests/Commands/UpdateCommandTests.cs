@@ -1579,6 +1579,33 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("daily", capturedChannel);
     }
 
+    [Theory]
+    [InlineData("daily", "staging")]
+    [InlineData("local", "staging")]
+    [InlineData("pr-123", "staging")]
+    [InlineData("daily", "StAgInG")]
+    public async Task UpdateCommand_SelfUpdate_WhenStagingUnavailable_DisplaysReason(string identityChannel, string requestedChannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: identityChannel);
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = sp => ActivatorUtilities.CreateInstance<CliDownloader>(sp);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"update --self --channel {requestedChannel}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var expectedReason = string.Format(PackagingStrings.StagingChannelUnavailableOnDailyCli, identityChannel);
+        Assert.Equal($"Failed to update CLI: {expectedReason}", Assert.Single(interactionService.DisplayedErrors));
+    }
+
     [Fact]
     [SkipOnPlatform(TestPlatforms.Windows, "The self-update archive contains a POSIX shell executable.")]
     public async Task UpdateCommand_SelfUpdate_PersistsSelectedChannelInInstallSidecar()

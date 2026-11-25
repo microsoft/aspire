@@ -82,6 +82,85 @@ public sealed class ResourceMenuBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateTagGroupMenuItems_CombinesCommandsAndOnlyExecutesForEnabledMembers()
+    {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var builder = CreateResourceMenuBuilder(repositoryContext.Repository);
+        var disabled = ModelTestHelpers.CreateResource(resourceName: "disabled", commands: [
+            CreateCommand("Refresh", CommandViewModelState.Disabled),
+            CreateCommand("Unavailable", CommandViewModelState.Disabled)
+        ]);
+        var first = ModelTestHelpers.CreateResource(resourceName: "first", commands: [CreateCommand("Refresh", CommandViewModelState.Enabled)]);
+        var second = ModelTestHelpers.CreateResource(resourceName: "second", commands: [CreateCommand("Refresh", CommandViewModelState.Enabled)]);
+        var hidden = ModelTestHelpers.CreateResource(resourceName: "hidden", commands: [
+            CreateCommand("Refresh", CommandViewModelState.Hidden),
+            CreateCommand("Hidden", CommandViewModelState.Hidden)
+        ]);
+        var busy = ModelTestHelpers.CreateResource(resourceName: "busy", commands: [CreateCommand("Refresh", CommandViewModelState.Enabled)]);
+        var removed = ModelTestHelpers.CreateResource(resourceName: "removed", commands: [CreateCommand("Refresh", CommandViewModelState.Enabled)]);
+        var noCommands = ModelTestHelpers.CreateResource(resourceName: "no-commands");
+        IReadOnlyList<ResourceViewModel> members = [disabled, first, second, hidden, busy, removed, noCommands];
+        var executed = new List<(string ResourceName, CommandViewModel Command)>();
+        var commandsFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var items = builder.CreateTagGroupMenuItems("API", "tag-header", () => members, (resource, _) => resource == busy,
+            (resource, command) =>
+            {
+                executed.Add((resource.Name, command));
+                return commandsFinished.Task;
+            });
+
+        Assert.Collection(items,
+            header => { Assert.True(header.IsHeader); Assert.Equal("API", header.Text); },
+            refresh =>
+            {
+                Assert.Equal("Refresh", refresh.Text);
+                Assert.False(refresh.IsDisabled);
+                Assert.Equal("Localized:ResourceOverviewCountOfTotal:3+7", refresh.Description);
+            },
+            unavailable =>
+            {
+                Assert.Equal("Unavailable", unavailable.Text);
+                Assert.True(unavailable.IsDisabled);
+                Assert.Null(unavailable.Description);
+            });
+
+        var newlyAdded = ModelTestHelpers.CreateResource(resourceName: "new", commands: [CreateCommand("Refresh", CommandViewModelState.Enabled)]);
+        members = [disabled, first, second, hidden, busy, noCommands, newlyAdded];
+        var execution = items[1].OnClick!();
+        try
+        {
+            Assert.Equal([(first.Name, first.Commands[0]), (second.Name, second.Commands[0])], executed);
+            Assert.False(execution.IsCompleted);
+        }
+        finally
+        {
+            commandsFinished.SetResult();
+            await execution;
+        }
+    }
+
+    [Theory]
+    [InlineData(true, CommandViewModelState.Enabled)]
+    [InlineData(false, CommandViewModelState.Disabled)]
+    public async Task CreateTagGroupMenuItems_RechecksAvailabilityOnClick(bool readOnly, CommandViewModelState latestState)
+    {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var builder = CreateResourceMenuBuilder(repositoryContext.Repository, new TestDashboardClient(isReadOnly: readOnly));
+        var member = ModelTestHelpers.CreateResource(resourceName: "first", commands: [CreateCommand("Refresh", CommandViewModelState.Enabled)]);
+        var items = builder.CreateTagGroupMenuItems("API", "tag-header", () => [member], (_, _) => false,
+            (_, _) => throw new InvalidOperationException("The command should not run."));
+
+        Assert.Equal(readOnly, items[1].IsDisabled);
+        Assert.Null(items[1].Description);
+        member = ModelTestHelpers.CreateResource(resourceName: member.Name, commands: [CreateCommand("Refresh", latestState)]);
+        await items[1].OnClick!();
+    }
+
+    private static CommandViewModel CreateCommand(string name, CommandViewModelState state) =>
+        new(name, state, name, "", "", [], false, "", IconVariant.Regular);
+
+    [Fact]
     public void AddMenuItems_NoTelemetry_NoTelemetryItems()
     {
         // Arrange

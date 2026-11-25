@@ -538,11 +538,7 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
                 printf '%s\n' "$@" > "{{capturePath}}"
                 exit 23
                 """;
-        await File.WriteAllTextAsync(cliPath, contents.ReplaceLineEndings(OperatingSystem.IsWindows() ? "\r\n" : "\n"));
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(cliPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
+        await FileHelper.WriteExecutableFileAsync(cliPath, contents.ReplaceLineEndings(OperatingSystem.IsWindows() ? "\r\n" : "\n"));
 
         var escapedCliPath = cliPath.Replace("'", "''");
         using var cmd = new ScriptFunctionCommand(

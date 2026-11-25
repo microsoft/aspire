@@ -1268,15 +1268,15 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         string[] cliArgs = ["restore", projectFilePath.FullName];
+        if (options.IsolatedRestorePackagesDirectory is { } packagesDirectory)
+        {
+            cliArgs = [.. cliArgs, "--packages", packagesDirectory.FullName, "--no-http-cache", "--force"];
+        }
         if (options.NoAutoResponse)
         {
             cliArgs = [.. cliArgs, "-noAutoResponse"];
         }
 
-        if (options.IsolatedRestorePackagesDirectory is { } packagesDirectory)
-        {
-            cliArgs = [.. cliArgs, "--packages", packagesDirectory.FullName, "--no-http-cache", "--force"];
-        }
         if (options.NuGetRestoreTargetsFile is { } restoreTargets)
         {
             cliArgs = [.. cliArgs, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(restoreTargets.FullName)}"];

@@ -105,7 +105,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
-                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+                new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         }).BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
 
@@ -169,7 +169,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
-                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+                new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         }).BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -960,7 +960,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [InlineData(true, false, true)]
     [InlineData(true, true, false)]
     [InlineData(true, true, true)]
-    public async Task RestoreAsyncRunsDotnetRestoreCommand(bool noAutoResponse, bool candidate, bool isolated)
+    public async Task RestoreAsyncRunsDotnetRestoreCommand(bool candidate, bool isolated, bool noAutoResponse)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -985,13 +985,13 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (args, _, _, _) =>
             {
                 string[] expected = ["restore", projectFile.FullName];
-                if (noAutoResponse)
-                {
-                    expected = [.. expected, "-noAutoResponse"];
-                }
                 if (isolated)
                 {
                     expected = [.. expected, "--packages", packages.FullName, "--no-http-cache", "--force"];
+                }
+                if (noAutoResponse)
+                {
+                    expected = [.. expected, "-noAutoResponse"];
                 }
                 if (candidate)
                 {
@@ -1035,7 +1035,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
-                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+                new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         }).BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
         var options = new ProcessInvocationOptions { NoAutoResponse = noAutoResponse };
@@ -2927,6 +2927,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         // data over the network. A transient feed failure then surfaces as warning NU1900 on stderr
         // even though restore and ComputeRunArguments succeed, so keep this test off the network.
         processStartInfo.ArgumentList.Add("-p:NuGetAudit=false");
+        // When a newly launched MSBuild server misses the client's connect window (common on loaded CI
+        // runners), MSBuild writes "MSBuild server unavailable: ..." to stderr and falls back to an
+        // in-process build. Build in-process so the stderr assertion only sees diagnostics from this project.
+        processStartInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
 
         using var process = Process.Start(processStartInfo) ?? throw new InvalidOperationException("Failed to start dotnet msbuild.");
         var stdout = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);

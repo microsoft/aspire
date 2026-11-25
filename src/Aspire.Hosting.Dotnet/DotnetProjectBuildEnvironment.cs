@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet;
 
@@ -20,13 +19,10 @@ internal static class DotnetProjectBuildEnvironment
 {
     public static Task<MsBuildResponseFile?> CreateResponseFileAsync(
         IReadOnlyDictionary<string, string> environment,
-        ILogger logger,
+        ITempFileSystemService temporaryFileSystem,
         CancellationToken cancellationToken) =>
-        MsBuildResponseFileFactory.CreateAsync(environment, logger, cancellationToken);
+        MsBuildResponseFileFactory.CreateAsync(environment, isFileBasedApp: false, temporaryFileSystem, cancellationToken);
 
     public static string CreateMsBuildPropertyArgument(string name, string value) =>
         MsBuildResponseFileFactory.CreatePropertyArgument(name, value);
-
-    internal static void TryDeleteDirectory(DirectoryInfo directory, ILogger logger)
-        => MsBuildResponseFileFactory.TryDeleteDirectory(directory, logger);
 }

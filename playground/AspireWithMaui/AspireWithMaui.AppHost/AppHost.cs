@@ -1,8 +1,6 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-#pragma warning disable CS0618 // Keep the MAUI companion scenario on its existing launch path until MAUI migrates.
-var weatherApi = builder.AddProject("webapi", @"../AspireWithMaui.WeatherApi/AspireWithMaui.WeatherApi.csproj");
-#pragma warning restore CS0618
+var weatherApi = builder.AddDotnetProject("webapi", "../AspireWithMaui.WeatherApi/AspireWithMaui.WeatherApi.csproj");
 
 var publicDevTunnel = builder.AddDevTunnel("devtunnel-public")
     .WithAnonymousAccess() // All ports on this tunnel default to allowing anonymous access

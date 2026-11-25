@@ -795,6 +795,31 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
     }
 
     [Fact]
+    public async Task EnsureProvisionedAsync_UpdatesNestedChildResources()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        AddTestAzureProvisioning(builder);
+
+        var cosmos = builder.AddAzureCosmosDB("cosmosdb");
+        var db = cosmos.AddCosmosDatabase("db");
+        var entries = db.AddContainer("entries", "/id");
+
+        using var app = builder.Build();
+
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        await controller.EnsureProvisionedAsync(model);
+
+        foreach (var resource in new IResource[] { cosmos.Resource, db.Resource, entries.Resource })
+        {
+            Assert.True(notifications.TryGetCurrentState(resource.Name, out var resourceEvent), $"No state was published for '{resource.Name}'.");
+            Assert.Equal(KnownResourceStates.Running, resourceEvent.Snapshot.State?.Text);
+        }
+    }
+
+    [Fact]
     public async Task EnsureProvisionedAsync_CompletesExistingPendingProvisioningWaiters()
     {
         var builder = CreateBuilder(isRunMode: true);

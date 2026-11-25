@@ -96,7 +96,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var result = await RunDotNetAsync(
             ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-t:_ShowBanner",
              $"-p:Configuration={configuration}", $"-p:ContinuousIntegrationBuild={ci}",
-             $"-p:ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
+             $"-p:_ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
 
         Assert.Equal(succeeds, result.ExitCode == 0);
         if (!succeeds)
@@ -138,15 +138,12 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         // Under CI load the dotnet CLI can fail to reach the MSBuild server and prints a fallback
         // diagnostic to standard output after the -getItem JSON. Inject that exact line so the
         // item query is verified independently of whatever else the CLI writes to its streams.
-        var dotnet = CreateDotNetWithStandardOutputDiagnostic(MSBuildServerFallbackDiagnostic);
+        var dotnet = await MSBuildServerFallbackDiagnostic.CreateDotNetWrapperAsync(_workspace.Path, GetDotNetPath());
 
         var result = await VerifyNativeAssetsAsync("win-x64", singleFile: false, dotnet);
 
-        Assert.Contains(MSBuildServerFallbackDiagnostic, result.StandardOutput);
+        Assert.Contains(MSBuildServerFallbackDiagnostic.Message, result.StandardOutput);
     }
-
-    private const string MSBuildServerFallbackDiagnostic =
-        "MSBuild server unavailable: could not connect to the server within the timeout window; the server may have failed to start. Falling back to an in-process build.";
 
     private async Task<(int ExitCode, string StandardOutput, string Output, string QueryResult)> VerifyNativeAssetsAsync(
         string rid, bool singleFile, string? dotnet = null)
@@ -275,23 +272,23 @@ public sealed class Hex1bNativePublishingTests : IDisposable
              "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
              typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
              "--output", layout, "--artifacts", artifacts, "--rid", rid, "--configuration", "Release"];
-        // Layout assembly now requires the native tray payload for desktop RIDs, even
+        // Layout assembly requires the native tray payload for desktop RIDs, even
         // when the scenario focuses on the managed bundle's PTY sidecars.
         if (rid.StartsWith("win-", StringComparison.Ordinal))
         {
             var tray = Path.Combine(_workspace.Path, "windows-tray");
             WindowsTrayTestPayload.Create(tray, rid);
-            arguments.AddRange(["--tray-windows", tray]);
+            arguments.AddRange(["--tray-dir", tray]);
         }
         else if (rid.StartsWith("osx-", StringComparison.Ordinal))
         {
-            arguments.AddRange(["--tray-app", MacTrayTestPayload.Create(_workspace.Path)]);
+            arguments.AddRange(["--tray-dir", MacTrayTestPayload.Create(_workspace.Path)]);
         }
         else if (rid is "linux-x64" or "linux-arm64")
         {
             var tray = Path.Combine(_workspace.Path, "linux-tray");
             LinuxTrayTestPayload.Create(tray, rid);
-            arguments.AddRange(["--tray-linux", tray]);
+            arguments.AddRange(["--tray-dir", tray]);
         }
 
         var result = await RunDotNetAsync(
@@ -467,34 +464,6 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, contents);
-    }
-
-    private string CreateDotNetWithStandardOutputDiagnostic(string diagnostic)
-    {
-        var dotnet = GetDotNetPath();
-        if (OperatingSystem.IsWindows())
-        {
-            var wrapper = Path.Combine(_workspace.Path, "dotnet-with-diagnostic.cmd");
-            File.WriteAllText(wrapper, $"""
-                @echo off
-                "{dotnet}" %*
-                set exitCode=%ERRORLEVEL%
-                echo {diagnostic}
-                exit /b %exitCode%
-                """);
-            return wrapper;
-        }
-
-        var script = Path.Combine(_workspace.Path, "dotnet-with-diagnostic.sh");
-        File.WriteAllText(script, $"""
-            #!/bin/sh
-            "{dotnet}" "$@"
-            exitCode=$?
-            echo '{diagnostic}'
-            exit $exitCode
-            """);
-        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        return script;
     }
 
     // MSBuild writes -getProperty/-getItem results to this file, separate from diagnostics such as the

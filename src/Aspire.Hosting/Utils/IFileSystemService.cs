@@ -17,7 +17,7 @@ public interface IFileSystemService
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Use this instead of calling <see cref="Directory.CreateTempSubdirectory(string?)"/> directly
+    /// Use this instead of calling system temporary directory APIs directly
     /// to ensure consistent temp file management and enable testability.
     /// </para>
     /// </remarks>
@@ -40,7 +40,7 @@ public interface ITempFileSystemService
     /// The directory is created immediately. Dispose the returned object to delete the directory.
     /// </para>
     /// <para>
-    /// Use this instead of calling <see cref="Directory.CreateTempSubdirectory(string?)"/> directly.
+    /// Use this instead of calling system temporary directory APIs directly.
     /// </para>
     /// </remarks>
     TempDirectory CreateTempSubdirectory(string? prefix = null);
@@ -53,11 +53,11 @@ public interface ITempFileSystemService
     /// <remarks>
     /// <para>
     /// This method creates a new temporary file. If a file name is specified, it creates a temporary subdirectory
-    /// and places the file with that name inside it. If no file name is specified, it uses <see cref="Path.GetTempFileName"/>.
+    /// and places the file with that name inside it. If no file name is specified, it generates a random name.
     /// Dispose the returned object to delete the file.
     /// </para>
     /// <para>
-    /// Use this instead of calling <see cref="Path.GetTempFileName"/> directly.
+    /// Use this instead of calling system temporary file APIs directly.
     /// </para>
     /// </remarks>
     TempFile CreateTempFile(string? fileName = null);

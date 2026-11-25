@@ -6,6 +6,7 @@ import {
   azureCliEnvironment,
   azurePipelineIdFromRemovalKey,
   azurePipelineRemovalKey,
+  classifyCommandError,
   discoverAzureDevOpsPipelines,
   loadAzureDevOpsPipelineHealth,
   parseAzureDevOpsPipelineUrl,
@@ -14,6 +15,29 @@ import {
   resolveAzureDevOpsPipeline,
   unavailableAzureDevOpsHealth,
 } from "./azure-devops.mjs";
+
+test("Azure CLI timeout errors explain why pipeline discovery stopped", () => {
+  const timeout = Object.assign(new Error("Command failed: az"), { killed: true, signal: "SIGTERM", code: null });
+  const classified = classifyCommandError(timeout);
+  assert.equal(classified.code, "azdo_timeout");
+  assert.equal(classified.message, "The Azure DevOps query timed out.");
+
+  const bufferFailure = Object.assign(new Error("stdout maxBuffer exceeded"), {
+    killed: true, signal: "SIGTERM", code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+  });
+  assert.equal(classifyCommandError(bufferFailure).code, "azdo_query_failed");
+});
+
+test("Azure CLI missing commands explain how to install the DevOps extension", () => {
+  for (const command of ["devops", "pipelines", "repos"]) {
+    const error = Object.assign(new Error("Command failed"), {
+      stderr: `ERROR: '${command}' is misspelled or not recognized by the system.`,
+    });
+    const classified = classifyCommandError(error);
+    assert.equal(classified.code, "azdo_extension_missing");
+    assert.equal(classified.message, "The Azure CLI azure-devops extension is not installed. Run az extension add --name azure-devops.");
+  }
+});
 
 test("Azure pipeline removal keys are opaque, stable, and project-specific", () => {
   const firstId = "azdo:dnceng/internal/1602";
@@ -556,18 +580,21 @@ test("resolveAzureCliCommand finds the standard Windows az.cmd shim", async () =
   assert.deepEqual(command, { path: python, prefixArgs: ["-IBm", "azure.cli"] });
 });
 
-test("Azure CLI environment excludes the Copilot agent session id", () => {
+test("Azure CLI environment excludes the Copilot session id and disables dynamic extension installation", () => {
   const environment = {
     COPILOT_AGENT_SESSION_ID: "session-id",
     AZURE_CONFIG_DIR: "C:\\Users\\test\\.azure",
+    AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt",
     PATH: "C:\\AzureCLI",
   };
 
   assert.deepEqual(azureCliEnvironment(environment), {
     AZURE_CONFIG_DIR: "C:\\Users\\test\\.azure",
+    AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "no",
     PATH: "C:\\AzureCLI",
   });
   assert.equal(environment.COPILOT_AGENT_SESSION_ID, "session-id");
+  assert.equal(environment.AZURE_EXTENSION_USE_DYNAMIC_INSTALL, "yes_without_prompt");
 });
 
 test("unavailableAzureDevOpsHealth preserves an actionable provider error", () => {

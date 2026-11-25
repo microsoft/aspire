@@ -521,11 +521,11 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             // Leaving the page while playing also closes the game, and it can be started again after coming back.
             await page.Keyboard.PressAsync("o");
             await Assertions.Expect(game).ToBeVisibleAsync();
-            await page.GetByRole(AriaRole.Tab, new() { Name = Dashboard.Resources.Layout.NavMenuConsoleLogsTab, Exact = true }).ClickAsync();
+            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = Dashboard.Resources.Layout.NavMenuConsoleLogsTab, Exact = true }).ClickAsync();
             await Assertions.Expect(game).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator("#resource-graph-game-style")).ToHaveCountAsync(0);
 
-            await page.GetByRole(AriaRole.Tab, new() { Name = Dashboard.Resources.Layout.ResourceTabOverview, Exact = true }).ClickAsync();
+            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = Dashboard.Resources.Layout.ResourceTabOverview, Exact = true }).ClickAsync();
             await Assertions.Expect(node).ToBeVisibleAsync();
             await graphContainer.FocusAsync();
             await page.Keyboard.PressAsync("o");

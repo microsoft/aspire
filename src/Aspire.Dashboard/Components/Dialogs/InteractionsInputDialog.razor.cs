@@ -141,13 +141,6 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
     private void InputValueChanged(FieldIdentifier field)
     {
-        // Combobox selection is UI state; UpdateChoiceValueState notifies the actual Value field.
-        // Processing both fields would send the same update to the AppHost twice.
-        if (field.Model is InputViewModel && field.FieldName == nameof(InputViewModel.SelectedOption))
-        {
-            return;
-        }
-
         if (field.Model is InputViewModel inputModel)
         {
             ValidateInput(inputModel);
@@ -197,6 +190,12 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         text ??= string.Empty;
         inputModel.SelectedOption = inputModel.SelectOptions.FirstOrDefault(option => option.Name == text)
             ?? new SelectViewModel<string> { Id = text, Name = text };
+        UpdateChoiceValueState(inputModel);
+    }
+
+    private void OnChoiceSelectionChanged(InputViewModel inputModel, IEnumerable<SelectViewModel<string>> options)
+    {
+        inputModel.SelectedOption = options.FirstOrDefault();
         UpdateChoiceValueState(inputModel);
     }
 

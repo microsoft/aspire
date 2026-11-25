@@ -47,8 +47,9 @@
     }
     else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
     {
-        @* All resources, or several selected resources: show their scoped Summary or Graph. *@
-        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : null)" />
+        var resourceNames = ResourcesLayout.SelectedResourceNames;
+        <ApplicationSummary ResourceNames="@(resourceNames.Count > 0 ? resourceNames : null)"
+                            TelemetryResourceKeys="@ResourcesLayout.GetSelectionTelemetryKeys(resourceNames)" />
     }
     else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {
@@ -64,7 +65,6 @@
             @TagsCard(resolvedParameter)
         </div>
         <ParameterOverview Resource="resolvedParameter"
-                           ResourceByName="ResourcesLayout.ResourceByName"
                            OnExecuteCommandAsync="ExecuteResourceCommandAsync"
                            OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
                            IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
@@ -79,11 +79,9 @@
     else
     {
         var resourceName = GetResourceName(resource);
-        var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
         // Internal URLs are listed after the URLs a user can browse to.
         var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: true, includeNonEndpointUrls: true).OrderBy(u => u.IsInternal).ToList();
         var relatedResources = GetRelatedResources(resource).ToList();
-        var source = ResourceSourceViewModel.GetSourceViewModel(resource);
         var hasTelemetry = _telemetryKey is not null;
         var isInstrumented = hasTelemetry && TelemetryRepository.GetResource(_telemetryKey!.Value) is { UninstrumentedPeer: false };
         // The telemetry cards show their content only when the resource sends that telemetry. While the first query
@@ -127,69 +125,7 @@
         <div class="overview-grid">
             @TagsCard(resource)
 
-            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Status)" aria-labelledby="overview-status-title">
-                <div class="overview-card-header">
-                    <span class="card-header-icon" aria-hidden="true">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
-                    </span>
-                    <h2 id="overview-status-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewStatusTitle)]</h2>
-                    @* Start, stop and the other actions live here rather than above every page of the resource, next to
-                       the state they change. *@
-                    @if (ResourcesLayout is not null)
-                    {
-                        <div class="overview-status-actions">
-                            @ResourcesLayout.RenderResourceActions(resource, showLabels: true, row: null)
-                        </div>
-                    }
-                </div>
-                <dl class="overview-properties">
-                    <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</dt>
-                    <dd>
-                        <span class="overview-state @ResourcesLayout.GetStateClass(resource)">
-                            <FluentIcon Value="@stateViewModel.Icon" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
-                            @stateViewModel.Text
-                        </span>
-                    </dd>
-                    @if (GetStateDescription(resource, stateViewModel.Text) is { } stateDescription)
-                    {
-                        <dt>@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]</dt>
-                        <dd>@stateDescription</dd>
-                    }
-                    @if (resource.HealthStatus is { } healthStatus)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsHealthStateProperty)]</dt>
-                        <dd>@healthStatus.Humanize()</dd>
-                    }
-                    <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</dt>
-                    <dd>@resource.ResourceTypeDisplayName</dd>
-                    @if (resource.IsPersistentContainer)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsContainerLifetimeProperty)]</dt>
-                        <dd data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcePersistentLifetimeDescription)]"
-                            aria-description="@Loc[nameof(Dashboard.Resources.Resources.ResourcePersistentLifetimeDescription)]">@Loc[nameof(Dashboard.Resources.Resources.ResourcePersistentLifetime)]</dd>
-                    }
-                    @if (resource.StartTimeStamp is not null)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</dt>
-                        <dd><StartTimeColumnDisplay Resource="@resource" /></dd>
-                    }
-                    @if (resource.StopTimeStamp is { } stopTime)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewStopTime)]</dt>
-                        <dd>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, stopTime)</dd>
-                    }
-                    @if (resource.TryGetExitCode(out var exitCode))
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewExitCode)]</dt>
-                        <dd class="@(exitCode is not 0 ? "overview-error-text" : string.Empty)">@exitCode</dd>
-                    }
-                    @if (source is not null)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</dt>
-                        <dd class="overview-mono" data-tooltip="@source.Tooltip">@source.Value</dd>
-                    }
-                </dl>
-            </section>
+            <OverviewStatusCard Resource="resource" HideCommandButtons="false" Style="@cardLayout.Style(OverviewCard.Status)" />
 
             @if (showEndpoints)
             {
@@ -280,14 +216,14 @@
                 {
                 var telemetry = metricsTelemetry;
                     <div class="overview-stats">
-                        <div class="overview-stat">
+                        <a class="overview-stat" href="@DashboardUrls.MetricsUrl(resourceName, all: true)">
                             <span class="overview-stat-value">@telemetry.Instruments.Count.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInstruments)]</span>
-                        </div>
-                        <div class="overview-stat">
+                        </a>
+                        <a class="overview-stat" href="@DashboardUrls.MetricsUrl(resourceName, all: true)">
                             <span class="overview-stat-value">@telemetry.Instruments.Select(i => i.Parent.Name).Distinct(StringComparer.Ordinal).Count().ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMeters)]</span>
-                        </div>
+                        </a>
                     </div>
                     var pinnedInstruments = PinStore.GetPinnedInstruments(telemetry.Instruments);
                     @if (pinnedInstruments.Count == 0)
@@ -442,28 +378,32 @@
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewErrors)]</span>
                         </a>
                     </div>
-                    @if (telemetry.RecentAttentionLogs.Count > 0)
+                    var recentLogs = telemetry.RecentAttentionLogs.Count > 0 ? telemetry.RecentAttentionLogs : telemetry.RecentLogs;
+                    @if (recentLogs.Count > 0)
                     {
                         <ul class="overview-list">
-                            @foreach (var log in telemetry.RecentAttentionLogs)
+                            @foreach (var log in recentLogs)
                             {
                                 <li @key="log.InternalId">
-                                    <span class="overview-level @(log.IsError ? "error" : "warning")">@log.Severity</span>
-                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
-                                    <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
-                                </li>
-                            }
-                        </ul>
-                    }
-                    else if (telemetry.RecentLogs.Count > 0)
-                    {
-                        <ul class="overview-list">
-                            @foreach (var log in telemetry.RecentLogs)
-                            {
-                                <li @key="log.InternalId">
-                                    <span class="overview-level">@log.Severity</span>
-                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
-                                    <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
+                                    <a class="overview-list-row-link" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">
+                                        <span class="overview-level" data-tooltip="@log.Severity">
+                                            @if (log.IsError)
+                                            {
+                                                <FluentIcon Icon="Icons.Filled.Size12.ErrorCircle" Color="Color.Error" aria-hidden="true" />
+                                            }
+                                            else if (log.IsWarning)
+                                            {
+                                                <FluentIcon Icon="Icons.Filled.Size16.Warning" Color="Color.Warning" Width="12px" aria-hidden="true" />
+                                            }
+                                            else
+                                            {
+                                                <span class="overview-log-level-dot" data-log-level="@log.Severity" aria-hidden="true"></span>
+                                            }
+                                            <span class="visually-hidden">@log.Severity</span>
+                                        </span>
+                                        <span class="overview-list-value">@log.Message</span>
+                                        <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
+                                    </a>
                                 </li>
                             }
                         </ul>
@@ -502,10 +442,10 @@
                             <span class="overview-stat-value">@telemetry.TraceCount.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTotal)]</span>
                         </a>
-                        <div class="overview-stat @(telemetry.FailedTraceCount > 0 ? "error" : string.Empty)">
+                        <a class="overview-stat @(telemetry.FailedTraceCount > 0 ? "error" : string.Empty)" href="@DashboardUrls.TracesUrl(resourceName, filters: s_serializedFailedTraceFilter)">
                             <span class="overview-stat-value">@telemetry.FailedTraceCount.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]</span>
-                        </div>
+                        </a>
                     </div>
                     @if (telemetry.RecentTraces.Count > 0)
                     {
@@ -513,16 +453,18 @@
                             @foreach (var trace in telemetry.RecentTraces)
                             {
                                 <li @key="trace.TraceId">
-                                    @if (trace.HasError)
-                                    {
-                                        <FluentIcon Value="@(new Icons.Filled.Size12.ErrorCircle())" Color="Color.Error" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" />
-                                    }
-                                    else
-                                    {
-                                        <span class="overview-dot"></span>
-                                    }
-                                    <a class="overview-list-value" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))" data-tooltip="@trace.FullName">@trace.FullName</a>
-                                    <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
+                                    <a class="overview-list-row-link" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))" data-tooltip="@trace.FullName">
+                                        @if (trace.HasError)
+                                        {
+                                            <FluentIcon Value="@(new Icons.Filled.Size12.ErrorCircle())" Color="Color.Error" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" />
+                                        }
+                                        else
+                                        {
+                                            <span class="overview-dot"></span>
+                                        }
+                                        <span class="overview-list-value">@trace.FullName</span>
+                                        <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
+                                    </a>
                                 </li>
                             }
                         </ul>
@@ -595,7 +537,7 @@
                     <PropertyGrid TItem="DisplayedResourcePropertyViewModel"
                                   Items="@(_propertiesExpanded ? properties : properties.Take(DetailsPreviewCount))"
                                   IsValueMaskedChanged="@OnPropertyMaskedChanged"
-                                  GridTemplateColumns="1fr 1.5fr"
+                                  GridTemplateColumns="1fr 2fr"
                                   GenerateHeader="DataGridGeneratedHeaderType.None"
                                   RowSize="DataGridRowSize.Small"
                                   ValueComponents="@_propertyValueComponents"
@@ -654,7 +596,7 @@
                                   Items="@(_environmentExpanded ? environmentVariables : environmentVariables.Take(DetailsPreviewCount))"
                                   IsValueMaskedChanged="@(variable => OnEnvironmentVariableMaskedChanged(resource, variable))"
                                   HighlightText="@_environmentFilter"
-                                  GridTemplateColumns="1fr 1fr"
+                                  GridTemplateColumns="1fr 2fr"
                                   GenerateHeader="DataGridGeneratedHeaderType.None"
                                   RowSize="DataGridRowSize.Small"
                                   Class="overview-property-grid env-var-properties" />
@@ -745,7 +687,7 @@
                                 <span class="overview-list-label" data-tooltip="@report.Name">@report.Name</span>
                                 <span class="overview-list-value overview-muted" data-tooltip="@report.DisplayedDescription">@report.DisplayedDescription</span>
                                 <ExceptionDetails ExceptionText="@report.ExceptionText" />
-                                <span class="overview-list-time" data-tooltip="@HealthReportFormatter.GetStatusTooltip(report, Loc, TimeProvider)">@HealthReportFormatter.GetStatusWithTime(report, Loc)</span>
+                                <span class="overview-list-time" data-tooltip="@HealthReportFormatter.GetLastRunTooltip(report, TimeProvider)">@HealthReportFormatter.GetStatusWithTime(report, Loc)</span>
                             </li>
                         }
                     </ul>
@@ -853,7 +795,7 @@
             @for (var i = 0; i < rowCount; i++)
             {
                 <li>
-                    <span class="overview-level"><FluentSkeleton Width="36px" Height="12px" Shimmer="true" /></span>
+                    <span class="overview-level"><FluentSkeleton Width="12px" Height="12px" Shimmer="true" /></span>
                     <span class="overview-list-value"><FluentSkeleton Width="60%" Height="12px" Shimmer="true" /></span>
                     <span class="overview-list-time"><FluentSkeleton Width="32px" Height="12px" Shimmer="true" /></span>
                 </li>

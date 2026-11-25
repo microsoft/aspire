@@ -40,8 +40,7 @@
     outline-offset: 1px;
 }
 
-/* The pin is only shown on hover or focus to keep cards quiet, but always shown once pinned
-   so pinned instruments are recognizable while scanning. */
+/* Keep the pin visible for keyboard navigation, but not when a mouse click leaves it focused after unpinning. */
 ::deep .meter-card-pin {
     position: absolute;
     top: 6px;
@@ -51,7 +50,7 @@
 }
 
 .meter-card:hover ::deep .meter-card-pin,
-.meter-card:focus-within ::deep .meter-card-pin,
+.meter-card:has(:focus-visible) ::deep .meter-card-pin,
 ::deep .meter-card-pin.pinned {
     opacity: 1;
 }

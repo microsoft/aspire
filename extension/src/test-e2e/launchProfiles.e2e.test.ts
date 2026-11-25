@@ -58,6 +58,8 @@ suite('Aspire launch profiles E2E', function () {
         writeWorkspaceAppHostConfigForPath(denoAppHostPath);
         await openAspireView();
         await waitForSelectedWorkspaceAppHost(denoAppHostPath, 180000);
+        // The wait above can open the workspace folder, which restarts the window with Explorer showing.
+        await openAspireView();
 
         const beforeDebug = getCommandInvocationCount('aspire-vscode.debugAppHost');
         await executeE2eControlCommand({ name: 'debugAppHost', appHostPath: denoAppHostPath }, { waitFor: 'started' });

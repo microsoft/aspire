@@ -187,24 +187,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Command &apos;{0}&apos; failed with exit code {1}:.
-        /// </summary>
-        internal static string CommandFailedWithExitCodeAndOutputFormat {
-            get {
-                return ResourceManager.GetString("CommandFailedWithExitCodeAndOutputFormat", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Command &apos;{0}&apos; failed with exit code {1}..
-        /// </summary>
-        internal static string CommandFailedWithExitCodeFormat {
-            get {
-                return ResourceManager.GetString("CommandFailedWithExitCodeFormat", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Cannot determine active conditional Aspire.AppHost.Sdk declarations for &apos;{0}&apos; without successful MSBuild evaluation; update the conditional SDK version explicitly..
         /// </summary>
         internal static string ConditionalSdkEvaluationRequiredFormat {
@@ -367,7 +349,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Note: Update plan generated using fallback parsing because MSBuild could not evaluate the AppHost project. Dependency analysis may have reduced accuracy..
+        ///   Looks up a localized string similar to Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy..
         /// </summary>
         internal static string FallbackParsingWarning {
             get {

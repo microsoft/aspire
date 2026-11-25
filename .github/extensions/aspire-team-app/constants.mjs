@@ -3,6 +3,9 @@
 export const currentRelease = "13.5";
 export const hourMs = 1000 * 60 * 60;
 export const dayMs = hourMs * 24;
+export const urgentReviewLabel = "review-urgent";
+// All labels that move an eligible PR to the front of the shared queue, with equal priority.
+export const priorityReviewLabels = [urgentReviewLabel, "urgent-review", "fixes-ci"];
 
 export const coreTeamMembers = [
   "davidfowl",

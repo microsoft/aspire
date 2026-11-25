@@ -25,6 +25,15 @@ export function getPrimaryAppHostProjectPath(): string {
     return getRequiredPathFromEnvironment('ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST');
 }
 
+/**
+ * The public PEM of the ASP.NET Core development certificate, exported by the runner before VS Code
+ * starts. The AppHost serves the Dashboard and HTTPS resource endpoints with that certificate, which
+ * clean machines and hosted runners do not trust. Undefined when the runner could not export it.
+ */
+export function getDevCertPath(): string | undefined {
+    return process.env.ASPIRE_EXTENSION_E2E_DEV_CERT_PATH ? path.resolve(process.env.ASPIRE_EXTENSION_E2E_DEV_CERT_PATH) : undefined;
+}
+
 export function getCliPath(): string {
     return getRequiredPathFromEnvironment('ASPIRE_EXTENSION_E2E_CLI_PATH');
 }

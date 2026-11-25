@@ -23,7 +23,7 @@ internal sealed class DcpCleanupTestHandler : HttpMessageHandler
 
     public DcpApiClient CreateClient(NativeServerOptions options)
     {
-        return new DcpApiClient(options, new HttpClient(this) { BaseAddress = new Uri("http://localhost") });
+        return new DcpApiClient(options, new HttpClient(this) { BaseAddress = new Uri("http://localhost") }, new Aspire.Shared.TemporaryStorage());
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

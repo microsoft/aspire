@@ -12,54 +12,27 @@ using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
-public sealed class DisposalSafeFluentDataGridTests : DashboardTestContext
+public sealed class FluentDataGridLifecycleTests : DashboardTestContext
 {
     private const string DataGridModulePath = "./_content/Microsoft.FluentUI.AspNetCore.Components/Components/DataGrid/FluentDataGrid.razor.js";
     private const string InitializeGrid = "Microsoft.FluentUI.Blazor.DataGrid.Initialize";
-    private const string EnableColumnResizing = "Microsoft.FluentUI.Blazor.DataGrid.EnableColumnResizing";
-
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RemovedWhileInitializing_IgnoresTheLateCallInsteadOfEndingTheCircuit(bool aspireGrid)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RemovedWhileInitializing_StopsLateControllerWithoutCallingDisposedModule(bool aspireGrid, bool resizableColumns)
     {
         var (module, controller) = aspireGrid
-            ? await RemoveGridWhileItInitializesAsync<AspireFluentDataGrid<string>>(resizableColumns: true)
-            : await RemoveGridWhileItInitializesAsync<DisposalSafeFluentDataGrid<string>>(resizableColumns: true);
+            ? await RemoveGridWhileItInitializesAsync<AspireFluentDataGrid<string>>(resizableColumns)
+            : await RemoveGridWhileItInitializesAsync<FluentDataGrid<string>>(resizableColumns);
 
-        // The grid resumed after disposal and reached its released module, which rejected the call. The grid ignored
-        // the rejection, so nothing reached the renderer, which would have ended the circuit. The controller that
-        // arrived after disposal was stopped and released.
-        Assert.Equal([EnableColumnResizing], module.RejectedInvocations);
-        Assert.False(Renderer.UnhandledException.IsCompleted);
-        AssertStoppedAndReleased(controller);
-    }
-
-    [Fact]
-    public async Task RemovedWhileInitializing_StopsTheGridControllerThatArrivesAfterDisposal()
-    {
-        // Without resizable or reorderable columns, the render that resumes after disposal makes no other call and
-        // completes without an error, but the controller still arrives after Fluent UI's cleanup ran.
-        var (module, controller) = await RemoveGridWhileItInitializesAsync<DisposalSafeFluentDataGrid<string>>(resizableColumns: false);
-
+        // Regression for https://github.com/microsoft/fluentui-blazor/issues/5580: navigating away during
+        // initialization must release the late controller without ending the dashboard's Blazor circuit.
+        Assert.Equal([InitializeGrid], module.Invocations.Select(invocation => invocation.Identifier));
         Assert.Empty(module.RejectedInvocations);
         Assert.False(Renderer.UnhandledException.IsCompleted);
         AssertStoppedAndReleased(controller);
-    }
-
-    // Fluent UI bug https://github.com/microsoft/fluentui-blazor/issues/5580, which DisposalSafeFluentDataGrid works
-    // around. This test fails once the Fluent UI version used here fixes it: then remove DisposalSafeFluentDataGrid, as
-    // its remarks describe, and this file.
-    [Fact]
-    public async Task FluentDataGrid_StillCallsIntoItsDisposedModuleWhenRemovedWhileInitializing()
-    {
-        var (module, controller) = await RemoveGridWhileItInitializesAsync<FluentDataGrid<string>>(resizableColumns: true);
-
-        Assert.Equal([EnableColumnResizing], module.RejectedInvocations);
-        Assert.IsType<ObjectDisposedException>(await Renderer.UnhandledException.DefaultTimeout());
-        // Fluent UI also leaves the controller that arrived after disposal running.
-        Assert.Empty(controller.Invocations);
-        Assert.Equal(0, controller.DisposeCount);
     }
 
     private static void AssertStoppedAndReleased(TestJSObjectReference controller)
@@ -107,11 +80,8 @@ public sealed class DisposalSafeFluentDataGridTests : DashboardTestContext
         import.SetResult(module);
         await initializeStarted.Task.DefaultTimeout();
 
-        // Removing the grid disposes it, and its module, while the initialization is pending. This test resumes on the
-        // thread pool while the dispatcher may still be finishing the grid's work item, so the removal runs on the
-        // dispatcher: from another thread, DisposeComponentsAsync queues the removal there but clears its list of
-        // rendered components right away, and the queued removal can then find nothing to remove.
-        await Renderer.Dispatcher.InvokeAsync(DisposeComponentsAsync);
+        // Remove the grid and dispose its module while initialization is still pending.
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
         Assert.Equal(1, module.DisposeCount);
 
         // The initialization completes after disposal, so the grid's OnAfterRenderAsync resumes. Its continuation is

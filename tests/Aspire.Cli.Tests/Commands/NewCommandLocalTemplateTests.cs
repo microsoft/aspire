@@ -1746,7 +1746,10 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
                 arguments.AddRange(["--template-repository-ref", reference]);
             }
 
-            var exitCode = await provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync().DefaultTimeout();
+            // Fresh checkouts run real git init/fetch/checkout, which take 23-27s on loaded Windows
+            // runners. The product bounds each Git phase at two minutes, so a 30s hang guard is too tight.
+            var exitCode = await provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync()
+                .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
             outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Generation '{label}' returned {exitCode} after {stopwatch.Elapsed}.");
 
             Assert.Equal(CliExitCodes.Success, exitCode);

@@ -82,7 +82,7 @@ user-only permissions and no raw discovery payloads or dashboard URLs.
 The launcher opens the log relative to no-follow directory handles and passes
 the open descriptor to the GUI, rather than asking another process to reopen a
 log pathname. Symlinked log files or parent directories are rejected.
-Quit the tray using its original CLI or the panel's **Quit** (**Exit** on Windows) before upgrading from an
+Quit the tray using its original CLI or the panel's **Quit** before upgrading from an
 earlier preview. The state directory has been renamed; a still-running older
 preview uses a separate control endpoint and must be stopped before starting this build.
 
@@ -246,10 +246,9 @@ Aspire logo, the title, and a one-line status
 ("3 running · 1 needs attention", "Connecting…") behind a colored connection dot, an
 optional banner for real problems (storage, discovery, or a failed action), the AppHost
 list, and a footer with three icon buttons on the right: **Settings** (a gear),
-**Documentation** (a globe) and **Quit** (**Exit** on Windows, following each platform's
-convention). Quit closes only the tray: its tooltip and accessibility description say
-"Quit the tray. AppHosts keep running." Every icon-only button, in the footer and on the
-rows, shows a native tooltip naming its action.
+**Documentation** (a globe) and **Quit**. Quit closes only the tray: its tooltip and
+accessibility description simply say "Quit". AppHosts keep running after the tray closes. Every
+icon-only button, in the footer and on the rows, shows a native tooltip naming its action.
 
 The list has **Running**, **Pinned**, and **Recent** sections. Recent is collapsed while
 other AppHosts are listed, and its header has a **Clear** button. Each row shows a
@@ -361,6 +360,16 @@ template image and the dot is a small view over it, colored with the system gree
 orange; the dimmed state is AppKit's own disabled status-item rendering. The tooltip and
 accessibility label state the status in words, so the dot's color is never the only cue.
 
+## Publish the standalone tray
+
+The public `PublishTray` target in `eng/Bundle.proj` publishes only the tray,
+without assembling a CLI bundle. The macOS `publish.sh` helper below uses this
+target; it can also be called directly:
+
+```sh
+dotnet msbuild eng/Bundle.proj -t:PublishTray -p:TargetRid=osx-arm64 -p:Configuration=Release
+```
+
 ## Build and run on macOS
 
 Building requires a compatible .NET SDK and Xcode Command Line Tools. From the
@@ -376,19 +385,13 @@ Publish for the current machine, or pass `osx-arm64` or `osx-x64` explicitly:
 bash src/Aspire.Tray/Mac/publish.sh
 ```
 
-This uses the same publish/package target as the CLI bundle. To build a complete
-Apple Silicon CLI into an isolated output directory:
+The helper publishes the tray without rebuilding unrelated bundle components.
+A complete CLI bundle embeds the prepared app alongside the other components.
+The app is verified from the actual payload archive so a valid source app alone
+is not mistaken for a correctly packaged app.
 
-```sh
-./dotnet.sh msbuild eng/Bundle.proj \
-    -p:Configuration=Release -p:TargetRid=osx-arm64 \
-    -p:CliPublishDir="$PWD/artifacts/tray-cli-validation"
-```
-
-The resulting `artifacts/tray-cli-validation/aspire` embeds the app together with
-the existing managed and DCP payloads. `SkipNativeBuild=true` skips only the
-outer CLI build, not the NativeAOT tray. The app is verified from the actual
-payload archive before embedding.
+See [the bundle build overview](../../docs/specs/bundle.md#build-process) for
+bundle configuration and component-reuse options.
 
 Quit the running tray before replacing its `.app` or republishing the CLI
 executable it uses. A running NativeAOT executable must not be overwritten.

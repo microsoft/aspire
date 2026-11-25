@@ -28,7 +28,7 @@ public class DeveloperCertificateCacheWriteTests(ITestOutputHelper outputHelper)
             var aspireDevCertsCacheDirectory = CertificateHelpers.AspireDevCertsHttpsCacheDirectory;
             Directory.CreateDirectory(userHttpsCertificateLocation);
 
-            var certificateManager = new MacOSCertificateManager(NullLogger.Instance);
+            var certificateManager = new MacOSCertificateManager(NullLogger.Instance, new Aspire.Shared.TemporaryStorage());
             using var certificate = certificateManager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(30));

@@ -2059,48 +2059,6 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(appHostProjectFile.DirectoryName!, "nuget.config")));
     }
 
-    [Theory]
-    [InlineData(155)]
-    [InlineData(0)]
-    public async Task UpdateProjectAsync_NuGetConfigDiscoveryFailure_ReportsActualCause(int exitCode)
-    {
-        // A nonzero exit (here, the host's SDK-selection failure) must surface the command's
-        // diagnostic, not blame NuGet.config. Only a successful, empty discovery is a config problem.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
-        var services = CreateNuGetConfigTestServices(
-            workspace, "9.5.0-preview.1", DailyPackageSource, verifySearch: null,
-            getNuGetConfigPathsCallback: (_, options, _) =>
-            {
-                options.StandardErrorCallback?.Invoke("      A compatible .NET SDK was not found.");
-                options.StandardErrorCallback?.Invoke(string.Empty);
-                options.StandardErrorCallback?.Invoke("Requested SDK version: 11.0.100   ");
-                options.StandardOutputCallback?.Invoke("10.0.401 [/usr/local/share/dotnet/sdk]");
-                return (exitCode, []);
-            });
-        using var provider = services.BuildServiceProvider();
-        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
-        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-
-        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(() => projectUpdater.UpdateProjectAsync(
-            CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "daily"))).DefaultTimeout());
-
-        var expected = exitCode == 0
-            ? Aspire.Cli.Resources.UpdateCommandStrings.FailedDiscoverNuGetConfig
-            : string.Join(
-                Environment.NewLine,
-                string.Format(
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    Aspire.Cli.Resources.UpdateCommandStrings.CommandFailedWithExitCodeAndOutputFormat,
-                    "dotnet nuget config paths",
-                    exitCode),
-                "          A compatible .NET SDK was not found.",
-                "    Requested SDK version: 11.0.100",
-                "    10.0.401 [/usr/local/share/dotnet/sdk]");
-        Assert.Equal(expected, exception.Message);
-        Assert.False(File.Exists(Path.Combine(appHostProjectFile.DirectoryName!, "nuget.config")));
-    }
-
     private static async Task<(FileInfo AppHostProjectFile, DirectoryInfo AppHostFolder)> SetupNuGetConfigTestProject(TemporaryWorkspace workspace)
     {
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
