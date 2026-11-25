@@ -46,7 +46,7 @@
                         <FluentIcon Value="@icon" Color="Color.Custom" CustomColor="currentColor" />
                     </span>
                 }
-                <span class="meter-card-name" data-tooltip="@instrument.Name"><FluentHighlighter HighlightedText="@HighlightText" Text="@instrument.Name" /></span>
+                <span class="meter-card-name metric-instrument-title" data-tooltip="@instrument.Name"><FluentHighlighter HighlightedText="@HighlightText" Text="@instrument.Name" /></span>
             </div>
 
             @if (!string.IsNullOrEmpty(instrument.Description))
@@ -57,13 +57,13 @@
             <div class="meter-card-body">
                 @if (cardData.LatestValue is { } latestValue)
                 {
-                    <div class="meter-card-value">
+                    <div class="metric-instrument-value">
                         @if (instrument.Type == OtlpInstrumentType.Histogram)
                         {
-                            <span class="meter-card-value-label">P50</span>
+                            <span class="metric-instrument-value-label">P50</span>
                         }
-                        <span class="meter-card-value-number">@FormatCompactValue(latestValue, CultureInfo.CurrentCulture)</span>
-                        <span class="meter-card-value-unit">@FormatUnit(instrument, latestValue)</span>
+                        <span class="meter-card-value-number metric-instrument-value-number">@FormatCompactValue(latestValue, CultureInfo.CurrentCulture)</span>
+                        <span class="metric-instrument-value-unit">@FormatUnit(instrument, latestValue)</span>
                     </div>
                     <MetricSparkline Data="@cardData" />
                 }

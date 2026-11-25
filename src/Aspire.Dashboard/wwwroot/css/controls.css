@@ -1337,6 +1337,39 @@ fluent-badge.property-details-accordion-badge {
     vertical-align: text-bottom;
     margin-inline-start: var(--inline-icon-margin);
 }
+.metric-instrument-title {
+    overflow: hidden;
+    font-size: var(--aspire-font-size-body);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.metric-instrument-value {
+    display: flex;
+    align-items: baseline;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.metric-instrument-value-label {
+    color: var(--colorNeutralForeground3);
+    font-size: var(--aspire-font-size-secondary);
+}
+
+.metric-instrument-value-number {
+    color: var(--colorNeutralForeground1);
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+}
+
+.metric-instrument-value-unit {
+    overflow: hidden;
+    color: var(--colorNeutralForeground3);
+    text-overflow: ellipsis;
+}
+
 /* Text-only tooltips use the same Fluent component as rich tooltips. Preserve multiline
    descriptions and wrap long URLs rather than overflowing the tooltip's default max width. */
 .dashboard-tooltip {

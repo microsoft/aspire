@@ -121,10 +121,7 @@
 }
 
 .meter-card-name {
-    overflow: hidden;
     font-weight: var(--aspire-font-weight-semibold);
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .meter-card-description {
@@ -146,30 +143,8 @@
     padding-top: var(--spacingVerticalXS);
 }
 
-.meter-card-value {
-    display: flex;
-    align-items: baseline;
-    gap: var(--aspire-space-1);
-    min-width: 0;
-    white-space: nowrap;
-}
-
-.meter-card-value-label {
-    color: var(--colorNeutralForeground3);
-    font-size: var(--aspire-font-size-secondary);
-}
-
 .meter-card-value-number {
     font-family: var(--aspire-font-display);
-    font-size: var(--aspire-font-size-title);
-    font-weight: var(--aspire-font-weight-semibold);
-    font-variant-numeric: tabular-nums;
-}
-
-.meter-card-value-unit {
-    overflow: hidden;
-    color: var(--colorNeutralForeground3);
-    text-overflow: ellipsis;
 }
 
 .meter-card-no-data {
