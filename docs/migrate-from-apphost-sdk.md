@@ -61,6 +61,11 @@ The `Aspire.Hosting.AppHost` package establishes `IsAspireHost` and supplies the
 including `dotnet run` integration. It does not automatically promote ordinary project
 references into resources.
 
+After NuGet restore, the AppHost package makes `$(AspireHostingSDKVersion)` available to
+properties in the project file. Unlike the old SDK, its `.props` import depends on restore,
+so don't use this property in `Directory.Build.props` or other imports that run before
+NuGet's generated `.props` file.
+
 ### Central Package Management
 
 If `ManagePackageVersionsCentrally` is enabled, place the AppHost and Dotnet versions
