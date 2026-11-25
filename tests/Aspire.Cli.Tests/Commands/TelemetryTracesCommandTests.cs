@@ -636,6 +636,87 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task TelemetryTracesCommand_TraceDetail_TruncatesLongSpanNames()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        // Span names are truncated to 47 characters before "...". The '[' and the emoji's two UTF-16
+        // code units straddle that truncation point.
+        var bracketName = new string('a', 46) + "[x] tail";
+        var surrogatePairName = new string('b', 46) + "\U0001F600 tail";
+        var resourceSpans = new OtlpResourceSpansJson[]
+        {
+            new()
+            {
+                Resource = TelemetryTestHelper.CreateOtlpResource("api", null),
+                ScopeSpans =
+                [
+                    new OtlpScopeSpansJson
+                    {
+                        Spans =
+                        [
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "root001",
+                                Name = bracketName,
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(50)),
+                                Status = new OtlpSpanStatusJson { Code = 1 }
+                            },
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "child01",
+                                ParentSpanId = "root001",
+                                Name = surrogatePairName,
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(10)),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(30)),
+                                Status = new OtlpSpanStatusJson { Code = 1 }
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        var traceJson = JsonSerializer.Serialize(new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans },
+            TotalCount = 1,
+            ReturnedCount = 1
+        }, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+            resources:
+            [
+                new ResourceInfoJson { Name = "api", InstanceId = null },
+            ],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/traces"] = traceJson
+            },
+            hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --trace-id abc1234567890def");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(
+            [
+                "Trace: abc1234 (http://localhost:18888/traces/detail/abc1234567890def)",
+                "Duration: 50ms  Spans: 2",
+                "",
+                "api",
+                $"└─ root001 {new string('a', 46)}[... OK     50ms",
+                $"   └─ child01 {new string('b', 46)}... OK     20ms",
+            ],
+            outputWriter.Logs.SkipWhile(l => !l.StartsWith("Trace:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public async Task TelemetryTracesCommand_WithDashboardUrl_FetchesTracesDirectly()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

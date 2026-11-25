@@ -24,6 +24,7 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class TelemetryTracesCommand : BaseCommand
 {
+    private const int MaxSpanNameLength = 50;
     private const int MaxDbQueryTextLength = 200;
 
     private readonly AppHostConnectionResolver _connectionResolver;
@@ -416,13 +417,9 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var durationStr = TelemetryCommandHelpers.FormatDuration(span.Duration).PadLeft(8);
         var shortenedSpanId = OtlpHelpers.ToShortenedId(span.SpanId);
         var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, traceId, shortenedSpanId, spanId: span.SpanId);
-        var escapedName = span.Name.EscapeMarkup();
-
-        // Truncate long names
-        var maxNameLength = 50;
-        var displayName = escapedName.Length > maxNameLength
-            ? escapedName[..(maxNameLength - 3)] + "..."
-            : escapedName;
+        // Truncate before escaping markup so the cut cannot split an escaped "[[" or "]]" pair,
+        // which Spectre would reject as a malformed tag.
+        var displayName = FormatHelpers.TruncateText(span.Name, MaxSpanNameLength, "...").EscapeMarkup();
 
         var dbQueryText = span.DbQueryText is { } queryText
             ? $" [dim]{FormatDbQueryText(queryText).EscapeMarkup()}[/]"
