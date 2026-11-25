@@ -497,20 +497,22 @@ internal static class SharedAIHelpers
         // exception.stacktrace attributes; the trace summary only shows a truncated "type: message", so the trace
         // detail includes events to make the full exception available.
         // See https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/
+        // Event attribute values bypass the prompt context: its length cap would cut long exception messages and
+        // stack traces, and its duplicate-line removal would drop legitimately repeated frames such as recursive
+        // calls. Span names, status messages and attributes still go through the context so large traces with
+        // repeated SQL or URLs stay compact; events are only emitted for the single-trace detail, which exists to
+        // show them in full.
         JsonArray? eventsArray = null;
         if (includeEvents && span.Events is { Length: > 0 })
         {
-            var eventObjects = span.Events.Select((spanEvent, eventIndex) =>
+            var eventObjects = span.Events.Select(spanEvent =>
             {
                 var eventAttributesObj = new JsonObject();
                 if (spanEvent.Attributes is not null)
                 {
                     foreach (var attr in spanEvent.Attributes)
                     {
-                        eventAttributesObj[attr.Key!] = context.AddValue(
-                            GetAttributeValue(attr),
-                            id => $@"Duplicate of attribute ""{id.Key}"" for event {id.EventIndex} of span {OtlpHelpers.ToShortenedId(id.SpanId)}",
-                            (SpanId: spanId, EventIndex: eventIndex, attr.Key));
+                        eventAttributesObj[attr.Key!] = GetAttributeValue(attr);
                     }
                 }
 

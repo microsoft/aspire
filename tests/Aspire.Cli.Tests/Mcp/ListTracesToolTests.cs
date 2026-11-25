@@ -917,8 +917,11 @@ public class ListTracesToolTests
     public async Task ListTracesTool_ReturnsFullException_WhenTraceIdProvidedAndSummaryTruncatesIt()
     {
         const string exceptionType = "System.InvalidOperationException";
-        var exceptionMessage = new string('x', 1000);
-        const string stackTrace = "   at Orders.Api.OrderHandler.HandleAsync()\n   at Microsoft.AspNetCore.Routing.EndpointMiddleware.Invoke(HttpContext httpContext)";
+        // Longer than the 2,048-character prompt cap, and the stack trace repeats a recursive frame so it would be
+        // damaged by the prompt context's duplicate-line removal; the detail must return both exactly as sent.
+        var exceptionMessage = new string('x', 3000);
+        var stackTrace = string.Concat(Enumerable.Repeat("   at Orders.Api.CategoryTree.Visit(Category category)\n", 20))
+            + "   at Orders.Api.OrderHandler.HandleAsync()\n   at Microsoft.AspNetCore.Routing.EndpointMiddleware.Invoke(HttpContext httpContext)";
         var apiResponse = CreateTracesResponse(CreateResourceSpans("api",
             new OtlpSpanJson
             {
