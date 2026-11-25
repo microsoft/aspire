@@ -25,6 +25,40 @@
         }
       ],
       "run_scope": "main"
+    },
+    {
+      "run_id": 45487444726,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45487444726",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest), Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "observed_at": "2026-11-24T21:05:10Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText",
+          "job_id": 138777722635,
+          "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+          "error": "Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.\n\nIf this test does not fail consistently, the reason may be that\nthe wait timeout is too short, and the runtime did not have enough\ntime to complete the necessary number of renders of the component under test.\nThis can happen on highly utilized or slower hardware, for example.\n\nTo determine if this is the cause, compare the check and render count(s) below\nand see if they match what is expected. If they do not,\nconsider increasing the timeout, either at the individual\nmethod call level, e.g. WaitForElement(\"div\", TimeSpan.FromSeconds(15)),\nor via the static TestContext.DefaultWaitTimeout property.\n\nCheck count: 1.\nComponent render count: 2.\nTotal render count across all components: 0.\n---- Assert.Equal() Failure: Strings differ\n                                 ↓ (pos 22)\nExpected: \"Localized:HomeActivityWaiting\"\nActual:   \"Localized:HomeActivityLoading\"\n                        ",
+          "stack_trace": "   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertionAsync[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 125\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 148\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.<>c__DisplayClass6_0.<Render_ActivityAndInsights_UseLocalizedText>b__0() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 148\n   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.<>c__DisplayClass6_0.<.ctor>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.<>c__DisplayClass32_0.<WrapSynchronousChecker>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226",
+          "standard_output": "Temporary workspace created at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/zo0cnzup.wdk\nDisposing temporary workspace at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/zo0cnzup.wdk\n",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "a6fd9dae-5d20-4c52-9287-c0348b6a1b0b"
+        },
+        {
+          "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText",
+          "job_id": 138777724788,
+          "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+          "error": "Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.\n\nIf this test does not fail consistently, the reason may be that\nthe wait timeout is too short, and the runtime did not have enough\ntime to complete the necessary number of renders of the component under test.\nThis can happen on highly utilized or slower hardware, for example.\n\nTo determine if this is the cause, compare the check and render count(s) below\nand see if they match what is expected. If they do not,\nconsider increasing the timeout, either at the individual\nmethod call level, e.g. WaitForElement(\"div\", TimeSpan.FromSeconds(15)),\nor via the static TestContext.DefaultWaitTimeout property.\n\nCheck count: 1.\nComponent render count: 2.\nTotal render count across all components: 0.\n---- Assert.Equal() Failure: Strings differ\n                                 ↓ (pos 22)\nExpected: \"Localized:HomeActivityWaiting\"\nActual:   \"Localized:HomeActivityLoading\"\n                        ",
+          "stack_trace": "   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertionAsync[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 125\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 148\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.<>c__DisplayClass6_0.<Render_ActivityAndInsights_UseLocalizedText>b__0() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 148\n   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.<>c__DisplayClass6_0.<.ctor>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.<>c__DisplayClass32_0.<WrapSynchronousChecker>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226",
+          "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\4dy2p0x2.dau\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\4dy2p0x2.dau\n",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "a0597fa0-b3b0-429f-8e38-4591d210a216"
+        }
+      ],
+      "run_scope": "main"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/22648"
