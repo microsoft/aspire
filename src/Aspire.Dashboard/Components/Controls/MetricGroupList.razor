@@ -34,6 +34,7 @@
 
 @{
     var groups = GetGroups();
+    var filter = PageViewModel.TextFilter.Trim();
     var allLabel = Loc[nameof(Metrics.MetricsAllInstrumentsTitle)];
     var isAllSelected = PageViewModel is { ShowAll: true, ShowFilterResults: false, SelectedInstrument: null };
 }
@@ -68,7 +69,7 @@
            @onclick="@(() => SelectGroupAsync(group.IsPinned ? Pages.Metrics.MetricGroupKind.Pinned : Pages.Metrics.MetricGroupKind.Meter, group.MeterName))"
            @onclick:preventDefault="true">
             <FluentIcon Value="@(group.IsPinned ? s_pinnedIcon : s_meterIcon)" Color="Color.Custom" CustomColor="currentColor" />
-            <span class="metric-group-name">@group.Name</span>
+            <span class="metric-group-name"><FluentHighlighter HighlightedText="@(group.IsPinned ? null : filter)" Text="@group.Name" /></span>
             <span class="aspire-count-badge aspire-count-badge-compact metric-group-count">@group.InstrumentCount</span>
         </a>
 

@@ -1469,6 +1469,9 @@ public partial class MetricsTests : DashboardTestContext
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
 
+        var memoryMetric = CreateSumMetric(metricName: "memory.usage", startTime: s_testTime.AddMinutes(1));
+        memoryMetric.Description = "Bytes in the managed heap.";
+
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
@@ -1483,7 +1486,7 @@ public partial class MetricsTests : DashboardTestContext
                         Metrics =
                         {
                             CreateSumMetric(metricName: "http.request.count", startTime: s_testTime.AddMinutes(1)),
-                            CreateSumMetric(metricName: "memory.usage", startTime: s_testTime.AddMinutes(1))
+                            memoryMetric
                         }
                     },
                     new ScopeMetrics
@@ -1513,12 +1516,29 @@ public partial class MetricsTests : DashboardTestContext
         var filterInput = cut.FindComponents<FluentTextInput>().Single(c => c.Instance.Class == "metric-groups-search");
 
         // Typing shows matches from every meter, grouped by meter, and no group is selected.
-        await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync("MEMORY"));
+        await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync("  MEMORY  "));
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(["test-meter1 1"], GetMetricGroups(cut));
             Assert.Equal(["test-meter1: memory.usage"], GetFilterResults(cut));
+            Assert.Equal("memory", cut.Find(".meter-card-name mark").TextContent);
+            Assert.Empty(cut.FindAll(".metric-group-name mark"));
             Assert.Empty(cut.FindAll(".metric-group.selected"));
+        });
+
+        await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync("MANAGED"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["memory.usage"], GetCardNames(cut));
+            Assert.Equal("managed", cut.Find(".meter-card-description mark").TextContent);
+            Assert.Empty(cut.FindAll(".meter-card-name mark"));
+        });
+
+        await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync("METER2"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["queue.length"], GetCardNames(cut));
+            Assert.Equal("meter2", cut.Find(".metric-group-name mark").TextContent);
         });
 
         // A match in another meter than the selected one is shown too.
@@ -1548,7 +1568,11 @@ public partial class MetricsTests : DashboardTestContext
 
         // Clearing the filter returns to the selected group.
         await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync(""));
-        cut.WaitForAssertion(() => Assert.Equal(["queue.length"], GetCardNames(cut)));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["queue.length"], GetCardNames(cut));
+            Assert.Empty(cut.FindAll(".metric-group-name mark, .meter-card-name mark, .meter-card-description mark"));
+        });
 
         // Each filter result as "<meter>: <instrument>".
         static List<string> GetFilterResults(IRenderedComponent<Metrics> cut) =>
