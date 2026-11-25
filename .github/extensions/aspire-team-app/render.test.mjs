@@ -49,7 +49,7 @@ test("render keeps the current dashboard visible and surfaces later load errors"
   assert.match(app.innerHTML, /GitHub accounts/);
 });
 
-test("Needs attention renders only its prefix and offers a collapsed, action-free remainder for position lookup", () => {
+test("PR queue renders only its prefix and offers a collapsed, action-free remainder for position lookup", () => {
   const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
   for (const count of [0, 4, 10, 11, 25]) {
     api.setState(reviewDashboard(count));
@@ -63,14 +63,51 @@ test("Needs attention renders only its prefix and offers a collapsed, action-fre
       assert.match(remainder[1], /aria-controls="later-in-queue-body" aria-expanded="false"/);
       assert.match(remainder[1], /id="later-in-queue-body" inert/);
       assert.match(remainder[1], new RegExp('<span class="sect-count">' + (count - 10) + "</span>"));
-      assert.match(remainder[1], /Prioritize the first 10 in Needs attention for review/);
+      assert.match(remainder[1], /Prioritize the first 10 in PR queue for review/);
       assert.deepEqual([...remainder[1].matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), positions.slice(10));
       assert.equal([...remainder[1].matchAll(/<a href=/g)].length, count - 10);
       assert.equal([...remainder[1].matchAll(/class="card-actions"/g)].length, 0);
     }
-    assert.match(app.innerHTML, /fixes-ci or urgent-review labels first, then first readiness, oldest first\. Blocked PRs keep their readiness when they return\./);
+    assert.match(app.innerHTML, /Urgent PRs first; first readiness, oldest first within each group\./);
   }
   assert.match(STYLES, /\.focus-queue \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 280px\), 1fr\)\)/);
+});
+
+test("PR queue leads the review board even when personal picks exist", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  const dashboard = reviewDashboard(11);
+  dashboard.attention.forMe = [dashboard.attention.focus[0]];
+  api.setState(dashboard);
+  api.render();
+  assert.deepEqual([...app.innerHTML.matchAll(/<section class="(?:qpanel|sect-group)[^"]*" data-(?:q|sect)="([^"]+)"/g)]
+    .map((match) => match[1]), ["pr-queue", "later-in-queue", "for-you", "outside-focus"]);
+  assert.match(app.innerHTML, /<span class="qtitle">PR queue<\/span>/);
+  assert.match(app.innerHTML, />11<\/b> in PR queue/);
+  assert.doesNotMatch(app.innerHTML, /Needs attention|needs attention/);
+});
+
+test("urgent queue cards and collapsed lookup entries have visible text badges without adding full cards", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  const dashboard = reviewDashboard(14);
+  const all = [...dashboard.attention.focus, ...dashboard.attention.focusRemainder];
+  for (const item of all.slice(0, 12)) item.urgent = true;
+  api.setState(dashboard);
+  api.render();
+  const queue = app.innerHTML.match(/<ol class="focus-queue"[^>]*>([\s\S]*?)<\/ol>/)[1];
+  const remainder = app.innerHTML.match(/data-sect="later-in-queue">([\s\S]*?)<\/section>/)[1];
+  assert.equal([...queue.matchAll(/class="card card-urgent"/g)].length, 10);
+  assert.equal([...queue.matchAll(/class="urgent-badge"[^>]*>Urgent<\/span>/g)].length, 10);
+  assert.match(queue, /title="review-urgent, urgent-review, or fixes-ci label: prioritized ahead of regular eligible PRs\."/);
+  assert.equal([...remainder.matchAll(/class="urgent-badge"[^>]*>Urgent<\/span>/g)].length, 2);
+  assert.match(remainder, /aria-expanded="false"/);
+  assert.deepEqual([...remainder.matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), [11, 12, 13, 14]);
+  assert.equal([...remainder.matchAll(/class="card(?: |")/g)].length, 0);
+  assert.match(app.innerHTML, /aria-label="PR queue, urgent first, then first-readiness order"/);
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.render();
+  assert.match(app.innerHTML, /Eligible PRs labeled <b>review-urgent<\/b>, <b>urgent-review<\/b>, or <b>fixes-ci<\/b> come first/);
+  assert.match(app.innerHTML, /Removing the label restores first-readiness order/);
 });
 
 test("remainder expansion and collapse survive refresh, including a remainder that arrives after initial load", () => {
@@ -111,7 +148,7 @@ test("remainder expansion and collapse survive refresh, including a remainder th
   assert.match(app.innerHTML, /id="later-in-queue-body" inert/);
 });
 
-test("resizing the review board cannot redistribute Needs attention into masonry columns", () => {
+test("resizing the review board cannot redistribute PR queue into masonry columns", () => {
   // Only legacy .grid panels participate in the JavaScript column redistribution.
   // The ordered list keeps its DOM/tab order at every responsive width.
   const queried = [];
@@ -123,7 +160,7 @@ test("resizing the review board cannot redistribute Needs attention into masonry
     queuePosition: position,
     pr: { number: position, title: `PR ${position}`, url: `https://github.com/microsoft/aspire/pull/${position}`, repository: "microsoft/aspire", author: "davidfowl" },
   }));
-  const markup = api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true });
+  const markup = api.queuePanel({ id: "pr-queue", title: "PR queue", items, numbered: true });
   api.setState(reviewDashboard(13));
   api.render();
   const board = app.innerHTML;
@@ -132,7 +169,7 @@ test("resizing the review board cannot redistribute Needs attention into masonry
     queried.length = 0;
     api.layoutGrids();
     assert.deepEqual(queried, [".grid"]);
-    assert.equal(api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true }), markup);
+    assert.equal(api.queuePanel({ id: "pr-queue", title: "PR queue", items, numbered: true }), markup);
     api.render();
     assert.equal(app.innerHTML, board);
   }
@@ -217,6 +254,316 @@ test("an unauthenticated initial load keeps Settings, Accounts, and Health navig
   assert.equal(api.getState().mode, "health");
   assert.match(app.innerHTML, /Repository &amp; delivery health/);
   assert.match(app.innerHTML, /No health sources configured/);
+});
+
+test("tab clicks request cached destinations without waiting for older loads", async () => {
+  const requests = [];
+  const { app, api } = createRendererHarness({
+    fetch: (url, options) => {
+      if (String(url) === "api/state") return new Promise(() => {});
+      assert.equal(String(url), "api/mode");
+      const mode = JSON.parse(options.body).mode;
+      return new Promise((resolve) => requests.push({ mode, resolve }));
+    },
+  });
+  api.setState({ ...reviewDashboard(1), seq: 1 });
+  api.setPrefs({ notifications: {}, azurePipelines: [], release: "13.5" });
+  api.render();
+
+  const issues = api.setMode("issues");
+  assert.match(app.innerHTML, /class="tab active" data-mode="issues"/);
+  assert.match(app.innerHTML, /Loading Issues/);
+  const ship = api.setMode("ship");
+  const health = api.setMode("health");
+  assert.deepEqual(requests.map((request) => request.mode), ["issues", "ship", "health"]);
+  assert.match(app.innerHTML, /class="tab active" data-mode="health"/);
+  assert.match(app.innerHTML, /Loading Health/);
+  api.goView("settings");
+  assert.match(app.innerHTML, /id="pipeline-url-input"/);
+  api.goView("queue");
+
+  requests[2].resolve(jsonResponse({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 4 },
+    prefs: { notifications: {}, azurePipelines: [] },
+  }));
+  await health;
+  assert.equal(api.getState().mode, "health");
+  assert.match(app.innerHTML, /No health sources configured/);
+  requests[0].resolve(jsonResponse({
+    dashboard: { ...reviewDashboard(1), mode: "issues", seq: 2 },
+    prefs: { notifications: {}, azurePipelines: [] },
+  }));
+  requests[1].resolve(jsonResponse({
+    dashboard: { ...reviewDashboard(1), mode: "ship", seq: 3 },
+    prefs: { notifications: {}, azurePipelines: [] },
+  }));
+  await Promise.all([issues, ship]);
+  assert.equal(api.getState().mode, "health");
+  assert.match(app.innerHTML, /No health sources configured/);
+});
+
+test("navigation is available before the first dashboard and a completed tab renders only once", async () => {
+  const requests = [];
+  const app = countingApp();
+  const { api } = createRendererHarness({
+    app,
+    fetch: (url, options) => {
+      if (String(url) === "api/state") return new Promise(() => {});
+      return new Promise((resolve) => requests.push({ mode: JSON.parse(options.body).mode, resolve }));
+    },
+  });
+  assert.match(app.innerHTML, /data-mode="health"/);
+  const loading = api.setMode("health");
+  assert.equal(requests[0].mode, "health");
+  assert.match(app.innerHTML, /Loading Health/);
+  api.applyPushedState({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), loading: true, seq: 1 },
+    prefs: rendererPrefs(),
+  });
+  assert.equal(api.getState().mode, "health");
+  const beforeCompletion = app.renders;
+  requests[0].resolve(jsonResponse({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), loading: false, seq: 2 },
+    prefs: rendererPrefs(),
+  }));
+  await loading;
+  assert.equal(app.renders, beforeCompletion + 1);
+  assert.match(app.innerHTML, /No health sources configured/);
+});
+
+test("settings load independently and keep edits while the first dashboard arrives", async () => {
+  const stateRequests = [];
+  const app = countingApp();
+  const { api } = createRendererHarness({
+    app,
+    fetch: (url) => {
+      if (String(url) === "api/prefs") return Promise.resolve(jsonResponse({ prefs: rendererPrefs() }));
+      assert.equal(String(url), "api/state");
+      return new Promise((resolve) => stateRequests.push(resolve));
+    },
+  });
+
+  api.goView("settings");
+  await api.loadSettingsPrefs();
+  assert.match(app.innerHTML, /<h2>Settings<\/h2>/);
+  assert.match(app.innerHTML, /id="release-input" value="13\.1"/);
+  const settings = app.innerHTML;
+  const renders = app.renders;
+
+  const loading = api.load();
+  stateRequests[1](jsonResponse({ dashboard: { ...reviewDashboard(1), seq: 1 }, prefs: rendererPrefs() }));
+  await loading;
+  assert.equal(app.renders, renders);
+  assert.equal(app.innerHTML, settings);
+  assert.equal(api.getState(), null);
+  api.applyPushedState({ dashboard: { ...reviewDashboard(2), seq: 2 }, prefs: rendererPrefs() });
+  assert.equal(app.renders, renders);
+  assert.equal(app.innerHTML, settings);
+
+  api.goView("queue");
+  assert.equal(api.getState().seq, 2);
+  assert.match(app.innerHTML, /PR 2/);
+});
+
+test("settings use pushed preferences without repainting when the initial read finishes", async () => {
+  for (const source of ["preferences", "snapshot"]) {
+    let resolvePrefs;
+    const app = countingApp();
+    const { api } = createRendererHarness({
+      app,
+      fetch: (url) => String(url) === "api/prefs"
+        ? new Promise((resolve) => { resolvePrefs = resolve; })
+        : new Promise(() => {}),
+    });
+
+    api.goView("settings");
+    assert.match(app.innerHTML, /Loading settings/);
+    if (source === "preferences") api.onPreferences(rendererPrefs());
+    else api.onSnapshot({ seq: 1, prefs: rendererPrefs() });
+    assert.match(app.innerHTML, /<h2>Settings<\/h2>/);
+    const renders = app.renders;
+    const reading = api.loadSettingsPrefs();
+    resolvePrefs(jsonResponse({ prefs: rendererPrefs() }));
+    await reading;
+    assert.equal(app.renders, renders);
+  }
+});
+
+test("initial settings report a preference read failure and allow retry", async () => {
+  let attempts = 0;
+  const { app, api } = createRendererHarness({
+    fetch: (url) => {
+      if (String(url) !== "api/prefs") return new Promise(() => {});
+      attempts++;
+      return Promise.resolve(attempts === 1
+        ? jsonResponse({ error: "Preferences unavailable" }, { ok: false, status: 500 })
+        : jsonResponse({ prefs: rendererPrefs() }));
+    },
+  });
+
+  api.goView("settings");
+  await api.loadSettingsPrefs();
+  assert.match(app.innerHTML, /Preferences unavailable/);
+  assert.match(app.innerHTML, /id="retry-btn"/);
+  await api.loadSettingsPrefs();
+  assert.match(app.innerHTML, /<h2>Settings<\/h2>/);
+});
+
+test("partial updates keep a useful board stable until the complete result arrives", () => {
+  const app = countingApp();
+  const { api } = createRendererHarness({ app, fetch: () => new Promise(() => {}) });
+  const push = (count, seq, loading) => api.applyPushedState({
+    dashboard: { ...reviewDashboard(count), seq, loading },
+    prefs: rendererPrefs(),
+  });
+  push(0, 1, true);
+  const emptyRenders = app.renders;
+  push(0, 2, true);
+  assert.equal(app.renders, emptyRenders);
+  push(1, 3, true);
+  assert.match(app.innerHTML, /PR 1/);
+  const usefulRenders = app.renders;
+  push(2, 4, true);
+  assert.equal(app.renders, usefulRenders);
+  assert.doesNotMatch(app.innerHTML, /PR 2/);
+  push(2, 5, false);
+  assert.equal(app.renders, usefulRenders + 1);
+  assert.match(app.innerHTML, /PR 2/);
+  assert.match(app.innerHTML, /class="view ">/);
+});
+
+test("a partial error does not prevent later useful results from appearing", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  api.applyPushedState({
+    dashboard: { ...reviewDashboard(0), seq: 1, loading: true, errors: ["A repository is unavailable"] },
+    prefs: rendererPrefs(),
+  });
+  api.applyPushedState({
+    dashboard: { ...reviewDashboard(1), seq: 2, loading: true, errors: ["A repository is unavailable"] },
+    prefs: rendererPrefs(),
+  });
+  assert.match(app.innerHTML, /PR 1/);
+});
+
+test("a tab result arriving during settings editing is applied only after returning", async () => {
+  let resolveMode;
+  const app = countingApp();
+  const { api } = createRendererHarness({
+    app,
+    fetch: (url) => String(url) === "api/state" ? new Promise(() => {}) :
+      new Promise((resolve) => { resolveMode = resolve; }),
+  });
+  api.setState({ ...reviewDashboard(1), seq: 1 });
+  api.setPrefs(rendererPrefs());
+  api.render();
+  const loading = api.setMode("health");
+  api.goView("settings");
+  const settings = app.innerHTML;
+  const renders = app.renders;
+  resolveMode(jsonResponse({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 2 },
+    prefs: rendererPrefs(),
+  }));
+  await loading;
+  assert.equal(app.renders, renders);
+  assert.equal(app.innerHTML, settings);
+  api.goView("queue");
+  assert.equal(api.getState().mode, "health");
+  assert.match(app.innerHTML, /No health sources configured/);
+});
+
+test("collapsed review sections build their cards only when opened", () => {
+  function control(dataset, id) {
+    const section = { dataset: { deferred: "true" }, classList: classList(), querySelector: () => null };
+    section.classList.add("collapsed");
+    const button = {
+      dataset: { [dataset]: id },
+      listeners: {},
+      addEventListener(name, handler) { this.listeners[name] = handler; },
+      closest() { return section; },
+      setAttribute() {},
+    };
+    return button;
+  }
+  const community = control("collapse", "community");
+  const breakdown = control("collapse", "attention-breakdown");
+  const lane = control("laneToggle", "b-sample-signal");
+  const { app, api } = createRendererHarness({
+    fetch: () => new Promise(() => {}),
+    querySelectorAll: (selector) => selector === "[data-collapse]" ? [community, breakdown] :
+      selector === ".lane-head" ? [lane] : [],
+  });
+  api.setState(reviewDashboard(0));
+  api.render();
+  const dashboard = reviewDashboard(0);
+  const item = (title, number) => ({
+    pr: { number, title, url: `https://github.com/microsoft/aspire/pull/${number}`,
+      repository: "microsoft/aspire", author: "octo", review: { state: "waiting" } },
+    signals: [],
+  });
+  dashboard.attention.community = [item("Community card", 31)];
+  dashboard.attention.buckets = [{ label: "Sample signal", items: [item("Breakdown card", 32)] }];
+  api.setState(dashboard);
+  api.render();
+  assert.match(app.innerHTML, /data-sect="community" data-deferred="true"/);
+  assert.match(app.innerHTML, /data-sect="attention-breakdown" data-deferred="true"/);
+  assert.doesNotMatch(app.innerHTML, /Community card|Breakdown card/);
+  community.listeners.click();
+  assert.match(app.innerHTML, /Community card/);
+  breakdown.listeners.click();
+  assert.match(app.innerHTML, /data-lane="b-sample-signal" data-deferred="true"/);
+  assert.doesNotMatch(app.innerHTML, /Breakdown card/);
+  lane.listeners.click();
+  assert.match(app.innerHTML, /Breakdown card/);
+});
+
+test("partial boards show loaded cards without claiming empty queues are complete", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  api.setState({ ...reviewDashboard(0), loading: true });
+  api.render();
+  assert.match(app.innerHTML, /checking more repositories/);
+  assert.match(app.innerHTML, /Still checking watched repositories/);
+  assert.doesNotMatch(app.innerHTML, /Nothing is waiting on a reviewer right now/);
+
+  api.setState({ ...reviewDashboard(1), loading: true });
+  api.render();
+  assert.match(app.innerHTML, /PR 1/);
+  assert.match(app.innerHTML, /checking more repositories/);
+
+  api.setState({ ...reviewDashboard(0), mode: "issues", attention: null, lanes: [], loading: true });
+  api.render();
+  assert.match(app.innerHTML, /Checking watched repositories/);
+  assert.doesNotMatch(app.innerHTML, /All clear/);
+
+  const source = { id: "github:github.com/microsoft/one", provider: "github", name: "microsoft/one",
+    state: "healthy", reasons: [], evidence: [] };
+  api.setState({ ...healthDashboard([source], emptyHealthCounts(), true), loading: true });
+  api.render();
+  assert.match(app.innerHTML, /draggable="false" disabled data-health-drag/);
+  assert.match(app.innerHTML, /Reordering is available after loading/);
+});
+
+test("a failed tab load restores the last complete board and allows another attempt", async () => {
+  let fails = true;
+  const { app, api } = createRendererHarness({
+    fetch: async (url) => {
+      if (String(url) === "api/state") return new Promise(() => {});
+      if (fails) throw new Error("Connection to GitHub timed out.");
+      return jsonResponse({
+        dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 2 },
+        prefs: {},
+      });
+    },
+  });
+  api.setState({ ...reviewDashboard(1), seq: 1 });
+  await api.setMode("health");
+  assert.equal(api.getState().mode, "review");
+  assert.match(app.innerHTML, /class="tab active" data-mode="review"/);
+  assert.match(app.innerHTML, /Connection to GitHub timed out/);
+  fails = false;
+  await api.setMode("health");
+  assert.equal(api.getState().mode, "health");
+  assert.equal(api.getLoadError(), null);
 });
 
 test("deleteRepo completes once when both the animation and fallback timeout fire", () => {
@@ -360,7 +707,7 @@ test("focusCardActions layers review-debt / review context with signal actions",
   assert.equal(mineChanges.map((a) => a.kind).join(","), "address-feedback,discuss-review");
   assert.equal(mineChanges[0].label, "Address feedback");
 
-  // The "Your PRs outside Needs attention" lane tags the same case with an "Author response" pill,
+  // The "Your PRs outside PR queue" lane tags the same case with an "Author response" pill,
   // which also qualifies even without review state on the card.
   const mineAuthorPill = api.focusCardActions({ pr: { isMine: true }, signals: [{ label: "Author response" }] });
   assert.equal(mineAuthorPill.map((a) => a.kind).join(","), "address-feedback,discuss-review");
@@ -680,16 +1027,17 @@ function assertTooltipLifecycle(selector) {
   assert.match(STYLES, /\.agent-action-tooltip \{[^}]*pointer-events: auto;/);
 }
 
-test("cardActionBtn greys out and spins while refresh finalization is in progress", () => {
+test("card actions remain available while another dashboard is loading", () => {
   const { api } = createRendererHarness();
   const pr = { url: "https://github.com/o/r/pull/1", number: 1, repository: "o/r", title: "t", author: "a" };
   const action = { kind: "review", label: "Review", done: "Review requested", icon: "" };
 
   api.setRefreshing(true);
   const html = api.cardActionBtn(pr, action);
-  assert.match(html, /class="card-btn cb-main busy spin" data-target="new-session" aria-live="polite" disabled/);
-  assert.match(html, /Finalizing…/);
-  assert.match(html, /class="card-btn cb-caret"[^>]*disabled/);
+  assert.match(html, /class="card-btn cb-main" data-target="new-session" aria-live="polite">/);
+  assert.match(html, /<span class="cb-label">Review<\/span>/);
+  assert.match(html, /class="card-btn cb-caret"[^>]*>/);
+  assert.doesNotMatch(html, /\bdisabled\b/);
 });
 
 test("cardActionBtn defaults a GHES/EMU card to the current session with no new-session option", () => {
@@ -1098,6 +1446,7 @@ test("refresh tooltip counts down to the server's next background poll", () => {
   const refreshButton = {
     dataset: {},
     classList: classList(),
+    addEventListener() {},
     setAttribute(name, value) { attributes[name] = value; },
   };
   let intervalMs;
@@ -1859,6 +2208,17 @@ function emptyHealthCounts() {
   return { total: 0, healthy: 0, running: 0, degraded: 0, failing: 0, unavailable: 0, unknown: 0 };
 }
 
+function countingApp() {
+  return {
+    html: "",
+    renders: 0,
+    get innerHTML() { return this.html; },
+    set innerHTML(value) { this.html = value; this.renders++; },
+    removeAttribute() {},
+    classList: classList(),
+  };
+}
+
 function healthDashboard(items, counts, authenticated) {
   return {
     authenticated,
@@ -1913,10 +2273,10 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  loadSettingsPrefs,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
-  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill })", sandbox));
+  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill, setMode, goView })", sandbox));
   return { app, api: sandbox.__test, events, document };
 }
 

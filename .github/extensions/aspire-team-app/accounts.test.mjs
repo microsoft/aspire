@@ -93,6 +93,37 @@ test("standalone discovery retains healthy CLI accounts when another host fails"
   }
 });
 
+test("stored CLI tokens are read concurrently without changing account order", { timeout: 5000 }, async (t) => {
+  let releaseFirst;
+  let signalSecond;
+  const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+  const secondStarted = new Promise((resolve) => { signalSecond = resolve; });
+  t.after(() => releaseFirst());
+
+  const discovery = detectCandidates({
+    env: {},
+    platform: "linux",
+    run: async (_command, args) => {
+      if (args[1] === "status") {
+        return { stdout: JSON.stringify({ hosts: { "github.com": [
+          { host: "github.com", login: "first", state: "success" },
+          { host: "github.com", login: "second", state: "success" },
+        ] } }) };
+      }
+      if (args.at(-1) === "first") await firstGate;
+      else signalSecond();
+      return { stdout: `${args.at(-1)}-token` };
+    },
+  });
+
+  await secondStarted;
+  releaseFirst();
+  const candidates = await discovery;
+  assert.deepEqual(candidates.map(({ login, token }) => [login, token]), [
+    ["first", "first-token"], ["second", "second-token"],
+  ]);
+});
+
 test("injected tokens do not override stored CLI credentials and remain separate candidates", async () => {
   const env = {
     GH_TOKEN: "injected-dotcom",
@@ -120,6 +151,35 @@ test("injected tokens do not override stored CLI credentials and remain separate
     { source: "copilot", token: "copilot-token" },
   ]);
   assert.deepEqual(env, before);
+});
+
+test("injected identities can start before CLI discovery without changing credential precedence", { timeout: 5000 }, async (t) => {
+  let releaseStatus;
+  let signalCandidate;
+  const statusGate = new Promise((resolve) => { releaseStatus = resolve; });
+  const candidateStarted = new Promise((resolve) => { signalCandidate = resolve; });
+  t.after(() => releaseStatus());
+  const candidates = detectCandidates({
+    env: { GH_TOKEN: "shared-token" },
+    platform: "linux",
+    onCandidate: (candidate) => {
+      assert.equal(candidate.source, "env");
+      signalCandidate();
+    },
+    run: async (_command, args) => {
+      if (args[1] === "status") {
+        await statusGate;
+        return { stdout: JSON.stringify({ hosts: { "github.com": [
+          { host: "github.com", login: "octo", state: "success" },
+        ] } }) };
+      }
+      return { stdout: "shared-token" };
+    },
+  });
+
+  await candidateStarted;
+  releaseStatus();
+  assert.deepEqual((await candidates).map(({ source, login }) => [source, login]), [["gh", "octo"]]);
 });
 
 test("discovery still uses environment credentials when gh is unavailable", async () => {
@@ -470,6 +530,108 @@ test("resolveAccounts reads legacy login-only preferences for github.com account
   assert.equal(accounts[0].id, "acct:github.com/octo");
   assert.deepEqual(accounts[0].repos, ["microsoft/aspire.dev"]);
   assert.equal(accounts[0].active, true);
+});
+
+test("identity and repository probes run concurrently and still select the strongest credential", { timeout: 5000 }, async (t) => {
+  resetAccountEnv({
+    GH_TOKEN: "first-token",
+    COPILOT_GH_ACCOUNT_github_2E_com_octo: "second-token",
+  });
+  let releaseIdentity;
+  let releaseRepository;
+  let signalIdentity;
+  let signalRepository;
+  const identityGate = new Promise((resolve) => { releaseIdentity = resolve; });
+  const repositoryGate = new Promise((resolve) => { releaseRepository = resolve; });
+  const secondIdentityStarted = new Promise((resolve) => { signalIdentity = resolve; });
+  const secondRepositoryStarted = new Promise((resolve) => { signalRepository = resolve; });
+  t.after(() => { releaseIdentity(); releaseRepository(); });
+  const base = accountFetch();
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    const first = options.headers?.Authorization === "bearer first-token";
+    if (query.includes("viewer { login")) {
+      if (first) await identityGate;
+      else signalIdentity();
+    } else if (query.includes("r0: repository")) {
+      if (first) {
+        await repositoryGate;
+        return jsonResponse({ data: { r0: null } });
+      }
+      signalRepository();
+    }
+    return base(url, options);
+  };
+  const { resolveAccounts } = await import(`./accounts.mjs?test=parallel-probes-${Date.now()}`);
+
+  const resolving = resolveAccounts(() => ["microsoft/aspire"], () => true);
+  await secondIdentityStarted;
+  releaseIdentity();
+  await secondRepositoryStarted;
+  releaseRepository();
+  const { accounts, tokenById } = await resolving;
+
+  assert.equal(accounts.length, 1);
+  assert.equal(tokenById.get(accounts[0].id), "second-token");
+  assert.equal(accounts[0].accessible, 1);
+});
+
+test("a failed repository probe does not discard another usable credential", async () => {
+  resetAccountEnv({
+    GH_TOKEN: "failed-token",
+    COPILOT_GH_ACCOUNT_github_2E_com_octo: "working-token",
+  });
+  const base = accountFetch();
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("r0: repository") && options.headers?.Authorization === "bearer failed-token") {
+      throw new Error("Repository probe timed out");
+    }
+    return base(url, options);
+  };
+  const { resolveAccounts } = await import(`./accounts.mjs?test=failed-repository-probe-${Date.now()}`);
+
+  const { accounts, tokenById } = await resolveAccounts(() => ["microsoft/aspire"], () => true);
+
+  assert.equal(accounts.length, 1);
+  assert.equal(accounts[0].status, "ok");
+  assert.equal(tokenById.get(accounts[0].id), "working-token");
+  const failed = accounts[0].sources.find((source) => source.source === "env");
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.reason, "Repository probe timed out");
+});
+
+test("account discovery settles and reports a stalled identity response body", { timeout: 5000 }, async (t) => {
+  resetAccountEnv({
+    COPILOT_GH_ACCOUNT_github_2E_com_octo: "token-dotcom",
+    COPILOT_GH_ACCOUNT_msft_2E_ghe_2E_com_octo: "token-proxima",
+  });
+  const timeout = AbortSignal.timeout.bind(AbortSignal);
+  t.mock.method(AbortSignal, "timeout", () => timeout(20));
+  const safety = new AbortController();
+  const timer = setTimeout(() => safety.abort(), 2000);
+  t.after(() => { clearTimeout(timer); safety.abort(); });
+  const base = accountFetch();
+  globalThis.fetch = async (url, options) => {
+    if (String(url) !== "https://api.github.com/graphql") return base(url, options);
+    const signal = options.signal ?? safety.signal;
+    return {
+      ok: true,
+      json: () => new Promise((_, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }),
+    };
+  };
+  const { resolveAccounts } = await import(`./accounts.mjs?test=stalled-identity-${Date.now()}`);
+
+  const { accounts } = await resolveAccounts(() => ["microsoft/aspire"], () => true);
+
+  assert.equal(safety.signal.aborted, false);
+  assert.equal(accounts.length, 2);
+  assert.equal(accounts[0].status, "ok");
+  const failed = accounts.find((account) => account.host === "github.com");
+  assert.equal(failed.status, "failed");
+  assert.match(failed.reason, /GitHub request timed out after 30 seconds/);
 });
 
 function resetAccountEnv(extra) {

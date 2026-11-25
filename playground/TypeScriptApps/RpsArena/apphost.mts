@@ -35,7 +35,7 @@ const nodePlayer = await builder
 // ── C# Paladin (Player 3) ─────────────────────────────────
 // A disciplined C# player that uses probability theory and streak detection.
 const csharpPlayer = await builder
-    .addCSharpApp("csharp-player", "./csharp-player/csharp-player.cs")
+    .addDotnetProject("csharp-player", "./csharp-player/csharp-player.cs")
     .withHttpEndpoint()
     .withHttpHealthCheck({ path: "/health" });
 
@@ -43,7 +43,7 @@ const csharpPlayer = await builder
 // Orchestrates matches, calls all players, stores results.
 // Waits for the database and all players before starting.
 const gamemaster = await builder
-    .addCSharpApp("gamemaster", "./gamemaster/gamemaster.cs")
+    .addDotnetProject("gamemaster", "./gamemaster/gamemaster.cs")
     .withReference(gameDb)
     .withReference(pythonPlayer)
     .withReference(nodePlayer)
@@ -56,7 +56,7 @@ const gamemaster = await builder
     .withHttpHealthCheck({ path: "/health" })
     .withCommand("clear-history", "Clear History", async (context: ExecuteCommandContext): Promise<ExecuteCommandResult> => {
         const endpoint = await gamemaster.getEndpoint("http");
-        const url = await endpoint.url.get();
+        const url = await endpoint.url();
         const res = await fetch(`${url}/api/rounds`, { method: "DELETE" });
         if (res.ok) {
             return { success: true };
