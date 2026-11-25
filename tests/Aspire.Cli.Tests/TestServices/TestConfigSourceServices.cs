@@ -34,7 +34,7 @@ internal static class TestConfigSourceServices
         return new ConfigSourceService(context, environment ?? new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), detector ?? new TestConfigSourceDetector(),
             git ?? new TestConfigSourceRepository(), clock ?? TimeProvider.System, interaction ?? new TestInteractionService(),
             interactive ? TestHelpers.CreateInteractiveHostEnvironment() : TestHelpers.CreateNonInteractiveHostEnvironment(),
-            NullLogger<ConfigSourceService>.Instance);
+            new TestFeatures(), NullLogger<ConfigSourceService>.Instance);
     }
 
     public static async Task<(string Commit, string Version, JsonObject Configuration)> AcquireAsync(

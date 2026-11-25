@@ -67,6 +67,11 @@
         <target state="translated">컴퓨터에서 구성 원본이 감지되었습니다. 조직에서 Aspire 설정을 공유하여 사용자의 개발 환경을 사용자 지정할 수 있습니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FeatureDisabled">
+        <source>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</source>
+        <target state="new">Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</target>
+        <note>Do not translate "features.configSourceEnabled" or "true".</note>
+      </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
         <target state="translated">Git을 시작할 수 없습니다. Git이 설치되어 있고 PATH에 이 구성 원본을 사용할 수 있는지 확인합니다.</target>

@@ -150,6 +150,7 @@ internal abstract class BaseCommand : Command
             // override GracefulShutdownBudget get the zero default (force-kill on cancel).
             services.CancellationManager.ConfigureForCommand(GracefulShutdownBudget);
 
+            ConfigSources.ValidateOptIn(parseResult);
             var handlerTask = ExecuteAsync(parseResult, cancellationToken);
             services.CancellationManager.SetStartedHandler(handlerTask);
 

@@ -13,6 +13,22 @@
       "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
       "type": "object",
       "properties": {
+        "configSourceEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable Git-backed configuration source discovery, template inheritance, update checks, and refresh",
+          "default": true
+        },
         "defaultWatchEnabled": {
           "anyOf": [
             {
