@@ -620,6 +620,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddSingleton<IDcpExecutor>(sp => sp.GetRequiredService<DcpExecutor>());
             _innerBuilder.Services.AddSingleton<DcpExecutorEvents>();
             _innerBuilder.Services.AddSingleton<DcpHost>();
+            _innerBuilder.Services.AddSingleton(static sp => sp.GetRequiredService<DcpHost>().MsBuildNodeReuseIsolation);
             _innerBuilder.Services.AddSingleton<IDcpDependencyCheckService, DcpDependencyCheck>();
             _innerBuilder.Services.AddSingleton<DcpNameGenerator>();
 

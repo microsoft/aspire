@@ -106,7 +106,7 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
         return Task.CompletedTask;
     }
 
-    private static bool IsAspireManagedDotnetBuild(IResource resource)
+    internal static bool IsAspireManagedDotnetBuild(IResource resource)
     {
         if (resource is not ExecutableResource { Command: "dotnet" })
         {

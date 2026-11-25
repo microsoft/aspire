@@ -4,6 +4,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,8 @@ internal sealed class ExecutableCreator(
     IConfiguration configuration,
     DistributedApplicationOptions distributedApplicationOptions,
     ExecutableLaunchPolicy launchPolicy,
+    MsBuildNodeReuseIsolation msBuildNodeReuseIsolation,
+    SecretRedactionHistory secretRedactionHistory,
     ILogger<ExecutableCreator> logger) : IObjectCreator<Executable, ContainerNetworkEndpointContext>
 {
     private readonly DcpNameGenerator _nameGenerator = nameGenerator;
@@ -32,6 +35,8 @@ internal sealed class ExecutableCreator(
     private readonly IConfiguration _configuration = configuration;
     private readonly DistributedApplicationOptions _distributedApplicationOptions = distributedApplicationOptions;
     private readonly ExecutableLaunchPolicy _launchPolicy = launchPolicy;
+    private readonly MsBuildNodeReuseIsolation _msBuildNodeReuseIsolation = msBuildNodeReuseIsolation;
+    private readonly SecretRedactionHistory _secretRedactionHistory = secretRedactionHistory;
     private readonly ILogger<ExecutableCreator> _logger = logger;
 
     public IEnumerable<RenderedModelResource<Executable>> PrepareObjects(CancellationToken cancellationToken)
@@ -114,7 +119,7 @@ internal sealed class ExecutableCreator(
             throw new FailedToApplyEnvironmentException(failureMessage, ex);
         }
 
-        Render(renderedResource, plan, configuration.PemCertificates, _logger);
+        Render(renderedResource, plan, configuration.PemCertificates, _msBuildNodeReuseIsolation, _secretRedactionHistory, _logger);
 
         await factory
             .CreateDcpObjectsAsync([renderedResource.DcpResource], cancellationToken)
@@ -236,6 +241,8 @@ internal sealed class ExecutableCreator(
         RenderedModelResource<Executable> renderedResource,
         ExecutableLaunchPlan plan,
         ExecutablePemCertificates? pemCertificates,
+        MsBuildNodeReuseIsolation msBuildNodeReuseIsolation,
+        SecretRedactionHistory secretRedactionHistory,
         ILogger logger)
     {
         var executable = renderedResource.DcpResource;
@@ -256,6 +263,7 @@ internal sealed class ExecutableCreator(
         spec.Env = plan.EnvironmentVariables
             .Select(static variable => new EnvVar { Name = variable.Key, Value = variable.Value })
             .ToList();
+        msBuildNodeReuseIsolation.Apply(renderedResource.ModelResource, spec, secretRedactionHistory);
         spec.PemCertificates = pemCertificates;
 
         executable.Metadata.Annotations?.Remove(Executable.LaunchConfigurationsAnnotation);
