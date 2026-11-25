@@ -40,19 +40,18 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         return (command, args);
     }
 
-    internal static bool IsAspireHook(JsonNode? node, string executableProperty)
+    internal static bool IsAspireHook(JsonNode? node, string executableProperty, string aspireHomeDirectory)
     {
         if (node is not JsonObject hook)
         {
             return false;
         }
 
-        // Older registrations use { "command": ".../track-telemetry.sh" } (Claude)
-        // or { "bash": ".../track-telemetry.sh", "powershell": "pwsh ...ps1" } (Copilot).
-        // Remove those during migration too, or both the legacy and direct hooks run.
-        if (ReferencesTelemetryScript(HookText(hook, executableProperty))
-            || ReferencesTelemetryScript(HookText(hook, "bash"))
-            || ReferencesTelemetryScript(HookText(hook, "powershell")))
+        var shellPath = Path.Combine(aspireHomeDirectory, "hooks", TelemetryHookInstaller.ShellResourceName);
+        var powerShellPath = Path.Combine(aspireHomeDirectory, "hooks", TelemetryHookInstaller.PowerShellResourceName);
+        // Match the commands we registered, not a script name mentioned by a user hook.
+        if (HookText(hook, "bash") == HookCommandFormatter.BuildBashCommand(shellPath)
+            || HookText(hook, "powershell") == HookCommandFormatter.BuildPwshCommand(powerShellPath))
         {
             return true;
         }
@@ -73,16 +72,17 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
             && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
             && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
 
-        return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);
+        var isLegacyShellInvocation = string.Equals(executableName, "bash", StringComparison.OrdinalIgnoreCase)
+            && values is [var scriptPath] && scriptPath == shellPath;
+        var isLegacyPowerShellInvocation = string.Equals(executableName, "pwsh", StringComparison.OrdinalIgnoreCase)
+            && (values is ["-File", var script] && script == powerShellPath
+                || values is ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", var fullScript] && fullScript == powerShellPath);
+
+        return isDirectAspireInvocation || isManagedAspireInvocation || isLegacyShellInvocation || isLegacyPowerShellInvocation;
     }
 
     private static string? HookText(JsonObject hook, string property)
         => hook[property] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
-
-    private static bool ReferencesTelemetryScript(string? value)
-        => value is not null
-            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
-                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     internal async Task<int> RunAsync(TextReader input, TextWriter output, TextWriter error, Func<string[], Task<int>> execute)
     {

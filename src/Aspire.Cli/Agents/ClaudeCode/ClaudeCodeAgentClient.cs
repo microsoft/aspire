@@ -232,7 +232,7 @@ internal sealed class ClaudeCodeAgentClient(
         };
     }
 
-    private static void RemoveExistingAspireHooks(JsonArray postToolUse)
+    private void RemoveExistingAspireHooks(JsonArray postToolUse)
     {
         // Remove individual Aspire hooks, preserving user hooks that share the same matcher group.
         for (var groupIndex = postToolUse.Count - 1; groupIndex >= 0; groupIndex--)
@@ -244,7 +244,7 @@ internal sealed class ClaudeCodeAgentClient(
             }
             for (var hookIndex = hooks.Count - 1; hookIndex >= 0; hookIndex--)
             {
-                if (AgentTelemetryHook.IsAspireHook(hooks[hookIndex], "command"))
+                if (AgentTelemetryHook.IsAspireHook(hooks[hookIndex], "command", context.AspireHomeDirectory.FullName))
                 {
                     hooks.RemoveAt(hookIndex);
                 }

@@ -162,22 +162,30 @@ internal sealed class CopilotAgentClient(
                     ? TelemetryHookStatus.MalformedConfig : TelemetryHookStatus.UnexpectedConfigShape;
             }
 
+            if (config.TryGetPropertyValue("version", out var version)
+                && (version is not JsonValue versionValue || !versionValue.TryGetValue<int>(out var number) || number != 1))
+            {
+                return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+
             if (config.TryGetPropertyValue("hooks", out var hooksNode) && hooksNode is not JsonObject)
             {
                 return TelemetryHookStatus.UnexpectedConfigShape;
             }
             var hooks = hooksNode as JsonObject ?? new JsonObject();
-            if (hooks.TryGetPropertyValue("postToolUse", out var postToolUseNode) && postToolUseNode is not JsonArray)
+            // A malformed sibling event also prevents Copilot from loading this file.
+            if (hooks.Any(entry => entry.Value is not JsonArray events || events.Any(item => item is not JsonObject)))
             {
                 return TelemetryHookStatus.UnexpectedConfigShape;
             }
+            hooks.TryGetPropertyValue("postToolUse", out var postToolUseNode);
             var postToolUse = postToolUseNode as JsonArray ?? new JsonArray();
 
             // This Aspire-owned file can still contain user entries. Replace only our
             // invocation, preserving other events and hooks even when matchers overlap.
             for (var i = postToolUse.Count - 1; i >= 0; i--)
             {
-                if (AgentTelemetryHook.IsAspireHook(postToolUse[i], "exec"))
+                if (AgentTelemetryHook.IsAspireHook(postToolUse[i], "exec", context.AspireHomeDirectory.FullName))
                 {
                     postToolUse.RemoveAt(i);
                 }
