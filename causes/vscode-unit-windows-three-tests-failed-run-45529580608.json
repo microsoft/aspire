@@ -1,0 +1,15 @@
+{
+  "id": "vscode-unit-windows-three-tests-failed-run-45529580608",
+  "type": "main-repository-breakage",
+  "title": "VS Code extension Windows unit tests: 3 tests failed in extension host runner",
+  "error_pattern": "3 tests failed.\nExtension host test runner error 3 tests failed.\nerror Command failed with exit code 1.",
+  "occurrences": [
+    {
+      "run_id": 45529580608,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45529580608",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "observed_at": "2026-11-25T02:40:52Z",
+      "pr_number": 0
+    }
+  ]
+}

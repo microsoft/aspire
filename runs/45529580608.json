@@ -1,0 +1,175 @@
+{
+  "run_id": 45529580608,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45529580608",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-25T02:40:52Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22432,
+    "title": "Split automated dependency updates into OpenTelemetry, Azure, and other PRs",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-split-dependency-update-prs",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22432",
+    "merged_at": "2026-11-25T01:58:16Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "55d2c657887c39a30ac2922404430c1d6812865b",
+    "failed_sha": "36bcf39f78ef1f3d9b43a3966ce16cab91bd8550",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "19e1440f8f123e12c1f6a77671d482113efc5d3e",
+        "message": "Keep Azure DevOps logging commands unwrapped in CLI pipeline output (#21487) ## Description With `--pipeline-log-level debug`, `aspire publish`, `deploy` and `do` forward child-process output, such as `dotnet publish (stdout): ...`, through `ConsoleActivityLogger`. That logger renders each line with Spectre's `MarkupLine`, which hard-wraps at the console width: 160 columns when output is redirected in CI, or `ASPIRE_CONSOLE_WIDTH`. Once the timestamp, step tag and `[DBG]` prefix are added, a sin",
+        "html_url": "https://github.com/microsoft/aspire/commit/19e1440f8f123e12c1f6a77671d482113efc5d3e",
+        "pull_request": {
+          "number": 21487,
+          "title": "Keep Azure DevOps logging commands unwrapped in CLI pipeline output",
+          "url": "https://github.com/microsoft/aspire/pull/21487",
+          "merged_at": "2026-11-24T21:05:06Z"
+        }
+      },
+      {
+        "sha": "f88fb0b911eb9d95697617dd45a16fb34e6f8df2",
+        "message": "[ci] Archive CLI starter validation diagnostics before artifact upload (#22348) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `8848ddee8533bee493addca4155693c0a4d35ee8` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8.5/10 | ↑ Native macOS archive and routing tests passed 193/193; binary-xattr probe preserved log contents and restored the environment.<br>↓ New-head hosted Linux/Windows execu",
+        "html_url": "https://github.com/microsoft/aspire/commit/f88fb0b911eb9d95697617dd45a16fb34e6f8df2",
+        "pull_request": {
+          "number": 22348,
+          "title": "[ci] Archive CLI starter validation diagnostics before artifact upload",
+          "url": "https://github.com/microsoft/aspire/pull/22348",
+          "merged_at": "2026-11-24T21:15:23Z"
+        }
+      },
+      {
+        "sha": "d201e0173cff2a7e6c4c997e7df2e049e36cfe5f",
+        "message": "Regenerate resource designer files (#22450) ## Description Regenerate the checked-in CLI and dashboard resource designers to match their configured resource generators. This reorders generated accessors and updates the dashboard `Routes` constructor to match the public resource generator. Resource strings and accessor mappings are unchanged. ### Validation - Compared all 244 generated accessors with their `.resx` keys and previous mappings: passed. - `dotnet test --project tests\\Aspire.Cli.Tests",
+        "html_url": "https://github.com/microsoft/aspire/commit/d201e0173cff2a7e6c4c997e7df2e049e36cfe5f",
+        "pull_request": {
+          "number": 22450,
+          "title": "Regenerate resource designer files",
+          "url": "https://github.com/microsoft/aspire/pull/22450",
+          "merged_at": "2026-11-24T22:18:26Z"
+        }
+      },
+      {
+        "sha": "1fbded12b815fd7770929240e06296a813549440",
+        "message": "Keep dashboard resource ordering stable and protect saved customizations (#22471)",
+        "html_url": "https://github.com/microsoft/aspire/commit/1fbded12b815fd7770929240e06296a813549440",
+        "pull_request": {
+          "number": 22471,
+          "title": "Keep dashboard resource ordering stable and protect saved customizations",
+          "url": "https://github.com/microsoft/aspire/pull/22471",
+          "merged_at": "2026-11-24T23:48:08Z"
+        }
+      },
+      {
+        "sha": "41786fb686ff54629beea96c028d24993df00715",
+        "message": "Dashboard: render header resource tabs as links and move narrow tabs into the nav menu (#22547)",
+        "html_url": "https://github.com/microsoft/aspire/commit/41786fb686ff54629beea96c028d24993df00715",
+        "pull_request": {
+          "number": 22547,
+          "title": "Dashboard: render header resource tabs as links and move narrow tabs into the nav menu",
+          "url": "https://github.com/microsoft/aspire/pull/22547",
+          "merged_at": "2026-11-24T23:48:57Z"
+        }
+      },
+      {
+        "sha": "1e842ec1df3549fff2ab3ecfb7e94dd0f730a932",
+        "message": "Add aspire stop --wait to wait for resource teardown (#22583) ## Description `aspire stop` reported success as soon as the AppHost process exited, but DCP was still removing the instance's containers in the background. A start issued right after could adopt a still-running fixed-name container (`WithContainerName(...)`), which the old teardown then removed about a minute later and broke every caller. Agents following \"stop, then restart\" guidance hit this often. ### User-facing usage - New opt-i",
+        "html_url": "https://github.com/microsoft/aspire/commit/1e842ec1df3549fff2ab3ecfb7e94dd0f730a932",
+        "pull_request": {
+          "number": 22583,
+          "title": "Add aspire stop --wait to wait for resource teardown",
+          "url": "https://github.com/microsoft/aspire/pull/22583",
+          "merged_at": "2026-11-25T00:48:18Z"
+        }
+      },
+      {
+        "sha": "0cd6fbf214fb87de503dd9782313241f2e20bd30",
+        "message": "Document how to run playground apps from source (#22554) ## Description Playground testing should not require a full solution build or manually tracking background processes. Replace the generic background-job instructions in `AGENTS.md` with PowerShell and Bash workflows that use the CLI built from the current checkout and target the exact AppHost. The guide defaults to anonymous dashboard access for loopback-only testing, explains how to run the same playground from separate worktrees, and cov",
+        "html_url": "https://github.com/microsoft/aspire/commit/0cd6fbf214fb87de503dd9782313241f2e20bd30",
+        "pull_request": {
+          "number": 22554,
+          "title": "Document how to run playground apps from source",
+          "url": "https://github.com/microsoft/aspire/pull/22554",
+          "merged_at": "2026-11-25T01:35:16Z"
+        }
+      },
+      {
+        "sha": "dd93c6c0f0b484c72cc0bfd6daa4bfc37b41f7bf",
+        "message": "Link Overview activity to traces and speed up telemetry time filters (#22551)",
+        "html_url": "https://github.com/microsoft/aspire/commit/dd93c6c0f0b484c72cc0bfd6daa4bfc37b41f7bf",
+        "pull_request": {
+          "number": 22551,
+          "title": "Link Overview activity to traces and speed up telemetry time filters",
+          "url": "https://github.com/microsoft/aspire/pull/22551",
+          "merged_at": "2026-11-25T01:35:44Z"
+        }
+      },
+      {
+        "sha": "2d1310607bf7ab72cab162c1814a0edbf9cb6b2d",
+        "message": "Centralize temporary storage allocation behind an internal helper (#22553) ## Description Centralize temporary storage allocation behind a source-linked internal `ITemporaryStorage` service so the allocation boundary can be maintained consistently. Existing temporary locations and allocation semantics remain unchanged. - Route production callers through the service, provided via dependency injection where available, including Aspire.Hosting's filesystem service without changing its public API. -",
+        "html_url": "https://github.com/microsoft/aspire/commit/2d1310607bf7ab72cab162c1814a0edbf9cb6b2d",
+        "pull_request": {
+          "number": 22553,
+          "title": "Centralize temporary storage allocation behind an internal helper",
+          "url": "https://github.com/microsoft/aspire/pull/22553",
+          "merged_at": "2026-11-25T01:36:20Z"
+        }
+      },
+      {
+        "sha": "5096d5fc79dc5a3bc5bb647d5485d69ac08fe786",
+        "message": "Update milestone changelog for 17.1 (#22470) ## Description Now that `main` targets Aspire 17.1, the changelog workflow should collect changes for 17.1 instead of continuing to update the 17.0 changelog. Set the target milestone to `17.1` and the previous milestone to `17.0`. Use November 5, 2026 (the Pacific date of the version bump in #21850) as the inclusive cutoff for merged documentation PRs. Keep the workflow prompt in sync and regenerate the lock file. ### Validation - `gh aw compile mile",
+        "html_url": "https://github.com/microsoft/aspire/commit/5096d5fc79dc5a3bc5bb647d5485d69ac08fe786",
+        "pull_request": {
+          "number": 22470,
+          "title": "Update milestone changelog for 17.1",
+          "url": "https://github.com/microsoft/aspire/pull/22470",
+          "merged_at": "2026-11-25T01:45:26Z"
+        }
+      },
+      {
+        "sha": "c2a4c37182384979b3fc135179a6c8c73099afdd",
+        "message": "CLI: drop table borders and row dashboard links when stdout is not a terminal (#22581) ## Description When an agent or a script captures Aspire CLI output, every box-drawing border is a multi-byte sequence and every row carries a dashboard URL that nobody can click. In the aspire-bench agent transcripts, 57 KB of the 75 KB read from the CLI came from `aspire describe` and the trace list, mostly borders and links (#22508, part of #22511). When stdout is not an interactive terminal (`ICliHostEnvir",
+        "html_url": "https://github.com/microsoft/aspire/commit/c2a4c37182384979b3fc135179a6c8c73099afdd",
+        "pull_request": {
+          "number": 22581,
+          "title": "CLI: drop table borders and row dashboard links when stdout is not a terminal",
+          "url": "https://github.com/microsoft/aspire/pull/22581",
+          "merged_at": "2026-11-25T01:46:41Z"
+        }
+      },
+      {
+        "sha": "36bcf39f78ef1f3d9b43a3966ce16cab91bd8550",
+        "message": "Split automated dependency updates into OpenTelemetry, Azure, and other PRs (#22432) ## Description The weekly `Update Dependencies` workflow opens a single PR with every external package update. One package that can't be updated yet (for example, because it isn't mirrored to the internal feeds) blocks all the others, so the PR tends to sit open for months ([#20281](https://github.com/microsoft/aspire/pull/20281) has been open since September). This change splits the workflow into one PR per pac",
+        "html_url": "https://github.com/microsoft/aspire/commit/36bcf39f78ef1f3d9b43a3966ce16cab91bd8550",
+        "pull_request": {
+          "number": 22432,
+          "title": "Split automated dependency updates into OpenTelemetry, Azure, and other PRs",
+          "url": "https://github.com/microsoft/aspire/pull/22432",
+          "merged_at": "2026-11-25T01:58:16Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 138924439866,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45529580608/job/138924439866",
+      "classification": "main-repository-breakage",
+      "reason": "Windows VS Code extension unit tests ran and 3 failed; no independent transient evidence, so not classified flaky.",
+      "failed_steps": [
+        "Run tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-unit-windows-three-tests-failed-run-45529580608"
+  ]
+}
