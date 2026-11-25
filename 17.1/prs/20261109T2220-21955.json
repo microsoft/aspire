@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky fix",
+  "mergedAt": "2026-11-09T22:20:05Z",
+  "number": 21955,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Fix flaky ComputeRunArgumentsPopulatesRunPropertiesForSdkProject (MSBuild server fallback notice on stderr)"
+}

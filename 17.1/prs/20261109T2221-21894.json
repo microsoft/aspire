@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Secure dashboard culture cookie",
+  "mergedAt": "2026-11-09T22:21:40Z",
+  "number": 21894,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "included",
+  "title": "Set Secure/HttpOnly/SameSite on the dashboard culture cookie (CodeQL SM02373)"
+}

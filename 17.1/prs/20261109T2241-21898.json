@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Test-only E2E change",
+  "mergedAt": "2026-11-09T22:41:05Z",
+  "number": 21898,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Pin the dev certificate in extension E2E HTTPS probes instead of disabling validation"
+}

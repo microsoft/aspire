@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension now gives its aspire --version probe a 30-second budget, avoiding spurious failures on slow startups.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u23f1\ufe0f",
+  "firstMergedAt": "2026-11-09T21:33:39Z",
+  "lastMergedAt": "2026-11-09T21:33:39Z",
+  "name": "Longer startup budget for the extension CLI version probe",
+  "owner": "davidfowl",
+  "prs": [
+    21912
+  ]
+}

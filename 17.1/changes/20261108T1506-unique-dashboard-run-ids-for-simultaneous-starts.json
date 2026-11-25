@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Two dashboards starting in the same millisecond now get distinct run IDs instead of failing with a \"run already in use\" error.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udd94",
+  "firstMergedAt": "2026-11-08T15:06:56Z",
+  "lastMergedAt": "2026-11-08T15:06:56Z",
+  "name": "Unique dashboard run IDs for simultaneous starts",
+  "owner": "davidfowl",
+  "prs": [
+    21913
+  ]
+}

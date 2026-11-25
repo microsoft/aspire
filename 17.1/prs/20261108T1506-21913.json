@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Unique dashboard run IDs for simultaneous starts",
+  "mergedAt": "2026-11-08T15:06:56Z",
+  "number": 21913,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "included",
+  "title": "Allocate the next dashboard run ID when two dashboards start in the same millisecond"
+}

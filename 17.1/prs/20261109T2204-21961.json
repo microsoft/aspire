@@ -1,0 +1,9 @@
+{
+  "author": "thomhurst",
+  "comment": "Reject occupied loopback ports during endpoint allocation",
+  "mergedAt": "2026-11-09T22:04:00Z",
+  "number": 21961,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "included",
+  "title": "Reject occupied loopback ports during endpoint allocation"
+}

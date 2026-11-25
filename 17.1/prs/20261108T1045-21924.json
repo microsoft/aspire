@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-08T10:45:27Z",
+  "number": 21924,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Read resource row state at every density in dashboard browser tests"
+}

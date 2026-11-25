@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-08T10:45:20Z",
+  "number": 21920,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Fix flaky ResourceGeneratorMetadataTests: read MSBuild query results from -getResultOutputFile"
+}

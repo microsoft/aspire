@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky fix",
+  "mergedAt": "2026-11-09T22:21:22Z",
+  "number": 21952,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Fix RepositoryTemplate_ResolvesRefsAndReusesPinnedCheckoutsAcrossInvocations timeout on slow Git checkouts"
+}

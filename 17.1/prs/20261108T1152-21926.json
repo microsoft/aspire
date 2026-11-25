@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only E2E flake fix",
+  "mergedAt": "2026-11-08T11:52:03Z",
+  "number": 21926,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Fix VS Code E2E folder picker flake after a colliding selection"
+}

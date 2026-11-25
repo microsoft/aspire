@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Hardened Go SDK runtime and richer API export metadata",
+  "mergedAt": "2026-11-09T14:49:44Z",
+  "number": 21827,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "included",
+  "title": "Harden Go SDK runtime and complete typed API export metadata"
+}

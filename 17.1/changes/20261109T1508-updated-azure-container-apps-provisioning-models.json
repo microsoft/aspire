@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Azure Container Apps provisioning now uses Azure.Provisioning.AppContainers 1.3.0-beta.2 with a newer default API version, while preserving existing managed-environment naming so current deployments are not renamed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u2601\ufe0f",
+  "firstMergedAt": "2026-11-09T15:08:43Z",
+  "lastMergedAt": "2026-11-09T15:08:43Z",
+  "name": "Updated Azure Container Apps provisioning models",
+  "owner": "eerhardt",
+  "prs": [
+    20178
+  ]
+}

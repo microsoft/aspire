@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-09T18:10:48Z",
+  "number": 21963,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Accept relay connection reset when waiting for stalled Blazor WASM bridge close"
+}

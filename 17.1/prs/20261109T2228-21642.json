@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "CI/test diagnostics only",
+  "mergedAt": "2026-11-09T22:28:52Z",
+  "number": 21642,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Dump AppHost resource state and logs when Nuxt validation health wait times out"
+}

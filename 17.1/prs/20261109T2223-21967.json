@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky fix",
+  "mergedAt": "2026-11-09T22:23:18Z",
+  "number": 21967,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Give dotnet run apphost.cs the aspire run startup budget in SingleFileAppHostInit E2E test"
+}

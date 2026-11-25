@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@thomhurst"
+  ],
+  "description": "On macOS, endpoint allocation no longer treats a port already in use on the loopback address as available, avoiding \"Address already in use\" failures.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd0c",
+  "firstMergedAt": "2026-11-09T22:04:00Z",
+  "lastMergedAt": "2026-11-09T22:04:00Z",
+  "name": "Reject occupied loopback ports during endpoint allocation",
+  "owner": "danegsta",
+  "prs": [
+    21961
+  ]
+}

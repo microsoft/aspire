@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard language cookie is now written with Secure, HttpOnly, and SameSite attributes.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf6a",
+  "firstMergedAt": "2026-11-09T22:21:40Z",
+  "lastMergedAt": "2026-11-09T22:21:40Z",
+  "name": "Secure dashboard culture cookie",
+  "owner": "eerhardt",
+  "prs": [
+    21894
+  ]
+}

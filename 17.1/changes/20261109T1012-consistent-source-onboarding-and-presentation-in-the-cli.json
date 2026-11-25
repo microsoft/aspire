@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Organization-provided configuration, template, skill, and integration sources now get a consistent introduction, trust warning, and aligned details before acquisition or selection, making it clearer where content comes from.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83e\udded",
+  "firstMergedAt": "2026-11-09T10:12:59Z",
+  "lastMergedAt": "2026-11-09T10:12:59Z",
+  "name": "Consistent source onboarding and presentation in the CLI",
+  "owner": "JamesNK",
+  "prs": [
+    21855
+  ]
+}

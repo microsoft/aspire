@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Repository tooling under .github, not a shipped product",
+  "mergedAt": "2026-11-09T21:41:10Z",
+  "number": 21896,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Fix CodeQL stack-trace exposure and disabled certificate validation findings"
+}

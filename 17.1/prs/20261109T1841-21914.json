@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only E2E fix",
+  "mergedAt": "2026-11-09T18:41:44Z",
+  "number": 21914,
+  "runDate": "2026-11-25T12:10:00Z",
+  "status": "excluded",
+  "title": "Wait for e2e-worker's endpoint URL before capturing it in the tree-actions E2E"
+}
