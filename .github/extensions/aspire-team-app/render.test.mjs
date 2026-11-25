@@ -219,7 +219,7 @@ test("an unauthenticated initial load keeps Settings, Accounts, and Health navig
   assert.match(app.innerHTML, /No health sources configured/);
 });
 
-test("tab clicks select immediately and coalesce slow loads to the latest destination", async () => {
+test("tab clicks request cached destinations without waiting for older loads", async () => {
   const requests = [];
   const { app, api } = createRendererHarness({
     fetch: (url, options) => {
@@ -233,32 +233,199 @@ test("tab clicks select immediately and coalesce slow loads to the latest destin
   api.setPrefs({ notifications: {}, azurePipelines: [], release: "13.5" });
   api.render();
 
-  const switching = api.setMode("issues");
+  const issues = api.setMode("issues");
   assert.match(app.innerHTML, /class="tab active" data-mode="issues"/);
   assert.match(app.innerHTML, /Loading Issues/);
-  api.setMode("ship");
-  api.setMode("health");
-  assert.deepEqual(requests.map((request) => request.mode), ["issues"]);
+  const ship = api.setMode("ship");
+  const health = api.setMode("health");
+  assert.deepEqual(requests.map((request) => request.mode), ["issues", "ship", "health"]);
   assert.match(app.innerHTML, /class="tab active" data-mode="health"/);
   assert.match(app.innerHTML, /Loading Health/);
   api.goView("settings");
   assert.match(app.innerHTML, /id="pipeline-url-input"/);
   api.goView("queue");
 
+  requests[2].resolve(jsonResponse({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 4 },
+    prefs: { notifications: {}, azurePipelines: [] },
+  }));
+  await health;
+  assert.equal(api.getState().mode, "health");
+  assert.match(app.innerHTML, /No health sources configured/);
   requests[0].resolve(jsonResponse({
     dashboard: { ...reviewDashboard(1), mode: "issues", seq: 2 },
     prefs: { notifications: {}, azurePipelines: [] },
   }));
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(requests.map((request) => request.mode), ["issues", "health"]);
-  assert.match(app.innerHTML, /Loading Health/);
   requests[1].resolve(jsonResponse({
-    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 3 },
+    dashboard: { ...reviewDashboard(1), mode: "ship", seq: 3 },
     prefs: { notifications: {}, azurePipelines: [] },
   }));
-  await switching;
+  await Promise.all([issues, ship]);
   assert.equal(api.getState().mode, "health");
   assert.match(app.innerHTML, /No health sources configured/);
+});
+
+test("navigation is available before the first dashboard and a completed tab renders only once", async () => {
+  const requests = [];
+  const app = countingApp();
+  const { api } = createRendererHarness({
+    app,
+    fetch: (url, options) => {
+      if (String(url) === "api/state") return new Promise(() => {});
+      return new Promise((resolve) => requests.push({ mode: JSON.parse(options.body).mode, resolve }));
+    },
+  });
+  assert.match(app.innerHTML, /data-mode="health"/);
+  const loading = api.setMode("health");
+  assert.equal(requests[0].mode, "health");
+  assert.match(app.innerHTML, /Loading Health/);
+  api.applyPushedState({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), loading: true, seq: 1 },
+    prefs: rendererPrefs(),
+  });
+  assert.equal(api.getState().mode, "health");
+  const beforeCompletion = app.renders;
+  requests[0].resolve(jsonResponse({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), loading: false, seq: 2 },
+    prefs: rendererPrefs(),
+  }));
+  await loading;
+  assert.equal(app.renders, beforeCompletion + 1);
+  assert.match(app.innerHTML, /No health sources configured/);
+});
+
+test("partial updates keep a useful board stable until the complete result arrives", () => {
+  const app = countingApp();
+  const { api } = createRendererHarness({ app, fetch: () => new Promise(() => {}) });
+  const push = (count, seq, loading) => api.applyPushedState({
+    dashboard: { ...reviewDashboard(count), seq, loading },
+    prefs: rendererPrefs(),
+  });
+  push(0, 1, true);
+  const emptyRenders = app.renders;
+  push(0, 2, true);
+  assert.equal(app.renders, emptyRenders);
+  push(1, 3, true);
+  assert.match(app.innerHTML, /PR 1/);
+  const usefulRenders = app.renders;
+  push(2, 4, true);
+  assert.equal(app.renders, usefulRenders);
+  assert.doesNotMatch(app.innerHTML, /PR 2/);
+  push(2, 5, false);
+  assert.equal(app.renders, usefulRenders + 1);
+  assert.match(app.innerHTML, /PR 2/);
+  assert.match(app.innerHTML, /class="view ">/);
+});
+
+test("a partial error does not prevent later useful results from appearing", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  api.applyPushedState({
+    dashboard: { ...reviewDashboard(0), seq: 1, loading: true, errors: ["A repository is unavailable"] },
+    prefs: rendererPrefs(),
+  });
+  api.applyPushedState({
+    dashboard: { ...reviewDashboard(1), seq: 2, loading: true, errors: ["A repository is unavailable"] },
+    prefs: rendererPrefs(),
+  });
+  assert.match(app.innerHTML, /PR 1/);
+});
+
+test("a tab result arriving during settings editing is applied only after returning", async () => {
+  let resolveMode;
+  const app = countingApp();
+  const { api } = createRendererHarness({
+    app,
+    fetch: (url) => String(url) === "api/state" ? new Promise(() => {}) :
+      new Promise((resolve) => { resolveMode = resolve; }),
+  });
+  api.setState({ ...reviewDashboard(1), seq: 1 });
+  api.setPrefs(rendererPrefs());
+  api.render();
+  const loading = api.setMode("health");
+  api.goView("settings");
+  const settings = app.innerHTML;
+  const renders = app.renders;
+  resolveMode(jsonResponse({
+    dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 2 },
+    prefs: rendererPrefs(),
+  }));
+  await loading;
+  assert.equal(app.renders, renders);
+  assert.equal(app.innerHTML, settings);
+  api.goView("queue");
+  assert.equal(api.getState().mode, "health");
+  assert.match(app.innerHTML, /No health sources configured/);
+});
+
+test("collapsed review sections build their cards only when opened", () => {
+  function control(dataset, id) {
+    const section = { dataset: { deferred: "true" }, classList: classList(), querySelector: () => null };
+    section.classList.add("collapsed");
+    const button = {
+      dataset: { [dataset]: id },
+      listeners: {},
+      addEventListener(name, handler) { this.listeners[name] = handler; },
+      closest() { return section; },
+      setAttribute() {},
+    };
+    return button;
+  }
+  const community = control("collapse", "community");
+  const breakdown = control("collapse", "attention-breakdown");
+  const lane = control("laneToggle", "b-sample-signal");
+  const { app, api } = createRendererHarness({
+    fetch: () => new Promise(() => {}),
+    querySelectorAll: (selector) => selector === "[data-collapse]" ? [community, breakdown] :
+      selector === ".lane-head" ? [lane] : [],
+  });
+  api.setState(reviewDashboard(0));
+  api.render();
+  const dashboard = reviewDashboard(0);
+  const item = (title, number) => ({
+    pr: { number, title, url: `https://github.com/microsoft/aspire/pull/${number}`,
+      repository: "microsoft/aspire", author: "octo", review: { state: "waiting" } },
+    signals: [],
+  });
+  dashboard.attention.community = [item("Community card", 31)];
+  dashboard.attention.buckets = [{ label: "Sample signal", items: [item("Breakdown card", 32)] }];
+  api.setState(dashboard);
+  api.render();
+  assert.match(app.innerHTML, /data-sect="community" data-deferred="true"/);
+  assert.match(app.innerHTML, /data-sect="attention-breakdown" data-deferred="true"/);
+  assert.doesNotMatch(app.innerHTML, /Community card|Breakdown card/);
+  community.listeners.click();
+  assert.match(app.innerHTML, /Community card/);
+  breakdown.listeners.click();
+  assert.match(app.innerHTML, /data-lane="b-sample-signal" data-deferred="true"/);
+  assert.doesNotMatch(app.innerHTML, /Breakdown card/);
+  lane.listeners.click();
+  assert.match(app.innerHTML, /Breakdown card/);
+});
+
+test("partial boards show loaded cards without claiming empty queues are complete", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  api.setState({ ...reviewDashboard(0), loading: true });
+  api.render();
+  assert.match(app.innerHTML, /checking more repositories/);
+  assert.match(app.innerHTML, /Still checking watched repositories/);
+  assert.doesNotMatch(app.innerHTML, /Nothing is waiting on a reviewer right now/);
+
+  api.setState({ ...reviewDashboard(1), loading: true });
+  api.render();
+  assert.match(app.innerHTML, /PR 1/);
+  assert.match(app.innerHTML, /checking more repositories/);
+
+  api.setState({ ...reviewDashboard(0), mode: "issues", attention: null, lanes: [], loading: true });
+  api.render();
+  assert.match(app.innerHTML, /Checking watched repositories/);
+  assert.doesNotMatch(app.innerHTML, /All clear/);
+
+  const source = { id: "github:github.com/microsoft/one", provider: "github", name: "microsoft/one",
+    state: "healthy", reasons: [], evidence: [] };
+  api.setState({ ...healthDashboard([source], emptyHealthCounts(), true), loading: true });
+  api.render();
+  assert.match(app.innerHTML, /draggable="false" disabled data-health-drag/);
+  assert.match(app.innerHTML, /Reordering is available after loading/);
 });
 
 test("a failed tab load restores the last complete board and allows another attempt", async () => {
@@ -745,16 +912,17 @@ function assertTooltipLifecycle(selector) {
   assert.match(STYLES, /\.agent-action-tooltip \{[^}]*pointer-events: auto;/);
 }
 
-test("cardActionBtn greys out and spins while refresh finalization is in progress", () => {
+test("card actions remain available while another dashboard is loading", () => {
   const { api } = createRendererHarness();
   const pr = { url: "https://github.com/o/r/pull/1", number: 1, repository: "o/r", title: "t", author: "a" };
   const action = { kind: "review", label: "Review", done: "Review requested", icon: "" };
 
   api.setRefreshing(true);
   const html = api.cardActionBtn(pr, action);
-  assert.match(html, /class="card-btn cb-main busy spin" data-target="new-session" aria-live="polite" disabled/);
-  assert.match(html, /Finalizing…/);
-  assert.match(html, /class="card-btn cb-caret"[^>]*disabled/);
+  assert.match(html, /class="card-btn cb-main" data-target="new-session" aria-live="polite">/);
+  assert.match(html, /<span class="cb-label">Review<\/span>/);
+  assert.match(html, /class="card-btn cb-caret"[^>]*>/);
+  assert.doesNotMatch(html, /\bdisabled\b/);
 });
 
 test("cardActionBtn defaults a GHES/EMU card to the current session with no new-session option", () => {
@@ -1163,6 +1331,7 @@ test("refresh tooltip counts down to the server's next background poll", () => {
   const refreshButton = {
     dataset: {},
     classList: classList(),
+    addEventListener() {},
     setAttribute(name, value) { attributes[name] = value; },
   };
   let intervalMs;
@@ -1922,6 +2091,17 @@ function rendererPrefs() {
 
 function emptyHealthCounts() {
   return { total: 0, healthy: 0, running: 0, degraded: 0, failing: 0, unavailable: 0, unknown: 0 };
+}
+
+function countingApp() {
+  return {
+    html: "",
+    renders: 0,
+    get innerHTML() { return this.html; },
+    set innerHTML(value) { this.html = value; this.renders++; },
+    removeAttribute() {},
+    classList: classList(),
+  };
 }
 
 function healthDashboard(items, counts, authenticated) {

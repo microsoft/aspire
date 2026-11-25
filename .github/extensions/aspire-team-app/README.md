@@ -79,9 +79,11 @@ card shows are driven by its lane and its signal pills:
   sources show an error and can be retried with Refresh. Repositories with more than
   two pages of open PRs or issues find later page boundaries with a cheap cursor-only
   query and load those pages a few at a time instead of one after another.
-- **Responsive navigation** — tabs select immediately while their complete board
-  loads. Additional clicks during a load retain only the latest destination instead
-  of queuing a full provider refresh for every click. Settings remain accessible.
+- **Responsive navigation** — completed tabs reopen from cache, even while another
+  tab is loading. A first visit starts without waiting for another tab and shows
+  clearly marked partial results as repositories or health sources respond. Review
+  and Ship share completed PR data; refreshes of an existing board remain atomic.
+  Settings remain accessible.
 - **Multiple GitHub accounts** — every detected credential (gh CLI, environment,
   Copilot) appears on the Accounts screen. Activate any number of them and their
   results **interleave across every tab**, de-duplicated by PR/issue URL. Each
@@ -159,6 +161,8 @@ supported. Explicit and discovered definitions are de-duplicated by canonical
 pipeline ID.
 
 Azure DevOps access reuses the installed Azure CLI and `azure-devops` extension.
+Install the extension with `az extension add --name azure-devops` if needed; the
+canvas does not dynamically install Azure CLI extensions during a refresh.
 Authenticate with an existing `az` session or `AZURE_DEVOPS_EXT_PAT`. The app stores
 only normalized pipeline coordinates and branch preferences; it never stores tokens
 or other credentials. GitHub and Azure DevOps sources are loaded independently, so

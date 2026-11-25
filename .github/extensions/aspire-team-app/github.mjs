@@ -23,7 +23,7 @@ import {
   visibleCheckState,
 } from "./model.mjs";
 import { currentRelease } from "./constants.mjs";
-import { withGitHubTimeout } from "./github-request.mjs";
+import { throwGitHubResponseError, withGitHubTimeout } from "./github-request.mjs";
 
 // The current milestone has a single source of truth in constants.mjs
 // (`currentRelease`). Re-export it here under the name the run-mode lane logic
@@ -67,7 +67,7 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL, { allowPartial
       signal,
     });
     if (!res.ok) {
-      throw new Error(`GitHub API ${res.status} ${res.statusText}`);
+      await throwGitHubResponseError(res, signal);
     }
     const json = await res.json();
     if (allowPartialData) {
@@ -90,6 +90,7 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL, { allowPartial
 // so a pathological repo can't spin the loader indefinitely.
 const MAX_PAGES = 25;
 const PAGE_SIZE = 40;
+const PARTIAL_MIN_MS = 250;
 
 // Each detailed PR page costs GitHub several seconds to resolve (reviews, threads, checks,
 // timelines, closing issues), and microsoft/aspire has hundreds of open PRs, so walking those
@@ -271,8 +272,10 @@ async function loadOpenPages(account, owner, name, connection, loadPage) {
   if (Number.isInteger(first.totalCount) && first.totalCount > PAGE_SIZE * 2) {
     try {
       starts = await loadPageStarts(account, owner, name, connection, first.pageInfo.endCursor);
-    } catch {
-      // The cursor walk is only an optimization; the serial walk below still loads every page.
+    } catch (error) {
+      // Do not turn a rate-limit or permission response into an immediate serial retry.
+      if (error?.status === 403 || error?.status === 429) throw error;
+      // Other cursor-walk failures can fall back to the serial walk.
       starts = null;
     }
   }
@@ -282,26 +285,32 @@ async function loadOpenPages(account, owner, name, connection, loadPage) {
   }
 
   // Middle pages are bounded by the next page's start cursor, so only the last page follows
-  // `hasNextPage`, which also picks up items opened after the cursor walk.
+  // `hasNextPage` to discover a growing tail after cursor discovery.
   const results = [];
   let next = 0;
+  let failure = null;
   const worker = async () => {
-    while (next < starts.length) {
+    while (next < starts.length && !failure) {
       const index = next++;
-      const page = await loadPage(starts[index]);
-      if (index === starts.length - 1) await loadSerialPages(loadPage, page, starts.length + 1);
+      try {
+        const page = await loadPage(starts[index]);
+        if (index === starts.length - 1) await loadSerialPages(loadPage, page, starts.length + 1, () => !failure);
+      } catch (error) {
+        failure ??= error;
+        throw error;
+      }
     }
   };
   for (let i = 0; i < Math.min(PAGE_CONCURRENCY, starts.length); i++) results.push(worker());
   // Wait for every in-flight page before reporting a failure so no request keeps mutating the
   // dashboard maps after this repository has settled.
   const settled = await Promise.allSettled(results);
-  const failure = settled.find((result) => result.status === "rejected");
-  if (failure) throw failure.reason;
+  const rejected = settled.find((result) => result.status === "rejected");
+  if (rejected) throw rejected.reason;
 }
 
-async function loadSerialPages(loadPage, page, pagesLoaded) {
-  for (let loaded = pagesLoaded; loaded < MAX_PAGES && page?.pageInfo?.hasNextPage; loaded++) {
+async function loadSerialPages(loadPage, page, pagesLoaded, shouldContinue = () => true) {
+  for (let loaded = pagesLoaded; loaded < MAX_PAGES && page?.pageInfo?.hasNextPage && shouldContinue(); loaded++) {
     page = await loadPage(page.pageInfo.endCursor);
   }
 }
@@ -931,7 +940,7 @@ export function buildNotifications(prs, prefs, dismissed = []) {
 // Top-level loader
 // ---------------------------------------------------------------------------
 
-export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, onProgress }) {
+export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, onProgress, onPartial, onRelated }) {
   const usable = (accounts ?? []).filter((a) => a && a.token && a.login);
   if (usable.length === 0) {
     return { authenticated: false, message: "No active GitHub account. Enable an account in the Accounts tab so the canvas can read your review queue." };
@@ -939,6 +948,9 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
 
   const viewers = new Set(usable.map((a) => a.login.toLowerCase()));
   const wantIssues = mode === "issues";
+  // Review and Ship use the same PRs. When the caller wants both snapshots, collect
+  // readiness once so switching between those tabs does not refetch every repository.
+  const wantReadiness = mode === "review" || (mode === "ship" && typeof onRelated === "function");
 
   // Union of every active account's watched repos.
   const repos = [...new Set(usable.flatMap((a) => a.repos ?? []))];
@@ -955,15 +967,36 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   const okRepos = new Set();  // hostRepoKey(host, repo) that succeeded under at least one account
   const errorsRaw = [];       // { repo, host, message }
 
-  // Each (account, repo) fetch reports when it settles so the caller can drive a deterministic
-  // progress bar. Dashboard state is intentionally produced only after every job completes:
-  // replacing an already-populated board with partial snapshots makes cards disappear and
-  // reappear as slower repositories finish.
+  // Partial snapshots are for a board without a complete cached result. Refreshes of an
+  // existing board remain atomic so cards do not disappear while repositories are loading.
   let total = 0;
   let done = 0;
+  let lastPartialAt = -Infinity;
+  let partialTimer = null;
+  const emitPartial = () => {
+    partialTimer = null;
+    lastPartialAt = Date.now();
+    try {
+      onPartial(snapshot(mode, true));
+    } catch (error) {
+      console.error("Failed to publish a partial GitHub dashboard:", error);
+    }
+  };
+  const maybePartial = () => {
+    if (typeof onPartial !== "function") return;
+    const delay = PARTIAL_MIN_MS - (Date.now() - lastPartialAt);
+    if (delay <= 0) {
+      if (partialTimer) clearTimeout(partialTimer);
+      emitPartial();
+    } else if (!partialTimer) {
+      // Emit the trailing update even if every remaining repository is still blocked.
+      partialTimer = setTimeout(emitPartial, delay);
+    }
+  };
   const reportDone = () => {
     done++;
     if (typeof onProgress === "function") onProgress({ done, total, phase: "fetch" });
+    maybePartial();
   };
 
   // Fetch each (account, repo) pair with that account's own token.
@@ -986,6 +1019,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                   const issue = normalizeIssue(repo, node, viewers);
                   if (!issueById.has(issue.url)) issueById.set(issue.url, issue);
                 }
+                maybePartial();
                 return conn;
               });
             } else {
@@ -993,7 +1027,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                 const { data, errors: graphqlErrors = [] } = await gql(
                   acct.token,
                   PR_QUERY,
-                  { owner, name, after, includeReadiness: mode === "review" },
+                  { owner, name, after, includeReadiness: wantReadiness },
                   acct.graphql,
                   { allowPartialData: true },
                 );
@@ -1022,7 +1056,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                   const pr = normalizePr(repo, { ...node, labels: labelResult.labels }, viewers, repoPrivate);
                   pr.labelsUnavailable = labelResult.error !== null;
                   pr.labelsError = labelResult.error;
-                  if (mode === "review") {
+                  if (wantReadiness) {
                     try {
                       pr.firstReadyForReviewAt = await loadFirstReadyForReviewAt(acct, owner, name, node);
                     } catch (error) {
@@ -1030,8 +1064,9 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                     }
                   }
                   const existing = prById.get(pr.url);
-                  prById.set(pr.url, existing ? mergePullRequestSnapshots(existing, pr, mode) : pr);
+                  prById.set(pr.url, existing ? mergePullRequestSnapshots(existing, pr, wantReadiness ? "review" : mode) : pr);
                 }
+                maybePartial();
                 return conn;
               });
             }
@@ -1046,7 +1081,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   total = jobs.length;
 
   // Reshape the accumulated PRs/issues into the dashboard shape the renderer consumes.
-  function snapshot() {
+  function snapshot(snapshotMode = mode, loading = false) {
     const allPrs = [...prById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const allIssues = [...issueById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
@@ -1061,14 +1096,14 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       if (pr.labelsUnavailable) {
         errors.push(`${pr.repository}#${pr.number}: labels unavailable; excluded from Needs attention. ${pr.labelsError}`);
       }
-      if (pr.firstReadinessError) {
+      if (snapshotMode === "review" && pr.firstReadinessError) {
         errors.push(`${pr.repository}#${pr.number}: first readiness unavailable; omitted from Needs attention. ${pr.firstReadinessError}`);
       }
     }
 
     let lanes;
-    if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
-    else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
+    if (snapshotMode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
+    else if (snapshotMode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
     else lanes = bucketReview(allPrs, { showDrafts });
 
     // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
@@ -1076,7 +1111,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     // "For you" picks and core-team developer counts sit beneath it. Items are reshaped into
     // the card shape the renderer consumes ({ pr, reason, signals }).
     let attention = null;
-    if (mode === "review") {
+    if (snapshotMode === "review") {
       const login = usable[0].login;
       const viewerLogins = usable.map((a) => a.login);
       const attentionPrs = allPrs.filter((pr) => !pr.labelsUnavailable);
@@ -1165,7 +1200,8 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       authenticated: true,
       viewer: usable[0].login,
       viewers: usable.map((a) => a.login),
-      mode,
+      mode: snapshotMode,
+      ...(loading ? { loading: true } : {}),
       release: release ?? CURRENT_RELEASE,
       repos,
       lanes,
@@ -1179,8 +1215,15 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     };
   }
 
-  await Promise.all(jobs);
+  try {
+    await Promise.all(jobs);
+  } finally {
+    if (partialTimer) clearTimeout(partialTimer);
+  }
   // Final, authoritative progress tick so the deterministic bar completes with the snapshot.
   if (typeof onProgress === "function") onProgress({ done: total, total, phase: "done" });
+  if (typeof onRelated === "function" && (mode === "review" || mode === "ship")) {
+    onRelated(snapshot(mode === "review" ? "ship" : "review"));
+  }
   return snapshot();
 }
