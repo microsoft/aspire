@@ -88,6 +88,16 @@ suite('E2E AppHost SDK version selection', () => {
         assert.strictEqual(project, createBrowserDebuggerAppHostProject('17.0.1', '17.0.1-ci'));
     });
 
+    test('uses the release companion instead of a leftover PR package in the same directory', () => {
+        const project = writeFixtureWithPackages([
+            'artifacts/nugets/Debug/Shipping/Aspire.AppHost.Sdk.17.0.1.nupkg',
+            'artifacts/nugets/Debug/Shipping/Aspire.Hosting.Blazor.17.0.1-ci.nupkg',
+            'artifacts/nugets/Debug/Shipping/Aspire.Hosting.Blazor.17.0.1-pr.22586.g8683dcc9.nupkg',
+        ]);
+
+        assert.strictEqual(project, createBrowserDebuggerAppHostProject('17.0.1', '17.0.1-ci'));
+    });
+
     test('preserves an exact companion match even when it is in a different source', () => {
         const project = writeFixtureWithPackages([
             'artifacts/packages/Release/Shipping/Aspire.AppHost.Sdk.17.0.1.nupkg',
@@ -104,6 +114,13 @@ suite('E2E AppHost SDK version selection', () => {
             packages: [
                 'artifacts/nugets/Debug/Shipping/Aspire.AppHost.Sdk.17.0.1.nupkg',
                 'home/.aspire/hives/pr-unrelated/packages/Aspire.Hosting.Blazor.17.0.1-pr.22500.1.nupkg',
+            ],
+        },
+        {
+            scenario: 'only a leftover PR companion beside the SDK',
+            packages: [
+                'artifacts/nugets/Debug/Shipping/Aspire.AppHost.Sdk.17.0.1.nupkg',
+                'artifacts/nugets/Debug/Shipping/Aspire.Hosting.Blazor.17.0.1-pr.22586.g8683dcc9.nupkg',
             ],
         },
         {

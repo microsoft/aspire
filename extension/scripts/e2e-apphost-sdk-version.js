@@ -31,13 +31,28 @@ function resolveAppHostSdkVersion(versionResult, getAvailablePackageVersions, ge
 // Pinning such a package to the AppHost version fails restore with NU1103, so prefer the exact
 // version and otherwise use a prerelease of the same major.minor.patch from the selected
 // SDK's local package source. The caller must exclude unrelated cached sources.
+//
+// PR builds (VersionSuffix=pr.<number>.g<sha>) give every package, including these, the same
+// version as the SDK, so they always resolve through the exact match. A same-patch
+// `-pr.*` package is therefore a leftover from another build, even in the same directory, and
+// is never a valid fallback.
 function selectCompanionPackageVersion(appHostSdkVersion, availablePackageVersions) {
   if (availablePackageVersions.includes(appHostSdkVersion)) {
     return appHostSdkVersion;
   }
 
   const versionPrefix = appHostSdkVersion.split('-')[0];
-  return availablePackageVersions.find(version => version.split('-')[0] === versionPrefix) ?? appHostSdkVersion;
+  return availablePackageVersions.find(version => {
+    const [prefix, prerelease] = splitVersion(version);
+    return prefix === versionPrefix && !prerelease.startsWith('pr.');
+  }) ?? appHostSdkVersion;
+}
+
+function splitVersion(version) {
+  const separatorIndex = version.indexOf('-');
+  return separatorIndex < 0
+    ? [version, '']
+    : [version.slice(0, separatorIndex), version.slice(separatorIndex + 1)];
 }
 
 function createBrowserDebuggerAppHostProject(appHostSdkVersion, blazorPackageVersion) {
