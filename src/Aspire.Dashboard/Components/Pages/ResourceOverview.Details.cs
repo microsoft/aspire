@@ -199,8 +199,10 @@ public sealed partial class ResourceOverview
     private HealthCheckProperty CreateHealthCheckProperty(HealthReportViewModel report)
     {
         var status = HealthReportFormatter.GetStatusWithTime(report, Loc);
-        var value = report.DisplayedDescription is { } description ? $"{status} \u00B7 {description}" : status;
-        return new HealthCheckProperty(report, value, HealthReportFormatter.GetStatusTooltip(report, Loc, TimeProvider));
+        var tooltipStatus = HealthReportFormatter.GetStatusTooltip(report, Loc, TimeProvider) ?? status;
+        return report.DisplayedDescription is { } description
+            ? new HealthCheckProperty(report, $"{status} \u00B7 {description}", $"{tooltipStatus} \u00B7 {description}")
+            : new HealthCheckProperty(report, status, tooltipStatus);
     }
 
     private static List<VolumeViewModel> GetVolumes(ResourceViewModel resource) =>
@@ -214,10 +216,10 @@ public sealed partial class ResourceOverview
         }
     }
 
-    private sealed record HealthCheckProperty(HealthReportViewModel Report, string Value, string? ValueTooltip) : IPropertyGridItem
+    private sealed record HealthCheckProperty(HealthReportViewModel Report, string Value, string ValueTooltip) : IPropertyGridItem
     {
         public string Name => Report.Name;
-        public string? ValueToVisualize => ValueTooltip;
+        public string ValueToVisualize => ValueTooltip;
     }
 
     /// <summary>
