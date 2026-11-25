@@ -488,6 +488,41 @@ public partial class StructuredLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ResourcesLayout_AllResources_HiddenLogsFollowTheVisibilityToggle()
+    {
+        SetupStructureLogsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker", hidden: true)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddLogAsync(repository, "api", SeverityNumber.Info);
+        await AddLogAsync(repository, "worker", SeverityNumber.Error);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl());
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<StructuredLogs>(0);
+            builder.CloseComponent();
+        }));
+        var page = cut.FindComponent<StructuredLogs>();
+
+        await AssertLogSourcesAsync("api");
+        Assert.Equal(1, repository.GetResourceUnviewedErrorLogsCount().Single(entry => entry.Key.Name == "worker").Value);
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: true);
+        await AssertLogSourcesAsync("api", "worker");
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: false);
+        await AssertLogSourcesAsync("api");
+
+        async Task AssertLogSourcesAsync(params string[] expected)
+        {
+            cut.WaitForAssertion(() => Assert.Equal(expected, page.Instance.ViewModel.ResourceKeys?.Select(key => key.Name).Order()));
+            var grid = page.FindComponent<AspireFluentDataGrid<LogSummary>>();
+            var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<LogSummary> { StartIndex = 0, Count = 100 }).AsTask());
+            Assert.Equal(expected, result.Items.Select(item => item.Resource.ResourceName).Order());
+        }
+    }
+
+    [Fact]
     public async Task ResourcesLayout_MultiSelection_OnlySelectedResourcesErrorsAreMarkedViewed()
     {
         SetupStructureLogsServices();

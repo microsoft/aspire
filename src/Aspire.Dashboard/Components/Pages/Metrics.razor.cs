@@ -619,12 +619,13 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         _resources = TelemetryRepository.GetResources();
         if (ResourcesLayout is { } layout)
         {
-            var paneKeys = layout.GetPaneTelemetryKeys();
+            // The aggregate list uses the layout's visibility setting; explicit resource links still resolve.
+            var paneKeys = layout.GetPaneTelemetryKeys(includeHiddenResources: true);
             _resources = _resources.Where(resource => paneKeys.Contains(resource.ResourceKey)).ToList();
         }
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
 
-        if (_resourceViewModels.Count != 1)
+        if (ResourcesLayout is not null || _resourceViewModels.Count != 1)
         {
             _resourceViewModels.Insert(0, _selectResource);
         }

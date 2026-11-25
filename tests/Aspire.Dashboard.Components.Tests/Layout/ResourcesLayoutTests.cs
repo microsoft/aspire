@@ -1491,7 +1491,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(resetFilter, currentOption.Instance.Value);
         string[] expected = resetFilter ? ["cache", "browser"] : ["cache"];
         Assert.Equal(expected, cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("aria-label")));
-        Assert.Equal(expected.Order(StringComparer.Ordinal), cut.Instance.GetPaneTelemetryKeys().Select(key => key.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(expected.Order(StringComparer.Ordinal), cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name).Order(StringComparer.Ordinal));
         var saved = await storage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneKinds);
         Assert.True(saved.Success);
         Assert.Equal(resetFilter ? "TelemetrySources" : string.Empty, saved.Value);
@@ -2626,6 +2626,41 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
 
         IEnumerable<string> GetRowNames() => cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name").Select(name => name.TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task AllResources_TogglingHiddenResourcesUpdatesTelemetryScope()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("hidden-flag", hidden: true),
+                ModelTestHelpers.CreateResource("hidden-state", state: KnownResourceState.Hidden),
+                ModelTestHelpers.CreateResource("pending")
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        foreach (var name in new[] { "api", "hidden-flag", "hidden-state", "browser" })
+        {
+            await AddTelemetryAsync(name);
+        }
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.MetricsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "browser"], GetTelemetryNames()));
+        Assert.Equal(["api", "browser", "pending"], GetPinNames());
+
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: true);
+        Assert.Equal(["api", "browser", "hidden-flag", "hidden-state"], GetTelemetryNames());
+        Assert.Equal(["api", "browser", "hidden-flag", "hidden-state", "pending"], GetPinNames());
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: false);
+
+        Assert.Equal(["api", "browser"], GetTelemetryNames());
+        Assert.Equal(["api", "browser", "pending"], GetPinNames());
+
+        IEnumerable<string> GetTelemetryNames() => cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name).Order();
+        IEnumerable<string> GetPinNames() => cut.Instance.GetSelectionPinResourceNames(null).Order();
     }
 
     [Fact]

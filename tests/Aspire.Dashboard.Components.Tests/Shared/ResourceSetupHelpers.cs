@@ -20,11 +20,21 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
+    public static Task ToggleHiddenResourcesAsync(IRenderedComponent<ResourcesLayout> component, bool show)
+    {
+        var menu = component.FindComponents<AspireMenuButton>()
+            .Single(button => button.Instance.Title == Resources.Resources.ResourcesChangeViewOptions);
+        var text = show ? Resources.ControlsStrings.ShowHiddenResources : Resources.ControlsStrings.HideHiddenResources;
+        var item = Assert.Single(menu.Instance.ItemsProvider(), item => item.Text == text);
+        return component.InvokeAsync(item.OnClick!);
+    }
+
     public static void ToggleResourceList<T>(IRenderedComponent<T> component) where T : class, IComponent
     {
         var layout = component.Instance as ResourcesLayout ?? component.FindComponent<ResourcesLayout>().Instance;
