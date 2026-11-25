@@ -18455,8 +18455,8 @@ type DistributedApplicationBuilder interface {
 	// Parameters:
 	//   - options: Optional parameters; see [AddCSharpAppOption].
 	//
-	// Deprecated: Use addDotnetProject from the Aspire.Hosting.Dotnet package
-	// instead.
+	// Deprecated: Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet
+	// package instead.
 	AddCSharpApp(name string, path string, options ...AddCSharpAppOption) CSharpAppResource
 
 	// AddConnectionString adds a connection string resource
@@ -18623,8 +18623,8 @@ type DistributedApplicationBuilder interface {
 	// Parameters:
 	//   - options: Optional parameters; see [AddProjectOption].
 	//
-	// Deprecated: Use addDotnetProject from the Aspire.Hosting.Dotnet package
-	// instead.
+	// Deprecated: Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet
+	// package instead.
 	AddProject(name string, projectPath string, options ...AddProjectOption) ProjectResource
 
 	// AddTestRedis adds a test Redis resource from ATS documentation.
