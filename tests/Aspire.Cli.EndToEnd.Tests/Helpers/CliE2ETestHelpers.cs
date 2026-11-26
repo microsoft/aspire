@@ -335,6 +335,10 @@ internal static class CliE2ETestHelpers
         // Delegate all mode-specific Docker config to the strategy.
         strategy.ConfigureContainer(options);
 
+        // Docker containers do not inherit the test host's environment, including prebuilt images.
+        options.Environment[E2ETelemetryEnvironment.CliOptOut] = "true";
+        options.Environment[E2ETelemetryEnvironment.DashboardOptOut] = "true";
+
         if (prebuiltImageSelected)
         {
             if (!string.IsNullOrEmpty(options.DockerfilePath) || !string.IsNullOrEmpty(options.BuildContext))
@@ -481,7 +485,7 @@ internal static class CliE2ETestHelpers
             }
         }
 
-        strategy.ConfigureContainer(options);
+        ConfigureDockerContainerStrategy(options, strategy);
 
         output.WriteLine("Creating Podman Docker test terminal:");
         output.WriteLine($"  Test name:      {testName}");
