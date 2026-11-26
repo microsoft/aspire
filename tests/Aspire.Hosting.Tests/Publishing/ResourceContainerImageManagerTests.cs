@@ -950,7 +950,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         await imageBuilder.BuildImageAsync(resource.Resource);
 
         Assert.True(File.Exists(archivePath));
-        Assert.Equal<byte>([0x1f, 0x8b], File.ReadAllBytes(archivePath)[..2]);
+        // Like the .NET SDK, the archive is an uncompressed tar even though its name ends in ".tar.gz".
+        Assert.Equal("ustar"u8.ToArray(), File.ReadAllBytes(archivePath)[257..262]);
         Assert.Equal([$"{imageName}:{imageTag}"], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
         Assert.Equal("archive", TestContainerImageArchive.ReadLayerContents(archivePath));
         IValueProvider imageReference = new ContainerImageReference(resource.Resource);
@@ -983,7 +984,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task BuildImageAsync_FailedArchiveCompressionPreservesExistingArchive()
+    public async Task BuildImageAsync_FailedArchivePublishPreservesExistingArchive()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         using var workspace = TemporaryWorkspace.Create(output);
