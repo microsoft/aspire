@@ -602,6 +602,11 @@
         <target state="translated">Sources de télémétrie</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneTelemetrySourceNoConsoleLogs">
+        <source>Telemetry sources do not produce console logs. Select to view this telemetry source's overview.</source>
+        <target state="new">Telemetry sources do not produce console logs. Select to view this telemetry source's overview.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneUntaggedGroup">
         <source>Untagged</source>
         <target state="translated">Sans étiquette</target>

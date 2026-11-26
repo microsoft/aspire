@@ -3,12 +3,10 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Overview;
 using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
-using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Otlp;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
@@ -26,19 +24,12 @@ namespace Aspire.Dashboard.Components.Pages;
 public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 {
     private const int ConsolePreviewLineCount = 10;
-    private const int RecentItemCount = 5;
-    private const int MetricsPreviewCount = 8;
-    // Matches the metrics page's default duration, so a tile's sparkline looks like the card it opens.
-    private static readonly TimeSpan s_metricsPreviewDuration = TimeSpan.FromMinutes(5);
 
     // Telemetry can arrive many times per second. Coalesce updates so the overview queries the repository at most
     // a couple of times per second.
     private static readonly TimeSpan s_telemetryRefreshDelay = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan s_consoleRenderDelay = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan s_consoleLoadingTimeout = TimeSpan.FromSeconds(1);
-
-    private static readonly FieldTelemetryFilter s_failedTraceFilter = new() { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) };
-    private static readonly string s_serializedFailedTraceFilter = TelemetryFilterFormatter.SerializeFiltersToString([s_failedTraceFilter]);
 
     private readonly object _consoleLock = new();
     private readonly List<ConsolePreviewLine> _consoleLines = new();
@@ -141,6 +132,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
+    private ResourcesLayout.TelemetryOnlyResource? TelemetrySource =>
+        Resource is null ? ResourcesLayout?.SelectedTelemetryOnlyResource : null;
+
     // A recording's terminal endpoint would resolve through the live dashboard client, and recorded instance names can
     // still match a running AppHost after a dashboard-only restart. Showing it would open a writable connection to a
     // live process from a read-only run, so recordings show the console card instead, like the Terminals page.
@@ -188,7 +182,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         await ConsoleLogsManager.EnsureInitializedAsync();
         _consoleLogsFiltersChangedSubscription = ConsoleLogsManager.OnFiltersChanged(() => InvokeAsync(() =>
         {
-            if (_subscribedResourceName is { } resourceName)
+            if (Resource is { Name: var resourceName })
             {
                 StartConsoleSubscription(resourceName);
 
@@ -237,16 +231,18 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private bool EnsureSubscriptions()
     {
         var resource = Resource;
-        var otlpResource = resource is not null ? TelemetryRepository.GetResourceByCompositeName(resource.Name) : null;
+        var telemetrySource = TelemetrySource;
+        var selectedName = resource?.Name ?? telemetrySource?.Name;
+        var otlpResource = resource is not null ? TelemetryRepository.GetResourceByCompositeName(resource.Name) : telemetrySource?.Resource;
 
-        if (string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName) &&
+        if (string.Equals(_subscribedResourceName, selectedName, StringComparisons.ResourceName) &&
             Equals(_telemetryKey, otlpResource?.ResourceKey))
         {
             return false;
         }
 
-        var resourceChanged = !string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName);
-        _subscribedResourceName = resource?.Name;
+        var resourceChanged = !string.Equals(_subscribedResourceName, selectedName, StringComparisons.ResourceName);
+        _subscribedResourceName = selectedName;
 
         if (resourceChanged)
         {
@@ -317,7 +313,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
                     // This read covers notifications that arrived during the delay.
                     refresh.RefreshRequested = false;
-                    var telemetry = await Task.Run(() => LoadTelemetryAsync(key, cancellationToken), cancellationToken);
+                    var telemetry = await Task.Run(() => OverviewTelemetry.LoadAsync(TelemetryRepository, key, cancellationToken), cancellationToken);
                     if (!IsCurrentRefresh())
                     {
                         return;
@@ -344,47 +340,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         }
 
         bool IsCurrentRefresh() => ReferenceEquals(_telemetryRefresh, refresh) && !cancellationToken.IsCancellationRequested;
-    }
-
-    private async Task<OverviewTelemetry> LoadTelemetryAsync(ResourceKey key, CancellationToken cancellationToken)
-    {
-        var repository = TelemetryRepository;
-
-        var logsTask = repository.GetOverviewLogsAsync([key], RecentItemCount, errorsOnly: false, cancellationToken);
-        var tracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([], RecentItemCount), cancellationToken);
-        var failedTracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([s_failedTraceFilter], 0), cancellationToken);
-        await Task.WhenAll(logsTask, tracesTask, failedTracesTask).ConfigureAwait(false);
-        var logs = await logsTask.ConfigureAwait(false);
-        var traces = (await tracesTask.ConfigureAwait(false)).PagedResult;
-        var failedTraces = (await failedTracesTask.ConfigureAwait(false)).PagedResult;
-
-        var instruments = repository.GetInstrumentSummaries(key)
-            .OrderBy(i => i.Parent.Name, StringComparer.Ordinal)
-            .ThenBy(i => i.Name, StringComparer.Ordinal)
-            .ToList();
-
-        var hasAttentionLogs = logs.ErrorCount + logs.WarningCount > 0;
-        return new OverviewTelemetry
-        {
-            LogCount = logs.TotalCount,
-            ErrorLogCount = logs.ErrorCount,
-            WarningLogCount = logs.WarningCount,
-            RecentAttentionLogs = hasAttentionLogs ? logs.Recent : [],
-            RecentLogs = hasAttentionLogs ? [] : logs.Recent,
-            TraceCount = traces.TotalItemCount,
-            FailedTraceCount = failedTraces.TotalItemCount,
-            RecentTraces = traces.Items.AsEnumerable().Reverse().ToList(),
-            Instruments = instruments
-        };
-
-        GetTracesRequest CreateTracesRequest(List<TelemetryFilter> filters, int count) => new()
-        {
-            ResourceKeys = [key],
-            StartIndex = 0,
-            Count = count,
-            LatestItemCount = count,
-            Filters = filters
-        };
     }
 
     /// <summary>
@@ -773,106 +728,4 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     }
 
     private sealed record RelatedResource(ResourceViewModel Resource, string Type, bool IsIncoming);
-
-    private sealed class OverviewTelemetry
-    {
-        public required int LogCount { get; init; }
-        public required int ErrorLogCount { get; init; }
-        public required int WarningLogCount { get; init; }
-        public required List<OverviewLog> RecentAttentionLogs { get; init; }
-        public required List<OverviewLog> RecentLogs { get; init; }
-        public required int TraceCount { get; init; }
-        public required int FailedTraceCount { get; init; }
-        public required List<TraceSummary> RecentTraces { get; init; }
-        public required List<OtlpInstrumentSummary> Instruments { get; init; }
-    }
-
-    internal enum OverviewCard
-    {
-        Status,
-        Endpoints,
-        Relationships,
-        Console,
-        Logs,
-        Traces,
-        Metrics,
-        Properties,
-        Environment,
-        Volumes,
-        Health
-    }
-
-    /// <summary>
-    /// Packs cards into rows of a 12 column grid in page order. Each card requests a span based on its content, and the
-    /// spare columns at the end of a row are shared between that row's cards so rows never have trailing gaps.
-    /// Medium widths use a separate two-per-row packing where wide cards take the full row.
-    /// </summary>
-    internal sealed class OverviewCardLayout
-    {
-        private const int Columns = 12;
-
-        private readonly Dictionary<OverviewCard, int> _spans;
-        private readonly Dictionary<OverviewCard, int> _mediumSpans;
-
-        private OverviewCardLayout(Dictionary<OverviewCard, int> spans, Dictionary<OverviewCard, int> mediumSpans)
-        {
-            _spans = spans;
-            _mediumSpans = mediumSpans;
-        }
-
-        public static OverviewCardLayout Create(IReadOnlyList<(OverviewCard Card, int Span)> cards)
-        {
-            return new OverviewCardLayout(
-                Pack(cards),
-                Pack(cards.Select(c => (c.Card, c.Span >= 7 ? Columns : Columns / 2)).ToList()));
-        }
-
-        public string Style(OverviewCard card)
-        {
-            return string.Create(CultureInfo.InvariantCulture, $"--overview-span: {_spans.GetValueOrDefault(card, Columns)}; --overview-span-md: {_mediumSpans.GetValueOrDefault(card, Columns)}; --overview-card-height: {GetHeight(card)}px;");
-        }
-
-        // Bound scrollable content while allowing each grid row to fit its tallest card.
-        // Terminals use the console limit as their minimum interactive viewport instead.
-        private static int GetHeight(OverviewCard card) => card switch
-        {
-            OverviewCard.Status or OverviewCard.Endpoints or OverviewCard.Metrics => 260,
-            OverviewCard.Console or OverviewCard.Logs => 300,
-            OverviewCard.Traces or OverviewCard.Relationships => 300,
-            OverviewCard.Properties or OverviewCard.Environment => 340,
-            _ => 240
-        };
-
-        private static Dictionary<OverviewCard, int> Pack(IReadOnlyList<(OverviewCard Card, int Span)> cards)
-        {
-            var result = new Dictionary<OverviewCard, int>();
-            var row = new List<(OverviewCard Card, int Span)>();
-            var used = 0;
-
-            foreach (var (card, requested) in cards)
-            {
-                var span = Math.Clamp(requested, 1, Columns);
-                if (used + span > Columns)
-                {
-                    CompleteRow();
-                }
-                row.Add((card, span));
-                used += span;
-            }
-            CompleteRow();
-
-            return result;
-
-            void CompleteRow()
-            {
-                var spare = Columns - used;
-                for (var i = 0; i < row.Count; i++)
-                {
-                    result[row[i].Card] = row[i].Span + (spare / row.Count) + (i < spare % row.Count ? 1 : 0);
-                }
-                row.Clear();
-                used = 0;
-            }
-        }
-    }
 }

@@ -63,7 +63,7 @@ public class OtlpHttpServiceTests
     }
 
     [Theory]
-    [InlineData("/", "/structuredlogs")]
+    [InlineData("/", "/resources")]
     [InlineData("/legacy", "/legacy/structuredlogs")]
     public async Task Get_OtlpHttpEndPoint_BrowserPagePath_NotRedirectedToFrontend(string path, string frontendRedirectLocation)
     {

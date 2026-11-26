@@ -1,0 +1,20 @@
+.telemetry-help-message {
+    margin: 0;
+    color: var(--colorNeutralForeground3);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-regular);
+    line-height: var(--lineHeightBase300);
+}
+
+/* Flex discards template whitespace; bottom alignment matches the surrounding text's line box. */
+.telemetry-help-message ::deep .telemetry-help-button {
+    display: inline-flex;
+    height: auto;
+    min-height: 0;
+    min-width: 0;
+    border: 0;
+    font-size: inherit;
+    line-height: inherit;
+    vertical-align: bottom;
+    text-decoration: underline;
+}

@@ -1387,17 +1387,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 yield return new TreePaneSection(treeRows);
             }
-
-            // Tags already include parameters in their groups.
-            if (_grouping != ResourcePaneGrouping.Tags && GetParameterPaneRows() is { Count: > 0 } parameterRows)
-            {
-                yield return new ParametersPaneSection(parameterRows);
-            }
         }
 
         if (GetVisibleTelemetryResources().ToList() is { Count: > 0 } telemetryRows)
         {
             yield return new TelemetryPaneSection(telemetryRows);
+        }
+
+        // Tags already include parameters in their groups.
+        if (DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.Tags && GetParameterPaneRows() is { Count: > 0 } parameterRows)
+        {
+            yield return new ParametersPaneSection(parameterRows);
         }
     }
 
@@ -2094,6 +2094,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     internal string GetResourceName(ResourceViewModel resource) =>
         IsReplica(resource) ? resource.Name : resource.DisplayName;
 
+    private static string GetRowIconColor(string name, bool isUnavailable) =>
+        isUnavailable
+            ? "var(--colorNeutralForeground3)"
+            : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(name)})";
+
     internal bool IsReplica(ResourceViewModel resource) =>
         GetDuplicateDisplayNames().Contains(resource.DisplayName);
 
@@ -2277,13 +2282,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         };
     }
 
-    // A telemetry-only row has no overview, console or terminal, and is unavailable for those tabs. Like the other rows,
-    // it's never unavailable while the content is closed (see GetResourceUnavailableReason).
+    // A telemetry source isn't part of the app model, so like a parameter it has no console logs or terminal. Choosing
+    // it from those views opens its overview (see GetSelectionUrl). Like the other rows, it's never unavailable while
+    // the content is closed (see GetResourceUnavailableReason).
     private string? GetTelemetryRowUnavailableReason(OtlpResource resource) =>
         _isPaneFullCanvas ? null
-        : CurrentTab is ResourceTab.Overview or ResourceTab.Console or ResourceTab.Terminal or ResourceTab.Parameters
-            ? Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value
-            : GetTelemetryUnavailableReason(resource);
+        : CurrentTab switch
+        {
+            ResourceTab.Console => Loc[nameof(Resources.Layout.ResourcePaneTelemetrySourceNoConsoleLogs)].Value,
+            ResourceTab.Terminal or ResourceTab.Parameters => Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
+            _ => GetTelemetryUnavailableReason(resource)
+        };
 
     private string? GetTelemetryUnavailableReason(OtlpResource? resource)
     {
@@ -2307,7 +2316,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             : 0;
     }
 
-    private TelemetryOnlyResource? SelectedTelemetryOnlyResource =>
+    /// <summary>
+    /// Gets the telemetry source that matches <see cref="SelectedResourceName"/>, if any. Telemetry sources send
+    /// telemetry without being part of the app model.
+    /// </summary>
+    internal TelemetryOnlyResource? SelectedTelemetryOnlyResource =>
         _selectedItems is [{ TelemetryOnly: { } telemetryOnly }] ? telemetryOnly : null;
 
     /// <summary>
@@ -2510,7 +2523,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 _resourceByName.Values.Any(r => r.IsParameter);
         }
 
-        if (IsTelemetryPane && tab is ResourceTab.Overview or ResourceTab.Console)
+        // Console logs come from the app host.
+        if ((IsTelemetryPane || !DashboardClient.IsEnabled) && tab is ResourceTab.Console)
         {
             return false;
         }
@@ -2545,7 +2559,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         if (item.TelemetryOnly is not null)
         {
-            return tab is ResourceTab.StructuredLogs or ResourceTab.Traces or ResourceTab.Metrics;
+            return tab is ResourceTab.Overview or ResourceTab.StructuredLogs or ResourceTab.Traces or ResourceTab.Metrics;
         }
 
         // The resource isn't known (yet). Keep the tab so the page can report it.
@@ -2625,18 +2639,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // Keep the chosen telemetry page so it can explain why the selection has no data.
             tab = CurrentTab;
         }
-        else if (selection is [{ Resource: { IsParameter: true } }])
-        {
-            tab = ResourceTab.Overview;
-        }
-        else if (!IsTelemetryPane && (selection.Any(i => i.Resource is not null) || selection.Count == 0))
-        {
-            tab = ResourceTab.Overview;
-        }
         else
         {
-            // Resources that only send telemetry don't have an overview.
-            tab = ResourceTab.StructuredLogs;
+            // Every selection has an overview, including parameters and telemetry sources.
+            tab = ResourceTab.Overview;
         }
 
         if (tab == CurrentTab && _selectionUrlProvider is { } registered && registered.Tab == tab)
@@ -2927,16 +2933,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             yield break;
         }
 
-        var isTelemetryOnly = SelectedTelemetryOnlyResource is not null;
-
         // Tabs that don't apply are returned hidden rather than left out, so the menus and the strip agree on them.
         var errorCount = _selectedItems.Sum(i => i.Resource is { } r ? GetUnviewedErrorCount(r) : 0);
         // Overview stays for a resource that isn't known, such as a replica that was replaced: its page says the
-        // resource wasn't found, and the tab is the way back to it from the resource's other pages.
+        // resource wasn't found, and the tab is the way back to it from the resource's other pages. Console logs come
+        // from the app host, so a dashboard without one has no console.
         yield return CreateTab(ResourceTab.Overview, Loc[nameof(Resources.Layout.ResourceTabOverview)], new Icons.Regular.Size24.Board(),
-            isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
+            isVisible: true);
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
-            isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
+            isVisible: DashboardClient.IsEnabled);
         // Shown whenever any resource has a terminal, not only when the selection does, so the navigation doesn't
         // shift as the selection changes. Without a terminal in the selection it opens the Terminals page instead.
         yield return CreateTab(ResourceTab.Terminal, Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], new Icons.Regular.Size20.WindowConsole(),
@@ -3094,7 +3099,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal sealed record ResourceLocation(ResourceTab Tab, string? RouteResourceName, IReadOnlyList<string> SelectedResourceNames, bool KeepSelection);
 
-    private sealed record TelemetryOnlyResource(string Name, OtlpResource Resource);
+    internal sealed record TelemetryOnlyResource(string Name, OtlpResource Resource);
 
     private sealed record SelectedResourceItem(string Name, ResourceViewModel? Resource, TelemetryOnlyResource? TelemetryOnly);
 

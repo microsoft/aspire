@@ -68,7 +68,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("BrowserStorageSaveFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Select run: {0}.
         /// </summary>
@@ -1137,6 +1137,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneTelemetryOnlyGroup {
             get {
                 return ResourceManager.GetString("ResourcePaneTelemetryOnlyGroup", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Telemetry sources do not produce console logs. Select to view this telemetry source&apos;s overview..
+        /// </summary>
+        public static string ResourcePaneTelemetrySourceNoConsoleLogs {
+            get {
+                return ResourceManager.GetString("ResourcePaneTelemetrySourceNoConsoleLogs", resourceCulture);
             }
         }
         

@@ -197,6 +197,11 @@
         <target state="translated">기록된 오류 없음</target>
         <note />
       </trans-unit>
+      <trans-unit id="HomeNoTelemetry">
+        <source>No telemetry</source>
+        <target state="new">No telemetry</target>
+        <note>Headline of the overview of a dashboard without an app host, before any telemetry source has sent telemetry.</note>
+      </trans-unit>
       <trans-unit id="HomeNotStartedLabel">
         <source>Not started</source>
         <target state="translated">시작되지 않음</target>
@@ -1036,6 +1041,31 @@
         <source>URLs</source>
         <target state="translated">URL</target>
         <note />
+      </trans-unit>
+      <trans-unit id="TelemetrySourceOverviewAttributesTitle">
+        <source>Resource attributes</source>
+        <target state="new">Resource attributes</target>
+        <note>Title of the card listing the OpenTelemetry resource attributes a telemetry source reports.</note>
+      </trans-unit>
+      <trans-unit id="TelemetrySourceOverviewInstanceId">
+        <source>Instance ID</source>
+        <target state="new">Instance ID</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetrySourceOverviewNoAttributes">
+        <source>No resource attributes</source>
+        <target state="new">No resource attributes</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetrySourceOverviewServiceName">
+        <source>Service name</source>
+        <target state="new">Service name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetrySourceOverviewType">
+        <source>Telemetry source</source>
+        <target state="new">Telemetry source</target>
+        <note>The type shown on the overview of a resource that sends telemetry without being part of the app model.</note>
       </trans-unit>
       <trans-unit id="TotalItemsFooterParametersPluralText">
         <source>Showing &lt;strong&gt;{0} parameters&lt;/strong&gt;</source>

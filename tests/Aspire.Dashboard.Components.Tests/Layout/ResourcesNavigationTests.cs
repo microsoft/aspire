@@ -39,8 +39,9 @@ public class ResourcesNavigationTests
     }
 
     [Theory]
-    [InlineData("", nameof(NavSection.None))]
-    [InlineData("resources/frontend", nameof(NavSection.None))]
+    [InlineData("", nameof(NavSection.Telemetry))]
+    [InlineData("resources", nameof(NavSection.Telemetry))]
+    [InlineData("resources/frontend", nameof(NavSection.Telemetry))]
     [InlineData("terminals", nameof(NavSection.None))]
     [InlineData("structuredlogs", nameof(NavSection.Telemetry))]
     [InlineData("traces/detail/abc", nameof(NavSection.Telemetry))]

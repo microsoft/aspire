@@ -420,7 +420,7 @@
                     <span class="resource-row-icon">
                         <FluentIcon Width="16px"
                                     Color="Color.Custom"
-                                    CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
+                                    CustomColor="@GetRowIconColor(name, unavailableReason is not null)"
                                     Value="@(new Icons.Regular.Size16.DataUsage())" />
                     </span>
                     <span class="resource-row-text">
@@ -1128,10 +1128,7 @@
 
     private void RenderRowIcon(RenderTreeBuilder __builder, ResourceRowContext item)
     {
-        var iconColor = item.UnavailableReason is not null
-            ? "var(--colorNeutralForeground3)"
-            : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(item.Name)})";
-
+        var iconColor = GetRowIconColor(item.Name, item.UnavailableReason is not null);
         RenderResourceIcon(__builder, item.Resource, iconColor, "16px", IconSize.Size16);
     }
 
