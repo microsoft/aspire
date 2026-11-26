@@ -262,7 +262,7 @@ The preview CLI command is disabled by default. Run the application with
 This flag gates CLI registration only; it does not change the hosting APIs or ordinary runs.
 The CLI reports the run's output location under its
 `testruns` directory. Each logical resource has a private directory named after it directly
-under the run directory (`<run>/api-tests`), shared by its replicas.
+under the run directory (`<run>/api-tests`).
 Before launch, the integration allocates a fresh temporary report directory independently
 of the runtime collector and configures the runner to write `results.trx` there.
 The asynchronous `WithTesting(context => ...)` collector starts only during testing,
