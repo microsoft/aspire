@@ -187,12 +187,11 @@ public static class GitHubAppResourceExtensions
         var configuration = builder.Configuration;
         var prefix = GitHubAppCredentialStore.GetPrefix(configuration, name);
         ParameterResource CreateParameter(string suffix, string key, bool secret) =>
-            new($"{name}-{suffix}", _ => configuration[$"{prefix}:{key}"] is { Length: > 0 } value
+            builder.CreateResourceBuilder(new ParameterResource($"{name}-{suffix}", _ => configuration[$"{prefix}:{key}"] is { Length: > 0 } value
                 ? value
-                : throw new MissingParameterValueException($"GitHub App '{name}' hasn't been registered."), secret)
-            {
-                Required = false
-            };
+                : throw new MissingParameterValueException($"GitHub App '{name}' hasn't been registered."), secret))
+            .AsOptional()
+            .Resource;
 
         var resource = new GitHubAppResource(
             name,
