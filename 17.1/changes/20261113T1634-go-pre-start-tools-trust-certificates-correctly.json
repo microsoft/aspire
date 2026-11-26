@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`WithModTidy`, `WithModVendor`, `WithModDownload`, and `WithVetTool` now apply the Go app’s platform-specific certificate trust defaults, fixing module download failures on macOS.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-11-13T16:34:40Z",
+  "lastMergedAt": "2026-11-13T16:34:40Z",
+  "name": "Go pre-start tools trust certificates correctly",
+  "owner": "danegsta",
+  "prs": [
+    22222
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-12T17:26:36Z",
+  "number": 2030,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Document WithBindMount idempotency and conflicting mount targets"
+}

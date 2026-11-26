@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard icon, tooltip, and sidebar polish",
+  "mergedAt": "2026-11-13T22:47:31Z",
+  "number": 22229,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Keep resource picker popup width consistent"
+}

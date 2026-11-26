@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Configured channel honored when updating C# AppHosts",
+  "mergedAt": "2026-11-12T18:49:22Z",
+  "number": 22182,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Honor configured channels when updating C# AppHosts"
+}

@@ -1,0 +1,26 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@thimok"
+  ],
+  "description": "Action icons use consistent neutral colors, plain-text tooltips wrap and use more space, relative-time tooltips show only the exact time, the collapsed resource picker keeps a consistent width, sidebar hover state is restored after selection, and resource types get more room when space allows.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "✨",
+  "firstMergedAt": "2026-11-12T23:41:50Z",
+  "lastMergedAt": "2026-11-15T16:31:42Z",
+  "name": "Dashboard icon, tooltip, and sidebar polish",
+  "owner": "JamesNK",
+  "prs": [
+    22142,
+    22235,
+    22228,
+    22263,
+    22229,
+    22275
+  ]
+}

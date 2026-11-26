@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Telemetry hooks and stale skills handled per agent in aspire agent init",
+  "mergedAt": "2026-11-13T20:52:07Z",
+  "number": 22080,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Remove static Aspire skill copies during aspire agent init"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire update` for C# AppHosts now respects the configured `channel` setting, keeping `nuget.config` in sync with the intended channel.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧬",
+  "firstMergedAt": "2026-11-12T18:49:22Z",
+  "lastMergedAt": "2026-11-12T18:49:22Z",
+  "name": "Configured channel honored when updating C# AppHosts",
+  "owner": "danegsta",
+  "prs": [
+    22182
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard icon, tooltip, and sidebar polish",
+  "mergedAt": "2026-11-13T04:27:39Z",
+  "number": 22235,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Improve dashboard tooltip wrapping"
+}

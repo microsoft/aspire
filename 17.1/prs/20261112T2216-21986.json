@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Redundant CLI bundle opt-ins removed from templates",
+  "mergedAt": "2026-11-12T22:16:05Z",
+  "number": 21986,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Remove redundant CLI bundle opt-ins from templates"
+}

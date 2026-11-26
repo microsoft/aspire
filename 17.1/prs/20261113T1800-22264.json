@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Previous dashboard language switch and graph controls fixed",
+  "mergedAt": "2026-11-13T18:00:01Z",
+  "number": 22264,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Fix clipped graph controls and hide the game in the previous dashboard"
+}

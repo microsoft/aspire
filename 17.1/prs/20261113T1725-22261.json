@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Previous dashboard language switch and graph controls fixed",
+  "mergedAt": "2026-11-13T17:25:35Z",
+  "number": 22261,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Fix 404 when switching language in the previous dashboard"
+}

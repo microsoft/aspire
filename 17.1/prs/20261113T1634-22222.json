@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Go pre-start tools trust certificates correctly",
+  "mergedAt": "2026-11-13T16:34:40Z",
+  "number": 22222,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Fix certificate trust for Go pre-start tools"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "CI workflow pin; no user-facing impact",
+  "mergedAt": "2026-11-12T22:21:21Z",
+  "number": 22223,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "excluded",
+  "title": "Pin native hosting validation to Ubuntu 24.04"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The MCP `doctor` tool no longer hangs while checking Aspire skills on Windows, because Git discovery commands no longer inherit the MCP server’s standard input.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-11-12T18:07:59Z",
+  "lastMergedAt": "2026-11-12T18:07:59Z",
+  "name": "MCP doctor no longer times out on Windows",
+  "owner": "ellahathaway",
+  "prs": [
+    21882
+  ]
+}

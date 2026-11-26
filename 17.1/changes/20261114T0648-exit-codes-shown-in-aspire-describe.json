@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The default `aspire describe` table shows known process exit codes in the State column and highlights nonzero exits in red.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔢",
+  "firstMergedAt": "2026-11-14T06:48:37Z",
+  "lastMergedAt": "2026-11-14T06:48:37Z",
+  "name": "Exit codes shown in aspire describe",
+  "owner": "mitchdenny",
+  "prs": [
+    22054
+  ]
+}

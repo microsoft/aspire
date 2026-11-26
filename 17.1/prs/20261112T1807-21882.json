@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "MCP doctor no longer times out on Windows",
+  "mergedAt": "2026-11-12T18:07:59Z",
+  "number": 21882,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Fix MCP doctor timeout on Windows"
+}

@@ -1,0 +1,22 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Configuration-source prompts explain what each command will do, update commands report what happened after a refresh, and accepted configuration sources are now used for template discovery in `aspire new`.",
+  "docsPrs": [
+    2139
+  ],
+  "docsRequired": true,
+  "emoji": "💬",
+  "firstMergedAt": "2026-11-12T23:41:59Z",
+  "lastMergedAt": "2026-11-16T05:54:32Z",
+  "name": "Clearer config source prompts and update feedback",
+  "owner": "JamesNK",
+  "prs": [
+    22200,
+    22298
+  ]
+}

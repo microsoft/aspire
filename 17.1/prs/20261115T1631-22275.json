@@ -1,0 +1,9 @@
+{
+  "author": "thimok",
+  "comment": "Dashboard icon, tooltip, and sidebar polish",
+  "mergedAt": "2026-11-15T16:31:42Z",
+  "number": 22275,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Dashboard vNext: Give resource type more space to reduce truncate if screen width allows"
+}

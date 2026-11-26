@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Telemetry hooks and stale skills handled per agent in aspire agent init",
+  "mergedAt": "2026-11-13T00:02:18Z",
+  "number": 22078,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Limit telemetry hooks to Aspire-configured agents"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Clearer config source prompts and update feedback",
+  "mergedAt": "2026-11-16T05:54:32Z",
+  "number": 22298,
+  "runDate": "2026-11-26T12:10:00Z",
+  "status": "included",
+  "title": "Use accepted configuration sources for template discovery"
+}
