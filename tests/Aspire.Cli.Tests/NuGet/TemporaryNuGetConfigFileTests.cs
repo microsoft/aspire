@@ -132,6 +132,7 @@ public class TemporaryNuGetConfigFileTests(ITestOutputHelper outputHelper)
     public async Task CreateRestoreOverlayAsync_UsesProvidedWriter()
     {
         using var config = await TemporaryNuGetConfigFile.CreateAsync(
+            new Aspire.Shared.TemporaryStorage(),
             path => File.WriteAllText(
                 path,
                 """
@@ -157,6 +158,7 @@ public class TemporaryNuGetConfigFileTests(ITestOutputHelper outputHelper)
     public async Task RegenerateAsync_RewritesConfigAndCacheIdentity()
     {
         using var config = await TemporaryNuGetConfigFile.CreateAsync(
+            new Aspire.Shared.TemporaryStorage(),
             path => File.WriteAllText(
                 path,
                 "<configuration><packageSourceMapping><clear /></packageSourceMapping></configuration>"));
@@ -181,6 +183,7 @@ public class TemporaryNuGetConfigFileTests(ITestOutputHelper outputHelper)
     public async Task Dispose_RemovesDirectoryWhenFailedRegenerationDeletedConfig()
     {
         using var config = await TemporaryNuGetConfigFile.CreateAsync(
+            new Aspire.Shared.TemporaryStorage(),
             path => File.WriteAllText(path, "<configuration />"));
         var directory = config.ConfigFile.Directory!.FullName;
 
@@ -202,10 +205,12 @@ public class TemporaryNuGetConfigFileTests(ITestOutputHelper outputHelper)
     public async Task CacheIdentity_DoesNotDependOnGlobalPackagesFolderLocation()
     {
         using var first = await TemporaryNuGetConfigFile.CreateAsync(
+            new Aspire.Shared.TemporaryStorage(),
             path => File.WriteAllText(
                 path,
                 "<configuration><config><add key=\"globalPackagesFolder\" value=\"/packages/first\" /></config></configuration>"));
         using var second = await TemporaryNuGetConfigFile.CreateAsync(
+            new Aspire.Shared.TemporaryStorage(),
             path => File.WriteAllText(
                 path,
                 "<configuration><config><add key=\"globalPackagesFolder\" value=\"/packages/second\" /></config></configuration>"));
@@ -217,6 +222,7 @@ public class TemporaryNuGetConfigFileTests(ITestOutputHelper outputHelper)
     public async Task CacheIdentity_DoesNotChangeWhenGlobalPackagesFolderIsAdded()
     {
         using var config = await TemporaryNuGetConfigFile.CreateAsync(
+            new Aspire.Shared.TemporaryStorage(),
             path => File.WriteAllText(path, "<configuration />"));
         var originalIdentity = config.CacheIdentity;
 

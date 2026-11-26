@@ -239,7 +239,7 @@ public class Hex1bAspireTerminalTests
         Assert.NotNull(home);
         Assert.NotNull(path);
         using var configuration = new ConfigurationManager();
-        var fileSystem = new FileSystemService(configuration);
+        var fileSystem = new FileSystemService(configuration, new Aspire.Shared.TemporaryStorage());
         using var directory = fileSystem.TempDirectory.CreateTempSubdirectory("terminal-options-");
         await File.WriteAllTextAsync(Path.Combine(directory.Path, "working-directory-marker"), string.Empty);
 

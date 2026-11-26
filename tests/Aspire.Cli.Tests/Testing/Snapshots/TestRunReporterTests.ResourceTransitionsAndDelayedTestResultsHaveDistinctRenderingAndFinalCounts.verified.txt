@@ -1,0 +1,66 @@
+﻿[
+  {
+    Emoji: microscope,
+    Message: Tests are running
+  },
+  {
+    Emoji: gear,
+    Message: Resource [teal]tests[/]: Starting
+  },
+  {
+    Emoji: gear,
+    Message: Resource [teal]tests[/]: Running
+  },
+  {
+    Emoji: gear,
+    Message: Resource [teal]cargo[/]: Running
+  },
+  {
+    Emoji: gear,
+    Message: Resource [teal]cargo[/]: Finished (exit code 0)
+  },
+  {
+    Emoji: gear,
+    Message: Resource [teal]tests[/]: Finished (exit code 0)
+  },
+  {
+    Emoji: microscope,
+    Message: Test [teal]tests[/] / [blue]fixture-failed[/]: [red]failed[/]
+  },
+  {
+    Emoji: microscope,
+    Message: Test [teal]tests[/] / [blue]fixture-passed[/]: [green]passed[/]
+  },
+  {
+    Emoji: microscope,
+    Message: Test [teal]tests[/] / [blue]fixture-skipped[/]: [yellow]skipped[/]
+  },
+  {
+    Emoji: microscope,
+    Message: Test [teal]tests[/] / [blue]fixture-inconclusive[/]: [red]inconclusive[/]
+  },
+  {
+    Emoji: microscope,
+    Message: Test [teal]tests[/] / [blue]fixture-error[/]: [red]error[/]
+  },
+  {
+    Emoji: microscope,
+    Message: Test [teal]tests[/] / [blue]fixture-timedOut[/]: [red]timed out[/]
+  },
+  {
+    Emoji: microscope,
+    Message: Test [teal]tests[/] / [blue]fixture-cancelled[/]: [red]cancelled[/]
+  },
+  {
+    Emoji: bar_chart,
+    Message: Resource [teal]tests[/]: [red]failed[/]; [green]1[/] passed, [red]5[/] failed, [yellow]1[/] other
+  },
+  {
+    Emoji: microscope,
+    Message: Test run [red]failed[/]
+  },
+  {
+    Emoji: microscope,
+    Message: Published test results: [green]1[/] passed, [red]5[/] failed, [yellow]1[/] skipped
+  }
+]

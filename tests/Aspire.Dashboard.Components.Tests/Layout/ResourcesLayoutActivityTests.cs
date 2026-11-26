@@ -11,13 +11,16 @@ using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -28,6 +31,80 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class ResourcesLayoutActivityTests : DashboardTestContext
 {
+    [Fact]
+    public async Task MobileMenu_RefreshesWhileOpenForLatePageAndLogUpdates()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var connected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Func<Task>? notifyLogs = null;
+        var client = new TestDashboardClient(isEnabled: true, whenConnected: connected.Task,
+            initialResources: [ModelTestHelpers.CreateResource("api-TestId")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client, configureServices: services =>
+        {
+            services.AddSingleton<IThemeResolver, TestThemeResolver>();
+            services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, client);
+            services.AddSingleton<ITooltipService, TooltipService>();
+            services.AddSingleton<ITelemetryRepository>(provider => new TestTelemetryRepository(provider.GetRequiredService<SqliteTelemetryRepository>())
+            {
+                OnNewLogsRegistered = callback => notifyLogs = callback
+            });
+        });
+        FluentUISetupHelpers.SetupFluentDialogProvider(this);
+        FluentUISetupHelpers.SetupFluentAnchor(this);
+        FluentUISetupHelpers.SetupFluentList(this);
+        FluentUISetupHelpers.SetupFluentCombobox(this);
+        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
+        var themeModule = JSInterop.SetupModule("/js/app-theme.js");
+        themeModule.Setup<string>("updateTheme", _ => true).SetResult(ThemeManager.ThemeSettingSystem);
+        JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true).SetVoidResult();
+        JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
+        JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
+        JSInterop.SetupVoid("registerResourceServiceConnectionProvider", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("updateResourceServiceConnectionState", _ => true).SetVoidResult();
+        JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
+        Render<FluentMessageBarProvider>(p => p.Add(p => p.Section, DashboardUIHelpers.MessageBarSection));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api-TestId");
+        var cut = Render<MainLayout>(p => p.AddCascadingValue(viewport)
+            .Add(p => p.Body, body =>
+            {
+                body.OpenComponent<ResourcesLayout>(0);
+                body.CloseComponent();
+            }));
+
+        await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        Assert.Equal([Resources.Layout.MainLayoutHelp, Resources.Layout.MainLayoutLaunchNotifications, Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip")));
+
+        connected.SetResult();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.FindComponent<ResourcesLayout>().Instance.IsLoaded);
+            Assert.Contains(cut.FindAll("fluent-menu-item"), item => item.GetAttribute("data-tooltip") == "Home");
+        });
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource("api"),
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(severity: SeverityNumber.Error) } } }
+            }
+        });
+        cut.WaitForAssertion(() => Assert.Equal("1", Assert.Single(cut.FindAll(".mobile-nav-menu-error-count")).TextContent.Trim()));
+
+        repository.MarkViewedErrorLogs(new ResourceKey("api", "TestId"));
+        Assert.NotNull(notifyLogs);
+        await notifyLogs();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".mobile-nav-menu-error-count")));
+
+        cut.Render(p => p.Add(p => p.Body, (RenderFragment?)null));
+        cut.WaitForAssertion(() => Assert.Equal(
+            [Resources.Layout.MainLayoutHelp, Resources.Layout.MainLayoutLaunchNotifications, Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip"))));
+    }
+
     [Fact]
     public async Task Canvas_MobileViewportCancelsPendingQueryAndDoesNotResumeOnDesktop()
     {
@@ -142,13 +219,19 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         var timers = new FakeTimeProvider();
         var clock = new TestTimeProvider { Timers = timers };
         var names = Enumerable.Range(0, 28).Select(i => $"service-{i}").ToArray();
+        // Use AppHost tags so every resource can appear twice without consuming the saved tag quota.
+        var tagProperty = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [tagProperty] = new(tagProperty, Value.ForList(Value.ForString("Backend"), Value.ForString("Shared")), false, null, 0, null, false)
+        };
         var calls = 0;
         var active = 0;
         var maximumActive = 0;
         var doubleFirst = false;
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport,
             new TestDashboardClient(isEnabled: true,
-                initialResources: names.Select(name => ModelTestHelpers.CreateResource($"{name}-TestId")).ToList(),
+                initialResources: names.Select(name => ModelTestHelpers.CreateResource($"{name}-TestId", properties: properties)).ToList(),
                 resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
             configureServices: services =>
             {
@@ -217,12 +300,6 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                 });
         }
         await SeedAsync("initial", names);
-        var tags = Services.GetRequiredService<ResourceTagStore>();
-        foreach (var name in names)
-        {
-            tags.AddTag($"{name}-TestId", "Backend");
-            tags.AddTag($"{name}-TestId", "Shared");
-        }
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
@@ -241,7 +318,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         doubleFirst = true;
         // Tick the polling timer without changing the displayed clock to isolate
         // a changed resource from the separate renewal of all active URL windows.
-        timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
+        await AdvanceTimersAsync(ResourcesLayout.s_paneActivityRefreshInterval);
         foreach (var component in changed)
         {
             component.WaitForAssertion(() => Assert.Equal("40", component.Find(".resource-row-insight-requests span").TextContent));
@@ -257,11 +334,10 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         });
         var href = changed[0].Find(".resource-row-insight-requests").GetAttribute("href");
         clock.UtcNow += TimeSpan.FromSeconds(14);
-        timers.Advance(TimeSpan.FromSeconds(14));
-        await cut.InvokeAsync(() => { });
+        await AdvanceTimersAsync(TimeSpan.FromSeconds(14));
         Assert.Equal(2, Volatile.Read(ref calls));
         clock.UtcNow += TimeSpan.FromSeconds(1);
-        timers.Advance(TimeSpan.FromSeconds(1));
+        await AdvanceTimersAsync(TimeSpan.FromSeconds(1));
         changed[0].WaitForAssertion(() =>
         {
             Assert.Equal(3, Volatile.Read(ref calls));
@@ -269,7 +345,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         });
         await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         clock.UtcNow += TimeSpan.FromMinutes(6);
-        timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
+        await AdvanceTimersAsync(ResourcesLayout.s_paneActivityRefreshInterval);
         WaitForInsightCount(0);
         await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         var beforeHidden = Volatile.Read(ref calls);
@@ -277,8 +353,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         doubleFirst = false;
         await SeedAsync("fresh", names);
         clock.UtcNow += TimeSpan.FromSeconds(30);
-        timers.Advance(TimeSpan.FromSeconds(30));
-        await cut.InvokeAsync(() => { });
+        await AdvanceTimersAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(beforeHidden, Volatile.Read(ref calls));
         await cut.InvokeAsync(() => cut.Instance.SetPaneActivityVisible(true));
         WaitForInsightCount(2);
@@ -291,6 +366,10 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         timers.Advance(TimeSpan.FromMinutes(1));
         Assert.Equal(beforeHidden + 1, Volatile.Read(ref calls));
         Assert.Equal(1, maximumActive);
+
+        // A renderer barrier can't drain a tick that the polling loop hasn't dispatched yet.
+        // Advance on the renderer so the polling loop handles each hidden tick before we resume.
+        Task AdvanceTimersAsync(TimeSpan elapsed) => cut.InvokeAsync(() => timers.Advance(elapsed));
 
         void WaitForInsightCount(int count)
         {
@@ -364,8 +443,8 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
             }
         });
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api-TestId", "Backend");
-        tags.AddTag("api-TestId", "Shared");
+        await tags.AddTagAsync("api-TestId", "Backend");
+        await tags.AddTagAsync("api-TestId", "Shared");
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));

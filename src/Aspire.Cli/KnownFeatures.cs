@@ -25,10 +25,12 @@ internal sealed record FeatureMetadata(string Name, string Description, bool Def
 internal static class KnownFeatures
 {
     public static string FeaturePrefix => "features";
+    public static string ConfigSourceEnabled => "configSourceEnabled";
     public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
     public static string ShowDeprecatedPackages => "showDeprecatedPackages";
     public static string StagingChannelEnabled => "stagingChannelEnabled";
     public static string DefaultWatchEnabled => "defaultWatchEnabled";
+    public static string TestCommandEnabled => "testCommandEnabled";
     public static string ShowAllTemplates => "showAllTemplates";
     public static string ExperimentalPolyglotRust => "experimentalPolyglotRust";
     public static string ExperimentalPolyglotJava => "experimentalPolyglotJava";
@@ -46,6 +48,11 @@ internal static class KnownFeatures
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
+        [ConfigSourceEnabled] = new(
+            ConfigSourceEnabled,
+            "Enable Git-backed configuration source discovery, template inheritance, update checks, and refresh",
+            DefaultValue: true),
+
         [UpdateNotificationsEnabled] = new(
             UpdateNotificationsEnabled,
             "Check if update notifications are disabled and set version check environment variable",
@@ -64,6 +71,11 @@ internal static class KnownFeatures
         [DefaultWatchEnabled] = new(
             DefaultWatchEnabled,
             "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
+            DefaultValue: false),
+
+        [TestCommandEnabled] = new(
+            TestCommandEnabled,
+            "Enable or disable the preview 'aspire test' command",
             DefaultValue: false),
 
         [ShowAllTemplates] = new(

@@ -135,6 +135,7 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
         // against the target's remaining hierarchy, rather than copying projection masks.
         string? conflictingSourceKey = null;
         using var file = await TemporaryNuGetConfigFile.CreateAsync(
+            nuGetService.TemporaryStorage,
             path => conflictingSourceKey = WriteConfig(
                 configuration, targetFile, path, originalContent, globalPackagesFolder, inheritedPaths, cancellationToken)).ConfigureAwait(false);
 

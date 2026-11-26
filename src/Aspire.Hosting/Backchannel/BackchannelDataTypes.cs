@@ -16,6 +16,56 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 
+/// <summary>
+/// Describes an observed test resource instance without framework-specific test results.
+/// </summary>
+internal sealed record TestResourceState
+{
+    public required string ResourceName { get; init; }
+    public string? ResourceId { get; init; }
+    public string? State { get; init; }
+    public int? ExitCode { get; init; }
+    public int ExpectedReplicas { get; init; } = 1;
+    public string Outcome { get; init; } = "pending";
+}
+
+/// <summary>
+/// Streams test resource observations followed by an authoritative aggregate completion.
+/// </summary>
+internal sealed class TestRunEvent
+{
+    public TestResourceState? Resource { get; init; }
+    public PublishedTestResult? Result { get; init; }
+    public TestCollectionState? Collection { get; init; }
+    public bool? Passed { get; init; }
+}
+
+internal sealed record PublishedTestResult
+{
+    public required string ResourceName { get; init; }
+    public required string Name { get; init; }
+    public required string Outcome { get; init; }
+    public double? DurationMilliseconds { get; init; }
+    public string? Message { get; init; }
+
+    // Published timeouts/cancellations fail testing without cancelling the command itself.
+    internal bool IsFailure() => Outcome switch
+    {
+        "passed" or "skipped" => false,
+        "failed" or "inconclusive" or "error" or "timedOut" or "cancelled" => true,
+        _ => throw new InvalidOperationException("The AppHost sent an invalid published test outcome.")
+    };
+}
+
+internal sealed record TestCollectionState
+{
+    public required string ResourceName { get; init; }
+    public string? OutputPath { get; init; }
+    public int CollectorCount { get; init; }
+    public required string Status { get; init; }
+    public string? Error { get; init; }
+}
+
 // =============================================================================
 // Auxiliary Backchannel Contract Rules:
 //
@@ -66,6 +116,13 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Resource snapshot version capability: snapshots include monotonic versions that can be used for ordering.
     /// </summary>
     public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
+
+    /// <summary>
+    /// Stop resource cleanup capability: <c>StopAsync</c> honors <see cref="StopAppHostRequest.WaitForResourceCleanup"/>
+    /// by tearing down the application resources before it responds, and reports the outcome in
+    /// <see cref="StopAppHostResponse.ResourcesCleanedUp"/>.
+    /// </summary>
+    public const string StopResourceCleanup_V1 = "stop-resource-cleanup.v1";
 }
 
 /// <summary>
@@ -420,18 +477,38 @@ internal sealed class StopAppHostRequest : BackchannelRequest
     /// </summary>
     public int? ExitCode { get; init; }
 
+    /// <summary>
+    /// Gets a value indicating whether the AppHost should tear down its resources before responding.
+    /// </summary>
+    /// <remarks>
+    /// Only honored by AppHosts that advertise <see cref="AuxiliaryBackchannelCapabilities.StopResourceCleanup_V1"/>.
+    /// Older AppHosts ignore it and initiate a regular stop.
+    /// </remarks>
+    public bool? WaitForResourceCleanup { get; init; }
+
     /// <inheritdoc />
     public override StopAppHostRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
     {
         TraceContext = traceContext,
-        ExitCode = ExitCode
+        ExitCode = ExitCode,
+        WaitForResourceCleanup = WaitForResourceCleanup
     };
 }
 
 /// <summary>
 /// Response from stopping the AppHost.
 /// </summary>
-internal sealed class StopAppHostResponse { }
+internal sealed class StopAppHostResponse
+{
+    /// <summary>
+    /// Gets a value indicating whether the AppHost confirmed that its resources were torn down before responding.
+    /// </summary>
+    /// <remarks>
+    /// <see langword="null"/> when <see cref="StopAppHostRequest.WaitForResourceCleanup"/> was not requested or the
+    /// AppHost does not support it.
+    /// </remarks>
+    public bool? ResourcesCleanedUp { get; init; }
+}
 
 /// <summary>
 /// Request for executing a resource command.

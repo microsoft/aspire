@@ -191,6 +191,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
                 Assert.Equal("aspire-cli", record.GetProperty("tags").GetProperty("ai.cloud.role").GetString());
                 var properties = record.GetProperty("data").GetProperty("baseData").GetProperty("properties");
                 Assert.Equal(AspireCliTelemetry.EventLogCategoryName, properties.GetProperty("CategoryName").GetString());
+                Assert.False(properties.TryGetProperty("process.runtime.version", out _));
                 Assert.False(properties.TryGetProperty("secret", out _));
                 Assert.Equal(activity.TraceId.ToHexString(), record.GetProperty("tags").GetProperty("ai.operation.id").GetString());
                 Assert.Equal(activity.SpanId.ToHexString(), record.GetProperty("tags").GetProperty("ai.operation.parentId").GetString());
@@ -198,8 +199,8 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             if (isEnabled)
             {
                 Assert.Equal("test-event", records[0].GetProperty("tags").GetProperty("ai.operation.name").GetString());
-                Assert.Equal("System.InvalidOperationException", records[1].GetProperty("data").GetProperty("baseData")
-                    .GetProperty("properties").GetProperty("exception.type").GetString());
+                var errorProperties = records[1].GetProperty("data").GetProperty("baseData").GetProperty("properties");
+                Assert.Equal("System.InvalidOperationException", errorProperties.GetProperty("exception.type").GetString());
             }
 
             ordinaryLogger.LogError("Still logging locally");

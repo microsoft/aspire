@@ -52,6 +52,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IFeatures _features;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly CliExecutionContext _executionContext;
+    private readonly ITemporaryStorage _temporaryStorage;
     private readonly ILogger<GuestAppHostProject> _logger;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly TimeProvider _timeProvider;
@@ -88,6 +89,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         CliExecutionContext executionContext,
         IEnvironment environment,
         AppHostConfigurationProjector appHostConfigurationProjector,
+        ITemporaryStorage temporaryStorage,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
         ProfilingTelemetry profilingTelemetry,
@@ -110,6 +112,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _executionContext = executionContext;
         _environment = environment;
         _appHostConfigurationProjector = appHostConfigurationProjector;
+        _temporaryStorage = temporaryStorage;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _profilingTelemetry = profilingTelemetry;
@@ -654,9 +657,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 launchSettingsEnvVars[KnownConfigNames.AspireSecretsFile] = aspireSecretsFile;
             }
+            if (context.IsTestRun && context.EnvironmentVariables.TryGetValue(KnownConfigNames.TestOutputPath, out var testOutputPath))
+            {
+                // Hosting executes test setup in the server, not in the guest AppHost client.
+                // Apply this after launch-profile/configuration projection so the current run wins.
+                launchSettingsEnvVars[KnownConfigNames.TestOutputPath] = testOutputPath;
+            }
 
             // Check if hot reload (watch mode) is enabled
-            var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+            var enableHotReload = !context.IsTestRun && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
 
             var environmentVariables = CreateGuestEnvironmentVariables(
                 context.EnvironmentVariables,
@@ -861,7 +870,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
                 // The RuntimeSpec declares the required extension capability (e.g., "node" for TypeScript);
                 // only use the extension launcher when the runtime requests it and the extension supports it.
-                if (_guestRuntime.ExtensionLaunchCapability is { } requiredCapability
+                if (!context.IsTestRun && _guestRuntime.ExtensionLaunchCapability is { } requiredCapability
                     && ExtensionHelper.IsExtensionHost(_interactionService, out var extensionInteractionService, out var extensionBackchannel)
                     && await extensionBackchannel.HasCapabilityAsync(requiredCapability, cancellationToken))
                 {
@@ -959,6 +968,22 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // A pre-launch failure completes the build signal with false. Once launch has
                 // succeeded, the backchannel exception instead ends RunCommand's startup wait.
                 return guestExitCode;
+            }
+
+            if (context.IsTestRun)
+            {
+                // A clean guest exit does not prove that the server shut down successfully.
+                // Drive its existing shutdown ladder, then retain failure/forced-kill exit codes
+                // instead of discarding them in the best-effort session disposal path.
+                await serverStopCts.CancelAsync();
+                var serverExitCode = await serverCompletion.WaitAsync(cancellationToken);
+                if (serverExitCode != 0)
+                {
+                    MergeServerOutputIntoContextCollector(context, appHostServerOutputCollector);
+                    _logger.LogError("AppHost server exited with code {ExitCode} after test execution.", serverExitCode);
+                }
+
+                return serverExitCode;
             }
 
             if (launcher is ExtensionGuestLauncher)
@@ -1105,7 +1130,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     internal async Task<bool> InstallIntegrationHostPackageAsync(string name, string npmPath, string hostDir, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var resultDirectory = Directory.CreateTempSubdirectory("aspire-integration-install-");
+        var resultDirectory = _temporaryStorage.CreateTempSubdirectory("aspire-integration-install-");
         try
         {
             var exitCodePath = Path.Combine(resultDirectory.FullName, "exit-code");

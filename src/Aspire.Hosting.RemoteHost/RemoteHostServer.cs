@@ -84,6 +84,7 @@ public static class RemoteHostServer
         var integrationConfiguration = new IntegrationHostConfiguration(configuration);
         services.AddSingleton(integrationConfiguration);
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ITemporaryStorage, TemporaryStorage>();
         services.AddSingleton<IChildProcessFactory, ChildProcessFactory>();
         services.AddSingleton<IntegrationHostProcessLauncher>();
         // Hosted services

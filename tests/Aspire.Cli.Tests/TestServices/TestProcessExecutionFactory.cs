@@ -20,7 +20,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 
     internal static IProcessExecutionFactory CreateForCliGuardian(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
     {
-        var factory = new ProcessExecutionFactory(environment, logger);
+        var factory = new ProcessExecutionFactory(environment, new Aspire.Shared.TemporaryStorage(), logger);
         static void ConfigureGuardian(ProcessInvocationOptions options)
         {
             // MTP cannot re-enter guardian mode. Only replace the executable and argv:
@@ -237,6 +237,11 @@ internal sealed class TestProcessExecution : IProcessExecution
 
     public Action<bool>? KillCallback { get; init; }
 
+    /// <summary>
+    /// Gets a value indicating whether <see cref="Kill"/> transitions the fake process to the exited state.
+    /// </summary>
+    public bool ExitsWhenKilled { get; init; }
+
     public Action? DisposeCallback { get; init; }
 
     public int KillCount { get; private set; }
@@ -293,6 +298,11 @@ internal sealed class TestProcessExecution : IProcessExecution
         KillCount++;
         KilledEntireProcessTree = entireProcessTree;
         KillCallback?.Invoke(entireProcessTree);
+        if (ExitsWhenKilled)
+        {
+            _exitCode = 137;
+            _hasExited = true;
+        }
     }
 
     public ValueTask DisposeAsync()

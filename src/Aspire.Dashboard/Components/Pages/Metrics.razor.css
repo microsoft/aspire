@@ -1,8 +1,3 @@
-.metrics-empty-content {
-    height: auto;
-    padding: 58px var(--spacingHorizontalXL) var(--spacingVerticalXL);
-}
-
 ::deep .meter-name-title,
 ::deep .metrics-chart-header h3 {
     overflow: hidden;
@@ -188,7 +183,6 @@
     margin-top: var(--spacingVerticalS);
 }
 
-::deep .metric-groups-empty,
 ::deep .metrics-limit-notice {
     padding: var(--spacingVerticalM) var(--spacingHorizontalS);
     color: var(--colorNeutralForeground3);
@@ -219,15 +213,20 @@
 
 ::deep .metric-group svg {
     flex: none;
-    color: var(--colorNeutralForeground3);
+    color: var(--colorNeutralForeground2);
 }
 
+::deep .metric-group-all svg,
 ::deep .metric-group.pinned svg {
     color: var(--colorBrandForeground1);
 }
 
-::deep .metric-group:hover,
 ::deep .metric-group.selected {
+    background-color: var(--colorNeutralBackground1);
+}
+
+::deep .metric-group:hover,
+::deep .metric-group.selected:hover {
     background-color: var(--colorNeutralBackground3);
 }
 
@@ -259,19 +258,6 @@
     font-weight: var(--aspire-font-weight-semibold);
 }
 
-::deep .metric-group-count {
-    flex: none;
-    min-width: 20px;
-    padding: 0 6px;
-    border-radius: var(--aspire-radius-medium);
-    background-color: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-secondary);
-    line-height: 18px;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-}
-
 ::deep .fluent-multi-splitter-pane:has(> .metrics-content),
 ::deep .fluent-multi-splitter-pane:has(> .metric-groups) {
     overflow: auto;
@@ -282,11 +268,8 @@
     height: 100%;
 }
 
-/* Reserve the scrollbar's space even when the content fits, so the content's width (and the pin button's
-   alignment with the toolbar above) doesn't shift when a scrollbar appears. A thinner scrollbar keeps the
-   reserved space small. --scrollbar-size sizes the dashboard's WebKit scrollbars; Firefox already uses thin. */
+/* Keep the card grid's available width stable when filtering removes the scrollbar. */
 ::deep .fluent-multi-splitter-pane:has(> .metrics-content) {
-    --scrollbar-size: 6px;
     scrollbar-gutter: stable;
 }
 
@@ -305,7 +288,7 @@
 
 ::deep .metrics-filter-results-meter {
     margin: 0 0 var(--spacingVerticalS) 0;
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground1);
     font-size: var(--aspire-font-size-body);
     font-weight: var(--aspire-font-weight-semibold);
 }
@@ -338,30 +321,22 @@
     outline-offset: 1px;
 }
 
-.metrics-section-count {
-    color: var(--colorNeutralForeground3);
-    font-size: var(--aspire-font-size-secondary);
-    font-weight: var(--aspire-font-weight-regular);
-}
-
 /* The dotted rule runs to the chevron at the end, so the header reads as one collapsible row. */
 .metrics-section-rule {
     flex: 1 1 auto;
     min-width: 16px;
-    border-top: 2px dotted var(--colorNeutralStroke2);
+    border-top: 2px dotted var(--colorNeutralStroke3);
 }
 
 .metrics-section-toggle ::deep .metrics-section-chevron {
     flex: 0 0 auto;
-    color: var(--colorNeutralForeground3);
+    color: var(--colorNeutralForeground1);
 }
 
 ::deep .metrics-content {
     height: 100%;
     min-height: 0;
-    /* Same left margin as the group list's items, so both panes start their content at the same inset.
-       The right margin plus the 6px scrollbar gutter puts the content's right edge at the toolbar's
-       right edge (12px from the page edge), aligning the chart's pin with the toolbar's action buttons. */
+    /* Same left margin as the group list's items, so both panes start their content at the same inset. */
     margin-left: 12px;
     margin-right: 6px;
 }

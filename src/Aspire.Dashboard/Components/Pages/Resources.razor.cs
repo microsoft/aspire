@@ -178,9 +178,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     // Internal for tests
     internal bool NoFiltersSet => AreAllTypesVisible && AreAllStatesVisible && AreAllHealthStatesVisible;
-    internal bool AreAllTypesVisible => PageViewModel.ResourceTypesToVisibility.Values.All(value => value);
-    internal bool AreAllStatesVisible => PageViewModel.ResourceStatesToVisibility.Values.All(value => value);
-    internal bool AreAllHealthStatesVisible => PageViewModel.ResourceHealthStatusesToVisibility.Values.All(value => value);
+    internal bool AreAllTypesVisible => PageViewModel.Filters.ResourceTypesToVisibility.Values.All(value => value);
+    internal bool AreAllStatesVisible => PageViewModel.Filters.ResourceStatesToVisibility.Values.All(value => value);
+    internal bool AreAllHealthStatesVisible => PageViewModel.Filters.ResourceHealthStatusesToVisibility.Values.All(value => value);
 
     private readonly EnumerableGridSort<ResourceGridViewModel> _nameSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
     private readonly EnumerableGridSort<ResourceGridViewModel> _stateSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.State).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
@@ -234,7 +234,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
         if (showHiddenResources.Success)
         {
-            PageViewModel.ShowHiddenResources = showHiddenResources.Value;
+            PageViewModel.Filters.ShowHiddenResources = showHiddenResources.Value;
         }
         UpdateMenuButtons();
 
@@ -296,9 +296,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                                 // The new type/state/health status should be visible if it's either
                                 // 1) new, or
                                 // 2) previously visible
-                                t => !PageViewModel.ResourceTypesToVisibility.TryGetValue(t, out var value) || value,
-                                s => !PageViewModel.ResourceStatesToVisibility.TryGetValue(s, out var value) || value,
-                                s => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(s, out var value) || value);
+                                t => !PageViewModel.Filters.ResourceTypesToVisibility.TryGetValue(t, out var value) || value,
+                                s => !PageViewModel.Filters.ResourceStatesToVisibility.TryGetValue(s, out var value) || value,
+                                s => !PageViewModel.Filters.ResourceHealthStatusesToVisibility.TryGetValue(s, out var value) || value);
 
                             if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
                             {
@@ -361,10 +361,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // and are excluded from the Table and Graph views regardless of the type filter.
         if (!resource.IsParameter)
         {
-            PageViewModel.ResourceTypesToVisibility.AddOrUpdate(resource.ResourceType, resourceTypeVisible(resource.ResourceType), (_, _) => resourceTypeVisible(resource.ResourceType));
+            PageViewModel.Filters.ResourceTypesToVisibility.AddOrUpdate(resource.ResourceType, resourceTypeVisible(resource.ResourceType), (_, _) => resourceTypeVisible(resource.ResourceType));
         }
-        PageViewModel.ResourceStatesToVisibility.AddOrUpdate(resource.State ?? string.Empty, stateVisible(resource.State ?? string.Empty), (_, _) => stateVisible(resource.State ?? string.Empty));
-        PageViewModel.ResourceHealthStatusesToVisibility.AddOrUpdate(resource.HealthStatus?.Humanize() ?? string.Empty, healthStatusVisible(resource.HealthStatus?.Humanize() ?? string.Empty), (_, _) => healthStatusVisible(resource.HealthStatus?.Humanize() ?? string.Empty));
+        PageViewModel.Filters.ResourceStatesToVisibility.AddOrUpdate(resource.State ?? string.Empty, stateVisible(resource.State ?? string.Empty), (_, _) => stateVisible(resource.State ?? string.Empty));
+        PageViewModel.Filters.ResourceHealthStatusesToVisibility.AddOrUpdate(resource.HealthStatus?.Humanize() ?? string.Empty, healthStatusVisible(resource.HealthStatus?.Humanize() ?? string.Empty), (_, _) => healthStatusVisible(resource.HealthStatus?.Humanize() ?? string.Empty));
 
         UpdateMenuButtons();
 
@@ -472,7 +472,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         var activeResources = ResourceGraphMapper.OrderResources(GetGraphResources());
         var tagsByResource = TagStore.GetTagsByResource(activeResources);
-        return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver,
+        return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.Filters.ShowHiddenResources, IconResolver,
             tagsByResource.GetValueOrDefault(r.DisplayName) ?? [])).ToList();
     }
 
@@ -501,7 +501,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         [JSInvokable]
         public Task SelectTagGroup(string tagName, MouseEventArgs e) =>
             (resources.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout."))
-                .SelectGraphTagGroupAsync(tagName, e, resources.GetGraphResources(), resources.PageViewModel.ShowHiddenResources);
+                .SelectGraphTagGroupAsync(tagName, e, resources.GetGraphResources(), resources.PageViewModel.Filters.ShowHiddenResources);
 
         [JSInvokable]
         public async Task SelectResource(string id)
@@ -625,14 +625,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         CommonMenuItems.AddToggleHiddenResourcesMenuItem(
             _resourcesMenuItems,
             ControlsStringsLoc,
-            PageViewModel.ShowHiddenResources,
+            PageViewModel.Filters.ShowHiddenResources,
             _resourceByName.Values,
             SessionStorage,
             EventCallback.Factory.Create<bool>(
                 this,
                 async value =>
                 {
-                    PageViewModel.ShowHiddenResources = value;
+                    PageViewModel.Filters.ShowHiddenResources = value;
                     UpdateMenuButtons();
 
                     await VisibleResourcesChangedAsync();
@@ -641,7 +641,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private bool HasCollapsedResources()
     {
-        return _resourceByName.Any(r => !r.Value.IsResourceHidden(PageViewModel.ShowHiddenResources) && _collapsedResourceNames.Contains(r.Value.PersistentKey));
+        return _resourceByName.Any(r => !r.Value.IsResourceHidden(PageViewModel.Filters.ShowHiddenResources) && _collapsedResourceNames.Contains(r.Value.PersistentKey));
     }
 
     private void UpdateMaxHighlightedCount()
@@ -889,7 +889,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         var count = 0;
         foreach (var (_, item) in _resourceByName)
         {
-            if (item.IsResourceHidden(PageViewModel.ShowHiddenResources))
+            if (item.IsResourceHidden(PageViewModel.Filters.ShowHiddenResources))
             {
                 continue;
             }
@@ -957,7 +957,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task OnToggleCollapseAll()
     {
         var resourcesWithChildren = _resourceByName.Values
-            .Where(r => !r.IsResourceHidden(PageViewModel.ShowHiddenResources))
+            .Where(r => !r.IsResourceHidden(PageViewModel.Filters.ShowHiddenResources))
             .Where(r => _resourceByName.Values.Any(nested => nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName) == r.Name))
             .ToList();
 
@@ -1103,66 +1103,23 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         public required ResourceViewKind SelectedViewKind { get; set; }
         public ResourceViewModel? SelectedResource { get; set; }
-        public string TextFilter { get; set; } = "";
-        public bool ShowHiddenResources { get; set; }
-        public ConcurrentDictionary<string, bool> ResourceTypesToVisibility { get; } = new(StringComparers.ResourceName);
-        public ConcurrentDictionary<string, bool> ResourceStatesToVisibility { get; } = new(StringComparers.ResourceState);
-        public ConcurrentDictionary<string, bool> ResourceHealthStatusesToVisibility { get; } = new(StringComparer.Ordinal);
-        public ConcurrentDictionary<string, bool> ResourceTagsToVisibility { get; } = new(StringComparer.OrdinalIgnoreCase);
-        public IReadOnlyDictionary<string, IReadOnlyList<string>> ResourceTagsByResource { get; set; } =
-            new Dictionary<string, IReadOnlyList<string>>(StringComparers.ResourceName);
+        internal ResourceFilter Filters { get; } = new();
 
-        public bool Filter(ResourceViewModel resource) => Filter(resource, TextFilter);
-
-        public bool FilterAllResourceKinds(ResourceViewModel resource, string textFilter) =>
-            FilterCore(resource, textFilter, filterBySelectedView: false);
-
-        /// <summary>
-        /// Filters a resource with a text filter other than <see cref="TextFilter"/>. Views that match the text
-        /// against more than the resource, such as the tags a resource is grouped by, pass an empty text filter and
-        /// match the text themselves.
-        /// </summary>
-        public bool Filter(ResourceViewModel resource, string textFilter) =>
-            FilterCore(resource, textFilter, filterBySelectedView: true);
-
-        private bool FilterCore(ResourceViewModel resource, string textFilter, bool filterBySelectedView)
+        public bool Filter(ResourceViewModel resource)
         {
             // In Parameters view, only show parameters; in Table and Graph views, exclude parameters
-            if (filterBySelectedView && SelectedViewKind == ResourceViewKind.Parameters && !resource.IsParameter)
+            if (SelectedViewKind == ResourceViewKind.Parameters && !resource.IsParameter)
             {
                 return false;
             }
-            if (filterBySelectedView && SelectedViewKind is ResourceViewKind.Table or ResourceViewKind.Graph && resource.IsParameter)
+            if (SelectedViewKind is ResourceViewKind.Table or ResourceViewKind.Graph && resource.IsParameter)
             {
                 return false;
             }
 
             // In Parameters view, ignore resource type filtering since we always show only parameters.
-            return (filterBySelectedView && SelectedViewKind == ResourceViewKind.Parameters || IsKeyValueTrue(resource.ResourceType, ResourceTypesToVisibility))
-                   && IsKeyValueTrue(resource.State ?? string.Empty, ResourceStatesToVisibility)
-                   && IsKeyValueTrue(resource.HealthStatus?.Humanize() ?? string.Empty, ResourceHealthStatusesToVisibility)
-                   && IsResourceTagVisible(resource)
-                   && (textFilter.Length == 0 || resource.MatchesFilter(textFilter))
-                   && !resource.IsResourceHidden(ShowHiddenResources);
+            return Filters.Matches(resource, Filters.TextFilter, ignoreResourceType: SelectedViewKind == ResourceViewKind.Parameters);
         }
-
-        private bool IsResourceTagVisible(ResourceViewModel resource)
-        {
-            if (ResourceTagsToVisibility.IsEmpty)
-            {
-                return true;
-            }
-
-            if (!ResourceTagsByResource.TryGetValue(resource.DisplayName, out var tags) || tags.Count == 0)
-            {
-                return IsKeyValueTrue(string.Empty, ResourceTagsToVisibility);
-            }
-
-            return tags.Any(tag => IsKeyValueTrue(tag, ResourceTagsToVisibility));
-        }
-
-        private static bool IsKeyValueTrue(string key, IDictionary<string, bool> dictionary) =>
-            dictionary.TryGetValue(key, out var value) && value;
     }
 
     public class ResourcesPageState
@@ -1208,9 +1165,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return new ResourcesPageState
         {
             ViewKind = PageViewModel.SelectedViewKind != ResourceViewKind.Table ? PageViewModel.SelectedViewKind.ToString() : null,
-            ResourceTypesToVisibility = PageViewModel.ResourceTypesToVisibility,
-            ResourceStatesToVisibility = PageViewModel.ResourceStatesToVisibility,
-            ResourceHealthStatusesToVisibility = PageViewModel.ResourceHealthStatusesToVisibility
+            ResourceTypesToVisibility = PageViewModel.Filters.ResourceTypesToVisibility,
+            ResourceStatesToVisibility = PageViewModel.Filters.ResourceStatesToVisibility,
+            ResourceHealthStatusesToVisibility = PageViewModel.Filters.ResourceHealthStatusesToVisibility
         };
     }
 

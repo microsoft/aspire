@@ -9,13 +9,27 @@
                      ResourceName="@nameof(TerminalStrings.TerminalsPageTitle)" Loc="@Loc"/>
 </PageTitle>
 
+@{
+    RenderFragment<ResourceViewModel> terminalView = resource => @<TerminalView ResourceName="@resource.Name" ShowOpenInWindow="true"
+        AutoFit="@resource.ShouldAutoFitTerminal()"
+        WindowResourceName="@GetResourceName(PageViewModel.SelectedResource)"
+        ResourceIcon="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />;
+}
+
 @if (ResourcesLayout is not null)
 {
     <div class="resource-terminal-page">
-        @if (_resources is not null && !_redirected && GetSelectedResource() is null)
+        @if (GetSelectedResource() is { } resource && resource.HasTerminal())
         {
-            <div class="aspire-empty-content aspire-empty-message" role="status">
-                @Loc[nameof(TerminalStrings.TerminalsSelectAResource)]
+            @terminalView(resource)
+        }
+        else if (_resources is not null && !_redirected)
+        {
+            <div class="aspire-empty-content aspire-page-empty-content" role="status">
+                <div class="aspire-empty-message">
+                    <FluentIcon Icon="Icons.Regular.Size20.WindowConsole" Width="24px" Color="Color.Primary" aria-hidden="true" />
+                    @Loc[nameof(TerminalStrings.TerminalsSelectAResource)]
+                </div>
             </div>
         }
     </div>
@@ -79,10 +93,7 @@ else
         <MainSection>
             @if (GetSelectedResource() is { } resource && resource.HasTerminal())
             {
-                <TerminalView ResourceName="@resource.Name" ShowOpenInWindow="true"
-                              AutoFit="@resource.ShouldAutoFitTerminal()"
-                              WindowResourceName="@GetResourceName(PageViewModel.SelectedResource)"
-                              ResourceIcon="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
+                @terminalView(resource)
             }
             else if (_resources is not null && !_redirected)
             {

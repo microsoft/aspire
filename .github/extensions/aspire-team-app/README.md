@@ -8,7 +8,7 @@ published as the first entry in the Canvas Marketplace.
 
 ## Screenshots
 
-The cross-repo review queue — signal pills, a "For you" focus lane, and per-repo
+The cross-repo PR queue — signal pills, a "For you" focus lane, and per-repo
 lanes for everything waiting on you:
 
 ![Aspire Team App review queue](media/review-queue.png)
@@ -26,12 +26,12 @@ card shows are driven by its lane and its signal pills:
 - **Address review** / **Discuss review** — any review-debt card (aged without an
   approving review; a PR that was only commented on or had changes requested still counts
   until it's approved), keyed off the "review debt" pill *and* the review-debt flag so it
-  shows everywhere the card appears — Needs attention, *Your PRs outside Needs attention*,
+  shows everywhere the card appears — PR queue, *Your PRs outside PR queue*,
   the breakdown lanes (e.g. Stalled), and Community — regardless of whether the PR is
   yours. Address review runs a fresh review; Discuss review talks through the existing
   feedback and lays out response options without rewriting anything.
 - **Address feedback** / **Discuss review** — your own PR with changes requested (the
-  "Author response" case, including in *Your PRs outside Needs attention*, which would
+  "Author response" case, including in *Your PRs outside PR queue*, which would
   otherwise show no actions). Address feedback works the requested changes; Discuss
   review talks them through and lays out options without rewriting anything.
 - **Resolve conflicts** — any card carrying a "merge conflicts" signal; runs a
@@ -73,7 +73,17 @@ card shows are driven by its lane and its signal pills:
   while the current board remains visible, then applied in one update. The compact
   **Auto** toolbar switch can pause automatic UI updates; when paused, an **Apply
   update** pill appears only after changed data is ready. The refresh button tooltip
-  counts down to the next background data check.
+  counts down to the next background data check. GitHub requests time out after
+  30 seconds, including stalled response bodies, and a timed-out read is retried once
+  on a fresh request, so a provider cannot block tab changes indefinitely. Failed
+  sources show an error and can be retried with Refresh. Repositories with more than
+  two pages of open PRs or issues find later page boundaries with a cheap cursor-only
+  query and load those pages a few at a time instead of one after another.
+- **Responsive navigation** — completed tabs reopen from cache, even while another
+  tab is loading. A first visit starts without waiting for another tab and shows
+  clearly marked partial results as repositories or health sources respond. Review
+  and Ship share completed PR data; refreshes of an existing board remain atomic.
+  Settings remain accessible.
 - **Multiple GitHub accounts** — every detected credential (gh CLI, environment,
   Copilot) appears on the Accounts screen. Activate any number of them and their
   results **interleave across every tab**, de-duplicated by PR/issue URL. Each
@@ -85,39 +95,46 @@ card shows are driven by its lane and its signal pills:
   `coreai/aspire-1p` and `coreai/sisyphus` repos. Defaults only fill in accounts
   you haven't configured — they never overwrite an explicit repo list.
 
-## Needs attention order
+## PR queue order
 
-Needs attention is numbered, left-to-right across each row, with eligible PRs
-labeled **fixes-ci** or **urgent-review** first. Label names match exactly,
-case-insensitively; either label or both gives the same priority. Within the
-priority group and the remaining group, PRs are in ascending order of
-**first-ever non-draft readiness**. A PR opened ready uses its creation time; a PR
+**PR queue** is the first content section in Review mode, above the personal
+**For you** picks. Eligible PRs with the **`review-urgent`**, **`urgent-review`**, or **`fixes-ci`**
+GitHub label come before regular PRs; any of these labels, or several, gives the
+same priority. Label matching is case-insensitive and exact (not a substring)
+across watched repositories and GitHub hosts; the label does not bypass any
+eligibility rule. Urgent cards have an **Urgent** text badge and an emphasized
+border; urgent entries in the collapsed position lookup have the same badge.
+
+Within each group, PR queue is numbered, left-to-right across each row, in ascending
+order of **first-ever non-draft readiness**. A PR opened ready uses its creation time; a PR
 opened as a draft uses its earliest ready-for-review event. Complete, paginated
 draft/ready transition history distinguishes these cases, including PRs opened
 ready that later returned to draft. Equal timestamps use ordinal host/repository
 order, then PR number, independent of fetch completion and user locale.
 
 Later draft cycles, comments, label changes, commits, and human or Copilot reviews
-do not reset the readiness timestamp. Adding or removing a priority label reorders
-the queue on refresh. Existing eligibility rules still hide blocked PRs, even
-with priority labels; when eligible again, they return at their original
-first-readiness position within their current label-priority group.
-This is an approximation of reviewability: within the same label-priority group,
-a PR marked ready on Monday but conflicted until Thursday still precedes one
-first marked ready on Tuesday.
+do not reset this readiness. Adding the urgency label moves an eligible PR ahead
+of regular PRs without changing its readiness; removing it restores the PR's
+ordinary first-readiness order. Existing eligibility rules still hide blocked PRs;
+when eligible again, they return at their original first-readiness order within
+their urgent or regular group.
+This is an approximation of reviewability: a PR marked ready on Monday but
+conflicted until Thursday still precedes one first marked ready on Tuesday.
 The canvas only reads GitHub; it does not persist queue state or write metadata.
 If transition history is missing, inconsistent, or exceeds the pagination safety
-limit, the PR is omitted from Needs attention with a visible error, not assigned
+limit, the PR is omitted from PR queue with a visible error, not assigned
 a guessed timestamp. A later refresh retries.
 
-The main queue shows the first **10** eligible PRs (or all of them when fewer than
-10 qualify), with no review-debt spillover or per-user limit override.
-**Later in queue** continues the same label-priority and readiness order, shows
-the remaining count, and starts collapsed. Expand it to
+The complete eligible queue is priority-sorted **before** taking the first **10**
+PRs (or all of them when fewer than 10 qualify), with no review-debt spillover or
+per-user limit override. For example, labeling the PRs at ordinary positions 16,
+17, and 18 makes them positions 1, 2, and 3, followed by the first seven regular PRs.
+Even when more than 10 PRs are urgent, only the first 10 get full queue cards.
+**Later in queue** shows the remaining count and starts collapsed. Expand it to
 look up a PR's position, not to pick an alternative review pool: prioritize the
-first 10 in Needs attention. This compact reference list has PR links but no
+first 10 in PR queue. This compact reference list has PR links but no
 review-action buttons. Positions continue at 11 without gaps or duplicates and
-keep their order at every window width. Expansion follows your choice during
+keep the same urgent-first global order at every window width. Expansion follows your choice during
 refreshes, but starts collapsed when the canvas reloads.
 
 The loader preserves the full eligible queue as `attention.focus` (positions
@@ -151,6 +168,8 @@ supported. Explicit and discovered definitions are de-duplicated by canonical
 pipeline ID.
 
 Azure DevOps access reuses the installed Azure CLI and `azure-devops` extension.
+Install the extension with `az extension add --name azure-devops` if needed; the
+canvas does not dynamically install Azure CLI extensions during a refresh.
 Authenticate with an existing `az` session or `AZURE_DEVOPS_EXT_PAT`. The app stores
 only normalized pipeline coordinates and branch preferences; it never stores tokens
 or other credentials. GitHub and Azure DevOps sources are loaded independently, so

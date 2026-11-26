@@ -13,12 +13,25 @@ import { createHash } from "node:crypto";
 
 import { coreTeamMemberAliasSuffixes } from "./constants.mjs";
 import { createCliRunner } from "./cli.mjs";
+import { withGitHubTimeout } from "./github-request.mjs";
 
 const execFileAsync = promisify(execFile);
 
 const API = "https://api.github.com";
 const GRAPHQL = `${API}/graphql`;
 const UA = "aspire-team-app-canvas";
+
+async function mapConcurrent(items, operation) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(items.length, 4) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await operation(items[index]);
+    }
+  }));
+  return results;
+}
 
 // REST + GraphQL endpoints for a given host. github.com uses the public API
 // origin; GHE.com data-residency hosts use an api.<host> origin; GitHub Enterprise
@@ -156,7 +169,7 @@ function decodeCopilotAccount(varName) {
   return { host, login };
 }
 
-export async function detectCandidates({ run = execFileAsync, env = process.env, platform = process.platform, diagnostics = [] } = {}) {
+export async function detectCandidates({ run = execFileAsync, env = process.env, platform = process.platform, diagnostics = [], onCandidate } = {}) {
   // Plain objects are case-sensitive even on Windows, unlike process.env and child
   // process environments. Normalize once so both removal and collection agree.
   if (platform === "win32") {
@@ -172,6 +185,27 @@ export async function detectCandidates({ run = execFileAsync, env = process.env,
     out.push({ source, token, hash, login: login ?? null, host: normalizeHost(host) });
   };
 
+  const injected = [];
+  const addInjected = (source, token, login, host) => {
+    if (!token) return;
+    const candidate = { source, token, hash: tokenHash(token), login: login ?? null, host: normalizeHost(host) };
+    injected.push(candidate);
+    onCandidate?.(candidate);
+  };
+  const envHost = normalizeHost(env.GH_HOST || "github.com");
+  addInjected("env", env.GH_TOKEN, null, envHost);
+  addInjected("env", env.GITHUB_TOKEN, null, envHost);
+  if (isEnterpriseHost(envHost)) {
+    addInjected("env", env.GH_ENTERPRISE_TOKEN, null, envHost);
+    addInjected("env", env.GITHUB_ENTERPRISE_TOKEN, null, envHost);
+  }
+  for (const [k, v] of Object.entries(env)) {
+    if (k.startsWith("COPILOT_GH_ACCOUNT_") && v) {
+      const { host, login } = decodeCopilotAccount(k);
+      addInjected("copilot", v, login, host);
+    }
+  }
+
   // gh CLI accounts (each may have distinct scopes / hosts).
   // gh prioritizes environment tokens even with --user. Enumerate stored credentials
   // independently so an app-injected, host-limited token cannot hide keyring accounts.
@@ -186,26 +220,12 @@ export async function detectCandidates({ run = execFileAsync, env = process.env,
   } catch (error) {
     diagnostics.push(error);
   }
-  for (const a of accounts) {
-    add("gh", await ghToken(a.host, a.login, runGh, ghEnv), a.login, a.host);
-  }
+  const tokens = await mapConcurrent(accounts, (a) => ghToken(a.host, a.login, runGh, ghEnv));
+  accounts.forEach((a, index) => add("gh", tokens[index], a.login, a.host));
 
-  // Plain env tokens (host from GH_HOST when targeting an enterprise instance).
-  const envHost = normalizeHost(env.GH_HOST || "github.com");
-  add("env", env.GH_TOKEN, null, envHost);
-  add("env", env.GITHUB_TOKEN, null, envHost);
-  if (isEnterpriseHost(envHost)) {
-    add("env", env.GH_ENTERPRISE_TOKEN, null, envHost);
-    add("env", env.GITHUB_ENTERPRISE_TOKEN, null, envHost);
-  }
-
-  // Per-account Copilot tokens injected by the host (host encoded in the var name).
-  for (const [k, v] of Object.entries(env)) {
-    if (k.startsWith("COPILOT_GH_ACCOUNT_") && v) {
-      const { host, login } = decodeCopilotAccount(k);
-      add("copilot", v, login, host);
-    }
-  }
+  // Keep the established source order and deduplication even though injected identities
+  // can be probed while gh is discovering its stored credentials.
+  injected.forEach(({ source, token, login, host }) => add(source, token, login, host));
 
   if (out.length === 0 && diagnostics.length > 0) throw diagnostics[0];
   return out;
@@ -217,23 +237,32 @@ export async function detectCandidates({ run = execFileAsync, env = process.env,
 
 async function gql(token, query, host) {
   const { graphql } = endpoints(host);
-  const res = await fetch(graphql, {
-    method: "POST",
-    headers: { Authorization: `bearer ${token}`, "Content-Type": "application/json", "User-Agent": UA },
-    body: JSON.stringify({ query }),
+  return withGitHubTimeout(async (signal) => {
+    const res = await fetch(graphql, {
+      method: "POST",
+      headers: { Authorization: `bearer ${token}`, "Content-Type": "application/json", "User-Agent": UA },
+      body: JSON.stringify({ query }),
+      signal,
+    });
+    const json = await res.json().catch((error) => {
+      if (signal.aborted) throw error;
+      return {};
+    });
+    return { ok: res.ok, data: json.data, errors: json.errors };
   });
-  const json = await res.json().catch(() => ({}));
-  return { ok: res.ok, data: json.data, errors: json.errors };
 }
 
 async function fetchScopes(token, host) {
   try {
     const { rest } = endpoints(host);
-    const res = await fetch(`${rest}/`, {
-      headers: { Authorization: `bearer ${token}`, "User-Agent": UA },
+    return await withGitHubTimeout(async (signal) => {
+      const res = await fetch(`${rest}/`, {
+        headers: { Authorization: `bearer ${token}`, "User-Agent": UA },
+        signal,
+      });
+      const raw = res.headers.get("x-oauth-scopes");
+      return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
     });
-    const raw = res.headers.get("x-oauth-scopes");
-    return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
   } catch {
     return [];
   }
@@ -279,7 +308,12 @@ async function probeRepoAccess(token, repos, host) {
       return `${aliasFor(i)}: repository(owner:${JSON.stringify(owner)}, name:${JSON.stringify(name)}) { nameWithOwner }`;
     })
     .join("\n");
-  const res = await gql(token, `query { ${selections} }`, host);
+  let res;
+  try {
+    res = await gql(token, `query { ${selections} }`, host);
+  } catch (error) {
+    return { accessible: 0, total: repos.length, status: "failed", reason: String(error?.message ?? error) };
+  }
   let accessible = 0;
   if (res.data) {
     for (let i = 0; i < repos.length; i++) {
@@ -389,14 +423,25 @@ const SOURCE_LABEL = { gh: "GitHub CLI", env: "Environment", copilot: "Copilot" 
 // for a given account; `isActive(id)` reports whether the user enabled it.
 export async function resolveAccounts(reposForId, isActive) {
   const diagnostics = [];
-  const candidates = await detectCandidates({ diagnostics });
+  const earlyIdentities = new Map();
+  const candidateKey = (candidate) => `${candidate.host}:${candidate.hash}`;
+  const candidates = await detectCandidates({
+    diagnostics,
+    onCandidate: (candidate) => {
+      const key = candidateKey(candidate);
+      if (earlyIdentities.size < 4 && !earlyIdentities.has(key)) {
+        earlyIdentities.set(key, probeIdentity(candidate));
+      }
+    },
+  });
 
-  const idents = [];
-  for (const c of candidates) {
-    const p = await probeIdentity(c);
+  const idents = await mapConcurrent(candidates, async (c) => {
+    const p = await (earlyIdentities.get(candidateKey(c)) ?? probeIdentity(c));
+    p.source = c.source;
+    if (!p.ok && c.login) p.login = c.login;
     p.token = c.token;
-    idents.push(p);
-  }
+    return p;
+  });
   if (!idents.some((identity) => identity.ok) && diagnostics.length > 0) {
     throw diagnostics[0];
   }
@@ -412,26 +457,26 @@ export async function resolveAccounts(reposForId, isActive) {
 
   const accounts = [];
   const tokenById = new Map();
+  const reposById = new Map([...groups.keys()].map((id) => [id, reposForId(id)]));
+  const probes = [...groups].flatMap(([id, list]) => list.map((identity) => ({ identity, repos: reposById.get(id) })));
+  await mapConcurrent(probes, async ({ identity: p, repos }) => {
+    if (p.ok) {
+      const acc = await probeRepoAccess(p.token, repos, p.host);
+      p.accessible = acc.accessible;
+      p.total = acc.total;
+      p.status = acc.status;
+      p.reason = acc.reason ?? p.reason;
+      p.hasReadOrg = (p.scopes || []).includes("read:org");
+    } else {
+      p.accessible = 0;
+      p.total = repos.length;
+      p.status = "failed";
+      p.hasReadOrg = false;
+    }
+  });
 
   for (const [id, list] of groups) {
-    const repos = reposForId(id);
-
-    // Probe repo access for each credential against this account's own repos.
-    for (const p of list) {
-      if (p.ok) {
-        const acc = await probeRepoAccess(p.token, repos, p.host);
-        p.accessible = acc.accessible;
-        p.total = acc.total;
-        p.status = acc.status;
-        p.hasReadOrg = (p.scopes || []).includes("read:org");
-      } else {
-        p.accessible = 0;
-        p.total = repos.length;
-        p.status = "failed";
-        p.hasReadOrg = false;
-      }
-    }
-
+    const repos = reposById.get(id);
     list.sort((a, b) => score(b) - score(a));
     const best = list[0];
     tokenById.set(id, best.token);

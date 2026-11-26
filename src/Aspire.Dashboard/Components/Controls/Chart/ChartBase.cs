@@ -341,7 +341,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
     private string GetDisplayedUnit(OtlpInstrumentSummary instrument)
     {
-        return InstrumentUnitResolver.ResolveDisplayedUnit(instrument, titleCase: true, pluralize: true);
+        return InstrumentUnitResolver.ResolveDisplayedUnit(instrument, capitalize: true, pluralize: true);
     }
 
     protected abstract Task OnChartUpdatedAsync(List<ChartTrace> traces, List<DateTimeOffset> xValues, List<ChartExemplar> exemplars, bool tickUpdate, DateTimeOffset inProgressDataTime, CancellationToken cancellationToken);

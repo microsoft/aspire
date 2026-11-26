@@ -475,6 +475,39 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopAsyncWithResourceCleanupReportsCleanupAndStopsAppHost()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
+
+        using var app = builder.Build();
+
+        await app.StartAsync().DefaultTimeout();
+
+        var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
+        await service.ListeningTask.DefaultTimeout();
+        Assert.NotNull(service.SocketPath);
+
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
+
+        using var stream = new NetworkStream(socket, ownsSocket: true);
+        using var rpc = JsonRpc.Attach(stream);
+
+        var response = await rpc.InvokeAsync<StopAppHostResponse>(
+            "StopAsync",
+            new object?[] { new StopAppHostRequest { WaitForResourceCleanup = true } }
+        ).WaitAsync(TestConstants.LongTimeoutTimeSpan);
+
+        Assert.True(response.ResourcesCleanedUp);
+
+        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        var stopping = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = lifetime.ApplicationStopping.Register(stopping.SetResult);
+        await stopping.Task.DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetCapabilitiesAsyncReturnsCurrentCapabilities()
     {
         // This test verifies that GetCapabilitiesAsync returns the current capabilities.
@@ -511,6 +544,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
             Assert.Contains(AuxiliaryBackchannelCapabilities.V3, response.Capabilities);
             Assert.Contains(AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1, response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.StopResourceCleanup_V1, response.Capabilities);
         }
 
         await app.StopAsync().DefaultTimeout();

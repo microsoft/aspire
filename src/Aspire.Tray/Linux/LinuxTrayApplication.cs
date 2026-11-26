@@ -77,7 +77,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         {
             throw new FileNotFoundException("The tray icon is missing.", icon);
         }
-        _icons = new LinuxTrayIcons(icon);
+        _icons = new LinuxTrayIcons(icon, new Aspire.Shared.TemporaryStorage());
         _applications = LinuxFolderApplication.Discover(Environment.GetEnvironmentVariable("PATH") ?? "");
         if (!nativeMenu)
         {

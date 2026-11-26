@@ -26,6 +26,9 @@ public partial class MeterOverview : LiveSparklinesBase
     [Parameter, EditorRequired]
     public required bool ShowMeterName { get; set; }
 
+    [Parameter]
+    public string? HighlightText { get; set; }
+
     [Parameter, EditorRequired]
     public required Func<OtlpInstrumentSummary, string> GetInstrumentUrl { get; set; }
 

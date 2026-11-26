@@ -10,35 +10,16 @@
     position: relative;
 }
 
-.live-metric-tile-value {
-    display: flex;
-    align-items: baseline;
-    gap: var(--aspire-space-1);
-    min-width: 0;
-    white-space: nowrap;
-}
-
-.live-metric-tile-label,
-.live-metric-tile-unit {
-    overflow: hidden;
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-secondary);
-    text-overflow: ellipsis;
-}
-
-.live-metric-tile-number {
-    color: var(--colorNeutralForeground1);
-    font-size: var(--aspire-font-size-title);
-    font-weight: var(--aspire-font-weight-semibold);
-    font-variant-numeric: tabular-nums;
+.overview-metric-name {
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 /* The sparkline fills the lower part of the tile, faded so the text overlaid on it stays readable. */
-::deep .live-metric-tile-sparkline {
+.live-metric-tile ::deep .live-metric-tile-sparkline {
     position: absolute;
-    right: 0;
+    inset-inline-start: var(--overview-metric-tile-padding-inline);
     bottom: 0;
-    left: 0;
+    width: calc(100% - 2 * var(--overview-metric-tile-padding-inline));
     height: 65%;
     opacity: 0.45;
     pointer-events: none;

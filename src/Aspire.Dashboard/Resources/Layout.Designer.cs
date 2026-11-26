@@ -61,6 +61,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Couldn&apos;t save the change. Check that browser storage is available and try again..
+        /// </summary>
+        public static string BrowserStorageSaveFailed {
+            get {
+                return ResourceManager.GetString("BrowserStorageSaveFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Select run: {0}.
         /// </summary>
         public static string DashboardRunMenuAccessibleLabel {
@@ -1186,6 +1195,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Home.
+        /// </summary>
+        public static string ResourceTabHome {
+            get {
+                return ResourceManager.GetString("ResourceTabHome", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Overview.
         /// </summary>
         public static string ResourceTabOverview {
@@ -1200,15 +1218,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceTabsLandmark {
             get {
                 return ResourceManager.GetString("ResourceTabsLandmark", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Home.
-        /// </summary>
-        public static string ResourceTabHome {
-            get {
-                return ResourceManager.GetString("ResourceTabHome", resourceCulture);
             }
         }
         
