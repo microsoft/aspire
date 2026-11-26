@@ -481,6 +481,32 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DockerComposePublishesExternalNetworkName()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(false)
+            .ConfigureComposeFile(file => file.AddNetwork(new Network
+            {
+                Name = "custom-network",
+                External = true,
+                ExternalName = "shared-network"
+            }));
+
+        builder.AddContainer("service", "nginx")
+            .PublishAsDockerComposeService((_, service) => service.Networks.Add("custom-network"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        await Verify(File.ReadAllText(composePath), "yaml");
+    }
+
+    [Fact]
     public async Task DockerComposeDoesNotOverwriteEnvFileOnPublish()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
