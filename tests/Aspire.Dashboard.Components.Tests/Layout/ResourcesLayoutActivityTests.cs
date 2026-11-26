@@ -11,13 +11,16 @@ using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -28,6 +31,80 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class ResourcesLayoutActivityTests : DashboardTestContext
 {
+    [Fact]
+    public async Task MobileMenu_RefreshesWhileOpenForLatePageAndLogUpdates()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var connected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Func<Task>? notifyLogs = null;
+        var client = new TestDashboardClient(isEnabled: true, whenConnected: connected.Task,
+            initialResources: [ModelTestHelpers.CreateResource("api-TestId")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client, configureServices: services =>
+        {
+            services.AddSingleton<IThemeResolver, TestThemeResolver>();
+            services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, client);
+            services.AddSingleton<ITooltipService, TooltipService>();
+            services.AddSingleton<ITelemetryRepository>(provider => new TestTelemetryRepository(provider.GetRequiredService<SqliteTelemetryRepository>())
+            {
+                OnNewLogsRegistered = callback => notifyLogs = callback
+            });
+        });
+        FluentUISetupHelpers.SetupFluentDialogProvider(this);
+        FluentUISetupHelpers.SetupFluentAnchor(this);
+        FluentUISetupHelpers.SetupFluentList(this);
+        FluentUISetupHelpers.SetupFluentCombobox(this);
+        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
+        var themeModule = JSInterop.SetupModule("/js/app-theme.js");
+        themeModule.Setup<string>("updateTheme", _ => true).SetResult(ThemeManager.ThemeSettingSystem);
+        JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true).SetVoidResult();
+        JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
+        JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
+        JSInterop.SetupVoid("registerResourceServiceConnectionProvider", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("updateResourceServiceConnectionState", _ => true).SetVoidResult();
+        JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
+        Render<FluentMessageBarProvider>(p => p.Add(p => p.Section, DashboardUIHelpers.MessageBarSection));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api-TestId");
+        var cut = Render<MainLayout>(p => p.AddCascadingValue(viewport)
+            .Add(p => p.Body, body =>
+            {
+                body.OpenComponent<ResourcesLayout>(0);
+                body.CloseComponent();
+            }));
+
+        await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        Assert.Equal([Resources.Layout.MainLayoutHelp, Resources.Layout.MainLayoutLaunchNotifications, Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip")));
+
+        connected.SetResult();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.FindComponent<ResourcesLayout>().Instance.IsLoaded);
+            Assert.Contains(cut.FindAll("fluent-menu-item"), item => item.GetAttribute("data-tooltip") == "Home");
+        });
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource("api"),
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(severity: SeverityNumber.Error) } } }
+            }
+        });
+        cut.WaitForAssertion(() => Assert.Equal("1", Assert.Single(cut.FindAll(".mobile-nav-menu-error-count")).TextContent.Trim()));
+
+        repository.MarkViewedErrorLogs(new ResourceKey("api", "TestId"));
+        Assert.NotNull(notifyLogs);
+        await notifyLogs();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".mobile-nav-menu-error-count")));
+
+        cut.Render(p => p.Add(p => p.Body, (RenderFragment?)null));
+        cut.WaitForAssertion(() => Assert.Equal(
+            [Resources.Layout.MainLayoutHelp, Resources.Layout.MainLayoutLaunchNotifications, Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip"))));
+    }
+
     [Fact]
     public async Task Canvas_MobileViewportCancelsPendingQueryAndDoesNotResumeOnDesktop()
     {
@@ -142,13 +219,19 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         var timers = new FakeTimeProvider();
         var clock = new TestTimeProvider { Timers = timers };
         var names = Enumerable.Range(0, 28).Select(i => $"service-{i}").ToArray();
+        // Use AppHost tags so every resource can appear twice without consuming the saved tag quota.
+        var tagProperty = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [tagProperty] = new(tagProperty, Value.ForList(Value.ForString("Backend"), Value.ForString("Shared")), false, null, 0, null, false)
+        };
         var calls = 0;
         var active = 0;
         var maximumActive = 0;
         var doubleFirst = false;
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport,
             new TestDashboardClient(isEnabled: true,
-                initialResources: names.Select(name => ModelTestHelpers.CreateResource($"{name}-TestId")).ToList(),
+                initialResources: names.Select(name => ModelTestHelpers.CreateResource($"{name}-TestId", properties: properties)).ToList(),
                 resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
             configureServices: services =>
             {
@@ -170,7 +253,16 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                                 return doubleFirst
                                     ? new GetRequestSpansResponse
                                     {
-                                        Items = [.. result.Items, .. result.Items.Where(span => span.Resource.ResourceKey == new ResourceKey(names[0], "TestId"))],
+                                        Items = [.. result.Items, .. result.Items.Where(span => span.Resource.ResourceKey == new ResourceKey(names[0], "TestId"))
+                                            .Select(span => new RequestSpanSummary
+                                            {
+                                                Resource = span.Resource,
+                                                TraceId = $"extra-{span.TraceId}",
+                                                Name = span.Name,
+                                                StartTime = span.StartTime,
+                                                Duration = span.Duration,
+                                                Status = span.Status
+                                            })],
                                         TotalItemCount = result.TotalItemCount + 20
                                     }
                                     : result;
@@ -208,12 +300,6 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                 });
         }
         await SeedAsync("initial", names);
-        var tags = Services.GetRequiredService<ResourceTagStore>();
-        foreach (var name in names)
-        {
-            tags.AddTag($"{name}-TestId", "Backend");
-            tags.AddTag($"{name}-TestId", "Shared");
-        }
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
@@ -235,9 +321,9 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
         foreach (var component in changed)
         {
-            component.WaitForAssertion(() => Assert.Equal("40 incoming", component.Find(".resource-row-insight-requests span").TextContent));
+            component.WaitForAssertion(() => Assert.Equal("40", component.Find(".resource-row-insight-requests span").TextContent));
         }
-        Assert.Equal(["40 incoming", "40 incoming"],
+        Assert.Equal(["40", "40"],
             cut.FindAll($"[data-resource-name='{names[0]}-TestId'] .resource-row-insight-requests span").Select(span => span.TextContent));
         await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(2, Volatile.Read(ref calls));
@@ -298,6 +384,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
 
     [Theory]
     [InlineData(false, 2)]
+    [InlineData(false, 20)]
     [InlineData(true, 20)]
     public async Task Canvas_SharedBoundedQueryFeedsDuplicateTagRowsAndExactScopedLinks(bool sampled, int sampleCount)
     {
@@ -343,9 +430,9 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                         Spans =
                         {
                             Enumerable.Range(1, sampleCount).Select(i =>
-                                CreateSpan(i.ToString(), i.ToString(), now, now.AddMilliseconds(i),
+                                CreateSpan(i <= 2 ? "1" : i.ToString(), i.ToString(), now, now.AddMilliseconds(i),
                                     kind: i == 1 ? Span.Types.SpanKind.Consumer : Span.Types.SpanKind.Server,
-                                    status: new Status { Code = i == 1 ? Status.Types.StatusCode.Error : Status.Types.StatusCode.Ok })),
+                                    status: new Status { Code = i <= 2 ? Status.Types.StatusCode.Error : Status.Types.StatusCode.Ok })),
                             CreateSpan("100", "100", now.AddMinutes(-6), now.AddMinutes(-6).AddMilliseconds(100), kind: Span.Types.SpanKind.Server),
                             CreateSpan("101", "101", now, now.AddMilliseconds(50), kind: Span.Types.SpanKind.Client)
                         }
@@ -354,8 +441,8 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
             }
         });
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api-TestId", "Backend");
-        tags.AddTag("api-TestId", "Shared");
+        await tags.AddTagAsync("api-TestId", "Backend");
+        await tags.AddTagAsync("api-TestId", "Shared");
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
@@ -364,15 +451,15 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         ResourceSetupHelpers.ToggleResourceList(cut);
 
         cut.WaitForAssertion(() => Assert.Equal(sampleCount >= 20 ? 6 : 4, cut.FindAll(".resource-row-insight").Count));
-        var expected = sampled ? new[] { "20+ incoming", "p95 19ms", "" } : ["2 incoming", ""];
+        var expected = sampled ? new[] { "1+", "19+", "19ms" } : sampleCount >= 20 ? ["1", "19", "19ms"] : ["1", "1"];
         Assert.Equal(expected.Concat(expected), cut.FindAll(".resource-row-insight").Select(link => link.TextContent.Trim()));
+        Assert.All(cut.FindAll(".resource-row-insight-requests"),
+            link => Assert.Equal(sampled ? "19+ incoming traces in the last 5 minutes"
+                : sampleCount >= 20 ? "19 incoming traces in the last 5 minutes" : "1 incoming trace in the last 5 minutes", link.GetAttribute("data-tooltip")));
         Assert.All(cut.FindAll(".resource-row-insight-latency"),
-            link => Assert.StartsWith(sampled ? "Sample p95 19ms." : "p95 19ms.", link.GetAttribute("aria-label")));
-        Assert.All(cut.FindAll(".resource-row-insight-failed"), link =>
-        {
-            Assert.StartsWith(sampled ? "1+ failed." : "1 failed.", link.GetAttribute("aria-label"));
-            Assert.Single(link.QuerySelectorAll("svg"));
-        });
+            link => Assert.Equal(sampled ? "Sample p95 latency: 19ms in the last 5 minutes" : "P95 latency: 19ms in the last 5 minutes", link.GetAttribute("data-tooltip")));
+        Assert.All(cut.FindAll(".resource-row-insight-failed"),
+            link => Assert.Equal(sampled ? "1+ failed traces in the last 5 minutes" : "1 failed trace in the last 5 minutes", link.GetAttribute("data-tooltip")));
         Assert.All(cut.FindAll(".resource-row-insight"), link =>
         {
             var url = new Uri(new Uri("http://localhost"), link.GetAttribute("href"));
@@ -382,10 +469,15 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
             Assert.Equal(KnownTraceFields.TimestampField, filters[0].Field);
             Assert.Equal(FilterCondition.GreaterThanOrEqual, filters[0].Condition);
             Assert.Equal(FilterCondition.LessThan, filters[1].Condition);
+            if (link.ClassList.Contains("resource-row-insight-failed"))
+            {
+                Assert.Equal(KnownTraceFields.StatusField, filters[2].Field);
+                Assert.Equal(FilterCondition.Equals, filters[2].Condition);
+                Assert.Equal(nameof(OtlpSpanStatusCode.Error), filters[2].Value);
+            }
             Assert.Equal(TimeSpan.FromMinutes(5), DateTime.Parse(filters[1].Value) - DateTime.Parse(filters[0].Value));
-            Assert.Contains("last 5 minutes", link.GetAttribute("aria-label"));
-            Assert.Contains("Refreshed", link.GetAttribute("data-tooltip"));
-            Assert.Equal(sampled, link.GetAttribute("data-tooltip")!.Contains("Counts are minimums", StringComparison.Ordinal));
+            Assert.Equal($"api-TestId: {link.GetAttribute("data-tooltip")}", link.GetAttribute("aria-label"));
+            Assert.Equal("true", Assert.Single(link.QuerySelectorAll("svg")).GetAttribute("aria-hidden"));
         });
         Assert.Equal(1, Volatile.Read(ref calls));
         Assert.All(cut.FindAll(".resource-row[data-resource-name='quiet'], .resource-row[data-resource-name='key']"),

@@ -134,38 +134,15 @@ internal static class DashboardUrls
     public const string ResourceSelectionQueryName = "resource";
 
     /// <summary>
+    /// The source of a metric chart when the sidebar selects several resources or all resources.
+    /// </summary>
+    public const string MetricsChartResourceQueryName = "chartResource";
+
+    /// <summary>
     /// The query string parameter that switches the dashboard's resource list between listing resources and grouping
     /// them by tag, for example <c>/resources?pane=tags</c>.
     /// </summary>
     public const string ResourcePaneQueryName = "pane";
-
-    /// <summary>
-    /// The query string parameter that focuses the selected resource's terminal instead of its overview cards.
-    /// </summary>
-    public const string ResourceTerminalQueryName = "terminal";
-
-    /// <summary>
-    /// Changes terminal focus without changing the resource, resource pane, other query parameters or fragment.
-    /// </summary>
-    public static string SetResourceTerminalFocus(string url, bool focused)
-    {
-        var fragmentIndex = url.IndexOf('#');
-        var fragment = fragmentIndex >= 0 ? url[fragmentIndex..] : string.Empty;
-        var pathAndQuery = fragmentIndex >= 0 ? url[..fragmentIndex] : url;
-        var queryIndex = pathAndQuery.IndexOf('?');
-        var path = queryIndex >= 0 ? pathAndQuery[..queryIndex] : pathAndQuery;
-        var query = HttpUtility.ParseQueryString(queryIndex >= 0 ? pathAndQuery[(queryIndex + 1)..] : string.Empty);
-        if (focused)
-        {
-            query[ResourceTerminalQueryName] = "true";
-        }
-        else
-        {
-            query.Remove(ResourceTerminalQueryName);
-        }
-
-        return $"{path}{(query.Count > 0 ? $"?{query}" : string.Empty)}{fragment}";
-    }
 
     /// <summary>
     /// The <see cref="ResourcePaneQueryName"/> value that lists resources.
@@ -305,7 +282,7 @@ internal static class DashboardUrls
         return url;
     }
 
-    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false, bool all = false)
+    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false, string? chartResource = null)
     {
         var url = $"/{MetricsBasePath}";
         if (resource != null)
@@ -317,11 +294,6 @@ internal static class DashboardUrls
             // The pinned group lists pinned instruments from every meter, so it replaces a meter selection.
             url = AddQueryString(url, "pinned", "true");
         }
-        else if (all)
-        {
-            // Every instrument, grouped by meter. Like the pinned group, it replaces a meter selection.
-            url = AddQueryString(url, "all", "true");
-        }
         else if (meter is not null)
         {
             // Meter and instrument must be querystring parameters because it's valid for the name to contain forward slashes.
@@ -329,6 +301,10 @@ internal static class DashboardUrls
             if (instrument is not null)
             {
                 url = AddQueryString(url, "instrument", instrument);
+                if (chartResource is not null)
+                {
+                    url = AddQueryString(url, MetricsChartResourceQueryName, chartResource);
+                }
             }
         }
         if (duration != null)

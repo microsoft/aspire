@@ -241,7 +241,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
         <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
-        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <target state="translated">コピーした Aspire スキル フォルダーを確認せずに削除します。フォルダー内のすべてのファイルと、フォルダーに加えた変更も削除されます。選択したスコープで Aspire スキル プラグインがフォルダーを置き換える場合にのみ適用されます。既定値は false です</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">
@@ -251,12 +251,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopies">
         <source>Deleted {0} copied skill folders</source>
-        <target state="new">Deleted {0} copied skill folders</target>
+        <target state="translated">{0} 個のコピー済みスキル フォルダーを削除しました</target>
         <note>{0} is the number of deleted skill folders, always greater than one.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopy">
         <source>Deleted 1 copied skill folder</source>
-        <target state="new">Deleted 1 copied skill folder</target>
+        <target state="translated">1 個のコピー済みスキル フォルダーを削除しました</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -286,7 +286,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesFound">
         <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
-        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
+        <target state="translated">Aspire スキル プラグインは、次のスキルを提供するようになりました。コピーしたフォルダーを削除すると、加えた変更を含め、フォルダー内のすべてが削除されます:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesRequirePlugin">

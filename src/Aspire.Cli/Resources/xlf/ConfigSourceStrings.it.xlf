@@ -67,6 +67,11 @@
         <target state="translated">È stata rilevata un'origine di configurazione nel computer. Consente a un'organizzazione di condividere le impostazioni di Aspire per personalizzare l'esperienza di sviluppo.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FeatureDisabled">
+        <source>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</source>
+        <target state="new">Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</target>
+        <note>Do not translate "features.configSourceEnabled" or "true".</note>
+      </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
         <target state="translated">Non è possibile avviare Git. Assicurarsi che Git sia installato e disponibile in PATH per usare questa origine di configurazione.</target>

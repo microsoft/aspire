@@ -5,6 +5,7 @@ using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
@@ -36,6 +37,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private static readonly TimeSpan s_consoleRenderDelay = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan s_consoleLoadingTimeout = TimeSpan.FromSeconds(1);
 
+    private static readonly FieldTelemetryFilter s_failedTraceFilter = new() { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) };
+    private static readonly string s_serializedFailedTraceFilter = TelemetryFilterFormatter.SerializeFiltersToString([s_failedTraceFilter]);
+
     private readonly object _consoleLock = new();
     private readonly List<ConsolePreviewLine> _consoleLines = new();
     private CancellationTokenSource? _resourceCts;
@@ -51,6 +55,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     // Tests replace this to hold a refresh at the point where it can be canceled, because how soon a real delay handles
     // its cancellation depends on thread pool timing.
     internal Func<TimeSpan, CancellationToken, Task> TelemetryRefreshDelayAsync { get; set; } = Task.Delay;
+    internal Task TelemetryRefreshTask { get; private set; } = Task.CompletedTask;
     private int _consoleRenderPending;
     private bool _hasConsoleLogs;
     private bool _consoleLogsLoaded;
@@ -58,9 +63,16 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private OverviewTelemetry? _telemetry;
     private ResourcesLayout? _subscribedLayout;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
-    private TerminalView? _terminalView;
-    private bool? _renderedTerminalFocus;
+    private int? _terminalFontSize;
+    private readonly EventCallback<TerminalToolbarState> _terminalToolbarStateChanged;
     private bool _hideEmptyPanels = true;
+
+    public ResourceOverview()
+    {
+        // The terminal reports toolbar state on every resize and connection change. A null receiver stops Blazor
+        // from re-rendering this whole page for each report; only a font change affects the window button.
+        _terminalToolbarStateChanged = new EventCallback<TerminalToolbarState>(null, (Func<TerminalToolbarState, Task>)OnTerminalToolbarStateChangedAsync);
+    }
 
     [Parameter]
     public string? ResourceName { get; set; }
@@ -129,17 +141,26 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
-    private bool IsTerminalFocused => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
-        Resource is { } resource && CanShowTerminal(resource);
-
     // A recording's terminal endpoint would resolve through the live dashboard client, and recorded instance names can
     // still match a running AppHost after a dashboard-only restart. Showing it would open a writable connection to a
     // live process from a read-only run, so recordings show the console card instead, like the Terminals page.
     private bool CanShowTerminal(ResourceViewModel resource) =>
         !DashboardClient.IsReadOnly && ResourceSelectHelpers.HasUsableTerminal(resource);
 
-    private void ToggleTerminalFocus() =>
-        NavigationManager.NavigateTo(DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, !IsTerminalFocused));
+    private string GetTerminalPageUrl(string resourceName) =>
+        ResourcesLayout!.WithCurrentResourceViewState(DashboardUrls.TerminalsUrl(resourceName));
+
+    private Task OnTerminalToolbarStateChangedAsync(TerminalToolbarState state)
+    {
+        int? fontSize = state.FontPx > 0 ? state.FontPx : null;
+        if (fontSize == _terminalFontSize)
+        {
+            return Task.CompletedTask;
+        }
+
+        _terminalFontSize = fontSize;
+        return InvokeAsync(StateHasChanged);
+    }
 
     private IReadOnlyList<IconToggleOption<bool>> PanelOptions =>
     [
@@ -151,21 +172,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     {
         _hideEmptyPanels = value;
         return InvokeAsync(StateHasChanged);
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_renderedTerminalFocus != IsTerminalFocused)
-        {
-            var wasRendered = _renderedTerminalFocus is not null;
-            _renderedTerminalFocus = IsTerminalFocused;
-            if (wasRendered && _terminalView is not null)
-            {
-                // Focus changes the existing card's size, not its connection. Explicit activation
-                // reapplies its sizing policy once; ordinary resizes must not fight other viewers.
-                await _terminalView.RefreshLayoutAsync();
-            }
-        }
     }
 
     protected override async Task OnInitializedAsync()
@@ -188,7 +194,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
                 // Replacing the subscription cancels a refresh that's still waiting. Nothing else queues another one
                 // for a quiet resource, which would otherwise keep showing its loading skeleton.
-                QueueTelemetryRefresh();
+                QueueTelemetryRefresh(immediate: !_telemetryLoaded);
             }
 
             StateHasChanged();
@@ -215,12 +221,12 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private void OnResourcesChanged()
     {
-        EnsureSubscriptions();
+        // A changed telemetry resource already starts its own first refresh.
+        if (!EnsureSubscriptions())
+        {
+            QueueTelemetryRefresh();
+        }
         UpdateDetails();
-
-        // The telemetry resource can appear after the app model resource, for example when a project starts
-        // sending telemetry. Refresh so the telemetry cards pick it up.
-        QueueTelemetryRefresh();
         StateHasChanged();
     }
 
@@ -228,7 +234,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     /// Starts console log and telemetry subscriptions for the selected resource, replacing subscriptions for a
     /// previously selected resource. The page instance is reused when navigating between resources.
     /// </summary>
-    private void EnsureSubscriptions()
+    private bool EnsureSubscriptions()
     {
         var resource = Resource;
         var otlpResource = resource is not null ? TelemetryRepository.GetResourceByCompositeName(resource.Name) : null;
@@ -236,7 +242,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         if (string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName) &&
             Equals(_telemetryKey, otlpResource?.ResourceKey))
         {
-            return;
+            return false;
         }
 
         var resourceChanged = !string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName);
@@ -256,129 +262,127 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         // instead of flashing the previous resource's stale data or popping in abruptly once the new data arrives.
         _telemetryLoaded = false;
         _telemetryKey = otlpResource?.ResourceKey;
+        _telemetryRefresh = new();
 
         if (_telemetryKey is { } key)
         {
             _logsSubscription = TelemetryRepository.OnNewLogs(key, SubscriptionType.Other, OnTelemetryChangedAsync);
             _tracesSubscription = TelemetryRepository.OnNewTraces(key, SubscriptionType.Other, OnTelemetryChangedAsync);
             _metricsSubscription = TelemetryRepository.OnNewMetrics(key, SubscriptionType.Other, OnTelemetryChangedAsync);
-            QueueTelemetryRefresh();
+            QueueTelemetryRefresh(immediate: true);
         }
+
+        return true;
     }
 
-    private Task OnTelemetryChangedAsync()
-    {
-        QueueTelemetryRefresh();
-        return Task.CompletedTask;
-    }
+    private Task OnTelemetryChangedAsync() => InvokeAsync(() => QueueTelemetryRefresh());
 
-    private void QueueTelemetryRefresh()
+    private void QueueTelemetryRefresh(bool immediate = false)
     {
         var refresh = _telemetryRefresh;
-        if (_telemetryKey is null || Interlocked.Exchange(ref refresh.Pending, 1) == 1)
+        if (_telemetryKey is not { } key)
         {
             return;
         }
 
-        var cancellationToken = _resourceCts?.Token ?? CancellationToken.None;
-        _ = Task.Run(async () =>
+        // Keep the gate on the render dispatcher through publication so a slower read cannot overwrite a newer one.
+        if (refresh.IsRunning)
         {
-            try
-            {
-                await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
-                Interlocked.Exchange(ref refresh.Pending, 0);
+            refresh.RefreshRequested = true;
+            return;
+        }
 
-                if (_telemetryKey is not { } key)
+        refresh.IsRunning = true;
+        TelemetryRefreshTask = RefreshTelemetryAsync(refresh, key, immediate, _resourceCts?.Token ?? CancellationToken.None);
+    }
+
+    private async Task RefreshTelemetryAsync(TelemetryRefreshGeneration refresh, ResourceKey key, bool immediate, CancellationToken cancellationToken)
+    {
+        try
+        {
+            do
+            {
+                refresh.RefreshRequested = false;
+                try
+                {
+                    if (!immediate)
+                    {
+                        await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken);
+                    }
+                    immediate = false;
+                    if (!IsCurrentRefresh())
+                    {
+                        return;
+                    }
+
+                    // This read covers notifications that arrived during the delay.
+                    refresh.RefreshRequested = false;
+                    var telemetry = await Task.Run(() => LoadTelemetryAsync(key, cancellationToken), cancellationToken);
+                    if (!IsCurrentRefresh())
+                    {
+                        return;
+                    }
+
+                    _telemetry = telemetry;
+                    _telemetryLoaded = true;
+                    StateHasChanged();
+                }
+                catch (OperationCanceledException) when (!IsCurrentRefresh())
                 {
                     return;
                 }
-
-                var telemetry = await LoadTelemetryAsync(key, cancellationToken).ConfigureAwait(false);
-                await InvokeAsync(() =>
+                catch (Exception ex)
                 {
-                    // Ignore results for a resource that is no longer selected.
-                    if (Equals(_telemetryKey, key))
-                    {
-                        _telemetry = telemetry;
-                        _telemetryLoaded = true;
-                        StateHasChanged();
-                    }
-                }).ConfigureAwait(false);
+                    Logger.LogWarning(ex, "Error loading telemetry summary for the resource overview.");
+                }
             }
-            catch (OperationCanceledException)
-            {
-                Interlocked.Exchange(ref refresh.Pending, 0);
-            }
-            catch (Exception ex)
-            {
-                Interlocked.Exchange(ref refresh.Pending, 0);
-                Logger.LogWarning(ex, "Error loading telemetry summary for the resource overview.");
-            }
-        }, CancellationToken.None);
+            while (refresh.RefreshRequested && IsCurrentRefresh());
+        }
+        finally
+        {
+            refresh.IsRunning = false;
+        }
+
+        bool IsCurrentRefresh() => ReferenceEquals(_telemetryRefresh, refresh) && !cancellationToken.IsCancellationRequested;
     }
 
     private async Task<OverviewTelemetry> LoadTelemetryAsync(ResourceKey key, CancellationToken cancellationToken)
     {
         var repository = TelemetryRepository;
 
-        var allLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, [], 0, 0), cancellationToken).ConfigureAwait(false);
-        List<TelemetryFilter> errorFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Error) }];
-        List<TelemetryFilter> warningFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.Equals, Value = nameof(LogLevel.Warning) }];
-        List<TelemetryFilter> attentionFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Warning) }];
-
-        var errorLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, errorFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-        var warningLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, warningFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-
-        // Results are ordered oldest first, so read the last page to get the most recent entries.
-        var attentionCount = errorLogs.TotalItemCount + warningLogs.TotalItemCount;
-        var recentAttentionLogs = attentionCount > 0
-            ? (await repository.GetLogSummariesAsync(CreateLogsContext(key, attentionFilters, Math.Max(0, attentionCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).Items
-            : [];
-
-        // A healthy resource has no warnings or errors to highlight, so show its latest logs instead of an empty card.
-        var recentLogs = attentionCount == 0 && allLogs.TotalItemCount > 0
-            ? (await repository.GetLogSummariesAsync(CreateLogsContext(key, [], Math.Max(0, allLogs.TotalItemCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).Items
-            : [];
-
-        var allTraces = await repository.GetTraceSummariesAsync(CreateTracesRequest(key, [], 0, 0), cancellationToken).ConfigureAwait(false);
-        List<TelemetryFilter> failedTraceFilters = [new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) }];
-        var failedTraces = await repository.GetTraceSummariesAsync(CreateTracesRequest(key, failedTraceFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-        var traceCount = allTraces.PagedResult.TotalItemCount;
-        var recentTraces = traceCount > 0
-            ? (await repository.GetTraceSummariesAsync(CreateTracesRequest(key, [], Math.Max(0, traceCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).PagedResult.Items
-            : [];
+        var logsTask = repository.GetOverviewLogsAsync([key], RecentItemCount, errorsOnly: false, cancellationToken);
+        var tracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([], RecentItemCount), cancellationToken);
+        var failedTracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([s_failedTraceFilter], 0), cancellationToken);
+        await Task.WhenAll(logsTask, tracesTask, failedTracesTask).ConfigureAwait(false);
+        var logs = await logsTask.ConfigureAwait(false);
+        var traces = (await tracesTask.ConfigureAwait(false)).PagedResult;
+        var failedTraces = (await failedTracesTask.ConfigureAwait(false)).PagedResult;
 
         var instruments = repository.GetInstrumentSummaries(key)
             .OrderBy(i => i.Parent.Name, StringComparer.Ordinal)
             .ThenBy(i => i.Name, StringComparer.Ordinal)
             .ToList();
 
+        var hasAttentionLogs = logs.ErrorCount + logs.WarningCount > 0;
         return new OverviewTelemetry
         {
-            LogCount = allLogs.TotalItemCount,
-            ErrorLogCount = errorLogs.TotalItemCount,
-            WarningLogCount = warningLogs.TotalItemCount,
-            RecentAttentionLogs = recentAttentionLogs.AsEnumerable().Reverse().ToList(),
-            RecentLogs = recentLogs.AsEnumerable().Reverse().ToList(),
-            TraceCount = traceCount,
-            FailedTraceCount = failedTraces.PagedResult.TotalItemCount,
-            RecentTraces = recentTraces.AsEnumerable().Reverse().ToList(),
+            LogCount = logs.TotalCount,
+            ErrorLogCount = logs.ErrorCount,
+            WarningLogCount = logs.WarningCount,
+            RecentAttentionLogs = hasAttentionLogs ? logs.Recent : [],
+            RecentLogs = hasAttentionLogs ? [] : logs.Recent,
+            TraceCount = traces.TotalItemCount,
+            FailedTraceCount = failedTraces.TotalItemCount,
+            RecentTraces = traces.Items.AsEnumerable().Reverse().ToList(),
             Instruments = instruments
         };
 
-        static GetLogsContext CreateLogsContext(ResourceKey key, List<TelemetryFilter> filters, int startIndex, int count) => new()
+        GetTracesRequest CreateTracesRequest(List<TelemetryFilter> filters, int count) => new()
         {
             ResourceKeys = [key],
-            StartIndex = startIndex,
+            StartIndex = 0,
             Count = count,
-            Filters = filters
-        };
-
-        static GetTracesRequest CreateTracesRequest(ResourceKey key, List<TelemetryFilter> filters, int startIndex, int count) => new()
-        {
-            ResourceKeys = [key],
-            StartIndex = startIndex,
-            Count = count,
+            LatestItemCount = count,
             Filters = filters
         };
     }
@@ -619,7 +623,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private sealed class TelemetryRefreshGeneration
     {
-        public int Pending;
+        public bool IsRunning;
+        public bool RefreshRequested;
     }
 
     private sealed record EndpointGroup(DisplayedUrl Primary, DisplayedUrl? Secondary);
@@ -733,6 +738,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         PinStore.Changed -= OnPinsChanged;
         TerminalDockState.Changed -= OnTerminalDockStateChanged;
 
+        _telemetryKey = null;
         _resourceCts?.Cancel();
         _resourceCts?.Dispose();
         _logsSubscription?.Dispose();
@@ -773,8 +779,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         public required int LogCount { get; init; }
         public required int ErrorLogCount { get; init; }
         public required int WarningLogCount { get; init; }
-        public required List<LogSummary> RecentAttentionLogs { get; init; }
-        public required List<LogSummary> RecentLogs { get; init; }
+        public required List<OverviewLog> RecentAttentionLogs { get; init; }
+        public required List<OverviewLog> RecentLogs { get; init; }
         public required int TraceCount { get; init; }
         public required int FailedTraceCount { get; init; }
         public required List<TraceSummary> RecentTraces { get; init; }

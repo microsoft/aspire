@@ -821,13 +821,15 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
             ["LargeService-instance-1"] = [AspireDataType.StructuredLogs]
         };
 
-        using var zipStream = await service.ExportSelectedAsync(selectedResources, CancellationToken.None).DefaultTimeout();
+        // Exporting 40,000 logs can exceed the standard timeout on a busy machine.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var zipStream = await service.ExportSelectedAsync(selectedResources, cancellationToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
         var logEntry = Assert.Single(archive.Entries);
         Assert.Equal("structuredlogs/LargeService.json", logEntry.FullName);
 
         using var logStream = logEntry.Open();
-        var logsData = await JsonSerializer.DeserializeAsync(logStream, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
+        var logsData = await JsonSerializer.DeserializeAsync(logStream, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson, cancellationToken);
         var exportedLogs = Assert.Single(logsData!.ResourceLogs!).ScopeLogs!.SelectMany(scope => scope.LogRecords!).ToList();
         Assert.Equal(logCount, exportedLogs.Count);
         Assert.All(exportedLogs, log => Assert.Contains(log.Attributes!, attribute => attribute.Key == "log.index"));

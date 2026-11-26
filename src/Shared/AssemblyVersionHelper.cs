@@ -2,14 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace Aspire.Shared;
 
 /// <summary>
-/// Helpers for reading version information from assemblies.
+/// Helpers for reading assembly and runtime version information.
 /// </summary>
 internal static class AssemblyVersionHelper
 {
+    private static readonly Lazy<string?> s_runtimeVersion = new(GetRuntimeVersion);
+
+    internal static string? RuntimeVersion => s_runtimeVersion.Value;
+
     /// <summary>
     /// Gets the informational version (e.g. "8.0.0-preview.2.23619.3+commit") from an assembly.
     /// </summary>
@@ -56,5 +61,14 @@ internal static class AssemblyVersionHelper
             ?? assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
 
         return version;
+    }
+
+    private static string? GetRuntimeVersion()
+    {
+        var description = RuntimeInformation.FrameworkDescription;
+
+        // The version is the last token, e.g. ".NET 8.0.3" or ".NET Core 3.1.32".
+        var lastSpace = description.LastIndexOf(' ');
+        return lastSpace >= 0 && lastSpace < description.Length - 1 ? description[(lastSpace + 1)..] : null;
     }
 }

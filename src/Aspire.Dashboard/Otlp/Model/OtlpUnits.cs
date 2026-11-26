@@ -1,57 +1,33 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Aspire.Dashboard.Otlp.Model;
 
 public static class OtlpUnits
 {
-    public static (string Unit, bool IsRateUnit) GetUnit(string unit)
+    public static (string Unit, bool IsRateUnit, bool StartsWithExpandedUnit) GetUnit(string unit)
     {
         // Dropping the portions of the Unit within brackets (e.g. {packet}). Brackets MUST NOT be included in the resulting unit. A "count of foo" is considered unitless in Prometheus.
         // https://github.com/open-telemetry/opentelemetry-specification/blob/b2f923fb1650dde1f061507908b834035506a796/specification/compatibility/prometheus_and_openmetrics.md#L238
         var updatedUnit = RemoveAnnotations(unit);
 
-        var isRateUnit = false;
         // Converting "foo/bar" to "foo_per_bar".
         // https://github.com/open-telemetry/opentelemetry-specification/blob/b2f923fb1650dde1f061507908b834035506a796/specification/compatibility/prometheus_and_openmetrics.md#L240C3-L240C41
-        if (TryProcessRateUnits(updatedUnit, out var updatedPerUnit))
+        var slashIndex = updatedUnit.IndexOf('/');
+        if (slashIndex >= 0 && slashIndex < updatedUnit.Length - 1)
         {
-            updatedUnit = updatedPerUnit;
-            isRateUnit = true;
-        }
-        else
-        {
-            // Converting from abbreviations to full words (e.g. "ms" to "milliseconds").
-            // https://github.com/open-telemetry/opentelemetry-specification/blob/b2f923fb1650dde1f061507908b834035506a796/specification/compatibility/prometheus_and_openmetrics.md#L237
-            updatedUnit = MapUnit(updatedUnit.AsSpan());
+            var numerator = updatedUnit.AsSpan(0, slashIndex);
+            var expandedNumerator = MapUnit(numerator);
+            var denominator = MapPerUnit(updatedUnit.AsSpan(slashIndex + 1));
+            return (expandedNumerator + " per " + denominator, true, !numerator.SequenceEqual(expandedNumerator));
         }
 
-        return (updatedUnit, isRateUnit);
-    }
-
-    private static bool TryProcessRateUnits(string updatedUnit, [NotNullWhen(true)] out string? updatedPerUnit)
-    {
-        updatedPerUnit = null;
-
-        for (int i = 0; i < updatedUnit.Length; i++)
-        {
-            if (updatedUnit[i] == '/')
-            {
-                // Only convert rate expressed units if it's a valid expression.
-                if (i == updatedUnit.Length - 1)
-                {
-                    return false;
-                }
-
-                updatedPerUnit = MapUnit(updatedUnit.AsSpan(0, i)) + " per " + MapPerUnit(updatedUnit.AsSpan(i + 1, updatedUnit.Length - i - 1));
-                return true;
-            }
-        }
-
-        return false;
+        // Converting from abbreviations to full words (e.g. "ms" to "milliseconds").
+        // https://github.com/open-telemetry/opentelemetry-specification/blob/b2f923fb1650dde1f061507908b834035506a796/specification/compatibility/prometheus_and_openmetrics.md#L237
+        var expandedUnit = MapUnit(updatedUnit);
+        return (expandedUnit, false, expandedUnit != updatedUnit);
     }
 
     public static string RemoveAnnotations(string unit)

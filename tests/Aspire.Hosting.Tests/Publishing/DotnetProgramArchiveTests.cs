@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPROJECTS001
 
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
@@ -23,6 +24,9 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
     private const string ImageName = "registry.example.com:5000/team/program";
     private const string ImageTag = "release";
     private const string ImageReference = $"{ImageName}:{ImageTag}";
+
+    // Directory output flattens the registry-qualified image name into a single file name.
+    private const string FlattenedArchiveName = "registry.example.com-5000-team-program.tar";
 
     [Theory]
     [InlineData(false)]
@@ -330,13 +334,14 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("program.tar", false)]
-    [InlineData("program.tar.gz", false)]
-    [InlineData("program.tgz", false)]
-    [InlineData("program.custom", false)]
-    [InlineData("archives", true)]
-    [InlineData("archives.v1", true)]
-    public async Task LayeredArchivePreservesOutputPathConventions(string path, bool directory)
+    [InlineData("program.tar", false, false)]
+    [InlineData("program.tar.gz", false, false)]
+    [InlineData("program.tgz", false, false)]
+    [InlineData("program.custom", false, false)]
+    [InlineData("archives", false, false)]
+    [InlineData("archives.v1", true, false)]
+    [InlineData("archives.v1", false, true)]
+    public async Task LayeredArchivePreservesOutputPathConventions(string path, bool trailingSeparator, bool existingDirectory)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -344,31 +349,190 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
         var runtime = CreateRuntime(images);
         builder.Services.AddSingleton<IProcessRunner>(CreateProcessRunner(images, "sdk"));
         builder.Services.AddFakeContainerRuntime(runtime);
-        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, path);
-        if (directory)
-        {
-            outputPath += Path.DirectorySeparatorChar;
-        }
-
-        var expectedArchivePath = directory
-            ? ResourceExtensions.GetContainerImageArchivePath(outputPath, ImageName, ImageTag)
-            : outputPath;
+        var outputPath = CreateOutputPath(workspace, path, trailingSeparator, existingDirectory);
+        var expectedArchivePath = GetExpectedArchivePath(outputPath, path, trailingSeparator, existingDirectory);
         var resource = AddArchiveResource(builder, workspace.WorkspaceRoot.FullName, outputPath);
         using var app = builder.Build();
 
         await BuildAsync(app, resource.Resource, false, TestContext.Current.CancellationToken);
 
-        IValueProvider imageReference = new ContainerImageReference(resource.Resource);
-        var resolvedPath = await imageReference.GetValueAsync(
+        Assert.Equal(expectedArchivePath, await ResolveContainerImageReferenceAsync(app, resource.Resource));
+        AssertUncompressed(expectedArchivePath);
+        Assert.Equal([ImageReference], TestContainerImageArchive.ReadDockerImageReferences(expectedArchivePath));
+        Assert.Equal("sdk+assets", TestContainerImageArchive.ReadLayerContents(expectedArchivePath));
+        Assert.False(Directory.Exists(Assert.Single(runtime.BuildImageCalls).options!.OutputPath));
+    }
+
+    [Theory]
+    [InlineData("program.tar", false, false)]
+    [InlineData("program.custom", false, false)]
+    [InlineData("archives", false, false)]
+    [InlineData("archives.v1", true, false)]
+    [InlineData("archives.v1", false, true)]
+    public async Task ArchiveWithoutContainerFilesPassesTheResolvedArchivePathToTheSdk(string path, bool trailingSeparator, bool existingDirectory)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var runner = new TestProcessRunner();
+        runner.EnqueueResult();
+        var runtime = new FakeContainerRuntime(name: "Docker");
+        builder.Services.AddSingleton<IProcessRunner>(runner);
+        builder.Services.AddFakeContainerRuntime(runtime);
+        var outputPath = CreateOutputPath(workspace, path, trailingSeparator, existingDirectory);
+        var expectedArchivePath = GetExpectedArchivePath(outputPath, path, trailingSeparator, existingDirectory);
+        var resource = AddProgram(builder, workspace.WorkspaceRoot.FullName, outputPath);
+        using var app = builder.Build();
+
+        await BuildAsync(app, resource.Resource, false, TestContext.Current.CancellationToken);
+
+        // The SDK must receive an explicit file so it writes the same archive as the layered path in
+        // LayeredArchivePreservesOutputPathConventions, rather than its default "<repository>.tar.gz".
+        var publish = Assert.Single(runner.ProcessSpecs);
+        var archiveArgument = Assert.Single(
+            publish.ArgumentList!,
+            static argument => argument.StartsWith("--property:ContainerArchiveOutputPath=", StringComparison.Ordinal));
+        // Property values use MSBuild's %XX escaping, for example "C%3A%5Cout%5Cprogram.tar".
+        Assert.Equal(
+            expectedArchivePath,
+            Uri.UnescapeDataString(archiveArgument["--property:ContainerArchiveOutputPath=".Length..]));
+        Assert.Equal(expectedArchivePath, await ResolveContainerImageReferenceAsync(app, resource.Resource));
+        Assert.Empty(runtime.BuildImageCalls);
+    }
+
+    [Theory]
+    [InlineData("program.tar.gz", true)]
+    [InlineData("program.TGZ", true)]
+    [InlineData("program.tar", false)]
+    [InlineData("archives", false)]
+    public async Task ArchiveWithCompressedExtensionWarnsThatItIsUncompressed(string path, bool expectWarning)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var runner = new TestProcessRunner();
+        runner.EnqueueResult();
+        builder.Services.AddSingleton<IProcessRunner>(runner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "Docker"));
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, path);
+        var resource = AddProgram(builder, workspace.WorkspaceRoot.FullName, outputPath);
+        using var app = builder.Build();
+
+        await BuildAsync(app, resource.Resource, false, TestContext.Current.CancellationToken);
+
+        var warnings = app.Services.GetFakeLogCollector().GetSnapshot()
+            .Where(static record => record.Level == LogLevel.Warning)
+            .Select(static record => record.Message)
+            .ToArray();
+        if (expectWarning)
+        {
+            Assert.Equal(
+                [$"The container image archive for resource program is written to {outputPath} as an uncompressed tar file. Use a .tar extension to match its format."],
+                warnings);
+        }
+        else
+        {
+            Assert.Empty(warnings);
+        }
+    }
+
+    [Fact]
+    public async Task LayeredOciArchivePreservesOciLayoutWithConfiguredTag()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var images = CreateExistingImages();
+        var runtime = CreateRuntime(images);
+        runtime.BuildImageAsyncCallback = (_, _, options, _, _, _, _) =>
+        {
+            var buildOptions = Assert.IsType<ContainerImageBuildOptions>(options);
+            Assert.Equal(ContainerImageFormat.Oci, buildOptions.ImageFormat);
+            Assert.True(buildOptions.RequiresLocalImageStore);
+            var imageReference = $"{buildOptions.ImageName}:{buildOptions.Tag}";
+            images[imageReference] = "layered";
+
+            // Docker Engine 25+ `docker image save` writes the OCI layout beside the Docker metadata.
+            TestContainerImageArchive.WriteArchive(
+                ResourceExtensions.GetContainerImageArchivePath(buildOptions.OutputPath!, buildOptions.ImageName!, buildOptions.Tag),
+                "sdk+assets",
+                ("manifest.json", $$"""[{"Config":"config.json","RepoTags":["{{imageReference}}"],"Layers":["layer.tar"]}]"""),
+                ("repositories", $$$"""{"{{{buildOptions.ImageName}}}":{"{{{buildOptions.Tag}}}":"layer"}}"""),
+                ("oci-layout", """{"imageLayoutVersion":"1.0.0"}"""),
+                ("index.json", $$"""
+                    {
+                      "schemaVersion": 2,
+                      "manifests": [
+                        {
+                          "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                          "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                          "size": 456,
+                          "annotations": {
+                            "io.containerd.image.name": "{{imageReference}}",
+                            "org.opencontainers.image.ref.name": "{{buildOptions.Tag}}"
+                          }
+                        }
+                      ]
+                    }
+                    """));
+            return Task.CompletedTask;
+        };
+        builder.Services.AddSingleton<IProcessRunner>(CreateProcessRunner(images, "sdk"));
+        builder.Services.AddFakeContainerRuntime(runtime);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "archives");
+        var resource = AddArchiveResource(builder, workspace.WorkspaceRoot.FullName, outputPath)
+            .WithContainerBuildOptions(static context => context.ImageFormat = ContainerImageFormat.Oci);
+        using var app = builder.Build();
+
+        await BuildAsync(app, resource.Resource, false, TestContext.Current.CancellationToken);
+
+        var archivePath = Path.Combine(outputPath, FlattenedArchiveName);
+        Assert.Equal(archivePath, await ResolveContainerImageReferenceAsync(app, resource.Resource));
+        AssertUncompressed(archivePath);
+        Assert.Equal(
+            ["manifest.json", "repositories", "oci-layout", "index.json", "layer.tar"],
+            TestContainerImageArchive.ReadEntryNames(archivePath));
+        using var index = JsonDocument.Parse(TestContainerImageArchive.ReadEntryText(archivePath, "index.json"));
+        var annotations = Assert.Single(index.RootElement.GetProperty("manifests").EnumerateArray()).GetProperty("annotations");
+        Assert.Equal(ImageTag, annotations.GetProperty("org.opencontainers.image.ref.name").GetString());
+        Assert.Equal(ImageReference, annotations.GetProperty("io.containerd.image.name").GetString());
+    }
+
+    private static string CreateOutputPath(TemporaryWorkspace workspace, string path, bool trailingSeparator, bool existingDirectory)
+    {
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, path);
+        if (existingDirectory)
+        {
+            Directory.CreateDirectory(outputPath);
+        }
+
+        return trailingSeparator ? outputPath + Path.DirectorySeparatorChar : outputPath;
+    }
+
+    private static string GetExpectedArchivePath(string outputPath, string path, bool trailingSeparator, bool existingDirectory)
+    {
+        // A directory is a trailing separator, a path without an extension, or an existing directory;
+        // anything else names the archive file.
+        return trailingSeparator || existingDirectory || !Path.HasExtension(path)
+            ? Path.Combine(outputPath, FlattenedArchiveName)
+            : outputPath;
+    }
+    private static async Task<string?> ResolveContainerImageReferenceAsync(DistributedApplication app, IResource resource)
+    {
+        IValueProvider imageReference = new ContainerImageReference(resource);
+        return await imageReference.GetValueAsync(
             new ValueProviderContext
             {
                 ExecutionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>()
             },
             TestContext.Current.CancellationToken);
-        Assert.Equal(expectedArchivePath, resolvedPath);
-        Assert.Equal([ImageReference], TestContainerImageArchive.ReadDockerImageReferences(expectedArchivePath));
-        Assert.Equal("sdk+assets", TestContainerImageArchive.ReadLayerContents(expectedArchivePath));
-        Assert.False(Directory.Exists(Assert.Single(runtime.BuildImageCalls).options!.OutputPath));
+    }
+
+    private static void AssertUncompressed(string archivePath)
+    {
+        // The .NET SDK never compresses archives, even when their names end in ".tar.gz" or ".tgz".
+        Span<byte> magic = stackalloc byte[2];
+        using var archive = File.OpenRead(archivePath);
+        archive.ReadExactly(magic);
+        Assert.False(magic[0] == 0x1f && magic[1] == 0x8b, $"'{archivePath}' is gzip-compressed.");
     }
 
     private static IResourceBuilder<ProjectResource> AddArchiveResource(
@@ -378,14 +542,22 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
     {
         var assets = builder.AddContainer("assets", "assets-image")
             .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
-#pragma warning disable CS0618 // Retain the legacy archive contract alongside shared .NET-program publishing coverage.
-        return builder.AddProject("program", Path.Combine(workspacePath, "program.csproj"), static options => options.ExcludeLaunchProfile = true)
-#pragma warning restore CS0618
+        return AddProgram(builder, workspacePath, outputPath)
             .WithAnnotation(new ContainerFilesDestinationAnnotation
             {
                 Source = assets.Resource,
                 DestinationPath = "/app/assets"
-            })
+            });
+    }
+
+    private static IResourceBuilder<ProjectResource> AddProgram(
+        IDistributedApplicationBuilder builder,
+        string workspacePath,
+        string outputPath)
+    {
+#pragma warning disable CS0618 // Retain the legacy archive contract alongside shared .NET-program publishing coverage.
+        return builder.AddProject("program", Path.Combine(workspacePath, "program.csproj"), static options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithContainerBuildOptions(context =>
             {
                 context.LocalImageName = ImageName;

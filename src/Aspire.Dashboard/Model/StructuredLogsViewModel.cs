@@ -20,7 +20,6 @@ public class StructuredLogsViewModel
     private int _logsStartIndex;
     private int _logsCount;
     private LogLevel? _logLevel;
-    private bool _currentDataHasErrors;
 
     public StructuredLogsViewModel(DashboardDataSource dataSource)
     {
@@ -100,7 +99,6 @@ public class StructuredLogsViewModel
     {
         if (ResourceKeys is { Count: 0 })
         {
-            _currentDataHasErrors = false;
             return PagedResult<LogSummary>.Empty;
         }
 
@@ -117,8 +115,6 @@ public class StructuredLogsViewModel
                 Filters = filters,
                 LatestItemCount = DashboardUIHelpers.MaxVirtualizedItemCount
             }, cancellationToken).ConfigureAwait(false);
-
-            _currentDataHasErrors = logs.Items.Any(i => i.Severity >= Microsoft.Extensions.Logging.LogLevel.Error);
         }
 
         return logs;

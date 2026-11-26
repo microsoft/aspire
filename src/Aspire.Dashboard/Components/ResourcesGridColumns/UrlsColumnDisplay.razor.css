@@ -15,38 +15,6 @@
     white-space: nowrap;
 }
 
-/* One URL, cut short when it doesn't fit, then the "+N" button. */
-.first-url-only {
-    display: flex;
-    align-items: center;
-    gap: var(--aspire-space-2);
-    min-width: 0;
-}
-
-.first-url {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-}
-
-.first-url > a,
-.first-url > span {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* A quiet count rather than a brand-colored button: brand color is kept for links and the primary action. */
-::deep .url-button-neutral {
-    flex: 0 0 auto;
-    padding: 1px 8px;
-    border-radius: var(--aspire-radius-round);
-    /* The count reads as part of the URL text beside it, so it uses the same size. */
-    font-size: inherit;
-    line-height: inherit;
-}
-
 /* Fluent v5 hides vertical overflow, which makes visible horizontal overflow compute to auto. */
 ::deep .url-overflow {
     overflow-x: visible !important;
@@ -82,6 +50,10 @@
     font-weight: var(--aspire-font-weight-regular);
 }
 
+::deep .url-button-neutral {
+    line-height: var(--resource-metadata-line-height, 18px);
+}
+
 ::deep.url-list {
     margin: 0;
     padding: 0;
@@ -98,12 +70,24 @@
     text-overflow: ellipsis;
 }
 
-/* Fluent sets the dialog insets inline; override them using the generated anchor to keep any +N button aligned. */
+/* Clear Fluent's inline insets so fallback placement can move the dialog across the anchor. */
 ::deep .url-overflow-popover::part(dialog) {
     position-anchor: var(--url-overflow-anchor);
-    top: anchor(bottom) !important;
-    right: anchor(right) !important;
-    bottom: auto !important;
-    left: auto !important;
-    position-try-fallbacks: flip-block;
+    inset: auto !important;
+    position-area: bottom span-left;
+    justify-self: end;
+    box-sizing: border-box;
+    position-try-fallbacks: flip-block, --url-overflow-scroll-above, --url-overflow-scroll-below;
+}
+
+/* Try the natural height below and above first. If neither fits, take the side with more
+   room: above only fits this minimum when the anchor's midpoint is in the lower half. */
+@position-try --url-overflow-scroll-above {
+    position-area: top span-left;
+    min-height: min(var(--content-list-popover-max-height), calc(50dvh - anchor-size(height) / 2));
+    max-height: min(var(--content-list-popover-max-height), 100%);
+}
+
+@position-try --url-overflow-scroll-below {
+    max-height: min(var(--content-list-popover-max-height), 100%);
 }

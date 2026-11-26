@@ -46,7 +46,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     private readonly CertificateConfiguration.NssDbOverride? _nssDbOverride;
     private readonly Action<ProcessStartInfo> _configureCertUtilStartInfo = static _ => { };
 
-    public UnixCertificateManager(ILogger logger, IEnvironment environment, CertificateConfiguration.NssDbOverride? nssDbOverride) : base(logger)
+    public UnixCertificateManager(ILogger logger, IEnvironment environment, ITemporaryStorage temporaryStorage, CertificateConfiguration.NssDbOverride? nssDbOverride) : base(logger, temporaryStorage)
     {
         _environment = environment;
         _nssDbOverride = nssDbOverride;
@@ -55,9 +55,10 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     internal UnixCertificateManager(
         ILogger logger,
         IEnvironment environment,
+        ITemporaryStorage temporaryStorage,
         CertificateConfiguration.NssDbOverride? nssDbOverride,
         Action<ProcessStartInfo> configureCertUtilStartInfo)
-        : this(logger, environment, nssDbOverride)
+        : this(logger, environment, temporaryStorage, nssDbOverride)
     {
         _configureCertUtilStartInfo = configureCertUtilStartInfo;
     }

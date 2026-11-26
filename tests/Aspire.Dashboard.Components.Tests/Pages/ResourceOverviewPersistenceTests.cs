@@ -46,9 +46,16 @@ public class ResourceOverviewPersistenceTests : DashboardTestContext
         void AssertStatus(string stateText, bool hasPersistentLifetime)
         {
             var status = cut.Find("[aria-labelledby='overview-status-title']");
-            var values = status.QuerySelectorAll("dt").ToDictionary(
-                dt => dt.TextContent.Trim(), dt => dt.NextElementSibling!);
+            var values = status.QuerySelectorAll(".overview-status-grid td.nameColumn").ToDictionary(
+                cell => cell.TextContent.Trim(), cell => cell.NextElementSibling!);
             Assert.Equal(stateText, values["State"].TextContent.Trim());
+            Assert.Single(values["State"].QuerySelectorAll("svg.severity-icon"));
+            Assert.Equal(state == KnownResourceState.Running, values.TryGetValue("Health state", out var health));
+            if (health is not null)
+            {
+                Assert.Equal("Healthy", health.TextContent.Trim());
+                Assert.Single(health.QuerySelectorAll("svg.severity-icon"));
+            }
             Assert.Equal("Container", values["Type"].TextContent.Trim());
             Assert.Equal(hasPersistentLifetime, values.ContainsKey("Container lifetime"));
             var row = cut.Find(".resource-row[data-resource-name='cache']");
@@ -62,7 +69,7 @@ public class ResourceOverviewPersistenceTests : DashboardTestContext
             Assert.Empty(cut.FindAll(".persistent-container-icon"));
             if (hasPersistentLifetime)
             {
-                var lifetimeValue = values["Container lifetime"];
+                var lifetimeValue = values["Container lifetime"].QuerySelector("[aria-description]")!;
                 Assert.Equal("Persistent", lifetimeValue.TextContent);
                 const string description = "Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.";
                 Assert.Equal(description, lifetimeValue.GetAttribute("data-tooltip"));

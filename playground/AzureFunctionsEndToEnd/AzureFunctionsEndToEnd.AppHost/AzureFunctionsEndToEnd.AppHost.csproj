@@ -18,10 +18,10 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.ServiceBus" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.CosmosDB" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AzureFunctionsEndToEnd.ApiService\AzureFunctionsEndToEnd.ApiService.csproj" />
     <ProjectReference Include="..\AzureFunctionsEndToEnd.Functions\AzureFunctionsEndToEnd.Functions.csproj" />
   </ItemGroup>
 

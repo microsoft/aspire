@@ -42,7 +42,8 @@ CI. Two compilations in the same checkout can agree while still differing from C
 The explicit seed preserves the canonical schedule regardless of checkout context.
 
 `validate-agentic-workflows.yml` recompiles with the pinned gh-aw version, checks
-for generated-file drift, runs `gh aw lint --shellcheck` as a blocking lint gate,
+for generated-file drift, runs `gh aw lint --shellcheck` on the generated workflows
+as a blocking lint gate,
 and runs the `Category=AgenticWorkflow` contracts in `Infrastructure.Tests`.
 Class-level traits group generated-workflow, validation trigger/drift, and shared
 process-runner tests without including unrelated negative-test diagnostics.
@@ -239,6 +240,8 @@ contents stop reconciliation before the agent can propose a duplicate fix.
   Alert collection suppresses its own diagnostics. Pre-scrub error detection and
   secret-redaction parsers are withheld because they can re-emit private log data;
   their transcript-derived classifications are unavailable, not reported as zero.
+  The generated GitHub rate-limit loggers stay unchanged because they only report
+  API quota counters and read no agent-written data.
   GitHub still records actual execution failures and exit statuses. Unsupported
   execution layouts fail compilation rather than silently losing this boundary.
 
@@ -246,9 +249,6 @@ Prerequisites:
 - The `auto-sec` label must exist.
 - The Aspire bot App needs pull request write access, and contents write access to
   push the `auto-sec` branch.
-
-Because the compiler's Windows build mis-handles redaction paths, compile this
-workflow on Linux or WSL.
 
 After compiling `auto-sec`, run
 `node .github/workflows/auto-sec/publication-guard.js`. The pinned compiler emits

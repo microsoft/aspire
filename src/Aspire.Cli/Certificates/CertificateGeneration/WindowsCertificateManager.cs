@@ -6,6 +6,7 @@ using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -18,7 +19,7 @@ internal sealed class WindowsCertificateManager : CertificateManager
     private const int UserCancelledHResult = unchecked((int)0x800704C7);
     private const int UserCancelledErrorCode = 1223;
 
-    public WindowsCertificateManager(ILogger logger) : base(logger)
+    public WindowsCertificateManager(ILogger logger, ITemporaryStorage temporaryStorage) : base(logger, temporaryStorage)
     {
     }
 

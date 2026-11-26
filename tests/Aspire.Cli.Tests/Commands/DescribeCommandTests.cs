@@ -9,6 +9,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Dashboard.Model;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.DependencyInjection;
@@ -129,6 +130,38 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         await Verify(string.Join("", outputWriter.Logs), "txt");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DescribeCommand_DefaultTable_DropsBordersAndDashboardLinksWhenOutputIsNotInteractive(bool interactiveOutput)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            new ResourceSnapshot
+            {
+                Name = "api",
+                ResourceType = "Project",
+                State = "Running",
+                HealthStatus = "Healthy",
+                Urls =
+                [
+                    new() { Name = "https", Url = "https://localhost:7001", IsInternal = false },
+                    new() { Name = "internal", Url = "http://localhost:5001", IsInternal = true }
+                ]
+            },
+            new ResourceSnapshot { Name = "cache", ResourceType = "Container", ResourceTypeDisplayName = "Redis", State = "Running" }
+        ], disableAnsi: true,
+        dashboardUrlsState: new DashboardUrlsState { BaseUrlWithLoginToken = "http://localhost:18888/login?t=abcd1234" },
+        hostEnvironment: interactiveOutput ? TestHelpers.CreateInteractiveHostEnvironment() : TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("\n", outputWriter.Logs), "txt").UseParameters(interactiveOutput);
     }
 
     [Fact]
@@ -1358,7 +1391,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         bool disableAnsi = false,
         DashboardUrlsState? dashboardUrlsState = null,
         Action<TestAppHostAuxiliaryBackchannel>? configureConnection = null,
-        StringWriter? errorTextWriter = null)
+        StringWriter? errorTextWriter = null,
+        ICliHostEnvironment? hostEnvironment = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -1381,6 +1415,10 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
             options.OutputTextWriter = outputWriter;
             options.ErrorTextWriter = errorTextWriter;
             options.DisableAnsi = disableAnsi;
+            if (hostEnvironment is not null)
+            {
+                options.CliHostEnvironmentFactory = _ => hostEnvironment;
+            }
         });
 
         return services.BuildServiceProvider();

@@ -67,6 +67,11 @@
         <target state="translated">Se detectó un origen de configuración en la máquina. Permite a una organización compartir la configuración de Aspire para personalizar su experiencia de desarrollo.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FeatureDisabled">
+        <source>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</source>
+        <target state="new">Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</target>
+        <note>Do not translate "features.configSourceEnabled" or "true".</note>
+      </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
         <target state="translated">No se pudo iniciar Git. Asegúrese de que Git está instalado y disponible en PATH para usar este origen de configuración.</target>
@@ -79,7 +84,7 @@
       </trans-unit>
       <trans-unit id="IncompatibleOptions">
         <source>--config-source cannot be combined with --self, --migrate, --dry-run, --channel, --quality, or --nuget-config-dir.</source>
-        <target state="new">--config-source cannot be combined with --self, --migrate, --dry-run, --channel, --quality, or --nuget-config-dir.</target>
+        <target state="translated">--config-source no se puede combinar con --self, --migrate, --dry-run, --channel, --quality, ni --nuget-config-dir.</target>
         <note>Do not translate the command-line option names.</note>
       </trans-unit>
       <trans-unit id="InitUseSourcePrompt">

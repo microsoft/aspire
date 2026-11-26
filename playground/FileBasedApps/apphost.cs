@@ -9,6 +9,8 @@
 #:property PublishAot=false
 #:property UserSecretsId=d858c770-3e70-4307-8be4-90d2f96bf595
 
+using Aspire.Hosting;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Display the runtime UserSecretsId for debugging
@@ -17,14 +19,12 @@ var userSecretsId = Environment.GetEnvironmentVariable("DOTNET_USER_SECRETS_ID")
     ?? "not set";
 Console.WriteLine($"UserSecretsId: {userSecretsId}");
 
-#pragma warning disable CS0618 // Exercise legacy AddCSharpApp file and directory handling.
 // C# File-based app
 // NOTE: This is in a sub-folder to ensure it doesn't pickup .razor files from the FrontEnd project
-builder.AddCSharpApp("api", "./api/api.cs");
+builder.AddDotnetProject("api", "./api/api.cs");
 
 // Traditional C# project added via same API just specifying project directory
-builder.AddCSharpApp("frontend", "./FileBasedApps.WebFrontEnd/");
-#pragma warning restore CS0618
+builder.AddDotnetProject("frontend", "./FileBasedApps.WebFrontEnd/");
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

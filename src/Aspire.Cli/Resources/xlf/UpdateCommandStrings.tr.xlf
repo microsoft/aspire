@@ -119,19 +119,19 @@
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
         <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
-        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <target state="translated">Mevcut yedeklemeler yenilenmeden deneme çalışması iptal edildi. Yeniden denemeden önce, listelenen yedekleme dosyalarından orijinalleri geri yükleyin veya bunları bir kenara alın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunExistingBackupsFormat">
         <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
 {0}</source>
-        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+        <target state="translated">Daha önceki bir deneme çalışmasından alınan yedekler halihazırda mevcuttur. Değiştirmeden önce, gerekirse geri kazanım amacıyla bunları saklayın:
 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunOptionDescription">
         <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
-        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <target state="translated">Değişiklik önermeden veya uygulamadan, geçici NuGet önbelleklerini kullanarak açık bir .NET AppHost kanalı güncellemesini doğrulayın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
@@ -141,12 +141,12 @@
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
         <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
-        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <target state="translated">--dry-run seçeneği, varsayılan değerden farklı açık bir --channel veya --quality seçeneği gerektirir ve --self veya --migrate seçenekleriyle bir arada kullanılamaz.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresDotNet">
         <source>--dry-run is supported only for .NET AppHosts.</source>
-        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <target state="translated">--dry-run seçeneği yalnızca .NET AppHost'lar için desteklenmektedir.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunSuccessful">
@@ -156,7 +156,7 @@
       </trans-unit>
       <trans-unit id="DryRunValidating">
         <source>Validating the channel update...</source>
-        <target state="new">Validating the channel update...</target>
+        <target state="translated">Kanal güncellemesinin doğrulanması...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -201,7 +201,7 @@
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
         <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
-        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <target state="translated">{1} projesi için {0} kanal güncelleştirmesi için doğrulama geri yüklemesi başarısız oldu. Güncelleştirme uygulanmadı. Ayrıntılar için geri yükleme çıkışını gözden geçirin.</target>
         <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">

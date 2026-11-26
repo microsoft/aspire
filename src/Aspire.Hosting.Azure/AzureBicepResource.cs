@@ -20,6 +20,10 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 public class AzureBicepResource : Resource, IAzureResource, IResourceWithParameters
 {
+    // GetBicepTemplateFile is a public virtual API with no service provider, so the default
+    // instance is used here rather than changing the public signature to accept one.
+    internal static readonly Aspire.Shared.ITemporaryStorage s_temporaryStorage = new Aspire.Shared.TemporaryStorage();
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureBicepResource"/> class.
     /// </summary>
@@ -164,7 +168,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             var isTempFile = directory is null;
 
             var path = TempDirectory is null
-                ? Path.Combine(directory ?? Directory.CreateTempSubdirectory("aspire").FullName, $"{Name.ToLowerInvariant()}.module.bicep")
+                ? Path.Combine(directory ?? s_temporaryStorage.CreateTempSubdirectory("aspire").FullName, $"{Name.ToLowerInvariant()}.module.bicep")
                 : Path.Combine(TempDirectory, $"{Name.ToLowerInvariant()}.module.bicep");
 
             if (TemplateResourceName is null)

@@ -282,7 +282,7 @@ This is especially common with:
 
 **Important:** Do NOT blindly bump transitive pinned versions of `Microsoft.Extensions.*` or `System.*` packages. These affect the shared framework surface area and could force customers onto versions that break their applications. Always flag these for human review.
 
-Package major versions do not have to match the target framework: a compatible dependency can lift to 11.x even for `net10.0`. Prefer framework-provided assemblies over explicit package references, including `System.Text.Json` and the `Microsoft.Extensions.*` abstractions now provided by .NET 11's `Microsoft.NETCore.App`. Keep references where an older supported target still needs them. EF providers can impose narrower constraints; Pomelo currently remains on EF Core 9 with project-local health-check pins. Inspect the provider's dependency ranges rather than assuming its major version follows the project's TFM.
+Package major versions do not have to match the target framework: a compatible dependency can lift to 11.x even for `net10.0`. Prefer framework-provided assemblies over explicit package references, including `System.Text.Json` and the `Microsoft.Extensions.*` abstractions now provided by .NET 11's `Microsoft.NETCore.App`. Keep references where an older supported target still needs them. EF providers can impose narrower constraints; Microting currently remains on EF Core 10. Inspect the provider's dependency ranges rather than assuming its major version follows the project's TFM.
 
 ### 4. Watch for broken transitive dependency metadata (NU1603)
 
@@ -306,12 +306,26 @@ After all pipelines complete, clear the NuGet cache again and re-run restore to 
 
 Some external dependencies have known constraints:
 
-- **`Pomelo.EntityFrameworkCore.MySql`** — The net10 integration currently retains the EF Core 9 provider and matching project-local health-check pins. Revisit those pins together when upgrading the provider.
+- **`Npgsql.EntityFrameworkCore.PostgreSQL`** — A new .NET/EF Core major may reach GA before the matching stable provider. Follow [Npgsql EF major-version transitions](#npgsql-ef-major-version-transitions); do not hold all EF integrations on prerelease for Npgsql.
+- **`Microting.EntityFrameworkCore.MySql`** — The net10 integration uses the EF Core 10 provider. Move it to EF Core 11 once a stable release is available.
 - **`Microsoft.AI.Foundry.Local`** — Has historically had broken transitive dependency metadata (NU1603). Check if the issue is resolved before updating.
 - **`Spectre.Console`** — Currently on pre-release. Always update to the latest pre-release, not the latest stable. Verify hyperlink rendering behavior hasn't changed (test: `ConsoleActivityLoggerTests`).
 - **`Milvus.Client`** — No stable release exists. Always stays on pre-release.
 - **`Azure.Monitor.OpenTelemetry.Exporter`** — Version 1.6.0 introduced AOT warnings. Hold at 1.5.0 until resolved. Version is in `eng/Versions.props`.
 - **`Microsoft.FluentUI.AspNetCore.Components`** and **`Microsoft.FluentUI.AspNetCore.Components.Icons`** — Must not be automatically updated. Updates to these packages often have breaking changes and require careful manual testing of the dashboard. Always flag these for human review and manual update.
+
+### Npgsql EF major-version transitions
+
+When EF reaches GA before the matching Npgsql provider, use this pattern:
+
+- **Check compatibility:** inspect the provider and HealthChecks EF nuspec dependency ranges for each TFM; matching major numbers do not guarantee compatibility. Pin the latest compatible Npgsql prerelease only in that TFM's `PackageVersion Update` in `Directory.Packages.props`.
+- **Keep the shared line stable:** leave repo-wide EF Core and HealthChecks EF versions on GA, with matching stable version/repository/SHA dependency-flow records. Do not hold other EF integrations on prerelease for Npgsql.
+- **Scope the HealthChecks override:** in both `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL` and `Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL`, use an affected-TFM `VersionOverride` for HealthChecks EF. Use `PackageReference Update` for the non-Azure project's existing reference and `Include` for the Azure project's otherwise-transitive reference. Add a matching conditional `PackageVersion Update` in both test projects. Preserve older TFMs' existing dependency lines.
+- **Keep both packages prerelease:** set `SuppressFinalPackageVersion=true` in both component projects while needed; do not change the global `StabilizePackageVersion` setting.
+- **Remove the workaround together:** when a compatible stable provider ships, recheck its nuspec, remove the provider and HealthChecks pins (and Azure's direct reference if no longer needed), both test overrides, and both suppression properties.
+- **Verify:** inspect restored per-TFM graphs for the provider, EF Core/Relational, and HealthChecks EF; run both integration test projects; and pack both components normally and with `/p:StabilizePackageVersion=true`, checking package suffixes and TFM dependency groups.
+
+In the #22070/#22146 example, Npgsql EF `11.0.0-rc.3` required exact EF Core `11.0.0-rc.3.26522.148`; stable HealthChecks EF `11.0.0` was incompatible, so the affected integrations and tests used HealthChecks EF `11.0.0-rc.3.26522.148`. Treat these versions as historical examples, not update targets.
 
 ## Important Constraints
 

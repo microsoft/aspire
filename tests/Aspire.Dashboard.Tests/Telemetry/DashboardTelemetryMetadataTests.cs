@@ -79,6 +79,19 @@ public class DashboardTelemetryMetadataTests
             usage.Attributes.OrderBy(tag => tag.Key, StringComparer.Ordinal));
         Assert.Equal(expected.OrderBy(tag => tag.Key, StringComparer.Ordinal),
             activity.TagObjects.OrderBy(tag => tag.Key, StringComparer.Ordinal));
+
+        var exception = new InvalidOperationException("test error");
+        telemetry.RecordError("Test error", exception, writeToLogging: false);
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var error));
+        Assert.Equal(expected.Concat(
+            [
+                new KeyValuePair<string, object?>("exception.type", typeof(InvalidOperationException).FullName),
+                new KeyValuePair<string, object?>("exception.message", exception.Message),
+                new KeyValuePair<string, object?>("exception.stacktrace", string.Empty),
+                new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.Error),
+                new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.Error)
+            ]).OrderBy(tag => tag.Key, StringComparer.Ordinal),
+            error.Attributes.OrderBy(tag => tag.Key, StringComparer.Ordinal));
         Assert.Equal(1, detector.InvocationCount);
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }

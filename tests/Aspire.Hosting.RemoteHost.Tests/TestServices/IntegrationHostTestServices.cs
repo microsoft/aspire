@@ -5,6 +5,7 @@ using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
 using Aspire.Shared;
+using Aspire.Shared.Tests;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,7 @@ public static class IntegrationHostTestServices
         var telemetry = RemoteHostProfilingTelemetry.Disabled;
 
         return new IntegrationHostLauncher(
-            new IntegrationHostProcessLauncher(resolver, settings, telemetry, logger, new ChildProcessFactory(), TimeProvider.System),
+            new IntegrationHostProcessLauncher(resolver, settings, telemetry, logger, new ChildProcessFactory(), TestTemporaryStorage.Create(), TimeProvider.System),
             registry, settings, lifetime, logger, telemetry, TimeProvider.System);
     }
 }

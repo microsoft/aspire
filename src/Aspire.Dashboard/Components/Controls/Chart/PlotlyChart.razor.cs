@@ -46,7 +46,7 @@ public partial class PlotlyChart : ChartBase
         var formattedValue = FormatHelpers.FormatNumberWithOptionalDecimalPlaces(yValue, maxDecimalPlaces: 3, CultureInfo.CurrentCulture);
         if (InstrumentViewModel?.Instrument is { } instrument)
         {
-            formattedValue += " " + InstrumentUnitResolver.ResolveDisplayedUnit(instrument, titleCase: false, pluralize: yValue != 1);
+            formattedValue += " " + InstrumentUnitResolver.ResolveDisplayedUnit(instrument, capitalize: false, pluralize: yValue != 1);
         }
         return $"""
                 <b>{HttpUtility.HtmlEncode(title)}</b><br />

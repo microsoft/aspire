@@ -1285,9 +1285,9 @@ Skonfiguruj aplikację do eksportowania dzienników, śladów i metryk przy uży
         <target state="translated">Wybierz format</target>
         <note />
       </trans-unit>
-      <trans-unit id="TextVisualizerWordWrap">
-        <source>Word wrap</source>
-        <target state="translated">Zawijanie wyrazów</target>
+      <trans-unit id="TextVisualizerWordWrapOff">
+        <source>Disable word wrap</source>
+        <target state="translated">Wyłącz zawijanie wierszy</target>
         <note />
       </trans-unit>
     </body>

@@ -1285,9 +1285,9 @@ Configure your app to export logs, traces, and metrics using [OTLP]({0}).</sourc
         <target state="translated">選取格式</target>
         <note />
       </trans-unit>
-      <trans-unit id="TextVisualizerWordWrap">
-        <source>Word wrap</source>
-        <target state="translated">自動換行</target>
+      <trans-unit id="TextVisualizerWordWrapOff">
+        <source>Disable word wrap</source>
+        <target state="translated">停用自動換行</target>
         <note />
       </trans-unit>
     </body>

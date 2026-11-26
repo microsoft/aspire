@@ -16,6 +16,7 @@ using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 
@@ -89,31 +90,29 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Selection_QuietReplacementResourceLoadsWithoutNewTelemetry()
+    public async Task Selection_FirstAndReplacementResourceLoadWithoutWaitingForLiveRefresh()
     {
-        var (cut, navigation) = await RenderOverviewWithTelemetryAsync();
-        cut.WaitForAssertion(() => AssertTelemetryLoaded(cut), DefaultWaitTimeout);
-
-        // Hold the next refresh in its delay, without handling cancellation, until the replacement has been selected.
         var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var holding = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var delays = 0;
-        cut.FindComponent<ResourceOverview>().Instance.TelemetryRefreshDelayAsync = (delay, cancellationToken) =>
+        ComponentFactories.Add(() =>
         {
-            if (Interlocked.Increment(ref delays) == 1)
+            var overview = Activator.CreateInstance<ResourceOverview>();
+            overview.TelemetryRefreshDelayAsync = (_, _) =>
             {
-                holding.SetResult();
+                holding.TrySetResult();
                 return held.Task;
-            }
-
-            return Task.Delay(delay, cancellationToken);
-        };
-        await AddSpanAsync("api", DateTime.UtcNow, "held");
-        await holding.Task.WaitAsync(DefaultWaitTimeout);
+            };
+            return overview;
+        });
 
         try
         {
-            // No more telemetry arrives, so nothing else queues a refresh for the replacement.
+            var (cut, navigation) = await RenderOverviewWithTelemetryAsync();
+            cut.WaitForAssertion(() => AssertTelemetryLoaded(cut), DefaultWaitTimeout);
+            await AddSpanAsync("api", DateTime.UtcNow, "held");
+            await holding.Task.WaitAsync(DefaultWaitTimeout);
+
+            // The old resource's refresh remains blocked in its delay, even after cancellation.
             navigation.NavigateTo("/resources/cache-TestId");
             cut.Render();
 
@@ -126,6 +125,77 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
         finally
         {
             held.TrySetCanceled();
+        }
+    }
+
+    [Fact]
+    public async Task Selection_OldTelemetryReadCompletesAfterReplacement_KeepsCurrentCountsAndPreview()
+    {
+        var apiReadStarted = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseApiRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timestamp = DateTime.UtcNow;
+
+        try
+        {
+            var (cut, navigation) = await RenderOverviewWithTelemetryAsync(services =>
+                services.AddSingleton<ITelemetryRepository>(provider =>
+                {
+                    var inner = provider.GetRequiredService<SqliteTelemetryRepository>();
+                    return new TestTelemetryRepository(inner)
+                    {
+                        // Let the whole read succeed after cancellation so the publication guard is what rejects it.
+                        GetTraceSummariesAsyncHandler = (request, _) => inner.GetTraceSummariesAsync(request, CancellationToken.None),
+                        GetOverviewLogsAsyncHandler = async (keys, _, _, cancellationToken) =>
+                        {
+                            var key = Assert.Single(keys);
+                            var resource = Assert.IsType<OtlpResource>(inner.GetResource(key));
+                            if (key.Name == "api")
+                            {
+                                apiReadStarted.TrySetResult(cancellationToken);
+                                await releaseApiRead.Task;
+                                return new OverviewLogs(2, 1, 1,
+                                [
+                                    new OverviewLog(1, timestamp, LogLevel.Error, "old api error", resource),
+                                    new OverviewLog(2, timestamp, LogLevel.Warning, "old api warning", resource)
+                                ]);
+                            }
+
+                            Assert.Equal("cache", key.Name);
+                            return new OverviewLogs(1, 0, 0, [new OverviewLog(3, timestamp, LogLevel.Information, "current cache log", resource)]);
+                        }
+                    };
+                }));
+
+            var apiToken = await apiReadStarted.Task.WaitAsync(DefaultWaitTimeout);
+            var overview = cut.FindComponent<ResourceOverview>().Instance;
+            var apiRefresh = Task.CompletedTask;
+            await cut.InvokeAsync(() =>
+            {
+                apiRefresh = overview.TelemetryRefreshTask;
+            });
+            Assert.False(apiRefresh.IsCompleted);
+
+            navigation.NavigateTo("/resources/cache-TestId");
+            cut.Render();
+            cut.WaitForAssertion(() => AssertCacheTelemetry(cut));
+            Assert.Same(overview, cut.FindComponent<ResourceOverview>().Instance);
+            Assert.True(apiToken.IsCancellationRequested);
+
+            releaseApiRead.SetResult();
+            await apiRefresh.WaitAsync(DefaultWaitTimeout);
+            await cut.InvokeAsync(() => AssertCacheTelemetry(cut));
+        }
+        finally
+        {
+            releaseApiRead.TrySetResult();
+        }
+
+        static void AssertCacheTelemetry(IRenderedComponent<ResourcesLayout> cut)
+        {
+            Assert.Equal("cache-TestId", cut.Find(".resource-overview").GetAttribute("data-resource-subscription"));
+            var logs = cut.Find("[aria-labelledby='overview-logs-title']");
+            Assert.Equal(["1", "0", "0"], logs.QuerySelectorAll(".overview-stat-value").Select(stat => stat.TextContent));
+            Assert.Equal("current cache log", Assert.Single(logs.QuerySelectorAll(".overview-list-value")).TextContent);
         }
     }
 
@@ -146,14 +216,14 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
         Assert.NotEmpty(cut.FindAll("[aria-labelledby='overview-traces-title'] .overview-stats"));
     }
 
-    private async Task<(IRenderedComponent<ResourcesLayout> Cut, NavigationManager Navigation)> RenderOverviewWithTelemetryAsync()
+    private async Task<(IRenderedComponent<ResourcesLayout> Cut, NavigationManager Navigation)> RenderOverviewWithTelemetryAsync(Action<IServiceCollection>? configureServices = null)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var client = new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("api-TestId"), ModelTestHelpers.CreateResource("cache-TestId")],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
             consoleLogsChannelProvider: _ => Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>());
-        ResourceSetupHelpers.SetupResourceOverview(this, viewport, client);
+        ResourceSetupHelpers.SetupResourceOverview(this, viewport, client, configureServices: configureServices);
         var requestTime = DateTime.UtcNow.AddSeconds(-1);
         await AddSpanAsync("api", requestTime, "first");
         await AddSpanAsync("cache", requestTime, "first");

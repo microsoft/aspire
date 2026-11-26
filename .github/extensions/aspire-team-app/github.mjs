@@ -18,11 +18,13 @@ import {
   computeCommunityItems,
   isChecksFailing,
   isReviewDebt,
+  isUrgentPullRequest,
   reviewAgeStartedAt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
 import { currentRelease } from "./constants.mjs";
+import { throwGitHubResponseError, withGitHubTimeout } from "./github-request.mjs";
 
 // The current milestone has a single source of truth in constants.mjs
 // (`currentRelease`). Re-export it here under the name the run-mode lane logic
@@ -53,24 +55,28 @@ const GRAPHQL = "https://api.github.com/graphql";
 // GraphQL helper.
 // ---------------------------------------------------------------------------
 
-async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
-  const res = await fetch(graphqlUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `bearer ${token}`,
-      "Content-Type": "application/json",
-      "User-Agent": "aspire-team-app-canvas",
-    },
-    body: JSON.stringify({ query, variables }),
+async function gql(token, query, variables, graphqlUrl = GRAPHQL, { allowPartialData = false } = {}) {
+  return withGitHubTimeout(async (signal) => {
+    const res = await fetch(graphqlUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `bearer ${token}`,
+        "Content-Type": "application/json",
+        "User-Agent": "aspire-team-app-canvas",
+      },
+      body: JSON.stringify({ query, variables }),
+      signal,
+    });
+    if (!res.ok) {
+      await throwGitHubResponseError(res, signal);
+    }
+    const json = await res.json();
+    if (allowPartialData) {
+      return { data: json.data, errors: json.errors ?? [] };
+    }
+    if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join("; "));
+    return json.data;
   });
-  if (!res.ok) {
-    throw new Error(`GitHub API ${res.status} ${res.statusText}`);
-  }
-  const json = await res.json();
-  if (json.errors?.length) {
-    throw new Error(json.errors.map((e) => e.message).join("; "));
-  }
-  return json.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +90,26 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
 // explicit safety bound (25 pages * 40 = up to 1000 open items per repo per account)
 // so a pathological repo can't spin the loader indefinitely.
 const MAX_PAGES = 25;
+const PAGE_SIZE = 40;
+const PARTIAL_MIN_MS = 250;
+
+// Each detailed PR page costs GitHub several seconds to resolve (reviews, threads, checks,
+// timelines, closing issues), and microsoft/aspire has hundreds of open PRs, so walking those
+// pages one cursor at a time took over a minute per Review/Ship load. When the first page reports
+// more items, a cheap cursor-only walk finds every later page boundary and the detailed pages
+// load a few at a time instead of serially.
+const PAGE_CONCURRENCY = 4;
+const CURSOR_PAGE_SIZE = 100;
+
+const pageCursorQuery = (connection) => `
+query($owner:String!, $name:String!, $after:String) {
+  repository(owner:$owner, name:$name) {
+    ${connection}(states:OPEN, first:${CURSOR_PAGE_SIZE}, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      pageInfo { hasNextPage endCursor }
+      edges { cursor }
+    }
+  }
+}`;
 
 const READINESS_TRANSITIONS = `
   pageInfo { hasNextPage endCursor }
@@ -98,7 +124,8 @@ const PR_QUERY = `
 query($owner:String!, $name:String!, $after:String, $includeReadiness:Boolean!) {
   repository(owner:$owner, name:$name) {
     isPrivate
-    pullRequests(states:OPEN, first:40, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+    pullRequests(states:OPEN, first:${PAGE_SIZE}, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      totalCount
       pageInfo { hasNextPage endCursor }
       nodes {
         number title url isDraft state createdAt updatedAt
@@ -114,7 +141,7 @@ query($owner:String!, $name:String!, $after:String, $includeReadiness:Boolean!) 
         }
         additions deletions changedFiles
         milestone { title }
-        labels(first:15) { nodes { name } }
+        labels(first:15) { pageInfo { hasNextPage endCursor } nodes { name } }
         assignees(first:10) { nodes { login } }
         reviewRequests(first:20) { nodes { requestedReviewer { __typename ... on User { login } } } }
         reviews(first:60) { nodes { state author { login } submittedAt } }
@@ -144,10 +171,23 @@ query($owner:String!, $name:String!, $number:Int!, $after:String!) {
   }
 }`;
 
+const PR_LABELS_QUERY = `
+query($owner:String!, $name:String!, $number:Int!, $after:String!) {
+  repository(owner:$owner, name:$name) {
+    pullRequest(number:$number) {
+      labels(first:100, after:$after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { name }
+      }
+    }
+  }
+}`;
+
 const ISSUE_QUERY = `
 query($owner:String!, $name:String!, $after:String) {
   repository(owner:$owner, name:$name) {
-    issues(states:OPEN, first:40, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+    issues(states:OPEN, first:${PAGE_SIZE}, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      totalCount
       pageInfo { hasNextPage endCursor }
       nodes {
         number title url createdAt updatedAt
@@ -166,6 +206,183 @@ query($owner:String!, $name:String!, $after:String) {
 function splitRepo(repo) {
   const [owner, ...rest] = repo.split("/");
   return { owner, name: rest.join("/") };
+}
+
+function getVerifiedLabelNodes(connection) {
+  return Array.isArray(connection?.nodes)
+    ? connection.nodes
+      .filter((label) => typeof label?.name === "string" && label.name)
+      .map((label) => ({ name: label.name }))
+    : [];
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function mergeErrors(...messages) {
+  const errors = [...new Set(messages.filter(Boolean))];
+  return errors.length ? errors.join("; ") : null;
+}
+
+function mergePullRequestSnapshots(existing, incoming, mode) {
+  const completeness = (pr) => Number(!pr.labelsUnavailable) + Number(!pr.firstReadinessError);
+  const completeLabels = !existing.labelsUnavailable ? existing : !incoming.labelsUnavailable ? incoming : null;
+  const completeReadiness = !existing.firstReadinessError ? existing : !incoming.firstReadinessError ? incoming : null;
+  const preferredSnapshot = mode === "review" && completeReadiness
+    ? completeReadiness
+    : completeness(incoming) > completeness(existing) ? incoming : existing;
+  const labels = completeLabels
+    ? completeLabels.labels
+    : [...new Set([...existing.labels, ...incoming.labels])];
+
+  return {
+    ...preferredSnapshot,
+    labels,
+    labelsUnavailable: completeLabels === null,
+    labelsError: completeLabels ? null : mergeErrors(existing.labelsError, incoming.labelsError),
+    firstReadyForReviewAt: completeReadiness?.firstReadyForReviewAt ?? null,
+    firstReadinessError: completeReadiness ? null : mergeErrors(existing.firstReadinessError, incoming.firstReadinessError),
+  };
+}
+
+// GraphQL field errors can preserve sibling data. Only tolerate paths scoped to one PR's
+// labels, e.g. ["repository", "pullRequests", "nodes", 0, "labels", "pageInfo"].
+function getPullRequestLabelErrors(errors, nodes) {
+  const errorsByNode = new Map();
+  for (const error of errors) {
+    const path = error?.path;
+    const index = path?.[3];
+    if (!Array.isArray(path) || path[0] !== "repository" || path[1] !== "pullRequests" ||
+        path[2] !== "nodes" || !Number.isInteger(index) || index < 0 || index >= nodes.length ||
+        path[4] !== "labels") {
+      throw new Error(errors.map((item) => item?.message ?? "Unknown GraphQL error").join("; "));
+    }
+    const message = error.message ?? "Unknown GraphQL error";
+    errorsByNode.set(index, mergeErrors(errorsByNode.get(index), message));
+  }
+  return errorsByNode;
+}
+
+// Loads every open page of a repository connection. `loadPage(after)` fetches and records one
+// detailed page and returns its connection ({ totalCount, pageInfo }).
+async function loadOpenPages(account, owner, name, connection, loadPage) {
+  const first = await loadPage(null);
+  if (!first?.pageInfo?.hasNextPage) return;
+  let starts = null;
+  if (Number.isInteger(first.totalCount) && first.totalCount > PAGE_SIZE * 2) {
+    try {
+      starts = await loadPageStarts(account, owner, name, connection, first.pageInfo.endCursor);
+    } catch (error) {
+      // Do not turn a rate-limit or permission response into an immediate serial retry.
+      if (error?.status === 403 || error?.status === 429) throw error;
+      // Other cursor-walk failures can fall back to the serial walk.
+      starts = null;
+    }
+  }
+  if (!starts?.length) {
+    await loadSerialPages(loadPage, first, 1);
+    return;
+  }
+
+  // Middle pages are bounded by the next page's start cursor, so only the last page follows
+  // `hasNextPage` to discover a growing tail after cursor discovery.
+  const results = [];
+  let next = 0;
+  let failure = null;
+  const worker = async () => {
+    while (next < starts.length && !failure) {
+      const index = next++;
+      try {
+        const page = await loadPage(starts[index]);
+        if (index === starts.length - 1) await loadSerialPages(loadPage, page, starts.length + 1, () => !failure);
+      } catch (error) {
+        failure ??= error;
+        throw error;
+      }
+    }
+  };
+  for (let i = 0; i < Math.min(PAGE_CONCURRENCY, starts.length); i++) results.push(worker());
+  // Wait for every in-flight page before reporting a failure so no request keeps mutating the
+  // dashboard maps after this repository has settled.
+  const settled = await Promise.allSettled(results);
+  const rejected = settled.find((result) => result.status === "rejected");
+  if (rejected) throw rejected.reason;
+}
+
+async function loadSerialPages(loadPage, page, pagesLoaded, shouldContinue = () => true) {
+  for (let loaded = pagesLoaded; loaded < MAX_PAGES && page?.pageInfo?.hasNextPage && shouldContinue(); loaded++) {
+    page = await loadPage(page.pageInfo.endCursor);
+  }
+}
+
+// Returns the `after` cursor for each detailed page following the first one, capped by MAX_PAGES.
+async function loadPageStarts(account, owner, name, connection, firstEndCursor) {
+  if (typeof firstEndCursor !== "string" || !firstEndCursor) return null;
+  const starts = [firstEndCursor];
+  const query = pageCursorQuery(connection);
+  let after = firstEndCursor;
+  let sincePageStart = 0;
+  while (starts.length < MAX_PAGES - 1) {
+    const data = await gql(account.token, query, { owner, name, after }, account.graphql);
+    const conn = data.repository?.[connection];
+    const edges = conn?.edges;
+    if (!Array.isArray(edges) || typeof conn.pageInfo?.hasNextPage !== "boolean") return null;
+    for (const [index, edge] of edges.entries()) {
+      if (typeof edge?.cursor !== "string" || !edge.cursor) return null;
+      sincePageStart++;
+      const isLast = !conn.pageInfo.hasNextPage && index === edges.length - 1;
+      if (sincePageStart === PAGE_SIZE && !isLast && starts.length < MAX_PAGES - 1) {
+        starts.push(edge.cursor);
+        sincePageStart = 0;
+      }
+    }
+    if (!conn.pageInfo.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return starts;
+}
+
+async function loadPullRequestLabels(account, owner, name, node) {
+  let connection = node.labels;
+  const labels = [];
+  const cursors = new Set();
+  for (let page = 0; ; page++) {
+    if (!Array.isArray(connection?.nodes) || typeof connection.pageInfo?.hasNextPage !== "boolean" ||
+        connection.nodes.some((label) => typeof label?.name !== "string" || !label.name)) {
+      return {
+        labels: { nodes: [...labels, ...getVerifiedLabelNodes(connection)] },
+        error: `Missing or malformed pull-request labels for #${node.number}`,
+      };
+    }
+    labels.push(...connection.nodes);
+    if (!connection.pageInfo.hasNextPage) return { labels: { nodes: labels }, error: null };
+    const after = connection.pageInfo.endCursor;
+    if (typeof after !== "string" || !after || cursors.has(after) || page + 1 >= MAX_PAGES) {
+      return { labels: { nodes: labels }, error: `Incomplete pull-request labels for #${node.number}` };
+    }
+    cursors.add(after);
+    let response;
+    try {
+      response = await gql(
+        account.token,
+        PR_LABELS_QUERY,
+        { owner, name, number: node.number, after },
+        account.graphql,
+        { allowPartialData: true },
+      );
+    } catch (error) {
+      return { labels: { nodes: labels }, error: getErrorMessage(error) };
+    }
+    connection = response.data?.repository?.pullRequest?.labels;
+    if (response.errors.length) {
+      labels.push(...getVerifiedLabelNodes(connection));
+      return {
+        labels: { nodes: labels },
+        error: response.errors.map((error) => error?.message ?? "Unknown GraphQL error").join("; "),
+      };
+    }
+  }
 }
 
 async function loadFirstReadyForReviewAt(account, owner, name, node) {
@@ -557,6 +774,7 @@ function reviewReady(pr) {
 // or a needs-author-action label) never surface in the team's shared review queue.
 function awaitingReview(pr) {
   return (
+    !pr.labelsUnavailable &&
     reviewReady(pr) &&
     !pr.isMine &&
     pr.review.state !== "approved" &&
@@ -723,7 +941,7 @@ export function buildNotifications(prs, prefs, dismissed = []) {
 // Top-level loader
 // ---------------------------------------------------------------------------
 
-export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, onProgress }) {
+export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, onProgress, onPartial, onRelated }) {
   const usable = (accounts ?? []).filter((a) => a && a.token && a.login);
   if (usable.length === 0) {
     return { authenticated: false, message: "No active GitHub account. Enable an account in the Accounts tab so the canvas can read your review queue." };
@@ -731,6 +949,9 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
 
   const viewers = new Set(usable.map((a) => a.login.toLowerCase()));
   const wantIssues = mode === "issues";
+  // Review and Ship use the same PRs. When the caller wants both snapshots, collect
+  // readiness once so switching between those tabs does not refetch every repository.
+  const wantReadiness = mode === "review" || (mode === "ship" && typeof onRelated === "function");
 
   // Union of every active account's watched repos.
   const repos = [...new Set(usable.flatMap((a) => a.repos ?? []))];
@@ -747,15 +968,36 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   const okRepos = new Set();  // hostRepoKey(host, repo) that succeeded under at least one account
   const errorsRaw = [];       // { repo, host, message }
 
-  // Each (account, repo) fetch reports when it settles so the caller can drive a deterministic
-  // progress bar. Dashboard state is intentionally produced only after every job completes:
-  // replacing an already-populated board with partial snapshots makes cards disappear and
-  // reappear as slower repositories finish.
+  // Partial snapshots are for a board without a complete cached result. Refreshes of an
+  // existing board remain atomic so cards do not disappear while repositories are loading.
   let total = 0;
   let done = 0;
+  let lastPartialAt = -Infinity;
+  let partialTimer = null;
+  const emitPartial = () => {
+    partialTimer = null;
+    lastPartialAt = Date.now();
+    try {
+      onPartial(snapshot(mode, true));
+    } catch (error) {
+      console.error("Failed to publish a partial GitHub dashboard:", error);
+    }
+  };
+  const maybePartial = () => {
+    if (typeof onPartial !== "function") return;
+    const delay = PARTIAL_MIN_MS - (Date.now() - lastPartialAt);
+    if (delay <= 0) {
+      if (partialTimer) clearTimeout(partialTimer);
+      emitPartial();
+    } else if (!partialTimer) {
+      // Emit the trailing update even if every remaining repository is still blocked.
+      partialTimer = setTimeout(emitPartial, delay);
+    }
+  };
   const reportDone = () => {
     done++;
     if (typeof onProgress === "function") onProgress({ done, total, phase: "fetch" });
+    maybePartial();
   };
 
   // Fetch each (account, repo) pair with that account's own token.
@@ -771,26 +1013,51 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           }
           try {
             if (wantIssues) {
-              let after = null;
-              for (let page = 0; page < MAX_PAGES; page++) {
+              await loadOpenPages(acct, owner, name, "issues", async (after) => {
                 const data = await gql(acct.token, ISSUE_QUERY, { owner, name, after }, acct.graphql);
                 const conn = data.repository?.issues;
                 for (const node of conn?.nodes ?? []) {
                   const issue = normalizeIssue(repo, node, viewers);
                   if (!issueById.has(issue.url)) issueById.set(issue.url, issue);
                 }
-                if (!conn?.pageInfo?.hasNextPage) break;
-                after = conn.pageInfo.endCursor;
-              }
+                maybePartial();
+                return conn;
+              });
             } else {
-              let after = null;
-              for (let page = 0; page < MAX_PAGES; page++) {
-                const data = await gql(acct.token, PR_QUERY, { owner, name, after, includeReadiness: mode === "review" }, acct.graphql);
+              await loadOpenPages(acct, owner, name, "pullRequests", async (after) => {
+                const { data, errors: graphqlErrors = [] } = await gql(
+                  acct.token,
+                  PR_QUERY,
+                  { owner, name, after, includeReadiness: wantReadiness },
+                  acct.graphql,
+                  { allowPartialData: true },
+                );
+                const conn = data?.repository?.pullRequests;
+                const nodes = conn?.nodes ?? [];
+                const initialLabelErrors = getPullRequestLabelErrors(graphqlErrors, nodes);
+                if (!data) {
+                  throw new Error("Missing GitHub GraphQL response data");
+                }
                 const repoPrivate = !!data.repository?.isPrivate;
-                const conn = data.repository?.pullRequests;
-                for (const node of conn?.nodes ?? []) {
-                  const pr = normalizePr(repo, node, viewers, repoPrivate);
-                  if (mode === "review") {
+                for (const [nodeIndex, node] of nodes.entries()) {
+                  // Priority labels may follow the list query's first 15 labels.
+                  // Keep the PR for views that do not need labels, but exclude it from attention
+                  // ranking if the complete label connection cannot be loaded.
+                  let labelResult = {
+                    labels: { nodes: getVerifiedLabelNodes(node.labels) },
+                    error: initialLabelErrors.get(nodeIndex) ?? null,
+                  };
+                  if (labelResult.error === null) {
+                    try {
+                      labelResult = await loadPullRequestLabels(acct, owner, name, node);
+                    } catch (error) {
+                      labelResult.error = getErrorMessage(error);
+                    }
+                  }
+                  const pr = normalizePr(repo, { ...node, labels: labelResult.labels }, viewers, repoPrivate);
+                  pr.labelsUnavailable = labelResult.error !== null;
+                  pr.labelsError = labelResult.error;
+                  if (wantReadiness) {
                     try {
                       pr.firstReadyForReviewAt = await loadFirstReadyForReviewAt(acct, owner, name, node);
                     } catch (error) {
@@ -798,13 +1065,11 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                     }
                   }
                   const existing = prById.get(pr.url);
-                  if (!existing || (existing.firstReadinessError && !pr.firstReadinessError)) {
-                    prById.set(pr.url, pr);
-                  }
+                  prById.set(pr.url, existing ? mergePullRequestSnapshots(existing, pr, wantReadiness ? "review" : mode) : pr);
                 }
-                if (!conn?.pageInfo?.hasNextPage) break;
-                after = conn.pageInfo.endCursor;
-              }
+                maybePartial();
+                return conn;
+              });
             }
             okRepos.add(hostRepoKey(acct.graphql, repo));
           } catch (e) {
@@ -817,7 +1082,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   total = jobs.length;
 
   // Reshape the accumulated PRs/issues into the dashboard shape the renderer consumes.
-  function snapshot() {
+  function snapshot(snapshotMode = mode, loading = false) {
     const allPrs = [...prById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const allIssues = [...issueById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
@@ -829,27 +1094,42 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     // host — a success on a different host must not mask this host's failure.
     const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(hostRepoKey(e.host, e.repo))).map((e) => e.message))];
     for (const pr of allPrs) {
-      if (pr.firstReadinessError) {
-        errors.push(`${pr.repository}#${pr.number}: first readiness unavailable; omitted from Needs attention. ${pr.firstReadinessError}`);
+      if (pr.labelsUnavailable) {
+        errors.push(`${pr.repository}#${pr.number}: labels unavailable; excluded from PR queue. ${pr.labelsError}`);
+      }
+      if (snapshotMode === "review" && pr.firstReadinessError) {
+        errors.push(`${pr.repository}#${pr.number}: first readiness unavailable; omitted from PR queue. ${pr.firstReadinessError}`);
       }
     }
 
     let lanes;
-    if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
-    else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
+    if (snapshotMode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
+    else if (snapshotMode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
     else lanes = bucketReview(allPrs, { showDrafts });
 
-    // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
+    // Full pr-dashboard attention engine (review mode only). The focused "PR queue"
     // queue is the capped headline; attention buckets, the community list, the personal
     // "For you" picks and core-team developer counts sit beneath it. Items are reshaped into
     // the card shape the renderer consumes ({ pr, reason, signals }).
     let attention = null;
-    if (mode === "review") {
+    if (snapshotMode === "review") {
       const login = usable[0].login;
       const viewerLogins = usable.map((a) => a.login);
-      const buckets = createAttentionBuckets(allPrs, login);
+      const attentionPrs = allPrs.filter((pr) => !pr.labelsUnavailable);
+      const focusExclusionPrs = allPrs.filter((pr) => !pr.labelsUnavailable || pr.isMine);
+      const personalActionPrs = allPrs.filter((pr) => !pr.labelsUnavailable ||
+        (pr.isMine && (isChecksFailing(pr) || pr.review.state === "changes_requested" ||
+          pr.review.state === "approved" || pr.review.unresolvedThreadCount > 0 ||
+          shouldHideFromSharedPullRequestLists(pr))));
+      // Draft ownership does not depend on complete labels. Retain owned drafts only in
+      // draft buckets, never in shared label-dependent buckets such as Regression.
+      const buckets = createAttentionBuckets(allPrs, login).map((bucket) => ({
+        ...bucket,
+        items: bucket.items.filter(({ pullRequest: pr }) => !pr.labelsUnavailable ||
+          (pr.isMine && pr.draft && (bucket.label === "Draft" || bucket.label === "My draft PRs"))),
+      })).filter((bucket) => bucket.items.length > 0);
       const focusAll = computeFocusItems(buckets);
-      const focusExclusions = computeFocusExclusionItems(allPrs, buckets, focusAll, login);
+      const focusExclusions = computeFocusExclusionItems(focusExclusionPrs, buckets, focusAll, login);
       // Every review-mode card carries a reviewDebt flag (aged past the focus limit without an
       // approving review) so the canvas can offer Address review / Discuss review even when the
       // "review debt" pill is truncated off the displayed signals. Derive it from the shared
@@ -860,10 +1140,13 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       const card = (pr, reason, extra) =>
         Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || ""), reviewDebt: isReviewDebt(pr) }, extra || {});
       const focusCards = focusAll.map((f, index) => {
-        return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone, queuePosition: index + 1 });
+        return card(f.pullRequest, f.reason, {
+          bucketLabel: f.bucketLabel, bucketTone: f.bucketTone,
+          queuePosition: index + 1, urgent: isUrgentPullRequest(f.pullRequest),
+        });
       });
       attention = {
-        forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
+        forMe: createForMeItems(personalActionPrs, viewerLogins).map((f) => {
           // Personal pick leads with its own call-to-action; the engine's action pill is
           // dropped (includeAction:false) so we don't double up, then state signals follow.
           const c = card(f.pullRequest, f.reason);
@@ -899,8 +1182,8 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           tone: b.tone,
           items: b.items.map((i) => card(i.pullRequest, i.reason)),
         })),
-        community: computeCommunityItems(allPrs).map((c) => card(c.pullRequest, "Community")),
-        developerCounts: createDeveloperPullRequestCounts(allPrs),
+        community: computeCommunityItems(attentionPrs).map((c) => card(c.pullRequest, "Community")),
+        developerCounts: createDeveloperPullRequestCounts(attentionPrs),
       };
     }
 
@@ -921,7 +1204,8 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       authenticated: true,
       viewer: usable[0].login,
       viewers: usable.map((a) => a.login),
-      mode,
+      mode: snapshotMode,
+      ...(loading ? { loading: true } : {}),
       release: release ?? CURRENT_RELEASE,
       repos,
       lanes,
@@ -935,8 +1219,15 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     };
   }
 
-  await Promise.all(jobs);
+  try {
+    await Promise.all(jobs);
+  } finally {
+    if (partialTimer) clearTimeout(partialTimer);
+  }
   // Final, authoritative progress tick so the deterministic bar completes with the snapshot.
   if (typeof onProgress === "function") onProgress({ done: total, total, phase: "done" });
+  if (typeof onRelated === "function" && (mode === "review" || mode === "ship")) {
+    onRelated(snapshot(mode === "review" ? "ship" : "review"));
+  }
   return snapshot();
 }

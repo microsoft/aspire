@@ -26,6 +26,7 @@
     <Compile Include="../Shared/BackchannelConstants.cs" Link="Auxiliary/BackchannelConstants.cs" />
     <Compile Include="../Shared/PathNormalizer.cs" Link="Auxiliary/PathNormalizer.cs" />
     <Compile Include="../Shared/SocketPermissionHelper.cs" Link="Auxiliary/SocketPermissionHelper.cs" />
+    <Compile Include="$(SharedDir)TemporaryStorage.cs" Link="Shared/TemporaryStorage.cs" />
     <Compile Include="../Shared/SocketDirectoryNames.cs" Link="Auxiliary/SocketDirectoryNames.cs" />
     <Compile Include="../Shared/DirectoryHelper.cs" Link="Auxiliary/DirectoryHelper.cs" />
     <Compile Include="../Shared/StringComparers.cs" Link="Auxiliary/StringComparers.cs" />

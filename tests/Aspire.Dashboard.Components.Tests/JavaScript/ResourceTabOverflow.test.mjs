@@ -189,6 +189,30 @@ test("cleanup removes the focus listener", () => {
     assert.equal(documentListeners.has("focusin"), false);
 });
 
+test("a plain click on a tab link is left to the layout, and a modified click to the browser", () => {
+    const current = register();
+    const tab = new FakeElement();
+    const click = options => {
+        const event = {
+            target: tab, button: 0, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, defaultPrevented: false,
+            preventDefault() { this.defaultPrevented = true; },
+            ...options,
+        };
+        documentListeners.get("click")(event);
+        return event.defaultPrevented;
+    };
+
+    assert.equal(click({}), true);
+    for (const modifier of ["ctrlKey", "shiftKey", "altKey", "metaKey"]) {
+        assert.equal(click({ [modifier]: true }), false, modifier);
+    }
+    assert.equal(click({ button: 1 }), false);
+    assert.equal(click({ target: Object.assign(new FakeElement(), { closest: () => null }) }), false);
+
+    unregisterTabOverflow(current.registrationId);
+    assert.equal(documentListeners.has("click"), false);
+});
+
 test("navigation that replaces only the tab list reconnects its content observer", () => {
     const current = register();
     const previousTablist = nav.tablist;

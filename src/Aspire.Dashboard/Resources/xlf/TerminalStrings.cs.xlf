@@ -162,11 +162,6 @@
         <target state="translated">Interaktivní vstup terminálu</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalMinimize">
-        <source>Minimize terminal</source>
-        <target state="translated">Minimalizovat terminál</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
         <target state="translated">Terminálu se nepovedlo připojit nebo inicializovat renderer. Zkontrolujte, jestli prostředek běží a váš prohlížeč podporuje WebGPU nebo WebGL2, a pak se zkuste znovu připojit. Protokoly konzoly tohoto prostředku můžete zobrazit i nadále.</target>

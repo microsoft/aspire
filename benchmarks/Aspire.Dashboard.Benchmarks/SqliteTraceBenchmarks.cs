@@ -43,6 +43,7 @@ public class SqliteTraceBenchmarks
     {
         _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-trace-benchmark-").FullName;
         _database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"));
+        await _database.InitializeSchemaAsync(CancellationToken.None);
         _repository = CreateRepository(_database);
 
         var resourceSpans = LoadResourceSpans();
@@ -66,15 +67,15 @@ public class SqliteTraceBenchmarks
     }
 
     [Benchmark(Description = "SQLite: summarize large trace")]
-    public int GetTraceSummaries()
+    public async Task<int> GetTraceSummaries()
     {
-        var response = _repository.GetTraceSummaries(new GetTracesRequest
+        var response = await _repository.GetTraceSummariesAsync(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
             Count = 100,
             Filters = []
-        });
+        }, CancellationToken.None);
 
         return response.PagedResult.Items.Count;
     }

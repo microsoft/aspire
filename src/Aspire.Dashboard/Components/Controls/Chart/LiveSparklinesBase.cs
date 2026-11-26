@@ -78,6 +78,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
     public required BrowserTimeProvider TimeProvider { get; init; }
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+    protected virtual int MaxConcurrentInstrumentReads => 1;
 
     protected LiveSparklinesBase()
     {
@@ -160,7 +161,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
 
     protected string FormatUnit(OtlpInstrumentSummary instrument, double value)
     {
-        return InstrumentUnitResolver.ResolveDisplayedUnit(instrument, titleCase: false, pluralize: value != 1);
+        return InstrumentUnitResolver.ResolveDisplayedUnit(instrument, capitalize: false, pluralize: value != 1);
     }
 
     private async Task RefreshPeriodicallyAsync(CancellationToken cancellationToken)
@@ -220,13 +221,44 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
     /// </summary>
     private async Task RefreshInstrumentsAsync(IReadOnlyList<OtlpInstrumentSummary> instruments, bool replaceAll, CancellationToken cancellationToken)
     {
+        var parameters = _loadedParameters;
+        var resourceKey = ResourceKey;
+        var duration = Duration;
         await _refreshLock.WaitAsync(cancellationToken);
         try
         {
-            var refreshed = new List<((ResourceKey, OtlpInstrumentKey) Key, SparklineData Data)>(instruments.Count);
-            foreach (var instrument in instruments)
+            if (parameters != _loadedParameters)
             {
-                refreshed.Add(((GetResourceKey(instrument), instrument.GetKey()), await GetSparklineDataAsync(instrument, cancellationToken)));
+                return;
+            }
+
+            var refreshed = new List<((ResourceKey, OtlpInstrumentKey) Key, SparklineData Data)>(instruments.Count);
+
+            async Task<((ResourceKey, OtlpInstrumentKey) Key, SparklineData Data)> ReadAsync(OtlpInstrumentSummary instrument)
+            {
+                var key = resourceKey ?? instrument.ResourceView.ResourceKey;
+                return ((key, instrument.GetKey()), await GetSparklineDataAsync(key, duration, instrument, cancellationToken));
+            }
+
+            if (MaxConcurrentInstrumentReads == 1)
+            {
+                foreach (var instrument in instruments)
+                {
+                    refreshed.Add(await ReadAsync(instrument));
+                }
+            }
+            else
+            {
+                foreach (var batch in instruments.Chunk(MaxConcurrentInstrumentReads))
+                {
+                    refreshed.AddRange(await Task.WhenAll(batch.Select(ReadAsync)));
+                }
+            }
+
+            // A parameter change queued its own refresh while these reads were running.
+            if (parameters != _loadedParameters)
+            {
+                return;
             }
 
             // Swap the whole dictionary so a render never sees a partially refreshed set of sparklines.
@@ -248,13 +280,13 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async Task<SparklineData> GetSparklineDataAsync(OtlpInstrumentSummary instrument, CancellationToken cancellationToken)
+    private async Task<SparklineData> GetSparklineDataAsync(ResourceKey resourceKey, TimeSpan duration, OtlpInstrumentSummary instrument, CancellationToken cancellationToken)
     {
         DateTime endTime;
         if (TelemetryRepository.IsReadOnly)
         {
             // Imported telemetry is historical, so anchor each sparkline to that instrument's last data.
-            var latestEndTime = TelemetryRepository.GetInstrumentLatestEndTime(GetResourceKey(instrument), instrument.Parent.Name, instrument.Name);
+            var latestEndTime = TelemetryRepository.GetInstrumentLatestEndTime(resourceKey, instrument.Parent.Name, instrument.Name);
             if (latestEndTime is null)
             {
                 return SparklineData.Empty;
@@ -269,16 +301,16 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
                 : TimeProvider.GetUtcNow().UtcDateTime.Subtract(TimeSpan.FromSeconds(1));
         }
 
-        var dataPointInterval = MetricDataPointInterval.Get(Duration);
+        var dataPointInterval = MetricDataPointInterval.Get(duration);
 
         // Histograms need one preceding rollup to calculate bucket count changes at the start of the range.
         var historyDuration = TimeSpan.FromTicks(Math.Max(TimeSpan.FromSeconds(30).Ticks, dataPointInterval.Ticks));
         var data = await TelemetryRepository.GetInstrumentAsync(new GetInstrumentRequest
         {
-            ResourceKey = GetResourceKey(instrument),
+            ResourceKey = resourceKey,
             MeterName = instrument.Parent.Name,
             InstrumentName = instrument.Name,
-            StartTime = endTime.Subtract(Duration + historyDuration),
+            StartTime = endTime.Subtract(duration + historyDuration),
             EndTime = endTime,
             DataPointInterval = dataPointInterval,
             IncludeExemplars = false,
@@ -290,9 +322,9 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
             return SparklineData.Empty;
         }
 
-        var calculator = new ChartDataCalculator(SparklinePointCount, Duration);
+        var calculator = new ChartDataCalculator(SparklinePointCount, duration);
         var endTimeOffset = new DateTimeOffset(endTime, TimeSpan.Zero);
-        var unit = InstrumentUnitResolver.ResolveDisplayedUnit(instrument, titleCase: true, pluralize: true);
+        var unit = InstrumentUnitResolver.ResolveDisplayedUnit(instrument, capitalize: true, pluralize: true);
 
         // Histograms show their median. It's the most representative single value for a
         // distribution, and the full chart is one click away for P90/P99.

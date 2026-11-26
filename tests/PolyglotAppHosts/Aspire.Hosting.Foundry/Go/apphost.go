@@ -83,7 +83,15 @@ func main() {
 
 	sharepoint := project.AddSharePointTool("sharepoint-tool", []string{"https://contoso.sharepoint.com", "MySite"})
 	fabric := project.AddFabricTool("fabric-tool", []string{"workspace-id"})
-	azFunc := project.AddAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q")
+	azFunc := project.AddAzureFunctionTool("az-func-tool", &aspire.AzureFunctionToolOptions{
+		FunctionName:        "myFunction",
+		Description:         "Does something",
+		ParametersJson:      "{}",
+		InputQueueEndpoint:  "https://queue.core.windows.net",
+		InputQueueName:      "input-q",
+		OutputQueueEndpoint: "https://queue.core.windows.net",
+		OutputQueueName:     "output-q",
+	})
 	funcTool := project.AddFunctionTool("func-tool", "myFunc", "{}")
 	promptAgent := project.AddPromptAgent("prompt-agent", chat)
 	promptAgent.WithTool(codeInterpreter).

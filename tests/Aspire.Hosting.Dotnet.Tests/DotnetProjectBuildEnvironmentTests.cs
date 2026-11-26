@@ -5,7 +5,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
@@ -22,7 +21,7 @@ public class DotnetProjectBuildEnvironmentTests
                     ["BUILD_FLAVOR"] = environmentValue,
                     ["BUILD\nINJECTED"] = "safe",
                 },
-                NullLogger.Instance,
+                new TestFileSystemService().TempDirectory,
                 TestContext.Current.CancellationToken));
         var responseFilePath = responseFile.FilePath;
         var responseFileDirectory = Path.GetDirectoryName(responseFilePath)!;
@@ -59,7 +58,7 @@ public class DotnetProjectBuildEnvironmentTests
     {
         var responseFile = await DotnetProjectBuildEnvironment.CreateResponseFileAsync(
             new Dictionary<string, string>(),
-            NullLogger.Instance,
+            new TestFileSystemService().TempDirectory,
             TestContext.Current.CancellationToken);
 
         Assert.Null(responseFile);
