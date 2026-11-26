@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now reports clearer Git diagnostics, applies timeouts to Git operations, and gives more helpful errors for configuration source failures.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧾",
+  "firstMergedAt": "2026-11-11T06:03:29Z",
+  "lastMergedAt": "2026-11-11T06:03:29Z",
+  "name": "Better CLI Git diagnostics, timeouts, and config-source errors",
+  "owner": "JamesNK",
+  "prs": [
+    22113
+  ]
+}

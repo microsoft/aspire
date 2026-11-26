@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Arguments added with WithArgs on a Redis resource are now forwarded to redis-server in the generated publish manifest.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧮",
+  "firstMergedAt": "2026-11-10T16:02:45Z",
+  "lastMergedAt": "2026-11-10T16:02:45Z",
+  "name": "Redis WithArgs honored in publish mode",
+  "owner": "davidfowl",
+  "prs": [
+    21447
+  ]
+}

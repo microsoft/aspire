@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Flaky test fix with no user-visible impact",
+  "mergedAt": "2026-11-10T17:27:11Z",
+  "number": 21500,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "excluded",
+  "title": "Fix flaky terminal WebSocket close handshake abort (ProducerDisconnect test)"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "No container runtime probe when the app has no containers",
+  "mergedAt": "2026-11-10T18:53:50Z",
+  "number": 21957,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Don't probe the container runtime at startup when the app has no containers"
+}

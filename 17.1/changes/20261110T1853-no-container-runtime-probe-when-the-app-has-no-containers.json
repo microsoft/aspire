@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The AppHost no longer probes for a container runtime at startup when the application model contains no containers, speeding up startup and avoiding spurious failures.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚀",
+  "firstMergedAt": "2026-11-10T18:53:50Z",
+  "lastMergedAt": "2026-11-10T18:53:50Z",
+  "name": "No container runtime probe when the app has no containers",
+  "owner": "davidfowl",
+  "prs": [
+    21957
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Open redirect fixed in dashboard token validation",
+  "mergedAt": "2026-11-10T15:38:31Z",
+  "number": 21895,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Use LocalRedirect in dashboard ValidateTokenMiddleware (CodeQL open redirect)"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The CLI now detects file-based AppHosts that use versionless #:package directives with central package management.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📎",
+  "firstMergedAt": "2026-11-10T21:06:01Z",
+  "lastMergedAt": "2026-11-10T21:06:01Z",
+  "name": "File-based AppHosts with versionless package directives detected",
+  "owner": "eerhardt",
+  "prs": [
+    22082
+  ]
+}

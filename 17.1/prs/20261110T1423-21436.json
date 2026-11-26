@@ -1,0 +1,9 @@
+{
+  "author": "tahakocal",
+  "comment": "OTLP JSON requests with malformed IDs return 400",
+  "mergedAt": "2026-11-10T14:23:09Z",
+  "number": 21436,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Return 400 for OTLP JSON requests with malformed ids"
+}

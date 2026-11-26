@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Flaky test fix, internal listener cleanup",
+  "mergedAt": "2026-11-11T02:17:54Z",
+  "number": 21442,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "excluded",
+  "title": "Release native socket listener slot before closing the connection"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Kusto emulator health checks use IPv4 loopback",
+  "mergedAt": "2026-11-11T05:06:54Z",
+  "number": 21523,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Use IPv4 loopback for Kusto emulator health checks to avoid Linux multi-connect failure"
+}

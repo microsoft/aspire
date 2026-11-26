@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Flaky test fix, internal shutdown race",
+  "mergedAt": "2026-11-10T23:38:32Z",
+  "number": 21433,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "excluded",
+  "title": "Keep terminal host shutdown connection open until the notification is delivered"
+}

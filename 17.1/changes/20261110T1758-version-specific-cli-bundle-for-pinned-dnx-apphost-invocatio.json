@@ -1,0 +1,20 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Pinned DNX AppHost invocations now use a CLI bundle matching the pinned version, and a warning is shown when AspireCliPath overrides the DNX AspireCliInvocationMode.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-11-10T17:58:29Z",
+  "lastMergedAt": "2026-11-11T00:37:05Z",
+  "name": "Version-specific CLI bundle for pinned DNX AppHost invocations",
+  "owner": "davidfowl",
+  "prs": [
+    21473,
+    21592
+  ]
+}

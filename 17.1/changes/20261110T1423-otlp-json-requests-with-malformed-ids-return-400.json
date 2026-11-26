@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@tahakocal"
+  ],
+  "description": "The dashboard OTLP/HTTP JSON endpoint now responds with 400 Bad Request when trace or span IDs are malformed instead of failing unexpectedly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧱",
+  "firstMergedAt": "2026-11-10T14:23:09Z",
+  "lastMergedAt": "2026-11-10T14:23:09Z",
+  "name": "OTLP JSON requests with malformed IDs return 400",
+  "owner": "JamesNK",
+  "prs": [
+    21436
+  ]
+}

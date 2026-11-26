@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Redis WithArgs honored in publish mode",
+  "mergedAt": "2026-11-10T16:02:45Z",
+  "number": 21447,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Forward Redis WithArgs to redis-server in publish mode"
+}

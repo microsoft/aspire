@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Version-specific CLI bundle for pinned DNX AppHost invocations",
+  "mergedAt": "2026-11-11T00:37:05Z",
+  "number": 21592,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Warn when AspireCliPath overrides a DNX AspireCliInvocationMode"
+}

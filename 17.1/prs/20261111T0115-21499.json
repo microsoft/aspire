@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only changes",
+  "mergedAt": "2026-11-11T01:15:29Z",
+  "number": 21499,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "excluded",
+  "title": "Fix CLI telemetry persistence tests racing the exporter's eager storage drain"
+}

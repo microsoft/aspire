@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Better CLI Git diagnostics, timeouts, and config-source errors",
+  "mergedAt": "2026-11-11T06:03:29Z",
+  "number": 22113,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Improve CLI Git diagnostics, timeouts, and config-source errors"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky fix",
+  "mergedAt": "2026-11-10T16:05:51Z",
+  "number": 21448,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "excluded",
+  "title": "Fix Text file busy race when exec'ing the mock gh script in Acquisition tests"
+}

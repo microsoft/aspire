@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Multi-platform project container builds fixed",
+  "mergedAt": "2026-11-11T07:00:48Z",
+  "number": 21514,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Fix multi-platform project container builds (RuntimeIdentifiers passed as one RID)"
+}

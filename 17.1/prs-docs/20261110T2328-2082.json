@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Documents pipeline output drift detection (WithOutputDiffing)",
+  "mergedAt": "2026-11-10T23:28:25Z",
+  "number": 2082,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document pipeline output drift detection for Aspire 17.0"
+}

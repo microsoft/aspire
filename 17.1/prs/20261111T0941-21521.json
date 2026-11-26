@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Kubernetes templates no longer overwritten when names collide",
+  "mergedAt": "2026-11-11T09:41:01Z",
+  "number": 21521,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Don't overwrite Kubernetes templates when objects share a name"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard login token validation now uses local redirects only, closing a potential open redirect.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-11-10T15:38:31Z",
+  "lastMergedAt": "2026-11-10T15:38:31Z",
+  "name": "Open redirect fixed in dashboard token validation",
+  "owner": "eerhardt",
+  "prs": [
+    21895
+  ]
+}

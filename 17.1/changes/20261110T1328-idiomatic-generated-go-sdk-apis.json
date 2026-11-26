@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The generated Go SDK for Aspire AppHosts now exposes more idiomatic Go APIs. Existing Go AppHosts may need updates to match the new shapes.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐹",
+  "firstMergedAt": "2026-11-10T13:28:49Z",
+  "lastMergedAt": "2026-11-10T13:28:49Z",
+  "name": "Idiomatic generated Go SDK APIs",
+  "owner": "IEvangelist",
+  "prs": [
+    21976
+  ]
+}

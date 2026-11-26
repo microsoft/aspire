@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "File-based AppHosts with versionless package directives detected",
+  "mergedAt": "2026-11-10T21:06:01Z",
+  "number": 22082,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "included",
+  "title": "Detect file-based AppHosts with versionless #:package directives (CPM)"
+}

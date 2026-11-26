@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky fix",
+  "mergedAt": "2026-11-10T16:21:14Z",
+  "number": 21503,
+  "runDate": "2026-11-26T00:10:00Z",
+  "status": "excluded",
+  "title": "Fix bUnit JS timeout flakes in StructuredLogs/Traces/TraceDetails tests"
+}
