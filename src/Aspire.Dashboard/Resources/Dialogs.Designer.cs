@@ -313,42 +313,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Don&apos;t ask again.
-        /// </summary>
-        public static string DashboardFeedbackPromptIgnore {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackPromptIgnore", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to We&apos;d love your feedback on the new experience..
-        /// </summary>
-        public static string DashboardFeedbackPromptMessage {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackPromptMessage", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Share feedback.
-        /// </summary>
-        public static string DashboardFeedbackPromptShare {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackPromptShare", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Welcome to the new Aspire dashboard!.
-        /// </summary>
-        public static string DashboardFeedbackPromptTitle {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackPromptTitle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to I couldn&apos;t find my application URLs.
         /// </summary>
         public static string DashboardFeedbackReasonFindingApplicationUrls {

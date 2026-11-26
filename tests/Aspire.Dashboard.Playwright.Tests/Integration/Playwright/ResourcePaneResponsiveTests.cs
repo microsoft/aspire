@@ -690,10 +690,6 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             // The expanded list is the dashboard's home, so it's opened directly rather than by closing a resource's
             // overview. The data tabs have no close button for it.
             await page.GotoAsync(fullCanvas ? "/" : "/resources/cache?pane=tags");
-            // The feedback prompt is shown above the header once the page has read browser storage, after the first
-            // render, and pushes the page down. Hovering before it arrives can leave the pointer over the brand,
-            // whose tooltip then shows instead of the button's.
-            await Assertions.Expect(page.GetByText(Resources.Dialogs.DashboardFeedbackPromptTitle, new() { Exact = true })).ToBeVisibleAsync();
             if (width <= 768)
             {
                 await page.Locator(".resource-picker").ClickAsync();

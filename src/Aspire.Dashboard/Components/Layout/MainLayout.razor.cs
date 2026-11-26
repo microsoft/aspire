@@ -194,7 +194,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             }
 
             await DisplayUnsecuredEndpointsMessageAsync();
-            await DisplayDashboardFeedbackMessageAsync();
         }
         catch (JSDisconnectedException ex)
         {
@@ -204,46 +203,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         {
             Logger.LogDebug(ex, "Dashboard layout initialization stopped because the layout was disposed.");
         }
-    }
-
-    private async Task DisplayDashboardFeedbackMessageAsync()
-    {
-        var dismissed = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.DashboardFeedbackPromptDismissed);
-        var dismissedForSession = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession);
-        if ((dismissed.Success && dismissed.Value) || (dismissedForSession.Success && dismissedForSession.Value))
-        {
-            return;
-        }
-
-        await MessageService.ShowAsync(
-            new DashboardMessageBarContent
-            {
-                Title = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptTitle)],
-                Message = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptMessage)],
-                // A native link, not a server-side window.open, so the browser doesn't popup-block it after the
-                // Blazor Server round trip.
-                LinkText = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptShare)],
-                LinkUrl = DashboardFeedbackDialog.DiscussionUrl,
-                LinkAsAction = true,
-                CloseOnLinkClick = true,
-                SecondaryAction = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptIgnore)]
-            },
-            MessageBarIntent.Info,
-            DashboardUIHelpers.MessageBarSection,
-            OnDashboardFeedbackMessageClosedAsync);
-    }
-
-    private async Task OnDashboardFeedbackMessageClosedAsync(MessageBarResult result)
-    {
-        // Sharing feedback (true) or ignoring (false) stops the prompt permanently. Dismissing with the close button
-        // (null) only hides it for the current browser session.
-        if (result.Data is bool)
-        {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissed, true);
-            return;
-        }
-
-        await SessionStorage.SetAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession, true);
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()
