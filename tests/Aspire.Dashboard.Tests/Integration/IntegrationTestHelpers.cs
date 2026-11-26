@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Dashboard.Configuration;
 using Aspire.Hosting;
@@ -10,6 +11,7 @@ using Grpc.Net.Client.Configuration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,6 +36,25 @@ public static class IntegrationTestHelpers
             {
                 builder.AddProvider(new TestLoggerProvider(testSink));
             }
+        });
+    }
+
+    public static void BindWildcardEndpointsToLoopback(WebApplicationBuilder builder)
+    {
+        // The dashboard needs the configured wildcard URLs to exercise endpoint reporting.
+        // Bind only the sockets to loopback: Kestrel still gets real ports without listening on
+        // all network interfaces, which can trigger a Windows Firewall prompt.
+        builder.Services.Configure<SocketTransportOptions>(options =>
+        {
+            options.CreateBoundListenSocket = endpoint =>
+            {
+                if (endpoint is IPEndPoint ipEndpoint && (IPAddress.Any.Equals(ipEndpoint.Address) || IPAddress.IPv6Any.Equals(ipEndpoint.Address)))
+                {
+                    endpoint = new IPEndPoint(IPAddress.Loopback, ipEndpoint.Port);
+                }
+
+                return SocketTransportOptions.CreateDefaultBoundListenSocket(endpoint);
+            };
         });
     }
 

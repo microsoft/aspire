@@ -69,7 +69,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 data[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = grpc ? "http://0.0.0.0:0" : string.Empty;
                 data[DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = http ? "http://0.0.0.0:0" : string.Empty;
-            });
+            },
+            preConfigureBuilder: IntegrationTestHelpers.BindWildcardEndpointsToLoopback);
 
         await app.StartAsync().DefaultTimeout();
 
@@ -235,40 +236,34 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task EndPointAccessors_AppStarted_IPv4OrIPv6()
+    public async Task EndPointAccessors_WildcardUrls_ReportAssignedPorts()
     {
-        // Arrange
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
             additionalConfiguration: data =>
             {
                 data[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://+:0;http://+:0";
                 data[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "http://+:0";
                 data[DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://+:0";
-            });
+            },
+            preConfigureBuilder: IntegrationTestHelpers.BindWildcardEndpointsToLoopback);
 
-        // Act
         await app.StartAsync().DefaultTimeout();
 
-        // Assert,
         Assert.Collection(app.FrontendEndPointsAccessor,
-            a =>
-            {
-                Assert.True(a().IsHttps);
-                AssertDynamicIPEndpoint(a);
-                AssertIPv4OrIPv6Endpoint(a);
-            },
-            a =>
-            {
-                Assert.False(a().IsHttps);
-                AssertDynamicIPEndpoint(a);
-                AssertIPv4OrIPv6Endpoint(a);
-            });
+            a => AssertEndpoint(a(), isHttps: true),
+            a => AssertEndpoint(a(), isHttps: false));
 
-        AssertDynamicIPEndpoint(app.OtlpServiceGrpcEndPointAccessor);
-        AssertIPv4OrIPv6Endpoint(app.OtlpServiceGrpcEndPointAccessor);
+        AssertEndpoint(app.OtlpServiceGrpcEndPointAccessor(), isHttps: false);
+        AssertEndpoint(app.OtlpServiceHttpEndPointAccessor(), isHttps: false);
 
-        AssertDynamicIPEndpoint(app.OtlpServiceHttpEndPointAccessor);
-        AssertIPv4OrIPv6Endpoint(app.OtlpServiceGrpcEndPointAccessor);
+        static void AssertEndpoint(ResolvedEndpointInfo endpoint, bool isHttps)
+        {
+            Assert.Equal(isHttps, endpoint.IsHttps);
+            // Port assignment must preserve the configured wildcard host even though the test socket is loopback-only.
+            Assert.Equal("+", endpoint.BindingAddress.Host);
+            Assert.Equal(IPAddress.Loopback, endpoint.EndPoint.Address);
+            Assert.True(endpoint.EndPoint.Port > 0);
+        }
     }
 
     [Fact]
@@ -1362,13 +1357,6 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
                 sources.Remove(item);
             }
         }
-    }
-
-    private static void AssertIPv4OrIPv6Endpoint(Func<ResolvedEndpointInfo> endPointAccessor)
-    {
-        // Check that the address is IPv4 or IPv6 any.
-        var ipEndPoint = endPointAccessor().EndPoint;
-        Assert.True(ipEndPoint.Address.Equals(IPAddress.Any) || ipEndPoint.Address.Equals(IPAddress.IPv6Any), "Endpoint address should be IPv4 or IPv6.");
     }
 
     private static void AssertDynamicIPEndpoint(Func<ResolvedEndpointInfo> endPointAccessor)
