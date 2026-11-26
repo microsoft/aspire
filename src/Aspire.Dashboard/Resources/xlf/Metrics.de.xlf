@@ -7,11 +7,6 @@
         <target state="translated">Alle Instrumente</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsBackTo">
-        <source>Back to {0}</source>
-        <target state="translated">Zurück zu {0}</target>
-        <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
-      </trans-unit>
       <trans-unit id="MetricsFilterResultsTitle">
         <source>Metrics matching "{0}"</source>
         <target state="translated">Metriken, die „{0}“ entsprechen</target>
@@ -123,8 +118,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
-        <source>No metrics match the filter</source>
-        <target state="translated">Keine Metriken entsprechen dem Filter.</target>
+        <source>No metrics found</source>
+        <target state="needs-review-translation">Keine Metriken entsprechen dem Filter.</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">

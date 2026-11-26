@@ -7,11 +7,6 @@
         <target state="translated">모든 계측</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsBackTo">
-        <source>Back to {0}</source>
-        <target state="translated">{0}(으)로 돌아가기</target>
-        <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
-      </trans-unit>
       <trans-unit id="MetricsFilterResultsTitle">
         <source>Metrics matching "{0}"</source>
         <target state="translated">"{0}"과(와) 일치하는 메트릭</target>
@@ -123,8 +118,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
-        <source>No metrics match the filter</source>
-        <target state="translated">필터와 일치하는 메트릭이 없음</target>
+        <source>No metrics found</source>
+        <target state="needs-review-translation">필터와 일치하는 메트릭이 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">

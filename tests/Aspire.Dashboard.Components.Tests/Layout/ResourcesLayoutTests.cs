@@ -3364,7 +3364,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll(".resource-row"));
-            var message = Assert.Single(cut.FindAll(".resource-pane-message"));
+            var message = Assert.Single(cut.FindAll(".resource-pane-list > .aspire-pane-message"));
             Assert.Equal(appHostEnabled ? "No resources found" : "No telemetry sources", message.TextContent.Trim());
             Assert.Equal(cut.Find(".resource-row-all"), message.PreviousElementSibling);
         });
@@ -3625,7 +3625,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".resource-pane-message"));
+            Assert.Empty(cut.FindAll(".resource-pane-list > .aspire-pane-message"));
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
             Assert.Empty(cut.Instance.GetSelectionTelemetryKeys(null)!);
             Assert.Single(cut.FindAll(".resource-row-all"));

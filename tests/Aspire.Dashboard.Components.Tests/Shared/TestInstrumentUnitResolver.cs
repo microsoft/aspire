@@ -8,7 +8,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 public sealed class TestInstrumentUnitResolver : IInstrumentUnitResolver
 {
-    public string ResolveDisplayedUnit(OtlpInstrumentSummary instrument, bool titleCase, bool pluralize)
+    public string ResolveDisplayedUnit(OtlpInstrumentSummary instrument, bool capitalize, bool pluralize)
     {
         return instrument.Unit;
     }

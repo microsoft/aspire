@@ -11,21 +11,28 @@ namespace Aspire.Dashboard.Model;
 
 public sealed class DefaultInstrumentUnitResolver(IStringLocalizer<ControlsStrings> loc) : IInstrumentUnitResolver
 {
-    public string ResolveDisplayedUnit(OtlpInstrumentSummary instrument, bool titleCase, bool pluralize)
+    public string ResolveDisplayedUnit(OtlpInstrumentSummary instrument, bool capitalize, bool pluralize)
     {
-        if (!string.IsNullOrEmpty(instrument.Unit))
+        if (instrument.Unit is { Length: > 0 } rawUnit)
         {
-            var (unit, isRateUnit) = OtlpUnits.GetUnit(instrument.Unit.TrimStart('{').TrimEnd('}'));
+            // A standalone annotation like "{match_attempts}" is a count label, unlike "mV{peak}".
+            var isCountLabel = rawUnit.Length >= 2 && rawUnit[0] == '{' && rawUnit[^1] == '}' &&
+                rawUnit.AsSpan(1, rawUnit.Length - 2).IndexOfAny('{', '}') < 0;
+            var (unit, isRateUnit, startsWithExpandedUnit) = OtlpUnits.GetUnit(isCountLabel ? rawUnit[1..^1] : rawUnit);
+            if (isCountLabel)
+            {
+                unit = unit.Replace('_', ' ').ToLowerInvariant();
+            }
 
-            // Don't pluralize rate units, e.g. We want "Bytes per second", not "Bytes per seconds".
-            if (pluralize && !isRateUnit)
+            // Only inflect words, not symbols or whole rates (e.g. "Bytes per seconds").
+            if (pluralize && !isRateUnit && (isCountLabel || startsWithExpandedUnit))
             {
                 unit = unit.Pluralize();
             }
 
-            if (titleCase)
+            if (capitalize && unit.Length > 0 && (isCountLabel || startsWithExpandedUnit))
             {
-                unit = unit.Titleize();
+                unit = char.ToUpperInvariant(unit[0]) + unit[1..];
             }
 
             return unit;
@@ -35,24 +42,18 @@ public sealed class DefaultInstrumentUnitResolver(IStringLocalizer<ControlsStrin
         // but have a descriptive name that lets us infer the unit.
         if (instrument.Name.EndsWith(".count", StringComparison.Ordinal))
         {
-            return UntitleCase(loc[nameof(ControlsStrings.PlotlyChartCount)], titleCase);
+            return FormatLocalizedUnit(loc[nameof(ControlsStrings.PlotlyChartCount)], capitalize);
         }
         else if (instrument.Name.EndsWith(".length", StringComparison.Ordinal))
         {
-            return UntitleCase(loc[nameof(ControlsStrings.PlotlyChartLength)], titleCase);
+            return FormatLocalizedUnit(loc[nameof(ControlsStrings.PlotlyChartLength)], capitalize);
         }
         else
         {
-            return UntitleCase(loc[nameof(ControlsStrings.PlotlyChartValue)], titleCase);
+            return FormatLocalizedUnit(loc[nameof(ControlsStrings.PlotlyChartValue)], capitalize);
         }
 
-        static string UntitleCase(string value, bool titleCase)
-        {
-            if (!titleCase)
-            {
-                value = value.ToLower(CultureInfo.CurrentCulture);
-            }
-            return value;
-        }
+        static string FormatLocalizedUnit(string value, bool capitalize) =>
+            capitalize ? value : value.ToLower(CultureInfo.CurrentCulture);
     }
 }

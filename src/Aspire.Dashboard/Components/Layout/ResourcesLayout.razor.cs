@@ -20,7 +20,6 @@ using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
-using ResourcesPage = Aspire.Dashboard.Components.Pages.Resources;
 
 namespace Aspire.Dashboard.Components.Layout;
 
@@ -54,7 +53,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private ResourcePaneGrouping _grouping;
     private readonly CancellationTokenSource _cts = new();
     private readonly List<MenuButtonItem> _paneMenuItems = [];
-    private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
+    private readonly ResourceFilter _filter = new();
+    private (ResourceTab Tab, SelectionUrlProvider Provider)? _selectionUrlProvider;
     private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
     // Registered with the main layout, which lists these views in the narrow layout's navigation menu. It's created
     // once so the layout can tell whether the registered entries are still this layout's when it's disposed.
@@ -908,6 +908,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     internal string? RouteResourceName { get; private set; }
 
+    // The provider builds the page URL; the layout still adds the multi-selection and pane to it.
+    internal void SetSelectionUrlProvider(ResourceTab tab, SelectionUrlProvider provider)
+    {
+        _selectionUrlProvider = (tab, provider);
+        StateHasChanged();
+    }
+
+    internal void ClearSelectionUrlProvider(SelectionUrlProvider provider)
+    {
+        if (_selectionUrlProvider is { } registered && registered.Provider == provider)
+        {
+            _selectionUrlProvider = null;
+        }
+    }
+
     /// <summary>
     /// Gets the URL of the given tab for the resources currently selected in the resource list.
     /// </summary>
@@ -1357,7 +1372,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
         var filteredResources = OrderStore.OrderResources(GetOrderableResources())
-            .Where(r => _filter.FilterAllResourceKinds(r, _filter.TextFilter))
+            .Where(_filter.Matches)
             .Select(r => new ResourceGridViewModel { Resource = r })
             .ToList();
 
@@ -1368,7 +1383,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private List<ResourceViewModel> GetParameterPaneRows() =>
         _resourceByName.Values
-            .Where(r => r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
+            .Where(r => r.IsParameter && _filter.Matches(r))
             .OrderBy(r => r.HasMissingParameterValueState() ? 0 : 1)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .ToList();
@@ -1458,7 +1473,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 var textFilter = group.Value is not null && GetGroupName(group.Value).Contains(_filter.TextFilter, StringComparisons.UserTextSearch)
                     ? string.Empty
                     : _filter.TextFilter;
-                return new ResourceGroup(group.Value, group.Resources.Where(r => _filter.FilterAllResourceKinds(r, textFilter)).ToList());
+                return new ResourceGroup(group.Value, group.Resources.Where(r => _filter.Matches(r, textFilter)).ToList());
             })
             .Where(group => group.Resources.Count > 0)
             .ToList();
@@ -1647,10 +1662,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private bool CanReorderGroups => CanReorderPane && _grouping != ResourcePaneGrouping.None;
 
+    private bool MatchesResourceFilter(ResourceViewModel resource) => !resource.IsParameter && _filter.Matches(resource);
+
     private string GetReorderParentName(ResourceViewModel resource)
     {
         var parentName = resource.GetResourcePropertyValue(KnownProperties.Resource.ParentName);
-        return parentName is not null && _resourceByName.TryGetValue(parentName, out var parent) && _filter.Filter(parent)
+        return parentName is not null && _resourceByName.TryGetValue(parentName, out var parent) && MatchesResourceFilter(parent)
             ? parentName : string.Empty;
     }
 
@@ -1661,7 +1678,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (CanReorderResources &&
             _resourceByName.TryGetValue(resourceName, out var resource) &&
             _resourceByName.TryGetValue(targetName, out var target) &&
-            _filter.Filter(resource) && _filter.Filter(target))
+            MatchesResourceFilter(resource) && MatchesResourceFilter(target))
         {
             switch (await OrderStore.MoveResourceAsync(resource, target, after, GetOrderableResources()))
             {
@@ -2551,6 +2568,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return tab == CurrentTab;
     }
 
+    private static string? GetRouteResourceName(IReadOnlyList<string> resourceNames, string? activeResourceName) =>
+        resourceNames.Count switch
+        {
+            0 => null,
+            1 => resourceNames[0],
+            _ => activeResourceName is not null && resourceNames.Contains(activeResourceName, StringComparers.ResourceName) ? activeResourceName : null
+        };
+
     internal static string GetTabUrl(ResourceTab tab, IReadOnlyList<string> resourceNames, string? activeResourceName = null)
     {
         if (resourceNames.Count > 1)
@@ -2565,7 +2590,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ResourceTab.Terminal => DashboardUrls.TerminalsUrl(),
                 ResourceTab.StructuredLogs => DashboardUrls.StructuredLogsUrl(),
                 ResourceTab.Traces => DashboardUrls.TracesUrl(),
-                ResourceTab.Metrics => DashboardUrls.MetricsUrl(activeResourceName is not null && resourceNames.Contains(activeResourceName, StringComparers.ResourceName) ? activeResourceName : null),
+                ResourceTab.Metrics => DashboardUrls.MetricsUrl(GetRouteResourceName(resourceNames, activeResourceName)),
                 _ => throw new InvalidOperationException($"Unexpected tab: {tab}")
             };
 
@@ -2591,7 +2616,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     /// <summary>
     /// Gets the URL that selects the given resources on the current tab, falling back to the overview when none of
-    /// the resources support the current tab. Telemetry pages are kept for any selection but a single parameter.
+    /// the resources support the current tab. Telemetry pages are kept for any selection but a single parameter,
+    /// and the current page can supply URLs that preserve its view.
     /// </summary>
     private string GetSelectionUrl(IReadOnlyList<string> resourceNames)
     {
@@ -2628,6 +2654,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             // Resources that only send telemetry don't have an overview.
             tab = ResourceTab.StructuredLogs;
+        }
+
+        if (tab == CurrentTab && _selectionUrlProvider is { } registered && registered.Tab == tab)
+        {
+            var resourceName = GetRouteResourceName(resourceNames, RouteResourceName);
+            var sameScope = resourceNames.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName);
+            var url = registered.Provider(resourceName, resourceNames, sameScope);
+            return AddPaneToUrl(resourceNames.Count > 1 ? DashboardUrls.AddResourceSelection(url, resourceNames) : url);
         }
 
         return GetTabUrl(tab, resourceNames, RouteResourceName);
@@ -3142,9 +3176,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 }
 
-// These enums are top-level rather than nested in ResourcesLayout because pages reference the layout through
-// [Layout(typeof(ResourcesLayout))], which preserves all of the layout's members for trimming. Native AOT reports
-// every preserved nested enum as a use of Enum.GetValues(Type) (IL3050) on each page that uses the layout.
+// Keep these types outside ResourcesLayout. [Layout(typeof(ResourcesLayout))] roots nested types for trimming,
+// which also roots reflection-based members inherited by enums and delegates.
+
+internal delegate string SelectionUrlProvider(string? routeResourceName, IReadOnlyList<string> resourceNames, bool sameScope);
 
 internal enum ResourceTab
 {

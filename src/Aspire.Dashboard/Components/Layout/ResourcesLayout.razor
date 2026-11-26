@@ -79,7 +79,7 @@
                 <span class="visually-hidden" role="status" aria-live="polite">@_orderStatus</span>
                 @if (!_isLoaded)
                 {
-                    <div class="resource-pane-message">
+                    <div class="aspire-pane-message">
                         <FluentSpinner Size="SpinnerSize.Small" />
                     </div>
                 }
@@ -119,7 +119,7 @@
 
                 @if (_isLoaded && paneItemCount == 0 && !showNoTags)
                 {
-                    <div class="resource-pane-message">
+                    <div class="aspire-pane-message">
                         @(DashboardClient.IsEnabled
                             ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
                             : Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)])
@@ -335,7 +335,7 @@
                @onclick:preventDefault="true">
                 @icon
                 <span class="resource-tag-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@groupName" /></span>
-                <span class="resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
+                <span class="aspire-count-badge aspire-count-badge-compact resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
             </a>
             <div class="resource-tag-actions">
                 <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"

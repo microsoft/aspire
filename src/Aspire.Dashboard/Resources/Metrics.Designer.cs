@@ -168,6 +168,9 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to No metrics found.
+        /// </summary>
         public static string MetricsNoMatchingInstruments {
             get {
                 return ResourceManager.GetString("MetricsNoMatchingInstruments", resourceCulture);
@@ -237,12 +240,6 @@ namespace Aspire.Dashboard.Resources {
         public static string MetricsShowAllInstruments {
             get {
                 return ResourceManager.GetString("MetricsShowAllInstruments", resourceCulture);
-            }
-        }
-
-        public static string MetricsBackTo {
-            get {
-                return ResourceManager.GetString("MetricsBackTo", resourceCulture);
             }
         }
 

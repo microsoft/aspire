@@ -152,11 +152,6 @@
 }
 
 .overview-card-count {
-    padding: 0 6px;
-    border-radius: var(--aspire-radius-medium);
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-caption);
     font-weight: var(--aspire-font-weight-semibold);
 }
 
@@ -630,31 +625,21 @@ a.overview-stat:focus-visible {
 }
 
 ::deep .overview-metric-tile {
+    --overview-metric-tile-padding-inline: 10px;
+
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
-    padding: 8px 10px;
-    border: 1px solid var(--colorNeutralStroke3);
+    padding: 8px var(--overview-metric-tile-padding-inline);
+    border: 1px solid var(--property-grid-row-divider-color, var(--datagrid-border-color));
     border-radius: var(--aspire-radius-medium);
-    color: inherit;
+    color: var(--colorNeutralForeground1);
     text-decoration: none;
 }
 
 ::deep .overview-metric-tile:hover {
-    border-color: var(--colorBrandStroke1);
-    background: var(--colorNeutralBackground1Hover);
-}
-
-::deep .overview-metric-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-::deep .overview-metric-name {
-    color: var(--colorBrandForegroundLink);
-    font-size: var(--aspire-font-size-body);
+    background-color: var(--property-grid-row-hover-color);
 }
 
 .overview-selection-groups {

@@ -422,14 +422,6 @@
     text-transform: uppercase;
 }
 
-.resource-pane-message {
-    display: flex;
-    justify-content: center;
-    padding: 16px 8px;
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-body);
-}
-
 .resource-pane-group {
     /* Contain the last row's margin instead of collapsing it between groups. */
     display: flow-root;
@@ -495,18 +487,6 @@
 .untagged .resource-tag-name {
     color: var(--colorNeutralForeground2);
     font-weight: var(--aspire-font-weight-regular);
-}
-
-.resource-tag-count {
-    flex: 0 0 auto;
-    min-width: 20px;
-    padding: 0 6px;
-    border-radius: var(--aspire-radius-medium);
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-caption);
-    line-height: 18px;
-    text-align: center;
 }
 
 .resource-tag-actions {
