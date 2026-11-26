@@ -423,6 +423,62 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Landing_RestoresSelectionOnlyIfStillStored(bool clearSelectionDuringStartup)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var finishPaneRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var localStorage = new TestLocalStorage
+        {
+            OnBeforeGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneCollapsed ? finishPaneRead.Task : Task.CompletedTask
+        };
+        List<string> storedSelection = ["api"];
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.LastSelectedResources ? (true, storedSelection) : (false, null),
+            OnSetAsync = (key, value) =>
+            {
+                if (key == BrowserStorageKeys.LastSelectedResources)
+                {
+                    storedSelection = Assert.IsType<List<string>>(value);
+                }
+            }
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services =>
+            {
+                services.AddSingleton<ILocalStorage>(localStorage);
+                services.AddSingleton<ISessionStorage>(sessionStorage);
+            });
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        Assert.False(cut.Instance.IsLoaded);
+
+        await cut.InvokeAsync(async () =>
+        {
+            // Help can clear the selection and reopen the same overview URL while the layout is starting.
+            if (clearSelectionDuringStartup)
+            {
+                await sessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
+                navigation.NavigateTo(DashboardUrls.ResourceListUrl());
+            }
+
+            finishPaneRead.SetResult();
+        });
+
+        var expectedUrl = clearSelectionDuringStartup ? DashboardUrls.ResourceListUrl() : DashboardUrls.ResourceOverviewUrl("api");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll("[data-resource-name='api']"));
+            Assert.Equal(expectedUrl, new Uri(navigation.Uri).PathAndQuery);
+        });
+    }
+
     [Fact]
     public async Task TabOverflowRegistration_UsesStableLayoutIdForCleanup()
     {

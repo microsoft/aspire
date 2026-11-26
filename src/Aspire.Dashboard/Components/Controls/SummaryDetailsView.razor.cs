@@ -102,18 +102,19 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
             // If show details is changing from false to true, read saved state.
             if (ShowDetails && (RememberOrientation || RememberSize))
             {
-                var orientationKey = RememberOrientation ? GetOrientationStorageKey() : null;
-                var sizeKey = RememberSize ? GetSizeStorageKey() : null;
-                string[] keys = (orientationKey, sizeKey) switch
+                var viewKey = GetStorageViewKey();
+                var (rememberOrientation, rememberSize) = (RememberOrientation, RememberSize);
+                var orientationKey = BrowserStorageKeys.SplitterOrientationKey(viewKey);
+                string[] keys = (rememberOrientation, rememberSize) switch
                 {
-                    ({ } o, { } s) => [o, s],
-                    ({ } o, null) => [o],
-                    (null, { } s) => [s],
-                    _ => []
+                    // The stored orientation determines which size to use, so fetch both sizes in the same read.
+                    (true, true) => [orientationKey, BrowserStorageKeys.SplitterSizeKey(viewKey, Orientation.Horizontal), BrowserStorageKeys.SplitterSizeKey(viewKey, Orientation.Vertical)],
+                    (true, false) => [orientationKey],
+                    _ => [BrowserStorageKeys.SplitterSizeKey(viewKey, Orientation)]
                 };
 
                 var snapshot = await LocalStore.ReadUnprotectedSnapshotAsync(keys);
-                if (orientationKey is not null)
+                if (rememberOrientation)
                 {
                     var orientationResult = snapshot.Get<Orientation>(orientationKey);
                     if (orientationResult.Success)
@@ -122,9 +123,12 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
                     }
                 }
 
-                if (sizeKey is not null)
+                if (rememberSize)
                 {
-                    var panel1FractionResult = snapshot.Get<float>(sizeKey);
+                    var sizeKey = BrowserStorageKeys.SplitterSizeKey(viewKey, Orientation);
+                    var panel1FractionResult = keys.Contains(sizeKey, StringComparer.Ordinal)
+                        ? snapshot.Get<float>(sizeKey)
+                        : await LocalStore.GetUnprotectedAsync<float>(sizeKey);
                     if (panel1FractionResult.Success)
                     {
                         var fraction = Math.Clamp(panel1FractionResult.Value, 0, 1);
@@ -303,15 +307,15 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
 
     private string GetSizeStorageKey()
     {
-        var viewKey = ViewKey ?? NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        return BrowserStorageKeys.SplitterSizeKey(viewKey, Orientation);
+        return BrowserStorageKeys.SplitterSizeKey(GetStorageViewKey(), Orientation);
     }
 
     private string GetOrientationStorageKey()
     {
-        var viewKey = ViewKey ?? NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        return BrowserStorageKeys.SplitterOrientationKey(viewKey);
+        return BrowserStorageKeys.SplitterOrientationKey(GetStorageViewKey());
     }
+
+    private string GetStorageViewKey() => ViewKey ?? NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
 
     public void Dispose()
     {
