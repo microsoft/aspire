@@ -1,3 +1,6 @@
 <Project>
   <!-- Exercise a consumer MSTest project without the repository's xUnit runner. -->
+  <PropertyGroup Condition="'$(__BuildPhase)' != 'SolutionBuild'">
+    <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
+  </PropertyGroup>
 </Project>
