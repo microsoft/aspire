@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Interaction;
@@ -192,7 +191,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
                 Assert.Equal("aspire-cli", record.GetProperty("tags").GetProperty("ai.cloud.role").GetString());
                 var properties = record.GetProperty("data").GetProperty("baseData").GetProperty("properties");
                 Assert.Equal(AspireCliTelemetry.EventLogCategoryName, properties.GetProperty("CategoryName").GetString());
-                Assert.Equal(RuntimeInformation.FrameworkDescription.Split(' ')[^1], properties.GetProperty("process.runtime.version").GetString());
+                Assert.False(properties.TryGetProperty("process.runtime.version", out _));
                 Assert.False(properties.TryGetProperty("secret", out _));
                 Assert.Equal(activity.TraceId.ToHexString(), record.GetProperty("tags").GetProperty("ai.operation.id").GetString());
                 Assert.Equal(activity.SpanId.ToHexString(), record.GetProperty("tags").GetProperty("ai.operation.parentId").GetString());

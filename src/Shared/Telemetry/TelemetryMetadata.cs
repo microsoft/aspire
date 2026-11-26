@@ -87,7 +87,9 @@ internal static class TelemetryMetadata
         tags.Add(new("os.name", OperatingSystemTelemetry.GetOsName()));
         tags.Add(new("os.type", OperatingSystemTelemetry.GetOsType()));
         tags.Add(new("os.version", OperatingSystemTelemetry.GetOsVersion()));
-        tags.Add(new(RuntimeVersionTagName, AssemblyVersionHelper.RuntimeVersion ?? string.Empty));
+
+        // Runtime version is not currently included in product telemetry.
+        // tags.Add(new(RuntimeVersionTagName, AssemblyVersionHelper.RuntimeVersion ?? string.Empty));
         return tags;
     }
 }
