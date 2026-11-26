@@ -653,8 +653,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
-        <source>Open console</source>
-        <target state="translated">Otevřít konzoli</target>
+        <source>Expand console logs</source>
+        <target state="needs-review-translation">Otevřít konzoli</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">

@@ -19,6 +19,7 @@ internal sealed class FakeAppHostServerSession : IAppHostServerSession
 {
     private readonly IAppHostRpcClient _rpcClient;
     private readonly TaskCompletionSource<int> _exit = new();
+    private CancellationTokenRegistration _stopRegistration;
 
     public FakeAppHostServerSession(IAppHostRpcClient? rpcClient = null)
     {
@@ -30,6 +31,32 @@ internal sealed class FakeAppHostServerSession : IAppHostServerSession
     public Func<CancellationToken, Task<IAppHostRpcClient>>? GetRpcClientAsyncCallback { get; init; }
 
     public bool StartAsyncCalled { get; private set; }
+
+    public int ShutdownExitCode { get; init; }
+
+    public Action? StopRequestedCallback { get; init; }
+
+    public bool StopRequested { get; private set; }
+
+    public bool Disposed { get; private set; }
+
+    public void Complete(int exitCode) => _exit.TrySetResult(exitCode);
+
+    public void SetStopToken(CancellationToken stopRequested)
+    {
+        _stopRegistration = stopRequested.Register(() =>
+        {
+            StopRequested = true;
+            if (StopRequestedCallback is { } callback)
+            {
+                callback();
+            }
+            else
+            {
+                Complete(ShutdownExitCode);
+            }
+        });
+    }
 
     public string AuthenticationToken { get; } = "fake-token";
 
@@ -71,7 +98,9 @@ internal sealed class FakeAppHostServerSession : IAppHostServerSession
 
     public ValueTask DisposeAsync()
     {
-        _exit.TrySetResult(0);
+        Disposed = true;
+        _stopRegistration.Dispose();
+        _exit.TrySetResult(ShutdownExitCode);
         return ValueTask.CompletedTask;
     }
 }
@@ -119,7 +148,13 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
     {
         CapturedEnvironmentVariables = environmentVariables is null ? null : new Dictionary<string, string>(environmentVariables);
         CreatedSessionEnvironments.Enqueue(CapturedEnvironmentVariables);
-        return CreateCallback?.Invoke() ?? Session ?? new FakeAppHostServerSession();
+        var session = CreateCallback?.Invoke() ?? Session ?? new FakeAppHostServerSession();
+        if (session is FakeAppHostServerSession fake)
+        {
+            fake.SetStopToken(stopRequested);
+        }
+
+        return session;
     }
 }
 

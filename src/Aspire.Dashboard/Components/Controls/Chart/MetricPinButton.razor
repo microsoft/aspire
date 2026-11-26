@@ -7,14 +7,16 @@
 }
 
 @* The bordered variant matches the dashboard's other header icon buttons (word wrap, close): a square
-   bordered button that turns primary while active. Cards use the quieter transparent variant. *@
+   bordered button that turns primary while active. *@
 <FluentButton Appearance="@(Bordered ? (_isPinned ? ButtonAppearance.Primary : ButtonAppearance.Default) : ButtonAppearance.Transparent)"
               IconOnly="true"
               Disabled="@_saving"
-              Class="@($"metric-pin-button{(Bordered ? " aspire-button" : null)}{(_isPinned ? " pinned" : null)} {Class}")"
+              Class="@($"metric-pin-button {(Bordered ? "aspire-button" : "aspire-icon-button")}{(_isPinned ? " pinned" : null)} {Class}")"
               data-tooltip="@label"
               aria-label="@label"
               aria-pressed="@(_isPinned ? "true" : "false")"
               OnClick="TogglePinnedAsync">
-    <FluentIcon Value="@(_isPinned ? s_pinnedIcon : s_unpinnedIcon)" Color="Color.Custom" CustomColor="currentColor" />
+    <FluentIcon Value="@(_isPinned ? s_pinnedIcon : s_unpinnedIcon)"
+                Color="Color.Custom"
+                CustomColor="@(_isPinned && !Bordered ? "var(--colorBrandForeground1)" : "currentColor")" />
 </FluentButton>

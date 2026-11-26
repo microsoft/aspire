@@ -1,0 +1,5 @@
+﻿[
+  Tests are running,
+  Resource [teal]tests[/]: Exited (exit code unknown),
+  Test run [red]failed[/]
+]

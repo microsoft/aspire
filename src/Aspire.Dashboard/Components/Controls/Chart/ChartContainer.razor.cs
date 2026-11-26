@@ -80,18 +80,6 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required bool ShowChangePerIntervalOption { get; set; }
 
-    /// <summary>
-    /// Gets or sets the label of the back button, e.g. "Back to System.Runtime". No back button when null.
-    /// </summary>
-    [Parameter]
-    public string? BackLabel { get; set; }
-
-    /// <summary>
-    /// Navigates back to the instruments the chart was opened from.
-    /// </summary>
-    [Parameter]
-    public Func<Task>? OnBackAsync { get; set; }
-
     [Inject]
     public required DashboardDataSource DataSource { get; init; }
 

@@ -193,9 +193,6 @@
   <data name="TerminalExpand" xml:space="preserve">
     <value>Expand terminal</value>
   </data>
-  <data name="TerminalMinimize" xml:space="preserve">
-    <value>Minimize terminal</value>
-  </data>
   <data name="TerminalDisconnectedMessage" xml:space="preserve">
     <value>Terminal disconnected. The last output has been preserved.</value>
   </data>

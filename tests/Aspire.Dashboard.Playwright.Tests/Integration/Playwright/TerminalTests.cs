@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
@@ -25,78 +24,32 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ModernResourceTerminal_FocusDocumentationAndShortcutsPreserveViewer()
+    public async Task ModernResourceTerminal_OverviewOpensFullTerminalPage()
     {
         await RunTestAsync(async page =>
         {
             await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
-            await page.Context.RouteAsync("https://aka.ms/aspire/dashboard-terminal",
-                route => route.FulfillAsync(new() { ContentType = "text/html", Body = "<title>Terminal documentation</title>" }));
-            await page.GotoAsync($"/resources/{ResourceName}?terminal=true").DefaultTimeout();
+            await page.GotoAsync($"/resources/{ResourceName}").DefaultTimeout();
+            await using var preview = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
+            var card = page.Locator(".overview-terminal-card");
+            await Assertions.Expect(card.Locator(".terminal-footer")).ToBeHiddenAsync();
+            await Assertions.Expect(card.GetByRole(AriaRole.Link, new() { Name = "More information", Exact = true }))
+                .ToHaveAttributeAsync("href", "https://aka.ms/aspire/dashboard-terminal");
+
+            await card.GetByRole(AriaRole.Link, new() { Name = "Expand terminal", Exact = true }).ClickAsync();
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == $"/terminals/resource/{ResourceName}");
             await using var connection = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
             await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
-            var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
+            var terminal = page.Locator(".resource-terminal-page");
+            var input = terminal.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
             await Assertions.Expect(input).ToBeVisibleAsync();
-            var viewer = await input.ElementHandleAsync();
-            Assert.NotNull(viewer);
-            var connectionCount = connection.ConnectionCount;
-            var overview = page.Locator(".resource-overview");
-            var statusCard = overview.Locator(".overview-status-card");
-            var documentation = page.Locator(".overview-terminal-card a.overview-card-action");
-
-            foreach (var focused in new[] { true, false })
-            {
-                await Assertions.Expect(overview).ToHaveClassAsync(focused
-                    ? new Regex("terminal-focused")
-                    : new Regex("^(?!.*terminal-focused)"));
-                if (focused)
-                {
-                    await Assertions.Expect(statusCard).ToHaveCountAsync(1);
-                    await Assertions.Expect(statusCard).ToBeHiddenAsync();
-                }
-                else
-                {
-                    await Assertions.Expect(statusCard).ToBeVisibleAsync();
-                }
-                await Assertions.Expect(documentation).ToHaveAttributeAsync("href", "https://aka.ms/aspire/dashboard-terminal");
-                await Assertions.Expect(documentation).ToHaveAttributeAsync("aria-label", "More information");
-                foreach (var keyboard in new[] { false, true })
-                {
-                    if (keyboard)
-                    {
-                        await documentation.FocusAsync();
-                    }
-                    var popup = await page.RunAndWaitForPopupAsync(() => keyboard
-                        ? page.Keyboard.PressAsync("Enter")
-                        : documentation.ClickAsync());
-                    await popup.WaitForLoadStateAsync();
-                    Assert.Equal("https://aka.ms/aspire/dashboard-terminal", popup.Url);
-                    await popup.CloseAsync();
-                }
-
-                await input.FocusAsync();
-                await page.Keyboard.TypeAsync("cd");
-                Assert.Equal("cd", await connection.ReadInputTextAsync(2, CancellationToken.None).DefaultTimeout());
-                Assert.Equal($"/resources/{ResourceName}", new Uri(page.Url).AbsolutePath);
-                await page.Keyboard.PressAsync("F6");
-                await Assertions.Expect(page.Locator(".terminal-font-controls fluent-button:not([disabled])").First).ToBeFocusedAsync();
-                Assert.True(await viewer.EvaluateAsync<bool>("element => element.isConnected"));
-                Assert.Equal(connectionCount, connection.ConnectionCount);
-
-                if (focused)
-                {
-                    await page.GetByRole(AriaRole.Button, new() { Name = "Minimize terminal", Exact = true }).ClickAsync();
-                    await Assertions.Expect(page).ToHaveURLAsync(new Regex($"/resources/{ResourceName}$"));
-                }
-            }
-
-            await page.GetByRole(AriaRole.Button, new() { Name = "Expand terminal", Exact = true }).ClickAsync();
-            await Assertions.Expect(overview).ToHaveClassAsync(new Regex("terminal-focused"));
-            Assert.True(await viewer.EvaluateAsync<bool>("element => element.isConnected"));
-            Assert.Equal(connectionCount, connection.ConnectionCount);
-            await page.GetByRole(AriaRole.Button, new() { Name = "Minimize terminal", Exact = true }).FocusAsync();
-            await page.Keyboard.PressAsync("c");
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath.StartsWith("/consolelogs", StringComparison.Ordinal));
+            await Assertions.Expect(terminal.Locator(".terminal-titlebar")).ToBeVisibleAsync();
+            await Assertions.Expect(terminal.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions" })).ToBeVisibleAsync();
+            await input.FocusAsync();
+            await page.Keyboard.TypeAsync("cd");
+            Assert.Equal("cd", await connection.ReadInputTextAsync(2, CancellationToken.None).DefaultTimeout());
+            await page.GoBackAsync();
+            await Assertions.Expect(card).ToBeVisibleAsync();
         });
     }
 

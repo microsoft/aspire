@@ -12,6 +12,24 @@ public class KnownFeaturesTests
 {
     [Theory]
     [InlineData(null, false)]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    public void TestCommand_DefaultsOffAndHonorsConfiguration(string? enabled, bool expected)
+    {
+        var metadata = KnownFeatures.GetFeatureMetadata(KnownFeatures.TestCommandEnabled);
+        Assert.NotNull(metadata);
+        Assert.False(metadata.DefaultValue);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["features:testCommandEnabled"] = enabled
+        }).Build();
+        var features = new Aspire.Cli.Configuration.Features(configuration, NullLogger<Aspire.Cli.Configuration.Features>.Instance);
+
+        Assert.Equal(expected, features.IsFeatureEnabled(metadata.Name, metadata.DefaultValue));
+    }
+
+    [Theory]
+    [InlineData(null, false)]
     [InlineData(false, false)]
     [InlineData(true, true)]
     public void AppHostServerV2_RequiresExplicitProjectOptIn(bool? enabled, bool expected)

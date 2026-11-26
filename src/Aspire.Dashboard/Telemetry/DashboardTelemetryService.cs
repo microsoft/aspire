@@ -17,6 +17,13 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     internal const string ReportedActivitySourceName = "Aspire.Dashboard.Reported";
     internal const string DiagnosticsActivitySourceName = ReportedActivitySourceName + ".Diagnostics";
     internal const string EventLogCategoryName = "Aspire.Dashboard.Reported.Events";
+
+    // Azure Monitor allows 8,192 characters per custom property value.
+    // https://learn.microsoft.com/azure/azure-monitor/fundamentals/service-limits#application-insights
+    // Use a smaller cap to keep telemetry payloads small. The first 2,048 code units
+    // should capture the details we need, though long stack traces may be truncated.
+    private const int MaxPropertyStringLength = 2048;
+
     private readonly DashboardTelemetryConfiguration _configuration;
     private readonly TelemetryTagsSource _tagsSource;
 
@@ -136,14 +143,6 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
 
     protected override bool IsReportedTelemetryEnabled => IsTelemetryEnabled;
 
-    protected override ActivityTagsCollection CreateErrorTags(Exception exception) => new()
-    {
-        // Preserve the IDE bridge's privacy policy: exception messages and stack traces
-        // can contain resource names, secrets and workspace paths, so only report the type.
-        [TelemetryPropertyKeys.ExceptionType] = exception.GetType().FullName,
-        [TelemetryPropertyKeys.ExceptionRuntimeVersion] = VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty
-    };
-
     /// <inheritdoc />
     protected override bool TrySanitizeProperty(string key, object? value, out object? sanitizedValue)
     {
@@ -172,16 +171,17 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         }
         else if (key is not (TelemetryPropertyKeys.DashboardVersion or TelemetryPropertyKeys.DashboardBuildId or
             TelemetryPropertyKeys.DeploymentEnvironmentName or TelemetryPropertyKeys.OsName or TelemetryPropertyKeys.OsType or TelemetryPropertyKeys.OsVersion or
-            TelemetryPropertyKeys.MacAddressHash or TelemetryPropertyKeys.DeviceId or TelemetryPropertyKeys.InternalMicrosoft or
+            TelemetryPropertyKeys.RuntimeVersion or TelemetryPropertyKeys.MacAddressHash or TelemetryPropertyKeys.DeviceId or TelemetryPropertyKeys.InternalMicrosoft or
             TelemetryPropertyKeys.InternalMicrosoftSource or TelemetryPropertyKeys.InternalMicrosoftAlias or TelemetryPropertyKeys.InternalMicrosoftDomain or
-            TelemetryPropertyKeys.ExceptionType or TelemetryPropertyKeys.ExceptionRuntimeVersion or "aspire.dashboard.result"))
+            TelemetryPropertyKeys.ExceptionType or TelemetryPropertyKeys.ExceptionMessage or TelemetryPropertyKeys.ExceptionStackTrace or "aspire.dashboard.result"))
         {
             return false;
         }
 
         sanitizedValue = value switch
         {
-            string text => text.Length <= 1024 ? text : text[..1024],
+            string text => FormatHelpers.TruncateText(text, MaxPropertyStringLength),
+            null when key == TelemetryPropertyKeys.ExceptionStackTrace => string.Empty,
             bool or int or double => value,
             _ => null
         };

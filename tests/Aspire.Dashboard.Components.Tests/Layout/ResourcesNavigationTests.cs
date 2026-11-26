@@ -87,11 +87,7 @@ public class ResourcesNavigationTests
     [InlineData("resources", nameof(ResourceTab.Overview), null, false)]
     [InlineData("resources/frontend", nameof(ResourceTab.Overview), "frontend", false)]
     [InlineData("resources/my%20app?x=1", nameof(ResourceTab.Overview), "my app", false)]
-    [InlineData("resources/shell?terminal=true", nameof(ResourceTab.Terminal), "shell", false)]
-    [InlineData("resources/shell?pane=tags&terminal=TRUE#output", nameof(ResourceTab.Terminal), "shell", false)]
-    [InlineData("resources/shell?terminal=false", nameof(ResourceTab.Overview), "shell", false)]
-    [InlineData("resources/shell?terminal=invalid", nameof(ResourceTab.Overview), "shell", false)]
-    [InlineData("resources?terminal=true", nameof(ResourceTab.Overview), null, false)]
+    [InlineData("resources/shell?terminal=true", nameof(ResourceTab.Overview), "shell", false)]
     [InlineData("consolelogs", nameof(ResourceTab.Console), null, false)]
     [InlineData("consolelogs/resource/frontend", nameof(ResourceTab.Console), "frontend", false)]
     [InlineData("terminals", nameof(ResourceTab.Terminal), null, false)]
@@ -132,7 +128,7 @@ public class ResourcesNavigationTests
     [InlineData(nameof(ResourceTab.Overview), null, "/resources")]
     [InlineData(nameof(ResourceTab.Console), "api", "/consolelogs/resource/api")]
     [InlineData(nameof(ResourceTab.Console), null, "/consolelogs")]
-    [InlineData(nameof(ResourceTab.Terminal), "shell #1", "/resources/shell%20%231?terminal=true")]
+    [InlineData(nameof(ResourceTab.Terminal), "shell #1", "/terminals/resource/shell%20%231")]
     [InlineData(nameof(ResourceTab.Terminal), null, "/terminals")]
     [InlineData(nameof(ResourceTab.StructuredLogs), "api", "/structuredlogs/resource/api")]
     [InlineData(nameof(ResourceTab.Traces), null, "/traces")]
@@ -141,18 +137,6 @@ public class ResourcesNavigationTests
     public void GetTabUrl_ReturnsTabUrl(string tab, string? resourceName, string expectedUrl)
     {
         Assert.Equal(expectedUrl, ResourcesLayout.GetTabUrl(Enum.Parse<ResourceTab>(tab), resourceName is null ? [] : [resourceName]));
-    }
-
-    [Theory]
-    [InlineData("/resources/shell", true, "/resources/shell?terminal=true")]
-    [InlineData("/resources/shell?terminal=true", true, "/resources/shell?terminal=true")]
-    [InlineData("/resources/shell?terminal=true", false, "/resources/shell")]
-    [InlineData("/resources/shell?pane=tags&terminal=true#output", false, "/resources/shell?pane=tags#output")]
-    [InlineData("/resources/shell?pane=tags#output", true, "/resources/shell?pane=tags&terminal=true#output")]
-    [InlineData("/resources/shell?resource=shell&resource=worker&terminal=true", false, "/resources/shell?resource=shell&resource=worker")]
-    public void TerminalFocusUrl_PreservesResourcePaneAndOtherState(string url, bool focused, string expected)
-    {
-        Assert.Equal(expected, DashboardUrls.SetResourceTerminalFocus(url, focused));
     }
 
     [Theory]

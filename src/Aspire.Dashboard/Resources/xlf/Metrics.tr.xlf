@@ -7,11 +7,6 @@
         <target state="translated">Tüm araçlar</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsBackTo">
-        <source>Back to {0}</source>
-        <target state="translated">{0} sitesine geri dön</target>
-        <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
-      </trans-unit>
       <trans-unit id="MetricsFilterResultsTitle">
         <source>Metrics matching "{0}"</source>
         <target state="translated">"{0}" ile eşleşen ölçümler</target>
@@ -123,8 +118,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
-        <source>No metrics match the filter</source>
-        <target state="translated">Filtreyle eşleşen ölçüm yok</target>
+        <source>No metrics found</source>
+        <target state="new">No metrics found</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">

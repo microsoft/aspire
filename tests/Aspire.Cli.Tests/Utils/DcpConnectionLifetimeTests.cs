@@ -7,7 +7,6 @@ using System.Reflection;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
-using Aspire.Hosting;
 using Aspire.Shared;
 using Aspire.Shared.Tests;
 using Aspire.TestUtilities;
@@ -24,27 +23,38 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Session_WhenParentExits_StopsApiServerAndControllers(bool delayHandoff)
+    public async Task Session_WhenParentExits_StopsApiServer(bool delayHandoff)
     {
-        await TestLifetimeAsync(abruptParentExit: true, delayHandoff, useSymlink: false, preventGracefulStop: false);
+        await TestLifetimeAsync(abruptParentExit: true, delayHandoff, useSymlink: false, preventGracefulStop: false, includeControllers: false);
+    }
+
+    [Fact]
+    public async Task Session_WhenControllersAreReadyAndParentExits_StopsApiServerAndControllers()
+    {
+        await TestLifetimeAsync(
+            abruptParentExit: true,
+            delayHandoff: false,
+            useSymlink: false,
+            preventGracefulStop: false,
+            includeControllers: true);
     }
 
     [Fact]
     public async Task Session_WhenDisposed_StopsDcpBeforeParentExits()
     {
-        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false, preventGracefulStop: false);
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false, preventGracefulStop: false, includeControllers: true);
     }
 
     [Fact]
     public async Task Session_WhenGracefulStopCannotBeRequested_KillsApiServerAndControllersBeforeParentExits()
     {
-        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false, preventGracefulStop: true);
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false, preventGracefulStop: true, includeControllers: true);
     }
 
     [Fact]
     public async Task Session_WhenBundleDirectoryIsSymlinked_RecognizesControllers()
     {
-        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: true, preventGracefulStop: false);
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: true, preventGracefulStop: false, includeControllers: true);
     }
 
     [Fact]
@@ -58,11 +68,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
         {
             CreateExecutionWithFileNameCallback = (fileName, arguments, environment, directory, options) =>
             {
-                var containerRuntime = Environment.GetEnvironmentVariable(KnownConfigNames.ContainerRuntime);
-                string[] testArguments = string.IsNullOrEmpty(containerRuntime)
-                    ? arguments
-                    : [.. arguments, "--container-runtime", containerRuntime];
-                var execution = factory.CreateExecution(fileName, testArguments, environment, directory, options);
+                var execution = factory.CreateExecution(fileName, arguments, environment, directory, options);
                 return new DcpConnectionTestProcess(execution, (process, _) =>
                 {
                     identity = ProcessTestIdentity.Capture(process.ProcessId);
@@ -115,7 +121,12 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
         return directory;
     }
 
-    private async Task TestLifetimeAsync(bool abruptParentExit, bool delayHandoff, bool useSymlink, bool preventGracefulStop)
+    private async Task TestLifetimeAsync(
+        bool abruptParentExit,
+        bool delayHandoff,
+        bool useSymlink,
+        bool preventGracefulStop,
+        bool includeControllers)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var readiness = new ProcessTestReadiness();
@@ -139,7 +150,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             dcpDirectory,
             workspace.Path,
             readiness.Name,
-            Environment.GetEnvironmentVariable(KnownConfigNames.ContainerRuntime) ?? string.Empty,
+            includeControllers.ToString(),
             preventGracefulStop.ToString(),
             options);
         var output = helper.Process.StandardOutput.ReadToEndAsync();
@@ -151,18 +162,25 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
 
         try
         {
-            // Capture the root before waiting for controller readiness so startup failures can
-            // still clean up the exact owned API server.
             var apiServer = await readiness.ReadSupervisorAsync();
             identities.Add(apiServer);
             processes.Add(Process.GetProcessById(apiServer.ProcessId));
-            // Account for DcpConnectionTestProcess startup and readiness times, plus a buffer for slower CI machines.
-            var treeReadinessTimeout = TimeSpan.FromSeconds(2 * DcpConnectionTestProcess.StartupAndReadinessTimeoutSeconds)
-                + TestConstants.DefaultTimeoutTimeSpan;
-            var tree = await readiness.ReadTreeAsync(treeReadinessTimeout);
-            Assert.Equal(apiServer, tree[0]);
-            identities.Add(tree[1]);
-            processes.Add(Process.GetProcessById(tree[1].ProcessId));
+            if (includeControllers)
+            {
+                // The helper reports the API server's PID before it waits for the kubeconfig.
+                // Allow both helper phases to finish before timing out the pipe reads.
+                var treeReadinessTimeout = DcpConnectionTestProcess.ControllerStartupAndReadinessTimeout
+                    + TestConstants.DefaultTimeoutTimeSpan;
+                var tree = await readiness.ReadTreeAsync(treeReadinessTimeout);
+                Assert.Equal(apiServer, tree[0]);
+                identities.Add(tree[1]);
+                processes.Add(Process.GetProcessById(tree[1].ProcessId));
+            }
+            else
+            {
+                var readyApiServer = await readiness.ReadTargetAsync();
+                Assert.Equal(apiServer, readyApiServer);
+            }
             sessionDirectory = await File.ReadAllTextAsync(sessionDirectoryFile, TestContext.Current.CancellationToken);
             Assert.StartsWith("aspire-dcp-doctor-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
             if (delayHandoff)

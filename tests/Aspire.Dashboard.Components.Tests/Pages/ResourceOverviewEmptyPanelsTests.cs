@@ -52,7 +52,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         {
             var metricsLinks = cut.FindAll("[aria-labelledby='overview-metrics-title'] a.overview-stat");
             Assert.Equal(["Instruments", "Meters"], metricsLinks.Select(link => link.QuerySelector(".overview-stat-label")!.TextContent));
-            Assert.All(metricsLinks, link => Assert.Equal($"/metrics/resource/{resourceName}?all=true", link.GetAttribute("href")));
+            Assert.All(metricsLinks, link => Assert.Equal($"/metrics/resource/{resourceName}", link.GetAttribute("href")));
 
             var traceLinks = cut.FindAll("[aria-labelledby='overview-traces-title'] a.overview-stat");
             Assert.Equal(["Total", "Failed"], traceLinks.Select(link => link.QuerySelector(".overview-stat-label")!.TextContent));

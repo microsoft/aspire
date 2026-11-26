@@ -30,6 +30,7 @@ internal sealed class ConfigSourceService(
     TimeProvider timeProvider,
     IInteractionService interaction,
     ICliHostEnvironment hostEnvironment,
+    IFeatures features,
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
@@ -51,6 +52,24 @@ internal sealed class ConfigSourceService(
         Arity = ArgumentArity.ZeroOrOne
     };
 
+    private bool IsEnabled => features.IsFeatureEnabled(KnownFeatures.ConfigSourceEnabled, defaultValue: true);
+
+    internal void ValidateOptIn(ParseResult parseResult)
+    {
+        if (parseResult.GetResult(s_useSourceOption)?.GetValueOrDefault<bool?>() is true)
+        {
+            EnsureEnabled();
+        }
+    }
+
+    internal void EnsureEnabled()
+    {
+        if (!IsEnabled)
+        {
+            throw new ConfigSourceException(ConfigSourceStrings.FeatureDisabled);
+        }
+    }
+
     /// <summary>
     /// Checks the saved source in the nearest local configuration file without applying changes.
     /// Runs in the background and defers advisory messages until command exit.
@@ -60,6 +79,11 @@ internal sealed class ConfigSourceService(
     /// <exception cref="InvalidOperationException">The service has already been used for a different project.</exception>
     public void CheckForConfigSourceUpdates(DirectoryInfo projectDirectory, CancellationToken cancellationToken)
     {
+        if (!IsEnabled)
+        {
+            return;
+        }
+
         lock (_checksLock)
         {
             EnsureSameProject(projectDirectory);
@@ -160,6 +184,11 @@ internal sealed class ConfigSourceService(
     internal async Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(
         ParseResult parseResult, string consentPrompt, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
+        if (!IsEnabled)
+        {
+            return null;
+        }
+
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         var explicitSource = repository is not null;
         if (!explicitSource)
@@ -256,6 +285,11 @@ internal sealed class ConfigSourceService(
     public async Task<ConfigSource?> SelectForInitializationAsync(
         DirectoryInfo projectDirectory, ParseResult parseResult, CancellationToken cancellationToken)
     {
+        if (!IsEnabled)
+        {
+            return null;
+        }
+
         EnsureSameProject(projectDirectory);
         var path = Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
@@ -277,6 +311,11 @@ internal sealed class ConfigSourceService(
 
     public async Task SelectForUpdateAsync(DirectoryInfo projectDirectory, ParseResult parseResult, CancellationToken cancellationToken)
     {
+        if (!IsEnabled)
+        {
+            return;
+        }
+
         EnsureSameProject(projectDirectory);
         var path = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory)
             ?? Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
@@ -326,6 +365,11 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
     {
+        if (!IsEnabled)
+        {
+            return new JsonObject();
+        }
+
         // Creation consent controls discovery for both explicit and Microsoft-default sources.
         // Reuse the selected identity and snapshot, and do not re-enable a declined source.
         if (_creationSource is not null)
@@ -470,6 +514,15 @@ internal sealed class ConfigSourceService(
 
     public async Task CheckProjectAsync(DirectoryInfo directory, bool force, CancellationToken cancellationToken)
     {
+        if (force)
+        {
+            EnsureEnabled();
+        }
+        else if (!IsEnabled)
+        {
+            return;
+        }
+
         EnsureSameProject(directory);
         if (!force && executionContext.Command is UpdateCommand { IsConfigSourceRefresh: true })
         {

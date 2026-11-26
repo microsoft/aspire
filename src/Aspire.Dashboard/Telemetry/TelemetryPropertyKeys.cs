@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared.Telemetry;
+
 namespace Aspire.Dashboard.Telemetry;
 
 public static class TelemetryPropertyKeys
@@ -16,6 +18,7 @@ public static class TelemetryPropertyKeys
     public const string OsName = "os.name";
     public const string OsType = "os.type";
     public const string OsVersion = "os.version";
+    public const string RuntimeVersion = TelemetryMetadata.RuntimeVersionTagName;
     public const string MacAddressHash = "machine.mac_address_hash";
     public const string DeviceId = "machine.device_id";
     public const string InternalMicrosoft = AspireDashboardPropertyPrefix + "is_microsoft_internal";
@@ -46,10 +49,9 @@ public static class TelemetryPropertyKeys
     public const string MetricsSelectedView = AspireDashboardPropertyPrefix + "metrics.selected_view";
 
     // Exception properties
-    public const string ExceptionType = "exception.type";
-    public const string ExceptionMessage = "exception.message";
-    public const string ExceptionStackTrace = "exception.stacktrace";
-    public const string ExceptionRuntimeVersion = "process.runtime.version";
+    public const string ExceptionType = AspireTelemetryBase.ExceptionTypeTagName;
+    public const string ExceptionMessage = AspireTelemetryBase.ExceptionMessageTagName;
+    public const string ExceptionStackTrace = AspireTelemetryBase.ExceptionStackTraceTagName;
 
     // Resources properties
     public const string ResourceType = AspireDashboardPropertyPrefix + "resource.type";

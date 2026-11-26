@@ -79,7 +79,7 @@
                 <span class="visually-hidden" role="status" aria-live="polite">@_orderStatus</span>
                 @if (!_isLoaded)
                 {
-                    <div class="resource-pane-message">
+                    <div class="aspire-pane-message">
                         <FluentSpinner Size="SpinnerSize.Small" />
                     </div>
                 }
@@ -119,7 +119,7 @@
 
                 @if (_isLoaded && paneItemCount == 0 && !showNoTags)
                 {
-                    <div class="resource-pane-message">
+                    <div class="aspire-pane-message">
                         @(DashboardClient.IsEnabled
                             ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
                             : Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)])
@@ -335,7 +335,7 @@
                @onclick:preventDefault="true">
                 @icon
                 <span class="resource-tag-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@groupName" /></span>
-                <span class="resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
+                <span class="aspire-count-badge aspire-count-badge-compact resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
             </a>
             <div class="resource-tag-actions">
                 <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
@@ -577,7 +577,7 @@
                       aria-haspopup="dialog"
                       aria-expanded="@(_isResourcePickerOpen ? "true" : "false")"
                       aria-description="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneOpen)]">
-            <span slot="start">@((RenderFragment)RenderHeaderIcon)</span>
+            <span slot="start">@((RenderFragment)(builder => RenderHeaderIcon(builder, compact: true)))</span>
             <span class="resource-picker-text">@text</span>
         </FluentButton>
     </h1>
@@ -599,28 +599,38 @@
         }
     }
 
-    private void RenderHeaderIcon(RenderTreeBuilder __builder)
+    private void RenderHeaderIcon(RenderTreeBuilder __builder, bool compact)
     {
+        const string iconWidth = "20px";
+
         if (CurrentTab == ResourceTab.Parameters)
         {
             <span class="resource-header-icon neutral">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Default" />
             </span>
         }
         else if (SelectedResource is { } selected)
         {
-            <span class="resource-header-icon">
-                <FluentIcon Width="20px"
-                            Color="Color.Custom"
-                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(selected))"
-                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
-                <PersistentContainerBadge Resource="@selected" />
-            </span>
+            var iconColor = ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(selected));
+            if (compact)
+            {
+                RenderResourceIcon(__builder, selected, iconColor, iconWidth, IconSize.Size20);
+            }
+            else
+            {
+                <span class="resource-header-icon">
+                    <FluentIcon Width="@iconWidth"
+                                Color="Color.Custom"
+                                CustomColor="@iconColor"
+                                Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
+                    <PersistentContainerBadge Resource="@selected" />
+                </span>
+            }
         }
         else if (SelectedTelemetryOnlyResource is { } telemetryOnly)
         {
             <span class="resource-header-icon">
-                <FluentIcon Width="20px"
+                <FluentIcon Width="@iconWidth"
                             Color="Color.Custom"
                             CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.Name)"
                             Value="@(new Icons.Regular.Size20.DataUsage())" />
@@ -631,24 +641,24 @@
             <span class="resource-header-icon">
                 @if (_selectedItems.All(item => item.Resource is { IsParameter: true }))
                 {
-                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
+                    <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
                 }
                 else
                 {
-                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
+                    <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
                 }
             </span>
         }
         else if (SelectedResourceName is not null && _isLoaded)
         {
             <span class="resource-header-icon neutral">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.QuestionCircle())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.QuestionCircle())" Color="Color.Default" />
             </span>
         }
         else
         {
             <span class="resource-header-icon scope">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
             </span>
         }
     }
@@ -669,7 +679,7 @@
         }
         @if (!isDesktop || !_isPaneCollapsed)
         {
-            RenderHeaderIcon(__builder);
+            RenderHeaderIcon(__builder, compact: false);
         }
         @if (CurrentTab == ResourceTab.Parameters)
         {
@@ -1122,14 +1132,19 @@
             ? "var(--colorNeutralForeground3)"
             : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(item.Name)})";
 
+        RenderResourceIcon(__builder, item.Resource, iconColor, "16px", IconSize.Size16);
+    }
+
+    private void RenderResourceIcon(RenderTreeBuilder __builder, ResourceViewModel resource, string iconColor, string width, IconSize iconSize)
+    {
         <span class="resource-row-icon">
             <span class="resource-row-glyph">
-                <FluentIcon Width="16px"
+                <FluentIcon Width="@width"
                             Color="Color.Custom"
                             CustomColor="@iconColor"
-                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, item.Resource, IconSize.Size16)" />
+                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, iconSize)" />
             </span>
-            <PersistentContainerBadge Resource="@item.Resource" />
+            <PersistentContainerBadge Resource="@resource" />
         </span>
     }
 

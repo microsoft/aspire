@@ -13,14 +13,10 @@ public sealed class ResourcesViewModelTests
     [Fact]
     public void TableView_ExcludesParameters()
     {
-        var vm = new ResourcesViewModel
-        {
-            SelectedViewKind = ResourceViewKind.Table,
-            TextFilter = ""
-        };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Parameter] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        var vm = new ResourcesViewModel { SelectedViewKind = ResourceViewKind.Table };
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Parameter] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running);
 
@@ -30,14 +26,10 @@ public sealed class ResourcesViewModelTests
     [Fact]
     public void GraphView_ExcludesParameters()
     {
-        var vm = new ResourcesViewModel
-        {
-            SelectedViewKind = ResourceViewKind.Graph,
-            TextFilter = ""
-        };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Parameter] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        var vm = new ResourcesViewModel { SelectedViewKind = ResourceViewKind.Graph };
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Parameter] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running);
 
@@ -47,14 +39,10 @@ public sealed class ResourcesViewModelTests
     [Fact]
     public void ParametersView_ShowsOnlyParameters()
     {
-        var vm = new ResourcesViewModel
-        {
-            SelectedViewKind = ResourceViewKind.Parameters,
-            TextFilter = ""
-        };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        var vm = new ResourcesViewModel { SelectedViewKind = ResourceViewKind.Parameters };
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var containerResource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
         var parameterResource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running);
@@ -66,14 +54,10 @@ public sealed class ResourcesViewModelTests
     [Fact]
     public void TypeNotVisible_ExcludesResource()
     {
-        var vm = new ResourcesViewModel
-        {
-            SelectedViewKind = ResourceViewKind.Table,
-            TextFilter = ""
-        };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = false;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        var vm = new ResourcesViewModel { SelectedViewKind = ResourceViewKind.Table };
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Container] = false;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
 
@@ -83,14 +67,10 @@ public sealed class ResourcesViewModelTests
     [Fact]
     public void StateNotVisible_ExcludesResource()
     {
-        var vm = new ResourcesViewModel
-        {
-            SelectedViewKind = ResourceViewKind.Table,
-            TextFilter = ""
-        };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = false;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        var vm = new ResourcesViewModel { SelectedViewKind = ResourceViewKind.Table };
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = false;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
 
@@ -103,11 +83,11 @@ public sealed class ResourcesViewModelTests
         var vm = new ResourcesViewModel
         {
             SelectedViewKind = ResourceViewKind.Table,
-            TextFilter = "xyz-no-match"
+            Filters = { TextFilter = "xyz-no-match" }
         };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceName: "my-app", resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
 
@@ -120,11 +100,11 @@ public sealed class ResourcesViewModelTests
         var vm = new ResourcesViewModel
         {
             SelectedViewKind = ResourceViewKind.Table,
-            TextFilter = "my-app"
+            Filters = { TextFilter = "my-app" }
         };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceName: "my-app", resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
 
@@ -137,12 +117,11 @@ public sealed class ResourcesViewModelTests
         var vm = new ResourcesViewModel
         {
             SelectedViewKind = ResourceViewKind.Table,
-            TextFilter = "",
-            ShowHiddenResources = false
+            Filters = { ShowHiddenResources = false }
         };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running, hidden: true);
 
@@ -155,12 +134,11 @@ public sealed class ResourcesViewModelTests
         var vm = new ResourcesViewModel
         {
             SelectedViewKind = ResourceViewKind.Table,
-            TextFilter = "",
-            ShowHiddenResources = true
+            Filters = { ShowHiddenResources = true }
         };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running, hidden: true);
 
@@ -173,11 +151,10 @@ public sealed class ResourcesViewModelTests
         var vm = new ResourcesViewModel
         {
             SelectedViewKind = ResourceViewKind.Parameters,
-            TextFilter = "",
-            ShowHiddenResources = true
+            Filters = { ShowHiddenResources = true }
         };
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var parameter = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running, hidden: true);
 
@@ -187,14 +164,10 @@ public sealed class ResourcesViewModelTests
     [Fact]
     public void AllFiltersPass_IncludesResource()
     {
-        var vm = new ResourcesViewModel
-        {
-            SelectedViewKind = ResourceViewKind.Table,
-            TextFilter = ""
-        };
-        vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
-        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+        var vm = new ResourcesViewModel { SelectedViewKind = ResourceViewKind.Table };
+        vm.Filters.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
+        vm.Filters.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.Filters.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
 

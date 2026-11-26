@@ -7,6 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.Tests;
 using Microsoft.AspNetCore.Certificates.Generation;
@@ -21,7 +22,11 @@ internal sealed class DcpConnectionTestProcess(
     internal const string SessionDirectoryFileName = "dcp-session-directory";
     internal const string StandardOutputFileName = "dcp-stdout.log";
     internal const string StandardErrorFileName = "dcp-stderr.log";
-    internal const int StartupAndReadinessTimeoutSeconds = 30;
+    private static readonly TimeSpan s_startupTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_controllerReadinessTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan s_apiReadinessTimeout = TimeSpan.FromSeconds(30);
+
+    internal static TimeSpan ControllerStartupAndReadinessTimeout => s_startupTimeout + s_controllerReadinessTimeout;
 
     public string FileName => inner.FileName;
     public IReadOnlyList<string> Arguments => inner.Arguments;
@@ -48,8 +53,14 @@ internal sealed class DcpConnectionTestProcess(
     public void Kill(bool entireProcessTree) => inner.Kill(entireProcessTree);
     public ValueTask DisposeAsync() => inner.DisposeAsync();
 
-    internal static async Task RunAsync(string dcpDirectory, string workingDirectory, string readinessName, string containerRuntime, string preventGracefulStop)
+    internal static async Task RunAsync(
+        string dcpDirectory,
+        string workingDirectory,
+        string readinessName,
+        string includeControllers,
+        string preventGracefulStop)
     {
+        var startControllers = bool.Parse(includeControllers);
         using var control = new NamedPipeServerStream(
             $"{readinessName}-control", PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
@@ -66,9 +77,12 @@ internal sealed class DcpConnectionTestProcess(
                 Assert.NotNull(environment);
                 var sessionDirectory = environment["DCP_SESSION_FOLDER"];
                 File.WriteAllText(Path.Combine(workingDirectory, SessionDirectoryFileName), sessionDirectory);
-                // Verbose startup metadata supplies the controller PID, not our readiness condition.
-                string[] testArguments = [.. arguments, "-v=debug"];
-                if (!string.IsNullOrEmpty(containerRuntime))
+                var testArguments = startControllers
+                    ? arguments.Where(argument => argument != "--server-only").ToArray()
+                    : arguments;
+                testArguments = [.. testArguments, "-v=debug"];
+                var containerRuntime = Environment.GetEnvironmentVariable(KnownConfigNames.ContainerRuntime);
+                if (startControllers && !string.IsNullOrEmpty(containerRuntime))
                 {
                     testArguments = [.. testArguments, "--container-runtime", containerRuntime];
                 }
@@ -96,7 +110,7 @@ internal sealed class DcpConnectionTestProcess(
             }
         };
         DcpConnectionChecker.DcpConnectionTestSession session;
-        using (var startup = new CancellationTokenSource(TimeSpan.FromSeconds(StartupAndReadinessTimeoutSeconds)))
+        using (var startup = new CancellationTokenSource(s_startupTimeout))
         {
             session = await DcpConnectionChecker.DcpConnectionTestSession.StartAsync(
                 dcpDirectory,
@@ -116,15 +130,25 @@ internal sealed class DcpConnectionTestProcess(
         {
             var process = Assert.Single(recordingFactory.CreatedExecutions);
             var sessionDirectory = Assert.IsType<string>(process.EnvironmentVariables["DCP_SESSION_FOLDER"]);
-            using (var readiness = new CancellationTokenSource(TimeSpan.FromSeconds(StartupAndReadinessTimeoutSeconds)))
+            var readinessTimeout = startControllers ? s_controllerReadinessTimeout : s_apiReadinessTimeout;
+            using (var readiness = new CancellationTokenSource(readinessTimeout))
             {
-                var controllerIdentity = await ReadControllerAsync(
-                    standardOutputPath, standardErrorPath, process.FileName, readiness.Token);
                 await WaitForApiAsync(Path.Combine(sessionDirectory, "kubeconfig"), readiness.Token);
-                Assert.True(ProcessStartTimeHelper.IsProcessRunning(controllerIdentity.ProcessId, controllerIdentity.StartTime));
-                await Task.WhenAll(
-                    NotifyAsync(readinessName, "target", ProcessTestIdentity.Capture(process.ProcessId), readiness.Token),
-                    NotifyAsync(readinessName, "worker", controllerIdentity, readiness.Token));
+                var targetIdentity = ProcessTestIdentity.Capture(process.ProcessId);
+                if (startControllers)
+                {
+                    var controllerIdentity = await ReadControllerAsync(
+                        standardOutputPath, standardErrorPath, process.FileName, readiness.Token);
+                    await WaitForControllerManagerAsync(standardOutputPath, standardErrorPath, readiness.Token);
+                    Assert.True(ProcessStartTimeHelper.IsProcessRunning(controllerIdentity.ProcessId, controllerIdentity.StartTime));
+                    await Task.WhenAll(
+                        NotifyAsync(readinessName, "target", targetIdentity, readiness.Token),
+                        NotifyAsync(readinessName, "worker", controllerIdentity, readiness.Token));
+                }
+                else
+                {
+                    await NotifyAsync(readinessName, "target", targetIdentity, readiness.Token);
+                }
             }
 
             using var handoff = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -222,6 +246,29 @@ internal sealed class DcpConnectionTestProcess(
         }
 
         return null;
+    }
+
+    private static async Task WaitForControllerManagerAsync(
+        string standardOutputPath,
+        string standardErrorPath,
+        CancellationToken cancellationToken)
+    {
+        // DCP emits this tab-delimited line only after its runtime probe and controller setup:
+        //   <time>\tinfo\tdcp\tStarting controller manager
+        const string readyMessage = "\tStarting controller manager";
+        while (true)
+        {
+            foreach (var path in new[] { standardOutputPath, standardErrorPath })
+            {
+                var content = await ReadLogAsync(path, cancellationToken);
+                if (content.Contains(readyMessage, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+        }
     }
 
     private static async Task WaitForApiAsync(string kubeconfigPath, CancellationToken cancellationToken)

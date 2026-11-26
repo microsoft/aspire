@@ -63,9 +63,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(selected ? "api" : appHostEnabled ? "All resources" : "All sources", picker.TextContent.Trim());
         Assert.Equal("dialog", picker.GetAttribute("aria-haspopup"));
         Assert.Equal("false", picker.GetAttribute("aria-expanded"));
-        var icon = Assert.Single(picker.QuerySelectorAll(".resource-header-icon"));
-        Assert.NotNull(icon.ParentElement);
-        Assert.Equal("start", icon.ParentElement.GetAttribute("slot"));
+        var iconClass = appHostEnabled && selected ? ".resource-row-icon" : ".resource-header-icon";
+        Assert.Single(picker.QuerySelectorAll($"[slot='start'] > {iconClass}"));
         Assert.Empty(cut.FindAll(".resource-header-row > .resource-header-icon"));
         Assert.Empty(cut.FindAll(".resource-pane"));
 
@@ -160,6 +159,36 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Single(cut.FindAll("#resourcePaneFilterButton"));
         Assert.Single(cut.FindAll("#resourcePaneGroupingButton"));
         Assert.Equal("api", cut.Find(".resource-title").TextContent.Trim());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PaneCollapsePreference_IsSavedAndRestoredByANewLayout(bool collapsed)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find(".resource-pane-toggle-button").ClickAsync(new MouseEventArgs());
+        if (!collapsed)
+        {
+            await cut.Find(".resource-pane-toggle-button").ClickAsync(new MouseEventArgs());
+        }
+
+        var storage = Services.GetRequiredService<ILocalStorage>();
+        var saved = await storage.GetUnprotectedAsync<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
+        Assert.True(saved.Success);
+        Assert.Equal(collapsed, saved.Value);
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
+
+        var restored = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        restored.WaitForAssertion(() => Assert.True(restored.Instance.IsLoaded));
+        Assert.Equal(collapsed, restored.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
     }
 
     [Theory]
@@ -762,7 +791,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         Assert.Equal("http://localhost/traces/resource/api", navigation.Uri);
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
+        Assert.Equal(initiallyCollapsed, cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
         Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
         Assert.Equal("--resource-pane-expanded-width: 440px", cut.Find(".resources-layout").GetAttribute("style"));
         Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
@@ -1646,12 +1675,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
         await header.Find("#tab-Terminal").ClickAsync(new MouseEventArgs());
-        Assert.Equal("http://localhost/resources/shell?terminal=true", navigation.Uri);
+        Assert.Equal("http://localhost/terminals/resource/shell", navigation.Uri);
         cut.Render();
         Assert.Equal("page", header.Find("#tab-Terminal").GetAttribute("aria-current"));
 
         cut.Find(".resource-row-link[aria-label='other-shell']").Click();
-        Assert.Equal("http://localhost/resources/other-shell?terminal=true", navigation.Uri);
+        Assert.Equal("http://localhost/terminals/resource/other-shell", navigation.Uri);
         cut.Render();
         Assert.Equal(["other-shell"], cut.Instance.SelectedResourceNames);
 
@@ -1659,11 +1688,14 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
         cut.Render();
         Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
-        Assert.Empty(header.FindAll("#tab-Terminal"));
+        // Another resource has a terminal, so the tab stays and opens the Terminals page instead.
+        var terminalTab = header.Find("#tab-Terminal");
+        Assert.Equal("Terminals", terminalTab.TextContent.Trim());
+        Assert.Equal("/terminals", terminalTab.GetAttribute("href"));
     }
 
     [Fact]
-    public async Task TerminalTab_FocusAndOverviewPreservePaneQueryAndFragment()
+    public async Task TerminalTab_AndOverviewPreservePaneQueryAndFragment()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
@@ -1675,7 +1707,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await header.Find("#tab-Terminal").ClickAsync(new MouseEventArgs());
-        Assert.Equal("http://localhost/resources/shell?pane=tags&terminal=true#output", navigation.Uri);
+        Assert.Equal("http://localhost/terminals/resource/shell?pane=tags#output", navigation.Uri);
         cut.Render();
         await header.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources/shell?pane=tags#output", navigation.Uri);
@@ -2330,7 +2362,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var navigation = Services.GetRequiredService<NavigationManager>();
         const string initialUrl = "/resources?resource=api&resource=shell&pane=tags&filter=one&filter=two#output";
-        const string terminalUrl = "/resources/shell?pane=tags&filter=one&filter=two&terminal=true#output";
+        const string terminalUrl = "/terminals/resource/shell?pane=tags&filter=one&filter=two#output";
         navigation.NavigateTo(initialUrl);
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
@@ -2654,10 +2686,9 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("/resources/api")]
-    [InlineData("/resources/api?terminal=true")]
-    [InlineData("/terminals/resource/api")]
-    public async Task AllResourcesRow_AlwaysSelectsEverything(string initialUrl)
+    [InlineData("/resources/api", "/resources")]
+    [InlineData("/terminals/resource/api", "/terminals")]
+    public async Task AllResourcesRow_ClearsSelectionOnCurrentTab(string initialUrl, string allResourcesUrl)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -2671,17 +2702,19 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal("api", cut.Find(".resource-header-title").TextContent.Trim()));
         Assert.Equal(["api"], cut.FindAll(".resource-row.selected[data-resource-name]").Select(r => r.GetAttribute("data-resource-name")));
         var allRow = cut.Find(".resource-row-all");
+        var allLink = allRow.QuerySelector(".resource-row-link")!;
         Assert.False(allRow.ClassList.Contains("selected"));
-        Assert.Null(allRow.QuerySelector(".resource-row-link")!.GetAttribute("aria-current"));
+        Assert.Null(allLink.GetAttribute("aria-current"));
+        Assert.Equal(allResourcesUrl, allLink.GetAttribute("href"));
 
-        await cut.InvokeAsync(() => allRow.QuerySelector(".resource-row-link")!.Click());
+        await cut.InvokeAsync(() => allLink.Click());
 
         // The row navigates to the resources without a selection. The router then gives the layout the new location.
-        Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
+        Assert.Equal(navigationManager.ToAbsoluteUri(allResourcesUrl).AbsoluteUri, navigationManager.Uri);
         cut.Render();
         cut.WaitForAssertion(() => Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim()));
         await cut.InvokeAsync(() => cut.Find(".resource-row-all .resource-row-link").Click());
-        Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
+        Assert.Equal(navigationManager.ToAbsoluteUri(allResourcesUrl).AbsoluteUri, navigationManager.Uri);
         cut.Render();
 
         Assert.True(cut.Find(".resource-row-all").ClassList.Contains("selected"));
@@ -3364,7 +3397,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll(".resource-row"));
-            var message = Assert.Single(cut.FindAll(".resource-pane-message"));
+            var message = Assert.Single(cut.FindAll(".resource-pane-list > .aspire-pane-message"));
             Assert.Equal(appHostEnabled ? "No resources found" : "No telemetry sources", message.TextContent.Trim());
             Assert.Equal(cut.Find(".resource-row-all"), message.PreviousElementSibling);
         });
@@ -3625,7 +3658,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".resource-pane-message"));
+            Assert.Empty(cut.FindAll(".resource-pane-list > .aspire-pane-message"));
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
             Assert.Empty(cut.Instance.GetSelectionTelemetryKeys(null)!);
             Assert.Single(cut.FindAll(".resource-row-all"));

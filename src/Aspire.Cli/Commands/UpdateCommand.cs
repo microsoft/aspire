@@ -228,6 +228,8 @@ internal sealed class UpdateCommand : BaseCommand
     {
         if (parseResult.GetValue(s_configSourceOption))
         {
+            ConfigSources.EnsureEnabled();
+
             var requestedFile = parseResult.GetValue(s_appHostOption);
             if (requestedFile is not null && !requestedFile.Exists && !Directory.Exists(requestedFile.FullName))
             {

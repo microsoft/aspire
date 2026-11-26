@@ -41,6 +41,10 @@ public partial class TerminalWindowButton : ComponentBase, IAsyncDisposable
     [Parameter]
     public string? Class { get; set; }
 
+    /// <summary>Gets or sets the icon color, so the button can match the action buttons around it.</summary>
+    [Parameter]
+    public Microsoft.FluentUI.AspNetCore.Components.Color IconColor { get; set; } = Microsoft.FluentUI.AspNetCore.Components.Color.Default;
+
     /// <summary>Gets or sets the group identifying native focus controls for this launcher's detached windows.</summary>
     [Parameter]
     public string? FocusGroup { get; set; }

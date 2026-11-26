@@ -12,6 +12,31 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class RootCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void TestCommandRequiresFeatureOptIn(bool? enabled, bool expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback = configuration =>
+            {
+                if (enabled is { } value)
+                {
+                    configuration[$"{KnownFeatures.FeaturePrefix}:{KnownFeatures.TestCommandEnabled}"] = value.ToString();
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.Equal(expected, command.Subcommands.Any(c => c.Name == "test"));
+        Assert.Equal(expected, command.Parse("test --help").Errors.Count == 0);
+        Assert.Empty(command.Parse("run --help").Errors);
+    }
+
     [Fact]
     public async Task RootCommandVersionOption_PrintsIdentityVersion_WhenIdentityOverridden()
     {
