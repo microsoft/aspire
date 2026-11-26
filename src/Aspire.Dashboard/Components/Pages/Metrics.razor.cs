@@ -20,6 +20,8 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageWithSessionAndUrlState<Metrics.MetricsViewModel, Metrics.MetricsPageState>
 {
+    internal const int InstrumentPaneMaxWidth = 500;
+
     private SelectViewModel<ResourceTypeDetails> _selectResource = null!;
     private List<SelectViewModel<TimeSpan>> _durations = null!;
     private static readonly TimeSpan s_defaultDuration = TimeSpan.FromMinutes(5);
@@ -134,7 +136,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
         _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Pages/Metrics.razor.js"]}");
         _selfRef ??= DotNetObjectReference.Create(this);
-        if (await _jsModule.InvokeAsync<bool>("registerMetricsSplitter", _metricsSplitterElement, _selfRef))
+        if (await _jsModule.InvokeAsync<bool>("registerMetricsSplitter", _metricsSplitterElement, _selfRef, InstrumentPaneMaxWidth))
         {
             // Selecting another resource can replace the splitter element while the Metrics component remains alive.
             _registeredMetricsSplitterElementId = _metricsSplitterElement.Id;

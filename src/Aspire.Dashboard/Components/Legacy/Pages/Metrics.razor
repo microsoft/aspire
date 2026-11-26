@@ -86,6 +86,8 @@
                     // but we want to only show Panel2 on mobile. Collapse the first pane; the shared styles hide its bar.
                     <FluentMultiSplitter Style="height:100%">
                         <FluentMultiSplitterPane Size="@(ViewportInformation.IsDesktop ? "20%" : "0")"
+                                                 Max="@($"{Aspire.Dashboard.Components.Pages.Metrics.InstrumentPaneMaxWidth}px")"
+                                                 Style="@($"max-width: {Aspire.Dashboard.Components.Pages.Metrics.InstrumentPaneMaxWidth}px")"
                                                  Collapsed="@(!ViewportInformation.IsDesktop)">
                             @if (ViewportInformation.IsDesktop)
                             {

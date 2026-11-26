@@ -76,6 +76,8 @@
                     <FluentMultiSplitter Style="height:100%"
                                          OnResize="HandleMetricsSplitterResize">
                         <FluentMultiSplitterPane Size="@(ViewportInformation.IsDesktop ? _metricGroupsPaneSize : "0")"
+                                                 Max="@($"{InstrumentPaneMaxWidth}px")"
+                                                 Style="@($"max-width: {InstrumentPaneMaxWidth}px")"
                                                  Collapsed="@(!ViewportInformation.IsDesktop)">
                             @if (ViewportInformation.IsDesktop)
                             {

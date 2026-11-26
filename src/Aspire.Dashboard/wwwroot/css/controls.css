@@ -1007,7 +1007,7 @@ body :is(.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter
 
 body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle):hover::after {
     opacity: 1;
-    transition: opacity 200ms ease 500ms;
+    transition: opacity 200ms ease 400ms;
 }
 
 body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle):is(:active, .resizing)::after {
