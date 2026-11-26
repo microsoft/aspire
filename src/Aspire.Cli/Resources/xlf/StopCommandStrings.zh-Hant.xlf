@@ -17,6 +17,11 @@
         <target state="translated">{0} (PID {1})</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostLeftRunningDuringResourceTeardown">
+        <source>{0} is still tearing down its resources, so it was left running. It stops when the teardown completes; run 'aspire stop' without {1} to stop it now.</source>
+        <target state="new">{0} is still tearing down its resources, so it was left running. It stops when the teardown completes; run 'aspire stop' without {1} to stop it now.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostNotRunningAtPathWithPid">
         <source>No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</source>
         <target state="translated">在 '{0}' 找不到具有 PID {1} 的執行中 AppHost。未停止任何 AppHost。</target>

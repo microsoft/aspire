@@ -17,6 +17,11 @@
         <target state="translated">{0} (PID {1})</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostLeftRunningDuringResourceTeardown">
+        <source>{0} is still tearing down its resources, so it was left running. It stops when the teardown completes; run 'aspire stop' without {1} to stop it now.</source>
+        <target state="new">{0} is still tearing down its resources, so it was left running. It stops when the teardown completes; run 'aspire stop' without {1} to stop it now.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostNotRunningAtPathWithPid">
         <source>No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</source>
         <target state="translated">Aucun AppHost en cours d’exécution à «{0}» avec {1} PID n’a été trouvé. Aucun AppHost n'a été arrêté.</target>

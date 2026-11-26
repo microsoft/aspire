@@ -686,21 +686,36 @@ internal sealed partial class StopCommand : BaseCommand
             teardown = await TearDownResourcesAsync(connection, appHostIdentifier, cancellationToken).ConfigureAwait(false);
             if (teardown is ResourceTeardownOutcome.TornDown or ResourceTeardownOutcome.NotConfirmed or ResourceTeardownOutcome.TimedOut)
             {
-                // The AppHost received the teardown request and stops itself once it has responded or the wait was
-                // abandoned, and it may already have closed the connection. Requesting the stop again over that
-                // connection could fail even though the stop is underway, so only observe the process from here.
+                // The AppHost received the teardown request and stops itself once its resource cleanup is over, and it
+                // may already have closed the connection. Requesting the stop again over that connection could fail
+                // even though the stop is underway, so the RPC stop is skipped.
                 requestRpcStopAsync = static _ => Task.FromResult(true);
             }
         }
 
+        // Concurrent `stop --wait` callers share a single resource cleanup in the AppHost, which keeps running while any
+        // of them is still waiting and stops the AppHost only once it is over. After this caller's wait timed out, the
+        // AppHost may therefore legitimately stay up for another caller. Signaling or force-killing it would close that
+        // caller's connection before the shared cleanup finishes, so the process is only observed. A teardown that
+        // completed (TornDown or NotConfirmed) has already answered every waiter, so the regular stop is harmless there.
+        var stopByConnectionOnly = useConnectionOnly || (teardown is ResourceTeardownOutcome.TimedOut && appHostInfo is not null);
         var stopped = await InteractionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostIdentifier),
-            () => useConnectionOnly
+            () => stopByConnectionOnly
                 ? _processShutdownService.StopAppHostByConnectionAsync(appHostInfo!, requestRpcStopAsync, cancellationToken)
                 : _processShutdownService.StopAppHostAsync(appHostInfo, requestRpcStopAsync, cancellationToken));
 
         // Reset cursor position after spinner
         InteractionService.DisplayPlainText("");
+
+        if (!stopped && teardown is ResourceTeardownOutcome.TimedOut)
+        {
+            // The AppHost is still running, so its socket is kept and the stop is reported as failed: --force must not
+            // clean up persistent resources under a live AppHost, and --all must not report success.
+            DisplayTeardownError(CliExitCodes.WaitTimeout, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, (int)_resourceTeardownTimeout.TotalSeconds);
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostLeftRunningDuringResourceTeardown, appHostIdentifier, s_waitOption.Name));
+            return CompleteStopActivity(activity, CliExitCodes.FailedToDotnetRunAppHost);
+        }
 
         if (!stopped)
         {

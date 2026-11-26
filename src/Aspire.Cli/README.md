@@ -364,9 +364,13 @@ after the AppHost stops and reports when that cleanup completes.
 
 The command waits up to 120 seconds for the teardown confirmation; use
 `--timeout <seconds>` to change it (for example, `aspire stop --wait --timeout 300`).
-`--timeout` requires `--wait`. The command exits with code 17 if the wait times out and
-code 9 if the AppHost's Aspire version does not support waiting; the AppHost is stopped
-in both cases. `--wait` can be combined with `--pid`, `--all`, and `--force`.
+`--timeout` requires `--wait`. The command exits with code 9 if the AppHost's Aspire
+version does not support waiting; the AppHost is still stopped. If the wait times out,
+the command does not signal the AppHost: it exits with code 17 once the AppHost has
+stopped on its own. An AppHost can keep running while another `aspire stop --wait` is
+still waiting for the same teardown; the command then leaves it running, does not run
+the `--force` cleanup, and exits with code 2. Run `aspire stop` without `--wait` to stop
+it immediately. `--wait` can be combined with `--pid`, `--all`, and `--force`.
 
 ### Desktop tray companion (Preview)
 

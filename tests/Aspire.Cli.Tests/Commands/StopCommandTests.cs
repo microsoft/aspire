@@ -1708,6 +1708,120 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             Assert.Single(interactionService.DisplayedErrors));
     }
 
+    [Fact]
+    public async Task StopCommand_Wait_ReportsTimeoutWhenAppHostRepliesNotConfirmedAfterDeadline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var timeProvider = new FakeTimeProvider();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+        var connection = CreateConnection(appHostPath, int.MaxValue - 1);
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        connection.StopAppHostAndWaitForResourceCleanupHandler = _ =>
+        {
+            // An AppHost that observes the cancellation sent for the expired deadline abandons the cleanup and replies
+            // that it was not confirmed instead of failing the request.
+            timeProvider.Advance(TimeSpan.FromSeconds(StopCommand.DefaultResourceTeardownTimeoutSeconds));
+            return Task.FromResult(false);
+        };
+        monitor.AddConnection(connection.SocketPath, connection);
+
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, new TestProcessExecutionFactory(), interactive: false, options =>
+        {
+            options.TimeProvider = timeProvider;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("stop --wait --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.WaitTimeout, exitCode);
+        var appHostIdentifier = Path.Combine("AppHost", "AppHost.csproj");
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier),
+            Assert.Single(interactionService.DisplayedSuccess));
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, StopCommand.DefaultResourceTeardownTimeoutSeconds),
+            Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StopCommand_Wait_LeavesAppHostRunningWhenTimedOutTeardownContinuesForAnotherCaller(bool selectByPid)
+    {
+        // Stands in for an AppHost that keeps running after this caller's wait timed out because another
+        // `stop --wait` caller is still waiting on the same shared resource cleanup. A real child process is used so
+        // a regression that signals or kills the AppHost is observable without endangering the test host.
+        using var appHostProcess = TestProcesses.StartLongRunning();
+        try
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var interactionService = new TestInteractionService();
+            var monitor = new TestAuxiliaryBackchannelMonitor();
+            var timeProvider = new FakeTimeProvider();
+            var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+            var connection = CreateConnection(appHostPath, appHostProcess.Id);
+            connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+            connection.StopAppHostAndWaitForResourceCleanupHandler = async cancellationToken =>
+            {
+                timeProvider.Advance(TimeSpan.FromSeconds(StopCommand.DefaultResourceTeardownTimeoutSeconds));
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return true;
+            };
+            monitor.AddConnection(connection.SocketPath, connection);
+
+            var appHostIdentifier = selectByPid
+                ? string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, Path.Combine("AppHost", "AppHost.csproj"), appHostProcess.Id)
+                : Path.Combine("AppHost", "AppHost.csproj");
+            var stoppingStatus = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostIdentifier);
+            interactionService.ShowStatusGateAsync = statusText =>
+            {
+                // The exit monitor polls on the injected clock. Advancing it by the whole monitor window on each read
+                // lets the window elapse without a real wait, while the process is still alive.
+                if (statusText == stoppingStatus)
+                {
+                    timeProvider.AutoAdvanceAmount = TimeSpan.FromSeconds(10);
+                }
+
+                return Task.CompletedTask;
+            };
+
+            var services = CreateInstanceStopServices(workspace, monitor, interactionService, new TestProcessExecutionFactory(), interactive: false, options =>
+            {
+                options.TimeProvider = timeProvider;
+            });
+            using var provider = services.BuildServiceProvider();
+            var command = provider.GetRequiredService<RootCommand>();
+            var commandLine = selectByPid
+                ? $"stop --wait --pid {appHostProcess.Id.ToString(CultureInfo.InvariantCulture)} --non-interactive"
+                : "stop --wait --non-interactive";
+
+            var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+            Assert.False(appHostProcess.HasExited);
+            Assert.Equal(0, connection.StopAppHostCallCount);
+            Assert.Equal(0, Assert.IsType<TestAppHostSocket>(connection.Socket).TryDeleteCallCount);
+            Assert.Empty(interactionService.DisplayedSuccess);
+            Assert.Equal(
+                [
+                    string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, StopCommand.DefaultResourceTeardownTimeoutSeconds),
+                    string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostLeftRunningDuringResourceTeardown, appHostIdentifier, "--wait")
+                ],
+                interactionService.DisplayedErrors);
+        }
+        finally
+        {
+            if (!appHostProcess.HasExited)
+            {
+                appHostProcess.Kill(entireProcessTree: true);
+                await appHostProcess.WaitForExitAsync().DefaultTimeout();
+            }
+        }
+    }
+
     [Theory]
     [InlineData("stop --timeout 30 --non-interactive")]
     [InlineData("stop --wait --timeout 0 --non-interactive")]

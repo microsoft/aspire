@@ -313,6 +313,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to {0} is still tearing down its resources, so it was left running. It stops when the teardown completes; run 'aspire stop' without {1} to stop it now..
+        /// </summary>
+        internal static string AppHostLeftRunningDuringResourceTeardown {
+            get {
+                return ResourceManager.GetString("AppHostLeftRunningDuringResourceTeardown", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Could not confirm that the resources of {0} were torn down. They may still be stopping in the background..
         /// </summary>
         internal static string ResourceTeardownNotConfirmed {
