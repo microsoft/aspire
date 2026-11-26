@@ -150,60 +150,39 @@ public class FormatHelpersTests
     }
 
     [Theory]
-    [InlineData("Nov 11, 2026, 12:41 PM", "2026-11-11T20:41:00.0000000Z", TimeFormat.System)]
-    [InlineData("Jul 1, 2026, 12:41 PM", "2026-07-01T19:41:00.0000000Z", TimeFormat.System)]
-    [InlineData("Nov 11, 2026, 12:41", "2026-11-11T20:41:00.0000000Z", TimeFormat.TwentyFourHour)]
-    public void FormatTooltipDateTime_UsesBrowserTimeZone(string expected, string value, TimeFormat timeFormat)
+    [InlineData("2026-11-11T23:59:37.1234567Z", TimeFormat.TwelveHour, "3:59:37 PM")]
+    [InlineData("2026-11-11T23:59:37.1234567Z", TimeFormat.TwentyFourHour, "15:59:37")]
+    [InlineData("2026-11-11T07:59:37.1234567Z", TimeFormat.TwentyFourHour, "11/10/2026 23:59:37")]
+    [InlineData("2026-11-12T08:15:37.1234567Z", TimeFormat.TwelveHour, "11/12/2026 12:15:37 AM")]
+    [InlineData("2026-07-01T19:41:13.1234567Z", TimeFormat.System, "7/1/2026 12:41:13 PM")]
+    public void FormatTooltipDateTime_UsesLocalDateAndTime(string value, TimeFormat timeFormat, string expected)
     {
-        var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone("America/Los_Angeles");
-        provider.SetConfiguredTimeFormat(timeFormat);
+        var provider = new FixedTimeProvider(
+            new DateTimeOffset(2026, 11, 12, 1, 15, 0, TimeSpan.Zero),
+            TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles"),
+            timeFormat);
 
         var date = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
+        var culture = CultureInfo.GetCultureInfo("en-US");
+        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, culture), ignoreWhiteSpaceDifferences: true);
+        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, new DateTimeOffset(date).ToOffset(TimeSpan.FromHours(3)), culture), ignoreWhiteSpaceDifferences: true);
     }
 
     [Theory]
-    [InlineData("en-US", TimeFormat.System, "Nov 11, 2026, 8:41 PM")]
-    [InlineData("en-US", TimeFormat.TwentyFourHour, "Nov 11, 2026, 20:41")]
-    [InlineData("fr-FR", TimeFormat.System, "11 nov. 2026, 20:41")]
-    [InlineData("fr-FR", TimeFormat.TwelveHour, "11 nov. 2026, 8:41 PM")]
-    [InlineData("ja-JP", TimeFormat.System, "2026年11月11日 20:41")]
+    [InlineData("en-US", TimeFormat.System, "11/11/2026 8:41:57 PM")]
+    [InlineData("en-US", TimeFormat.TwentyFourHour, "11/11/2026 20:41:57")]
+    [InlineData("fr-FR", TimeFormat.System, "11/11/2026 20:41:57")]
+    [InlineData("fr-FR", TimeFormat.TwelveHour, "11/11/2026 8:41:57 PM")]
+    [InlineData("ja-JP", TimeFormat.System, "2026/11/11 20:41:57")]
     public void FormatTooltipDateTime_FollowsCulture(string cultureName, TimeFormat timeFormat, string expected)
     {
-        var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone("UTC");
-        provider.SetConfiguredTimeFormat(timeFormat);
+        var provider = new FixedTimeProvider(
+            new DateTimeOffset(2026, 11, 12, 20, 0, 0, TimeSpan.Zero),
+            TimeZoneInfo.Utc,
+            timeFormat);
 
-        var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
+        var date = new DateTime(2026, 11, 11, 20, 41, 57, DateTimeKind.Utc);
         Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, CultureInfo.GetCultureInfo(cultureName)), ignoreWhiteSpaceDifferences: true);
-    }
-
-    [Theory]
-    // The day of the week leads, with a comma, a space, an Arabic comma, or a space before the comma.
-    [InlineData("dddd, MMMM d, yyyy", "Nov 11, 2026, 20:41")]
-    [InlineData("dddd d MMMM yyyy", "11 Nov 2026, 20:41")]
-    [InlineData("dddd، d MMMM yyyy", "11 Nov 2026, 20:41")]
-    [InlineData("dddd , d MMMM yyyy", "11 Nov 2026, 20:41")]
-    // The day of the week trails, after a space or a comma that must not be left behind.
-    [InlineData("d MMMM yyyy dddd", "11 Nov 2026, 20:41")]
-    [InlineData("yyyy. MMMM d., dddd", "2026. Nov 11., 20:41")]
-    [InlineData("d MMMM yyyy, dddd", "11 Nov 2026, 20:41")]
-    // An abbreviated day of the week is removed too.
-    [InlineData("ddd, MMMM d, yyyy", "Nov 11, 2026, 20:41")]
-    // No day of the week.
-    [InlineData("d MMMM yyyy", "11 Nov 2026, 20:41")]
-    public void FormatTooltipDateTime_RemovesDayOfWeekWithItsSeparator(string longDatePattern, string expected)
-    {
-        // A custom culture keeps the test independent of each operating system's culture data.
-        var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
-        culture.DateTimeFormat.LongDatePattern = longDatePattern;
-
-        var provider = CreateTimeProvider();
-        provider.SetBrowserTimeZone("UTC");
-
-        var date = new DateTime(2026, 11, 11, 20, 41, 0, DateTimeKind.Utc);
-        Assert.Equal(expected, FormatHelpers.FormatTooltipDateTime(provider, date, culture));
     }
 
     private static DateTime GetLocalDateTime(string value)
@@ -246,7 +225,7 @@ public class FormatHelpersTests
     [InlineData("2025-12-19T13:45:30.0000000Z", "12/19/2025 1:45:30 PM")]
     public void FormatTimeWithOptionalDate_UsesTimeProviderCurrentDate(string value, string expected)
     {
-        var provider = new FixedTimeProvider(new DateTimeOffset(2025, 12, 20, 23, 59, 59, TimeSpan.Zero));
+        var provider = new FixedTimeProvider(new DateTimeOffset(2025, 12, 20, 23, 59, 59, TimeSpan.Zero), TimeZoneInfo.Utc, TimeFormat.System);
         var date = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 
         Assert.Equal(expected, FormatHelpers.FormatTimeWithOptionalDate(provider, date, cultureInfo: CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
@@ -344,10 +323,12 @@ public class FormatHelpersTests
         return new BrowserTimeProvider(NullLoggerFactory.Instance);
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow, TimeZoneInfo localTimeZone, TimeFormat timeFormat) : TimeProvider, ITimeFormatProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;
 
-        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+        public override TimeZoneInfo LocalTimeZone => localTimeZone;
+
+        public TimeFormat ResolvedTimeFormat => timeFormat;
     }
 }

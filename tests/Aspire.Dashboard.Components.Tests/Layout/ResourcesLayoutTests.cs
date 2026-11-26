@@ -484,7 +484,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     public async Task RowTime_ShowsWhenAStoppedResourceStopped()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var started = new DateTime(2026, 11, 6, 10, 0, 0, DateTimeKind.Utc);
+        var started = new DateTime(2026, 11, 6, 10, 0, 37, DateTimeKind.Utc);
         var stopped = started.AddHours(3);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:
@@ -506,18 +506,18 @@ public class ResourcesLayoutTests : DashboardTestContext
         var workerTime = cut.Find("[data-resource-name='worker'] .resource-row-sidebar-start time");
         Assert.Equal("Stopped 1m ago", workerTime.TextContent);
         Assert.Equal(stopped.ToString("O", System.Globalization.CultureInfo.InvariantCulture), workerTime.GetAttribute("datetime"));
-        Assert.Equal(FormatHelpers.FormatTooltipDateTime(clock, stopped), workerTime.GetAttribute("data-tooltip"));
-        Assert.Equal($"Stopped 1m ago ({FormatHelpers.FormatTooltipDateTime(clock, stopped)})", workerTime.GetAttribute("aria-label"));
+        Assert.Equal("2:00:37 PM", workerTime.GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
+        Assert.Equal("Stopped 1m ago (2:00:37 PM)", workerTime.GetAttribute("aria-label"), ignoreWhiteSpaceDifferences: true);
         var apiTime = cut.Find("[data-resource-name='api'] .resource-row-sidebar-start time");
-        Assert.Equal(FormatHelpers.FormatTooltipDateTime(clock, started), apiTime.GetAttribute("data-tooltip"));
-        Assert.Equal($"Started 3h ago ({FormatHelpers.FormatTooltipDateTime(clock, started)})", apiTime.GetAttribute("aria-label"));
+        Assert.Equal("11:00:37 AM", apiTime.GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
+        Assert.Equal("Started 3h ago (11:00:37 AM)", apiTime.GetAttribute("aria-label"), ignoreWhiteSpaceDifferences: true);
 
         // The expanded list shows the same short age; the state beside it says which it is.
         ResourceSetupHelpers.ToggleResourceList(cut);
         var wideWorkerTime = cut.Find("[data-resource-name='worker'] .resource-row-wide-metadata time");
         Assert.Equal("Stopped 1m ago", wideWorkerTime.TextContent.Trim());
-        Assert.Equal(FormatHelpers.FormatTooltipDateTime(clock, stopped), wideWorkerTime.GetAttribute("data-tooltip"));
-        Assert.Equal($"Stopped 1m ago ({FormatHelpers.FormatTooltipDateTime(clock, stopped)})", wideWorkerTime.GetAttribute("aria-label"));
+        Assert.Equal("2:00:37 PM", wideWorkerTime.GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
+        Assert.Equal("Stopped 1m ago (2:00:37 PM)", wideWorkerTime.GetAttribute("aria-label"), ignoreWhiteSpaceDifferences: true);
         Assert.Equal("Started 3h ago", cut.Find("[data-resource-name='api'] .resource-row-wide-metadata time").TextContent.Trim());
     }
 
