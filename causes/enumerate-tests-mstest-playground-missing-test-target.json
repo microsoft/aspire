@@ -24,6 +24,13 @@
       "job": "Tests / Setup for tests",
       "observed_at": "2026-11-26T07:53:30Z",
       "pr_number": 0
+    },
+    {
+      "run_id": 45874995323,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45874995323",
+      "job": "Tests / Setup for tests",
+      "observed_at": "2026-11-26T18:46:53Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/22715"
