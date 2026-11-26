@@ -124,10 +124,6 @@ fluent-text-input:is([disabled], :disabled)::part(control) {
     color: var(--colorNeutralForegroundDisabled);
 }
 
-fluent-dropdown > [slot="control"] {
-    align-self: center;
-}
-
 fluent-dropdown > button[slot="control"] {
     width: auto;
     min-width: 0;
