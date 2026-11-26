@@ -9,6 +9,7 @@ namespace Aspire.Hosting.Tasks;
 /// <summary>
 /// Gets the references in 'AppProjectTargetFramework' that aren't executable projects.
 /// </summary>
+[MSBuildMultiThreadableTask]
 public sealed class GetNonExecutableReferences : Microsoft.Build.Utilities.Task
 {
     /// <summary>

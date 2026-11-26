@@ -9,7 +9,9 @@
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup>   
+  <ItemGroup>
+    <!-- Match the task's dependency, not the central MSBuild pin used by repository tools. -->
+    <PackageReference Include="Microsoft.Build.Framework" VersionOverride="17.9.5" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" />
   </ItemGroup>
 
