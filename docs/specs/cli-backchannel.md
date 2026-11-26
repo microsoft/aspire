@@ -174,7 +174,9 @@ The same capability means `ResourceSnapshot.IsExplicitStart` reports whether the
 
 ### Resource Wait Response Compatibility
 
-When a `healthy` or `up` wait stops because the resource reached a terminal state, `WaitForResourceAsync` returns `Success = false` with the `State`, `HealthStatus`, and `ExitCode` of the snapshot that stopped the wait, so the CLI can report a resource that exited with code 0 as completed. `ErrorMessage` keeps the same text as before.
+When a `healthy` or `up` wait stops because the resource reached a terminal state, `WaitForResourceAsync` returns `Success = false` with the `State`, `HealthStatus`, and `ExitCode` of the snapshot that stopped the wait, so the CLI can report a resource that exited with code 0 as completed.
+
+`ErrorMessage` is human-readable text, not a stable contract; consumers should use `State`, `ExitCode`, and the response flags instead of parsing it. When a `healthy` wait stops and the snapshot has an exit code, the message reports the stopped state and exit code (`Stopped waiting for resource '<name>' to become healthy because it stopped in state '<state>' with exit code <code>.`). Without an exit code it keeps the previous `... because it failed to start.` text. The `up` wait message is unchanged.
 
 Older AppHosts omit `ExitCode`, and their `healthy` wait returns only `ErrorMessage` when it stops. For those AppHosts the CLI reads the exit code from the resource snapshot watch and, if the watch has not caught up after a short grace period, from a `GetResourceSnapshotsAsync` read bounded by the wait timeout.
 
