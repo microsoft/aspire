@@ -369,8 +369,11 @@ version does not support waiting; the AppHost is still stopped. If the wait time
 the command does not signal the AppHost: it exits with code 17 once the AppHost has
 stopped on its own. An AppHost can keep running while another `aspire stop --wait` is
 still waiting for the same teardown; the command then leaves it running, does not run
-the `--force` cleanup, and exits with code 2. Run `aspire stop` without `--wait` to stop
-it immediately. `--wait` can be combined with `--pid`, `--all`, and `--force`.
+the `--force` cleanup, and exits with code 2. The same applies when the connection to
+the AppHost fails after the teardown request may have reached it: the command does not
+signal the AppHost, and it exits with code 2 whether or not the AppHost stops. Run
+`aspire stop` without `--wait` to stop it immediately. `--wait` can be combined with
+`--pid`, `--all`, and `--force`.
 
 ### Desktop tray companion (Preview)
 

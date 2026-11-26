@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostLeftRunningDuringResourceTeardown">
-        <source>{0} is still tearing down its resources, so it was left running. It stops when the teardown completes; run 'aspire stop' without {1} to stop it now.</source>
-        <target state="new">{0} is still tearing down its resources, so it was left running. It stops when the teardown completes; run 'aspire stop' without {1} to stop it now.</target>
+        <source>{0} may still be tearing down its resources, so it was left running. Run 'aspire stop' without {1} to stop it now instead of waiting for the teardown to finish.</source>
+        <target state="new">{0} may still be tearing down its resources, so it was left running. Run 'aspire stop' without {1} to stop it now instead of waiting for the teardown to finish.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotRunningAtPathWithPid">

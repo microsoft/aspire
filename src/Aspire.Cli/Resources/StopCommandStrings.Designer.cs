@@ -313,7 +313,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to {0} is still tearing down its resources, so it was left running. It stops when the teardown completes; run 'aspire stop' without {1} to stop it now..
+        ///   Looks up a localized string similar to {0} may still be tearing down its resources, so it was left running. Run 'aspire stop' without {1} to stop it now instead of waiting for the teardown to finish..
         /// </summary>
         internal static string AppHostLeftRunningDuringResourceTeardown {
             get {

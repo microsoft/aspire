@@ -120,6 +120,18 @@ public class AppHostAuxiliaryBackchannelTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stopTask).DefaultTimeout();
     }
 
+    [Fact]
+    public async Task StopAppHostAndWaitForResourceCleanupAsync_WhenBackchannelDisposed_ReportsRequestNotSent()
+    {
+        using var server = TestAppHostBackchannelServer.Start();
+        var backchannel = await server.ConnectAsync().DefaultTimeout();
+        backchannel.Dispose();
+
+        var exception = await Assert.ThrowsAsync<AppHostRequestNotSentException>(() => backchannel.StopAppHostAndWaitForResourceCleanupAsync()).DefaultTimeout();
+
+        Assert.IsType<ObjectDisposedException>(exception.InnerException);
+    }
+
     private sealed class TestAppHostBackchannelServer : IDisposable
     {
         private readonly TcpListener _listener;

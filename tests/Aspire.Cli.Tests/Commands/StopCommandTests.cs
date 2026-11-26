@@ -22,6 +22,7 @@ using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -1811,6 +1812,160 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
                     string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostLeftRunningDuringResourceTeardown, appHostIdentifier, "--wait")
                 ],
                 interactionService.DisplayedErrors);
+        }
+        finally
+        {
+            if (!appHostProcess.HasExited)
+            {
+                appHostProcess.Kill(entireProcessTree: true);
+                await appHostProcess.WaitForExitAsync().DefaultTimeout();
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StopCommand_Wait_LeavesAppHostRunningWhenTeardownRequestDeliveryIsUncertain(bool selectByPid)
+    {
+        // The connection drops after the teardown request may have reached the AppHost, which can then be running a
+        // resource cleanup shared with another `stop --wait` caller. A real child process is used so a regression that
+        // signals or kills the AppHost is observable without endangering the test host.
+        using var appHostProcess = TestProcesses.StartLongRunning();
+        try
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var interactionService = new TestInteractionService();
+            var monitor = new TestAuxiliaryBackchannelMonitor();
+            var timeProvider = new FakeTimeProvider();
+            var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+            var connection = CreateConnection(appHostPath, appHostProcess.Id);
+            connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+            connection.StopAppHostAndWaitForResourceCleanupHandler = _ => Task.FromException<bool>(new ConnectionLostException());
+            monitor.AddConnection(connection.SocketPath, connection);
+
+            var appHostIdentifier = selectByPid
+                ? string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, Path.Combine("AppHost", "AppHost.csproj"), appHostProcess.Id)
+                : Path.Combine("AppHost", "AppHost.csproj");
+            var stoppingStatus = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostIdentifier);
+            interactionService.ShowStatusGateAsync = statusText =>
+            {
+                // The exit monitor polls on the injected clock. Advancing it by the whole monitor window on each read
+                // lets the window elapse without a real wait, while the process is still alive.
+                if (statusText == stoppingStatus)
+                {
+                    timeProvider.AutoAdvanceAmount = TimeSpan.FromSeconds(10);
+                }
+
+                return Task.CompletedTask;
+            };
+
+            var services = CreateInstanceStopServices(workspace, monitor, interactionService, new TestProcessExecutionFactory(), interactive: false, options =>
+            {
+                options.TimeProvider = timeProvider;
+            });
+            using var provider = services.BuildServiceProvider();
+            var command = provider.GetRequiredService<RootCommand>();
+            var commandLine = selectByPid
+                ? $"stop --wait --pid {appHostProcess.Id.ToString(CultureInfo.InvariantCulture)} --non-interactive"
+                : "stop --wait --non-interactive";
+
+            var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+            Assert.False(appHostProcess.HasExited);
+            Assert.Equal(1, connection.StopAppHostAndWaitForResourceCleanupCallCount);
+            Assert.Equal(0, connection.StopAppHostCallCount);
+            Assert.Equal(0, Assert.IsType<TestAppHostSocket>(connection.Socket).TryDeleteCallCount);
+            Assert.Empty(interactionService.DisplayedSuccess);
+            Assert.Equal(
+                [
+                    string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownNotConfirmed, appHostIdentifier),
+                    string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostLeftRunningDuringResourceTeardown, appHostIdentifier, "--wait")
+                ],
+                interactionService.DisplayedErrors);
+        }
+        finally
+        {
+            if (!appHostProcess.HasExited)
+            {
+                appHostProcess.Kill(entireProcessTree: true);
+                await appHostProcess.WaitForExitAsync().DefaultTimeout();
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(nameof(ConnectionLostException))]
+    [InlineData(nameof(RemoteInvocationException))]
+    public async Task StopCommand_Wait_ReportsUnconfirmedTeardownWithoutRequestingStopWhenDeliveryIsUncertain(string failure)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+        var connection = CreateConnection(appHostPath, int.MaxValue - 1);
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+        Exception exception = failure == nameof(ConnectionLostException)
+            ? new ConnectionLostException()
+            : new RemoteInvocationException("The resource cleanup failed.", errorCode: -32000, errorData: null);
+        connection.StopAppHostAndWaitForResourceCleanupHandler = _ => Task.FromException<bool>(exception);
+        monitor.AddConnection(connection.SocketPath, connection);
+
+        var services = CreateInstanceStopServices(workspace, monitor, interactionService, new TestProcessExecutionFactory(), interactive: false);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("stop --wait --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(1, connection.StopAppHostAndWaitForResourceCleanupCallCount);
+        Assert.Equal(0, connection.StopAppHostCallCount);
+        Assert.Equal(1, Assert.IsType<TestAppHostSocket>(connection.Socket).TryDeleteCallCount);
+        var appHostIdentifier = Path.Combine("AppHost", "AppHost.csproj");
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier),
+            Assert.Single(interactionService.DisplayedSuccess));
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownNotConfirmed, appHostIdentifier),
+            Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
+    public async Task StopCommand_Wait_StopsAppHostWhenTeardownRequestWasNotSent()
+    {
+        // The AppHost never received the teardown request, so no other caller can be waiting on a cleanup it started,
+        // and the regular stop must still stop it. A real child process makes the stop observable.
+        using var appHostProcess = TestProcesses.StartLongRunning();
+        try
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var interactionService = new TestInteractionService();
+            var monitor = new TestAuxiliaryBackchannelMonitor();
+            var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+            var connection = CreateConnection(appHostPath, appHostProcess.Id);
+            connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 1);
+            connection.StopAppHostAndWaitForResourceCleanupHandler = _ => Task.FromException<bool>(
+                new AppHostRequestNotSentException("The request was not sent.", new ObjectDisposedException("connection")));
+            monitor.AddConnection(connection.SocketPath, connection);
+
+            var services = CreateInstanceStopServices(workspace, monitor, interactionService, new TestProcessExecutionFactory(), interactive: false);
+            using var provider = services.BuildServiceProvider();
+            var command = provider.GetRequiredService<RootCommand>();
+
+            var exitCode = await command.Parse("stop --wait --non-interactive").InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+            Assert.True(appHostProcess.HasExited);
+            Assert.Equal(1, connection.StopAppHostAndWaitForResourceCleanupCallCount);
+            Assert.Equal(1, Assert.IsType<TestAppHostSocket>(connection.Socket).TryDeleteCallCount);
+            var appHostIdentifier = Path.Combine("AppHost", "AppHost.csproj");
+            Assert.Equal(
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier),
+                Assert.Single(interactionService.DisplayedSuccess));
+            Assert.Equal(
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownNotConfirmed, appHostIdentifier),
+                Assert.Single(interactionService.DisplayedErrors));
         }
         finally
         {

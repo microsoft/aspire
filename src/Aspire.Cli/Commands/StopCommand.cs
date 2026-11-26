@@ -13,6 +13,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
+using StreamJsonRpc;
 
 namespace Aspire.Cli.Commands;
 
@@ -684,21 +685,24 @@ internal sealed partial class StopCommand : BaseCommand
         if (_waitForResourceTeardown)
         {
             teardown = await TearDownResourcesAsync(connection, appHostIdentifier, cancellationToken).ConfigureAwait(false);
-            if (teardown is ResourceTeardownOutcome.TornDown or ResourceTeardownOutcome.NotConfirmed or ResourceTeardownOutcome.TimedOut)
+            if (teardown is ResourceTeardownOutcome.TornDown or ResourceTeardownOutcome.NotConfirmed or ResourceTeardownOutcome.TimedOut or ResourceTeardownOutcome.DeliveryUncertain)
             {
-                // The AppHost received the teardown request and stops itself once its resource cleanup is over, and it
-                // may already have closed the connection. Requesting the stop again over that connection could fail
-                // even though the stop is underway, so the RPC stop is skipped.
+                // The AppHost received the teardown request, or may have, and then stops itself once its resource
+                // cleanup is over. It may already have closed the connection, and requesting the stop again over that
+                // connection could fail even though the stop is underway, so the RPC stop is skipped.
                 requestRpcStopAsync = static _ => Task.FromResult(true);
             }
         }
 
         // Concurrent `stop --wait` callers share a single resource cleanup in the AppHost, which keeps running while any
-        // of them is still waiting and stops the AppHost only once it is over. After this caller's wait timed out, the
-        // AppHost may therefore legitimately stay up for another caller. Signaling or force-killing it would close that
-        // caller's connection before the shared cleanup finishes, so the process is only observed. A teardown that
-        // completed (TornDown or NotConfirmed) has already answered every waiter, so the regular stop is harmless there.
-        var stopByConnectionOnly = useConnectionOnly || (teardown is ResourceTeardownOutcome.TimedOut && appHostInfo is not null);
+        // of them is still waiting and stops the AppHost only once it is over. When this caller's wait timed out, or
+        // when it cannot tell whether the AppHost received its request (for example, its connection dropped while the
+        // request was in flight), the AppHost may legitimately stay up for another caller. Signaling or force-killing
+        // it would close that caller's connection before the shared cleanup finishes, so the process is only observed.
+        // A teardown that completed (TornDown or NotConfirmed) has already answered every waiter, and one that never
+        // started (CleanupNotStarted) has no waiter to interrupt, so the regular stop is harmless there.
+        var leftForSharedTeardown = teardown is ResourceTeardownOutcome.TimedOut or ResourceTeardownOutcome.DeliveryUncertain;
+        var stopByConnectionOnly = useConnectionOnly || (leftForSharedTeardown && appHostInfo is not null);
         var stopped = await InteractionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostIdentifier),
             () => stopByConnectionOnly
@@ -708,11 +712,19 @@ internal sealed partial class StopCommand : BaseCommand
         // Reset cursor position after spinner
         InteractionService.DisplayPlainText("");
 
-        if (!stopped && teardown is ResourceTeardownOutcome.TimedOut)
+        if (!stopped && leftForSharedTeardown)
         {
             // The AppHost is still running, so its socket is kept and the stop is reported as failed: --force must not
             // clean up persistent resources under a live AppHost, and --all must not report success.
-            DisplayTeardownError(CliExitCodes.WaitTimeout, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, (int)_resourceTeardownTimeout.TotalSeconds);
+            if (teardown is ResourceTeardownOutcome.TimedOut)
+            {
+                DisplayTeardownError(CliExitCodes.WaitTimeout, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, (int)_resourceTeardownTimeout.TotalSeconds);
+            }
+            else
+            {
+                DisplayTeardownError(CliExitCodes.FailedToDotnetRunAppHost, StopCommandStrings.ResourceTeardownNotConfirmed, appHostIdentifier);
+            }
+
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostLeftRunningDuringResourceTeardown, appHostIdentifier, s_waitOption.Name));
             return CompleteStopActivity(activity, CliExitCodes.FailedToDotnetRunAppHost);
         }
@@ -784,11 +796,21 @@ internal sealed partial class StopCommand : BaseCommand
             _logger.LogDebug("Timed out waiting for the resources of AppHost {AppHostIdentifier} to be torn down.", appHostIdentifier);
             return ResourceTeardownOutcome.TimedOut;
         }
+        catch (Exception ex) when (ex is AppHostRequestNotSentException or RemoteMethodNotFoundException)
+        {
+            // The AppHost never received the request, or rejected it without starting a resource cleanup, so the
+            // regular stop below must still request the stop.
+            _logger.LogDebug(ex, "AppHost {AppHostIdentifier} did not start tearing down its resources.", appHostIdentifier);
+            return ResourceTeardownOutcome.CleanupNotStarted;
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // The request may not have reached the AppHost, so the regular stop below must still request it.
-            _logger.LogDebug(ex, "Failed to ask AppHost {AppHostIdentifier} to tear down its resources.", appHostIdentifier);
-            return ResourceTeardownOutcome.Failed;
+            // The AppHost may have received the request and started a resource cleanup shared with other callers, for
+            // example when the connection drops while the request is in flight or the cleanup itself fails. StreamJsonRpc
+            // reports a connection that was lost before the call with the same ConnectionLostException as one lost
+            // after the request was sent, so any failure not proven to precede delivery is treated as uncertain.
+            _logger.LogDebug(ex, "Could not confirm that AppHost {AppHostIdentifier} received the request to tear down its resources.", appHostIdentifier);
+            return ResourceTeardownOutcome.DeliveryUncertain;
         }
     }
 
@@ -907,6 +929,11 @@ internal sealed partial class StopCommand : BaseCommand
         NotConfirmed,
         TimedOut,
         Unsupported,
-        Failed
+
+        /// <summary>The request failed without the AppHost starting a resource cleanup.</summary>
+        CleanupNotStarted,
+
+        /// <summary>The request failed, and the AppHost may have received it and started a resource cleanup.</summary>
+        DeliveryUncertain
     }
 }

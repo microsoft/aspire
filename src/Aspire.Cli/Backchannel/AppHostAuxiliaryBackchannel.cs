@@ -962,7 +962,18 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             throw new InvalidOperationException("The AppHost does not support waiting for resource cleanup.");
         }
 
-        var rpc = EnsureConnected();
+        // A caller that cannot tell whether the AppHost received this request must not escalate to signaling it, because
+        // the AppHost may be running a resource cleanup shared with other waiters. A connection that is not usable is
+        // detected here, before anything is sent, so it is reported distinctly as a request the AppHost never received.
+        JsonRpc rpc;
+        try
+        {
+            rpc = EnsureConnected();
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+        {
+            throw new AppHostRequestNotSentException("The resource cleanup request was not sent because the AppHost connection is not available.", ex);
+        }
 
         _logger.LogDebug("Stopping AppHost and waiting for resource cleanup");
 
