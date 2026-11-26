@@ -17,9 +17,9 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
     private readonly Lazy<(string Path, FileLock Lease)> _session;
     private bool _disposed;
 
-    public PrivateTemporaryStorage(IConfiguration configuration)
+    public PrivateTemporaryStorage(string home, IConfiguration configuration)
     {
-        _session = new(() => CreateSession(configuration));
+        _session = new(() => CreateSession(home, configuration));
     }
 
     public string GetTempPath()
@@ -73,13 +73,9 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
         return new FileStream(path, options);
     }
 
-    private static (string Path, FileLock Lease) CreateSession(IConfiguration configuration)
+    private static (string Path, FileLock Lease) CreateSession(string home, IConfiguration configuration)
     {
-        var configuredHome = configuration[AspireHomeDirectory.EnvironmentVariable];
-        var home = AspireHomeDirectory.GetDefault(configuredHome, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-        // Relative explicit overrides retain their existing cwd-relative meaning.
-        // Do not turn a missing user profile into an implicit cwd-relative home.
-        var root = GetRoot(string.IsNullOrWhiteSpace(configuredHome) ? home : Path.GetFullPath(home));
+        var root = GetRoot(home);
         var session = Path.Combine(root, Path.GetRandomFileName());
         var lease = FileLock.AcquirePrivate(session + ".lock");
         try

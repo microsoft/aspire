@@ -52,10 +52,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
     public async Task TestConnectionAsync_WhenProbeCompletes_StopsDcpBeforeCallerExits()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var storage = new PrivateTemporaryStorage(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ASPIRE_HOME"] = Path.Combine(workspace.Path, ".aspire")
-        }).Build());
+        using var storage = new PrivateTemporaryStorage(Path.Combine(workspace.Path, ".aspire"), new ConfigurationBuilder().Build());
         var factory = new ProcessExecutionFactory(new HostEnvironment(), storage, NullLogger<ProcessExecutionFactory>.Instance);
         ProcessTestIdentity? identity = null;
         string? sessionDirectory = null;

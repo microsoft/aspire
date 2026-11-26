@@ -67,14 +67,19 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildApplication_UsesPrivateTemporaryStorage()
+    public async Task BuildApplication_UsesPrivateTemporaryStorageUnderExecutionContextHome()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = Path.Combine(workspace.Path, ".aspire");
-        using var host = await BuildHostAsync(new Dictionary<string, string?> { ["ASPIRE_HOME"] = home });
+        var configuredHome = Path.Combine(workspace.Path, "workspace-config-home");
+        using var homeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, home);
+        using var host = await BuildHostAsync(new Dictionary<string, string?> { ["ASPIRE_HOME"] = configuredHome });
+        var context = host.Services.GetRequiredService<CliExecutionContext>();
         var storage = host.Services.GetRequiredService<ITemporaryStorage>();
         Assert.IsType<PrivateTemporaryStorage>(storage);
-        Assert.StartsWith(Path.Combine(home, "tmp") + Path.DirectorySeparatorChar, storage.GetTempPath());
+        Assert.Equal(home, context.AspireHomeDirectory.FullName);
+        Assert.StartsWith(Path.Combine(context.AspireHomeDirectory.FullName, "tmp") + Path.DirectorySeparatorChar, storage.GetTempPath());
+        Assert.False(Directory.Exists(configuredHome));
         Assert.NotNull(host.Services.GetRequiredService<IDcpConnectionChecker>());
     }
 

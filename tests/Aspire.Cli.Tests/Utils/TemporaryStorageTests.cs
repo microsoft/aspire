@@ -207,10 +207,9 @@ public class TemporaryStorageTests(ITestOutputHelper output)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [AspireHomeDirectory.EnvironmentVariable] = home,
             ["ASPIRE_PRESERVE_TEMP_FILES"] = preserve
         }).Build();
 
-        return new PrivateTemporaryStorage(configuration);
+        return new PrivateTemporaryStorage(home, configuration);
     }
 }
