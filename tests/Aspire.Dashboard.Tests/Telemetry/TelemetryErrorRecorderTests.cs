@@ -3,7 +3,6 @@
 
 using System.Runtime.ExceptionServices;
 using Aspire.Dashboard.Telemetry;
-using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -23,6 +22,21 @@ public class TelemetryErrorRecorderTests
         recorder.RecordError("Test message", exception);
 
         AssertError(fixture, Assert.Single(ReadErrors(fixture)), exception);
+    }
+
+    [Fact]
+    public void RecordError_LongExceptionDetails_TruncatesMessageAndStackTrace()
+    {
+        using var fixture = new DashboardTelemetryFixture();
+        var recorder = CreateRecorder(fixture);
+        var stackPrefix = new string('s', 2046);
+        var exception = CreateException(new InvalidOperationException(new string('m', 2100)), stackPrefix + "\U0001F600 trailing stack");
+
+        recorder.RecordError("Test message", exception);
+
+        var log = Assert.Single(ReadErrors(fixture));
+        Assert.Equal(new string('m', 2047) + "\u2026", log.Attributes.Single(p => p.Key == "exception.message").Value);
+        Assert.Equal(stackPrefix + "\u2026", log.Attributes.Single(p => p.Key == "exception.stacktrace").Value);
     }
 
     [Fact]
@@ -157,8 +171,9 @@ public class TelemetryErrorRecorderTests
         Assert.Equal(DashboardTelemetryService.EventLogCategoryName, log.CategoryName);
         fixture.AssertAttributes(log.Attributes,
             new(TelemetryPropertyKeys.ExceptionType, exception.GetType().FullName),
+            new("exception.message", exception.Message),
+            new("exception.stacktrace", exception.StackTrace ?? string.Empty),
             new("microsoft.operation_name", TelemetryEventKeys.Error),
-            new(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
             new("{OriginalFormat}", TelemetryEventKeys.Error));
     }
 

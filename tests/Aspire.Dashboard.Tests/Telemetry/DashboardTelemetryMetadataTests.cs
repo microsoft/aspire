@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Utils;
 using Aspire.Shared;
 using Aspire.Shared.Telemetry;
 using Aspire.Tests.Shared.Telemetry;
@@ -41,6 +42,7 @@ public class DashboardTelemetryMetadataTests
             new("os.name", OperatingSystemTelemetry.GetOsName()),
             new("os.type", OperatingSystemTelemetry.GetOsType()),
             new("os.version", Environment.OSVersion.Version.ToString()),
+            new("process.runtime.version", VersionHelpers.RuntimeVersion ?? string.Empty),
             new("machine.mac_address_hash", "test-mac-hash"),
             new("machine.device_id", "test-device-id"),
             new("aspire.dashboard.version", AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly)),

@@ -7,10 +7,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Shared.Telemetry;
 
 /// <summary>
-/// Calculates common machine, environment, and Microsoft-internal telemetry metadata.
+/// Calculates common machine, runtime, environment, and Microsoft-internal telemetry metadata.
 /// </summary>
 internal static class TelemetryMetadata
 {
+    internal const string RuntimeVersionTagName = "process.runtime.version";
+
     internal static IMachineInformationProvider CreateMachineInformationProvider(ILoggerFactory loggerFactory, ITelemetryEnvironment environment)
     {
         if (environment.IsWindows())
@@ -85,6 +87,7 @@ internal static class TelemetryMetadata
         tags.Add(new("os.name", OperatingSystemTelemetry.GetOsName()));
         tags.Add(new("os.type", OperatingSystemTelemetry.GetOsType()));
         tags.Add(new("os.version", OperatingSystemTelemetry.GetOsVersion()));
+        tags.Add(new(RuntimeVersionTagName, AssemblyVersionHelper.RuntimeVersion ?? string.Empty));
         return tags;
     }
 }
