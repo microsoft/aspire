@@ -106,9 +106,9 @@ Follow GitHub CLI's configuration-directory precedence:
 | 1 | `$GH_CONFIG_DIR/hosts.yml`, when `GH_CONFIG_DIR` is nonempty |
 | 2 | `$XDG_CONFIG_HOME/gh/hosts.yml`, when `XDG_CONFIG_HOME` is nonempty |
 | 3 | `%APPDATA%\GitHub CLI\hosts.yml`, on Windows when `APPDATA` is nonempty |
-| 4 | `~/.config/gh/hosts.yml` in the user home directory |
+| 4 | `$HOME/.config/gh/hosts.yml` (`%USERPROFILE%\.config\gh\hosts.yml` on Windows), when that variable is nonempty |
 
-Relative directory overrides are resolved against the invocation's working directory; literal `~` values are not expanded. A missing, unreadable, or malformed file does not select the Microsoft default and is logged without exposing file contents. Host detection does not use the telemetry detector's OS enrollment, Visual Studio, GitHub organization membership, Copilot credentials, or six-hour cache. Changes to GitHub host configuration are visible on the next invocation.
+Only the highest-priority location is used. Unlike GitHub CLI, Aspire never falls back to the invocation's working directory: if no location applies, or the selected directory is not an absolute path (including literal `~` values), host detection is disabled. A missing, unreadable, or malformed file does not select the Microsoft default and is logged without exposing file contents. Host detection does not use the telemetry detector's OS enrollment, Visual Studio, GitHub organization membership, Copilot credentials, or six-hour cache. Changes to GitHub host configuration are visible on the next invocation.
 
 See GitHub CLI's [known-host implementation](https://github.com/cli/go-gh/blob/v2.17.0/pkg/auth/auth.go) and [configuration-directory resolution](https://github.com/cli/go-gh/blob/v2.17.0/pkg/config/config.go).
 

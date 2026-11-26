@@ -13,7 +13,6 @@ internal interface IConfigSourceDetector
 }
 
 internal sealed class ConfigSourceDetector(
-    CliExecutionContext executionContext,
     IEnvironment environment,
     ILogger<ConfigSourceDetector> logger) : IConfigSourceDetector
 {
@@ -31,9 +30,15 @@ internal sealed class ConfigSourceDetector(
             return true;
         }
 
+        if (GetHostsFilePath() is not { } hostsFilePath)
+        {
+            logger.LogDebug("GitHub CLI host configuration directory could not be resolved from the environment.");
+            return false;
+        }
+
         try
         {
-            var configuration = await File.ReadAllTextAsync(GetHostsFilePath(), cancellationToken);
+            var configuration = await File.ReadAllTextAsync(hostsFilePath, cancellationToken);
             using var reader = new StringReader(configuration);
             var yaml = new YamlStream();
             yaml.Load(reader);
@@ -66,11 +71,15 @@ internal sealed class ConfigSourceDetector(
         }
     }
 
-    private string GetHostsFilePath()
+    private string? GetHostsFilePath()
     {
-        // Match gh's config-directory precedence without expanding literal '~' values.
+        // Follow gh's config-directory precedence, but only read from absolute directories
+        // supplied by the environment. gh falls back to the working directory when no home
+        // variable is set and resolves relative paths against it; reading a hosts.yml from an
+        // arbitrary invocation directory could select the Microsoft source from untrusted
+        // content, so those cases disable detection instead.
         // https://github.com/cli/go-gh/blob/v2.17.0/pkg/config/config.go
-        string directory;
+        string? directory;
         if (environment.GetEnvironmentVariable("GH_CONFIG_DIR") is { Length: > 0 } configDirectory)
         {
             directory = configDirectory;
@@ -83,13 +92,17 @@ internal sealed class ConfigSourceDetector(
         {
             directory = Path.Combine(appData, "GitHub CLI");
         }
-        else
+        else if (environment.GetEnvironmentVariable(environment.IsWindows() ? "USERPROFILE" : "HOME") is { Length: > 0 } home)
         {
-            var home = environment.GetEnvironmentVariable(environment.IsWindows() ? "USERPROFILE" : "HOME")
-                is { Length: > 0 } configuredHome ? configuredHome : executionContext.HomeDirectory.FullName;
             directory = Path.Combine(home, ".config", "gh");
         }
+        else
+        {
+            directory = null;
+        }
 
-        return Path.GetFullPath(Path.Combine(directory, "hosts.yml"), executionContext.WorkingDirectory.FullName);
+        return directory is not null && Path.IsPathFullyQualified(directory)
+            ? Path.Combine(directory, "hosts.yml")
+            : null;
     }
 }

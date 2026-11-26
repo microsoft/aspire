@@ -28,7 +28,7 @@ public class ConfigSourceDetectorTests(ITestOutputHelper outputHelper)
         {
             ["GH_CONFIG_DIR"] = workspace.Path
         });
-        var detector = new ConfigSourceDetector(workspace.CreateExecutionContext(), environment, NullLogger<ConfigSourceDetector>.Instance);
+        var detector = new ConfigSourceDetector(environment, NullLogger<ConfigSourceDetector>.Instance);
 
         Assert.Equal(expected, await detector.IsMicrosoftGitHubHostConfiguredAsync(CancellationToken.None));
     }
@@ -42,45 +42,71 @@ public class ConfigSourceDetectorTests(ITestOutputHelper outputHelper)
     [InlineData("linux", null, null, "roaming", "home/.config/gh/hosts.yml")]
     [InlineData("macos", null, null, "roaming", "home/.config/gh/hosts.yml")]
     [InlineData("windows", "", "", "", "home/.config/gh/hosts.yml")]
-    [InlineData("linux", "~", null, null, "~/hosts.yml")]
     public async Task HostConfiguration_FollowsGitHubCliDirectoryPrecedence(
         string platform, string? configDirectory, string? xdgConfigHome, string? appData, string hostsPath)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         workspace.CreateDirectory(Path.GetDirectoryName(hostsPath)!);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, hostsPath), "msft.ghe.com: {}");
+        string? InWorkspace(string? path) => string.IsNullOrEmpty(path) ? path : Path.Combine(workspace.Path, path);
+        var variables = new Dictionary<string, string?>
+        {
+            ["GH_CONFIG_DIR"] = InWorkspace(configDirectory),
+            ["XDG_CONFIG_HOME"] = InWorkspace(xdgConfigHome),
+            ["AppData"] = InWorkspace(appData),
+            ["HOME"] = InWorkspace("home"),
+            ["USERPROFILE"] = InWorkspace("home")
+        };
+        var detector = new ConfigSourceDetector(CreateEnvironment(platform, variables), NullLogger<ConfigSourceDetector>.Instance);
+
+        Assert.True(await detector.IsMicrosoftGitHubHostConfiguredAsync(CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("linux", null, null, null)]
+    [InlineData("macos", "", "", "")]
+    [InlineData("windows", null, null, null)]
+    [InlineData("linux", "gh", null, null)]
+    [InlineData("linux", "~", null, null)]
+    [InlineData("macos", null, "xdg", null)]
+    [InlineData("linux", null, null, "home")]
+    [InlineData("windows", null, null, "home")]
+    public async Task HostConfiguration_MissingOrRelativeDirectoryDisablesDetection(
+        string platform, string? configDirectory, string? xdgConfigHome, string? home)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        foreach (var relativeDirectory in new[] { Path.Combine(".config", "gh"), "gh", "~", Path.Combine("xdg", "gh"), Path.Combine("home", ".config", "gh") })
+        {
+            workspace.CreateDirectory(relativeDirectory);
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, relativeDirectory, "hosts.yml"), "msft.ghe.com: {}");
+        }
         var variables = new Dictionary<string, string?>
         {
             ["GH_CONFIG_DIR"] = configDirectory,
             ["XDG_CONFIG_HOME"] = xdgConfigHome,
-            ["AppData"] = appData,
-            ["HOME"] = Path.Combine(workspace.Path, "home"),
-            ["USERPROFILE"] = Path.Combine(workspace.Path, "home")
+            ["HOME"] = home,
+            ["USERPROFILE"] = home
         };
-        var environment = platform switch
-        {
-            "windows" => TestEnvironment.CreateWindows(variables),
-            "macos" => TestEnvironment.CreateMacOS(variables),
-            _ => TestEnvironment.CreateLinux(variables)
-        };
-        var detector = new ConfigSourceDetector(workspace.CreateExecutionContext(), environment, NullLogger<ConfigSourceDetector>.Instance);
+        var detector = new ConfigSourceDetector(CreateEnvironment(platform, variables), NullLogger<ConfigSourceDetector>.Instance);
 
-        Assert.True(await detector.IsMicrosoftGitHubHostConfiguredAsync(CancellationToken.None));
+        Assert.False(await detector.IsMicrosoftGitHubHostConfiguredAsync(CancellationToken.None));
     }
 
     [Fact]
     public async Task HostConfiguration_DoesNotFallBackPastConfiguredDirectory()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var context = workspace.CreateExecutionContext();
-        var defaultDirectory = context.HomeDirectory.CreateSubdirectory(Path.Combine(".config", "gh"));
+        var home = workspace.CreateDirectory("home");
+        var defaultDirectory = home.CreateSubdirectory(Path.Combine(".config", "gh"));
         await File.WriteAllTextAsync(Path.Combine(defaultDirectory.FullName, "hosts.yml"), "msft.ghe.com: {}");
         var customDirectory = workspace.CreateDirectory("custom-gh");
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
-            ["GH_CONFIG_DIR"] = customDirectory.FullName
+            ["GH_CONFIG_DIR"] = customDirectory.FullName,
+            ["HOME"] = home.FullName,
+            ["USERPROFILE"] = home.FullName
         });
-        var detector = new ConfigSourceDetector(context, environment, NullLogger<ConfigSourceDetector>.Instance);
+        var detector = new ConfigSourceDetector(environment, NullLogger<ConfigSourceDetector>.Instance);
 
         Assert.False(await detector.IsMicrosoftGitHubHostConfiguredAsync(CancellationToken.None));
         await File.WriteAllTextAsync(Path.Combine(customDirectory.FullName, "hosts.yml"), "github.com: {}");
@@ -102,7 +128,7 @@ public class ConfigSourceDetectorTests(ITestOutputHelper outputHelper)
             ["GH_TOKEN"] = "test-token",
             ["GH_CONFIG_DIR"] = workspace.Path
         });
-        var detector = new ConfigSourceDetector(workspace.CreateExecutionContext(), environment, NullLogger<ConfigSourceDetector>.Instance);
+        var detector = new ConfigSourceDetector(environment, NullLogger<ConfigSourceDetector>.Instance);
 
         Assert.Equal(expected, await detector.IsMicrosoftGitHubHostConfiguredAsync(CancellationToken.None));
     }
@@ -121,7 +147,7 @@ public class ConfigSourceDetectorTests(ITestOutputHelper outputHelper)
         {
             ["GH_CONFIG_DIR"] = workspace.Path
         });
-        var detector = new ConfigSourceDetector(workspace.CreateExecutionContext(), environment, logger);
+        var detector = new ConfigSourceDetector(environment, logger);
 
         Assert.False(await detector.IsMicrosoftGitHubHostConfiguredAsync(CancellationToken.None));
         var record = Assert.Single(logger.Collector.GetSnapshot());
@@ -133,10 +159,15 @@ public class ConfigSourceDetectorTests(ITestOutputHelper outputHelper)
     public async Task HostConfiguration_ReflectsLoginAndLogoutWithoutCachedDetection()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var context = workspace.CreateExecutionContext();
-        var directory = context.HomeDirectory.CreateSubdirectory(Path.Combine(".config", "gh"));
+        var home = workspace.CreateDirectory("home");
+        var directory = home.CreateSubdirectory(Path.Combine(".config", "gh"));
         var hostsPath = Path.Combine(directory.FullName, "hosts.yml");
-        var detector = new ConfigSourceDetector(context, new TestEnvironment(), NullLogger<ConfigSourceDetector>.Instance);
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["HOME"] = home.FullName,
+            ["USERPROFILE"] = home.FullName
+        });
+        var detector = new ConfigSourceDetector(environment, NullLogger<ConfigSourceDetector>.Instance);
 
         Assert.False(await detector.IsMicrosoftGitHubHostConfiguredAsync(CancellationToken.None));
         await File.WriteAllTextAsync(hostsPath, "msft.ghe.com: {}");
@@ -155,8 +186,15 @@ public class ConfigSourceDetectorTests(ITestOutputHelper outputHelper)
         {
             ["GH_HOST"] = "msft.ghe.com"
         });
-        var detector = new ConfigSourceDetector(workspace.CreateExecutionContext(), environment, NullLogger<ConfigSourceDetector>.Instance);
+        var detector = new ConfigSourceDetector(environment, NullLogger<ConfigSourceDetector>.Instance);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => detector.IsMicrosoftGitHubHostConfiguredAsync(cancellation.Token));
     }
+
+    private static TestEnvironment CreateEnvironment(string platform, IReadOnlyDictionary<string, string?> variables) => platform switch
+    {
+        "windows" => TestEnvironment.CreateWindows(variables),
+        "macos" => TestEnvironment.CreateMacOS(variables),
+        _ => TestEnvironment.CreateLinux(variables)
+    };
 }
