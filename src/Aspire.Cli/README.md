@@ -521,18 +521,33 @@ stop behavior is unchanged.
 By default, `aspire stop` returns once the AppHost process has exited. The AppHost's
 resources, such as containers, can still be stopping in the background at that point,
 so a start issued right away can find a container with a fixed name still running.
-Use `--wait` to return only after the resources have been torn down:
+Use `--wait` to return only after the resources that a normal shutdown removes have
+been torn down:
 
 ```bash
 aspire stop --wait
 ```
 
 With `--wait`, the AppHost tears its resources down before it exits and confirms when
-they are gone. The command waits up to 120 seconds for that confirmation; use
+they are gone. This covers the resources that a normal shutdown removes, such as
+executables and non-persistent containers. Persistent resources, such as containers
+configured with a persistent lifetime, are intentionally kept running by a normal
+shutdown, including with `--wait`. To remove them too, add `--force`
+(`aspire stop --wait --force`); the command then cleans up the persistent resources
+after the AppHost stops and reports when that cleanup completes.
+
+The command waits up to 120 seconds for the teardown confirmation; use
 `--timeout <seconds>` to change it (for example, `aspire stop --wait --timeout 300`).
-`--timeout` requires `--wait`. The command exits with code 17 if the wait times out and
-code 9 if the AppHost's Aspire version does not support waiting; the AppHost is stopped
-in both cases. `--wait` can be combined with `--pid`, `--all`, and `--force`.
+`--timeout` requires `--wait`. The command exits with code 9 if the AppHost's Aspire
+version does not support waiting; the AppHost is still stopped. If the wait times out,
+the command does not signal the AppHost: it exits with code 17 once the AppHost has
+stopped on its own. An AppHost can keep running while another `aspire stop --wait` is
+still waiting for the same teardown; the command then leaves it running, does not run
+the `--force` cleanup, and exits with code 2. The same applies when the connection to
+the AppHost fails after the teardown request may have reached it: the command does not
+signal the AppHost, and it exits with code 2 whether or not the AppHost stops. Run
+`aspire stop` without `--wait` to stop it immediately. `--wait` can be combined with
+`--pid`, `--all`, and `--force`.
 
 ### Desktop tray companion (Preview)
 

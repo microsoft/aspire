@@ -36,6 +36,10 @@ internal sealed class ApplicationOrchestrator
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly ParameterProcessor _parameterProcessor;
     private readonly CancellationTokenSource _shutdownCancellation = new();
+    private readonly object _resourceCleanupLock = new();
+    private Task<bool>? _resourceCleanupTask;
+    private CancellationTokenSource? _resourceCleanupCancellation;
+    private int _resourceCleanupWaiterCount;
     private IConfiguration? Configuration => _serviceProvider.GetService<IConfiguration>();
 
     public ApplicationOrchestrator(DistributedApplicationModel model,
@@ -711,15 +715,98 @@ internal sealed class ApplicationOrchestrator
     /// <summary>
     /// Stops the application resources and waits until the orchestrator confirms they were cleaned up.
     /// </summary>
+    /// <param name="onCleanupCompleted">
+    /// Invoked exactly once, when the shared cleanup completes with any outcome. Only the callback passed by the call
+    /// that starts the cleanup is used; callbacks passed by concurrent or later calls are ignored.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Stops this caller from waiting. The cleanup itself is canceled only when every caller waiting for it has stopped waiting.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when the orchestrator confirmed that the application resources were cleaned up.
+    /// </returns>
     /// <remarks>
     /// Used when a caller such as <c>aspire stop --wait</c> needs the resources to be gone before the AppHost exits.
     /// The regular shutdown path leaves the cleanup to DCP, which finishes it after the AppHost process has exited.
+    /// <para>
+    /// Concurrent callers share one cleanup. The executor only performs the first stop request it receives and reports
+    /// any later one as unconfirmed, so a second caller that reached the executor directly would get <see langword="false"/>
+    /// immediately and could stop the AppHost while the first caller is still waiting for its result.
+    /// </para>
     /// </remarks>
-    public async Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken)
+    public async Task<bool> StopAndWaitForResourceCleanupAsync(Action onCleanupCompleted, CancellationToken cancellationToken)
     {
-        _shutdownCancellation.Cancel();
+        ArgumentNullException.ThrowIfNull(onCleanupCompleted);
 
-        return await _dcpExecutor.StopAndWaitForResourceCleanupAsync(cancellationToken).ConfigureAwait(false);
+        Task<bool> cleanupTask;
+        lock (_resourceCleanupLock)
+        {
+            if (_resourceCleanupTask is null)
+            {
+                _resourceCleanupCancellation = new CancellationTokenSource();
+                var cleanupCancellationToken = _resourceCleanupCancellation.Token;
+
+                // Queue the cleanup instead of starting it inline so that its synchronous part (including the
+                // cancellation callbacks run by _shutdownCancellation.Cancel()) does not run under the lock.
+                _resourceCleanupTask = Task.Run(() => RunResourceCleanupAsync(onCleanupCompleted, cleanupCancellationToken), CancellationToken.None);
+            }
+
+            cleanupTask = _resourceCleanupTask;
+            _resourceCleanupWaiterCount++;
+        }
+
+        try
+        {
+            return await cleanupTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_resourceCleanupLock)
+            {
+                // The cleanup is bounded by its callers: once the last waiter stops waiting, nobody is left to
+                // receive its result, so stop it. One waiter giving up while others still wait must not cancel it.
+                // _resourceCleanupCancellation is null once the cleanup has completed and disposed it. CancelAsync
+                // runs the registered callbacks on the thread pool rather than under this lock.
+                if (--_resourceCleanupWaiterCount == 0 && _resourceCleanupCancellation is { } cleanupCancellation)
+                {
+                    _ = cleanupCancellation.CancelAsync();
+                }
+            }
+        }
+    }
+
+    private async Task<bool> RunResourceCleanupAsync(Action onCleanupCompleted, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _shutdownCancellation.Cancel();
+
+            return await _dcpExecutor.StopAndWaitForResourceCleanupAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Every waiter stopped waiting, so the cleanup was abandoned before it could be confirmed. Callers that
+            // arrive later observe the same unconfirmed result instead of a canceled task.
+            return false;
+        }
+        finally
+        {
+            lock (_resourceCleanupLock)
+            {
+                // Disposed under the lock so that a waiter leaving concurrently never cancels a disposed source.
+                _resourceCleanupCancellation!.Dispose();
+                _resourceCleanupCancellation = null;
+            }
+
+            try
+            {
+                onCleanupCompleted();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while handling the completion of the application resource cleanup.");
+            }
+        }
     }
 
     public async Task StartResourceAsync(string resourceName, CancellationToken cancellationToken)

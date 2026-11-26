@@ -168,7 +168,7 @@ Older AppHosts omit `ResourceSnapshot.Version`, which deserializes as `0`. Witho
 
 ### Stop Resource Cleanup Compatibility
 
-When the AppHost advertises `stop-resource-cleanup.v1`, `StopAsync(StopAppHostRequest)` honors `WaitForResourceCleanup = true`: the AppHost asks DCP to clean up the application resources, waits until DCP reports the cleanup complete, responds with `StopAppHostResponse.ResourcesCleanedUp`, and then stops itself. The client bounds the wait with its cancellation token; the AppHost still stops when the wait is canceled. `aspire stop --wait` uses this to return only after resources such as fixed-name containers are gone.
+When the AppHost advertises `stop-resource-cleanup.v1`, `StopAsync(StopAppHostRequest)` honors `WaitForResourceCleanup = true`: the AppHost asks DCP to clean up the application resources, waits until DCP reports the cleanup complete, responds with `StopAppHostResponse.ResourcesCleanedUp`, and then stops itself. The client bounds the wait with its cancellation token; the AppHost still stops when the wait is canceled. Concurrent requests share one cleanup: each receives its result, the cleanup is canceled only when every waiting client has canceled, and the AppHost stops once, after the cleanup completes. `aspire stop --wait` uses this to return only after resources such as fixed-name containers are gone.
 
 Older AppHosts ignore `WaitForResourceCleanup` and stop without waiting. Without the capability, the CLI does not send the request, stops the AppHost normally, and reports that the teardown could not be confirmed.
 

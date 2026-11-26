@@ -2091,6 +2091,100 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(parentProjectResourceId, childProjectParentResourceId);
     }
 
+    [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncSharesOneCleanupAcrossConcurrentWaiters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var app = builder.Build();
+
+        var cleanupStartCount = 0;
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupResult = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dcpExecutor = new TestDcpExecutor
+        {
+            OnStopAndWaitForResourceCleanupAsync = _ =>
+            {
+                Interlocked.Increment(ref cleanupStartCount);
+                cleanupStarted.TrySetResult();
+                return cleanupResult.Task;
+            }
+        };
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            dcpExecutor: dcpExecutor);
+
+        var firstCallbackCount = 0;
+        var secondCallbackCount = 0;
+        var firstWait = orchestrator.StopAndWaitForResourceCleanupAsync(() => Interlocked.Increment(ref firstCallbackCount), CancellationToken.None);
+        var secondWait = orchestrator.StopAndWaitForResourceCleanupAsync(() => Interlocked.Increment(ref secondCallbackCount), CancellationToken.None);
+
+        await cleanupStarted.Task.DefaultTimeout();
+
+        Assert.Equal(1, Volatile.Read(ref cleanupStartCount));
+        Assert.False(firstWait.IsCompleted);
+        Assert.False(secondWait.IsCompleted);
+        Assert.Equal(0, Volatile.Read(ref firstCallbackCount));
+
+        cleanupResult.SetResult(true);
+
+        Assert.True(await firstWait.DefaultTimeout());
+        Assert.True(await secondWait.DefaultTimeout());
+        Assert.Equal(1, Volatile.Read(ref cleanupStartCount));
+        Assert.Equal(1, Volatile.Read(ref firstCallbackCount));
+        Assert.Equal(0, Volatile.Read(ref secondCallbackCount));
+    }
+
+    [Fact]
+    public async Task StopAndWaitForResourceCleanupAsyncCancelsCleanupOnlyWhenEveryWaiterStopsWaiting()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var app = builder.Build();
+
+        var cleanupToken = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dcpExecutor = new TestDcpExecutor
+        {
+            OnStopAndWaitForResourceCleanupAsync = async cancellationToken =>
+            {
+                cleanupToken.SetResult(cancellationToken);
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+                return true;
+            }
+        };
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
+            dcpExecutor: dcpExecutor);
+
+        var callbackCount = 0;
+        var callbackInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnCleanupCompleted()
+        {
+            Interlocked.Increment(ref callbackCount);
+            callbackInvoked.TrySetResult();
+        }
+
+        using var firstWaitCancellation = new CancellationTokenSource();
+        using var secondWaitCancellation = new CancellationTokenSource();
+        var firstWait = orchestrator.StopAndWaitForResourceCleanupAsync(OnCleanupCompleted, firstWaitCancellation.Token);
+        var secondWait = orchestrator.StopAndWaitForResourceCleanupAsync(OnCleanupCompleted, secondWaitCancellation.Token);
+
+        var sharedCleanupToken = await cleanupToken.Task.DefaultTimeout();
+
+        firstWaitCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => firstWait).DefaultTimeout();
+
+        Assert.False(sharedCleanupToken.IsCancellationRequested);
+        Assert.False(secondWait.IsCompleted);
+        Assert.Equal(0, Volatile.Read(ref callbackCount));
+
+        secondWaitCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => secondWait).DefaultTimeout();
+        await callbackInvoked.Task.DefaultTimeout();
+
+        Assert.True(sharedCleanupToken.IsCancellationRequested);
+
+        // A caller arriving after the cleanup was abandoned gets the unconfirmed result without starting another cleanup.
+        Assert.False(await orchestrator.StopAndWaitForResourceCleanupAsync(OnCleanupCompleted, CancellationToken.None).DefaultTimeout());
+        Assert.Equal(1, Volatile.Read(ref callbackCount));
+    }
+
     private sealed class ThrowingValueProvider : IValueProvider, IManifestExpressionProvider
     {
         public string ValueExpression => "{throwing.value}";

@@ -271,34 +271,29 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             return new StopAppHostResponse();
         }
 
-        try
-        {
-            // The regular stop returns immediately and the resources are torn down by DCP after the AppHost
-            // process has exited, so a caller has no way to know when they are gone. Tear them down here,
-            // before responding, so the response can report that the application resources (for example,
-            // fixed-name containers) no longer exist. The caller bounds the wait with its cancellation token.
-            var resourcesCleanedUp = await StopAndWaitForResourceCleanupAsync(cancellationToken).ConfigureAwait(false);
-            return new StopAppHostResponse { ResourcesCleanedUp = resourcesCleanedUp };
-        }
-        finally
-        {
-            // Always stop the AppHost, including when the caller gave up waiting: its resources are already
-            // being torn down, so the AppHost must not keep running without them.
-            await StopAppHostAsync(CancellationToken.None).ConfigureAwait(false);
-        }
-    }
-
-    private async Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken)
-    {
         var orchestrator = serviceProvider.GetService<ApplicationOrchestrator>();
         if (orchestrator is null)
         {
             // The orchestrator only exists in run mode. Without it the AppHost created no resources to tear down.
-            return true;
+            await StopAppHostAsync(cancellationToken).ConfigureAwait(false);
+            return new StopAppHostResponse { ResourcesCleanedUp = true };
         }
 
+        // The regular stop returns immediately and the resources are torn down by DCP after the AppHost
+        // process has exited, so a caller has no way to know when they are gone. Tear them down here,
+        // before responding, so the response can report that the application resources (for example,
+        // fixed-name containers) no longer exist. The caller bounds the wait with its cancellation token.
+        //
+        // Concurrent callers share one cleanup, and the AppHost stop is scheduled once, when that cleanup
+        // completes, rather than by each caller. Otherwise a caller that gives up early would stop the AppHost
+        // and close the connections of callers that are still waiting for the result. The AppHost still always
+        // stops: when the last waiter gives up, the cleanup is canceled, completes, and schedules the stop.
         logger.LogDebug("Tearing down application resources before stopping the AppHost");
-        return await orchestrator.StopAndWaitForResourceCleanupAsync(cancellationToken).ConfigureAwait(false);
+        var resourcesCleanedUp = await orchestrator.StopAndWaitForResourceCleanupAsync(
+            () => _ = StopAppHostAsync(CancellationToken.None),
+            cancellationToken).ConfigureAwait(false);
+
+        return new StopAppHostResponse { ResourcesCleanedUp = resourcesCleanedUp };
     }
 
     /// <summary>

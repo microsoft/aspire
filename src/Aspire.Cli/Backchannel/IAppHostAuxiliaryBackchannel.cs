@@ -152,6 +152,9 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// <see langword="true"/> if the AppHost confirmed that its resources were torn down; otherwise <see langword="false"/>.
     /// The AppHost initiates its stop in both cases.
     /// </returns>
+    /// <exception cref="AppHostRequestNotSentException">
+    /// The request was not sent because the connection is not available, so the AppHost did not receive it.
+    /// </exception>
     Task<bool> StopAppHostAndWaitForResourceCleanupAsync(CancellationToken cancellationToken = default);
 
     /// <summary>

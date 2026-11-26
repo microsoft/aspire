@@ -17,6 +17,11 @@
         <target state="translated">{0} (PID {1})</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostLeftRunningDuringResourceTeardown">
+        <source>{0} may still be tearing down its resources, so it was left running. Run 'aspire stop' without {1} to stop it now instead of waiting for the teardown to finish.</source>
+        <target state="new">{0} may still be tearing down its resources, so it was left running. Run 'aspire stop' without {1} to stop it now instead of waiting for the teardown to finish.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostNotRunningAtPathWithPid">
         <source>No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</source>
         <target state="translated">未在“{0}”找到 PID 为 {1} 的正在运行的 AppHost。未停止任何 AppHost。</target>
@@ -148,8 +153,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourcesTornDown">
-        <source>The resources of {0} were torn down.</source>
-        <target state="new">The resources of {0} were torn down.</target>
+        <source>The non-persistent resources of {0} were torn down.</source>
+        <target state="new">The non-persistent resources of {0} were torn down.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -203,13 +208,13 @@
         <note />
       </trans-unit>
       <trans-unit id="WaitOptionDescription">
-        <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
-        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <source>Wait until the AppHost's non-persistent resources, such as containers, are torn down before returning. Persistent resources are kept unless --force is also specified</source>
+        <target state="new">Wait until the AppHost's non-persistent resources, such as containers, are torn down before returning. Persistent resources are kept unless --force is also specified</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForResourceTeardown">
-        <source>Waiting for the resources of {0} to be torn down...</source>
-        <target state="new">Waiting for the resources of {0} to be torn down...</target>
+        <source>Waiting for the non-persistent resources of {0} to be torn down...</source>
+        <target state="new">Waiting for the non-persistent resources of {0} to be torn down...</target>
         <note />
       </trans-unit>
     </body>

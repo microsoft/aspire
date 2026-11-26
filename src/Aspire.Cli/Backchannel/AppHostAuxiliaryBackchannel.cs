@@ -962,18 +962,42 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             throw new InvalidOperationException("The AppHost does not support waiting for resource cleanup.");
         }
 
-        var rpc = EnsureConnected();
+        // A caller that cannot tell whether the AppHost received this request must not escalate to signaling it, because
+        // the AppHost may be running a resource cleanup shared with other waiters. A connection that is not usable is
+        // detected here, before anything is sent, so it is reported distinctly as a request the AppHost never received.
+        JsonRpc rpc;
+        try
+        {
+            rpc = EnsureConnected();
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+        {
+            throw new AppHostRequestNotSentException("The resource cleanup request was not sent because the AppHost connection is not available.", ex);
+        }
 
         _logger.LogDebug("Stopping AppHost and waiting for resource cleanup");
 
-        var response = await rpc.InvokeWithProfilingAsync<StopAppHostResponse>(
+        var responseTask = rpc.InvokeWithProfilingAsync<StopAppHostResponse>(
             _profilingTelemetry,
             "auxiliary",
             "StopAsync",
             [new StopAppHostRequest { WaitForResourceCleanup = true }],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
-        return response?.ResourcesCleanedUp is true;
+        // Canceling a StreamJsonRpc call only sends $/cancelRequest to the AppHost; the client keeps waiting for the
+        // AppHost to reply. Stop waiting as soon as the caller's token is canceled so an AppHost that never replies
+        // cannot hold the caller past its deadline. The abandoned call is observed below so its eventual failure is
+        // not reported as an unobserved task exception.
+        try
+        {
+            var response = await responseTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return response?.ResourcesCleanedUp is true;
+        }
+        catch (OperationCanceledException) when (!responseTask.IsCompleted)
+        {
+            _ = responseTask.ContinueWith(static task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            throw;
+        }
     }
 
     /// <summary>

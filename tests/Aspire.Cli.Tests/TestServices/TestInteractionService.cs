@@ -25,8 +25,15 @@ internal sealed class TestInteractionService : IInteractionService
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Action<string>? ShowStatusCallback { get; set; }
+
+    /// <summary>
+    /// Optional asynchronous gate awaited before a status action runs, so tests can control the order in which
+    /// concurrent operations proceed.
+    /// </summary>
+    public Func<string, Task>? ShowStatusGateAsync { get; set; }
     public Action<string>? ShowDynamicStatusCallback { get; set; }
     public Action<KnownEmoji, string, ConsoleOutput?>? DisplayMessageCallback { get; set; }
+    public Action<string>? DisplayErrorCallback { get; set; }
     public Action<string?, ConsoleOutput?>? DisplayCancellationMessageCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
@@ -85,7 +92,13 @@ internal sealed class TestInteractionService : IInteractionService
         }
 
         ShowStatusCallback?.Invoke(statusText);
-        return action();
+        return ShowStatusGateAsync is { } gate ? RunAfterGateAsync(gate(statusText), action) : action();
+
+        static async Task<T> RunAfterGateAsync(Task gateTask, Func<Task<T>> action)
+        {
+            await gateTask.ConfigureAwait(false);
+            return await action().ConfigureAwait(false);
+        }
     }
 
     public List<string> DynamicStatusTexts { get; } = [];
@@ -270,6 +283,8 @@ internal sealed class TestInteractionService : IInteractionService
         {
             DisplayedErrors.Add(errorMessage);
         }
+
+        DisplayErrorCallback?.Invoke(errorMessage);
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
