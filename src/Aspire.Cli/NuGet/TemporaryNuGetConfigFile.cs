@@ -32,7 +32,7 @@ internal sealed class TemporaryNuGetConfigFile : IDisposable
     {
         ArgumentNullException.ThrowIfNull(temporaryStorage);
         ArgumentNullException.ThrowIfNull(writeConfig);
-        return CreateInDirectoryAsync(temporaryStorage.CreateTempSubdirectory("aspire-nuget-config"), writeConfig);
+        return CreateInDirectoryAsync(temporaryStorage.CreateTempSubdirectory("nuget-"), writeConfig);
     }
 
     public static Task<TemporaryNuGetConfigFile> CreateAsync(DirectoryInfo parentDirectory, Action<string> writeConfig)

@@ -80,7 +80,7 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
         // Relative explicit overrides retain their existing cwd-relative meaning.
         // Do not turn a missing user profile into an implicit cwd-relative home.
         var root = GetRoot(string.IsNullOrWhiteSpace(configuredHome) ? home : Path.GetFullPath(home));
-        var session = Path.Combine(root, "aspire-session-" + Path.GetRandomFileName());
+        var session = Path.Combine(root, Path.GetRandomFileName());
         var lease = FileLock.AcquirePrivate(session + ".lock");
         try
         {

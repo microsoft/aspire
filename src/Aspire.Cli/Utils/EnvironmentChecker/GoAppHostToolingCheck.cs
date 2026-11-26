@@ -233,7 +233,7 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
         // so ask go for the effective value. Run it in a fresh empty directory, never the AppHost's: go
         // commands that read a go.mod or go.work can switch toolchains and download one, which doctor must
         // not do. A pinned GOTOOLCHAIN=<name> is not modelled; the check validates the Go on PATH.
-        var probeDirectory = _temporaryStorage.CreateTempSubdirectory("aspire-go-doctor-");
+        var probeDirectory = _temporaryStorage.CreateTempSubdirectory("go-");
 
         try
         {

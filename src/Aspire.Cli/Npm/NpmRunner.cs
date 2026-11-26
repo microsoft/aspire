@@ -183,7 +183,7 @@ internal sealed class NpmRunner(IEnvironment environment, ITemporaryStorage temp
 
     private string CreateIsolatedTempDirectory()
     {
-        return temporaryStorage.CreateTempSubdirectory("aspire-npm-").FullName;
+        return temporaryStorage.CreateTempSubdirectory("npm-").FullName;
     }
 
     private void CleanupTempDirectory(string tempDir)

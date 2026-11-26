@@ -761,7 +761,7 @@ internal sealed class ConfigSourceService(
             logger.LogDebug("No cached configuration source version check was found.");
         }
         logger.LogDebug("Checking configuration source repository version without interactive input.");
-        var temporaryDirectory = temporaryStorage.CreateTempSubdirectory("aspire-config-source-check-");
+        var temporaryDirectory = temporaryStorage.CreateTempSubdirectory("cfg-");
         try
         {
             var identity = new ConfigSource

@@ -14,6 +14,7 @@ using Aspire.TestUtilities;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
@@ -51,7 +52,11 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
     public async Task TestConnectionAsync_WhenProbeCompletes_StopsDcpBeforeCallerExits()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var factory = new ProcessExecutionFactory(new HostEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
+        using var storage = new PrivateTemporaryStorage(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ASPIRE_HOME"] = Path.Combine(workspace.Path, ".aspire")
+        }).Build());
+        var factory = new ProcessExecutionFactory(new HostEnvironment(), storage, NullLogger<ProcessExecutionFactory>.Instance);
         ProcessTestIdentity? identity = null;
         string? sessionDirectory = null;
         var recordingFactory = new TestProcessExecutionFactory
@@ -72,11 +77,11 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             }
         };
         var checker = new DcpConnectionChecker(
-            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), new Aspire.Shared.TemporaryStorage(), nssDbOverride: null),
+            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), storage, nssDbOverride: null),
             recordingFactory,
             DcpConnectionTestProcess.CreateExecutionContext(workspace.Path),
             new HostEnvironment(),
-            new Aspire.Shared.TemporaryStorage(),
+            storage,
             NullLogger<DcpConnectionChecker>.Instance);
 
         try
@@ -88,6 +93,8 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             Assert.NotNull(identity);
             Assert.False(ProcessStartTimeHelper.IsProcessRunning(identity.Value.ProcessId, identity.Value.StartTime));
             Assert.NotNull(sessionDirectory);
+            Assert.Equal(Path.TrimEndingDirectorySeparator(storage.GetTempPath()), Path.GetDirectoryName(sessionDirectory));
+            Assert.StartsWith("dcp-", Path.GetFileName(sessionDirectory), StringComparison.Ordinal);
             Assert.False(Directory.Exists(sessionDirectory));
         }
         finally
@@ -98,7 +105,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             }
             if (sessionDirectory is not null && Directory.Exists(sessionDirectory))
             {
-                Assert.StartsWith("aspire-dcp-doctor-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
+                Assert.StartsWith("dcp-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
                 Directory.Delete(sessionDirectory, recursive: true);
             }
         }
@@ -164,7 +171,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             identities.Add(tree[1]);
             processes.Add(Process.GetProcessById(tree[1].ProcessId));
             sessionDirectory = await File.ReadAllTextAsync(sessionDirectoryFile, TestContext.Current.CancellationToken);
-            Assert.StartsWith("aspire-dcp-doctor-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
+            Assert.StartsWith("dcp-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
             if (delayHandoff)
             {
                 // Exceed the checker's 20-second probe deadline without advancing the lifetime test
@@ -240,7 +247,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
 
             if (sessionDirectory is not null)
             {
-                Assert.StartsWith("aspire-dcp-doctor-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
+                Assert.StartsWith("dcp-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
                 if (Directory.Exists(sessionDirectory))
                 {
                     Directory.Delete(sessionDirectory, recursive: true);

@@ -12,7 +12,6 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Microsoft.AspNetCore.Certificates.Generation;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
@@ -27,7 +26,7 @@ internal sealed class DcpConnectionChecker(
     IProcessExecutionFactory processExecutionFactory,
     CliExecutionContext executionContext,
     IEnvironment environment,
-    [FromKeyedServices(typeof(DcpConnectionChecker))] ITemporaryStorage temporaryStorage,
+    ITemporaryStorage temporaryStorage,
     ILogger<DcpConnectionChecker> logger) : IDcpConnectionChecker
 {
     private static readonly TimeSpan s_connectionTimeout = TimeSpan.FromSeconds(20);
@@ -246,7 +245,7 @@ internal sealed class DcpConnectionChecker(
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var sessionDirectory = temporaryStorage.CreateTempSubdirectory("aspire-dcp-doctor-").FullName;
+            var sessionDirectory = temporaryStorage.CreateTempSubdirectory("dcp-").FullName;
             var kubeconfigPath = Path.Combine(sessionDirectory, "kubeconfig");
             var dcpExecutablePath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
             var output = new OutputCollector();
@@ -281,6 +280,9 @@ internal sealed class DcpConnectionChecker(
 
                 // DCP uses this folder for process-scoped state such as the generated kubeconfig.
                 // Keeping it under the doctor-owned temp directory prevents overlap with AppHost sessions.
+                // This probe creates no workloads or logging socket. DCP's notification socket uses
+                // the user cache directory, not this folder, so its Unix socket path limit is independent.
+                // https://github.com/microsoft/dcp/blob/v0.27.5/internal/dcp/bootstrap/dcp_run.go#L243-L253
                 environmentVariables["DCP_SESSION_FOLDER"] = sessionDirectory;
 
                 var options = new ProcessInvocationOptions

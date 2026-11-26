@@ -67,7 +67,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildApplication_UsesPrivateTemporaryStorageExceptForDcpSockets()
+    public async Task BuildApplication_UsesPrivateTemporaryStorage()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = Path.Combine(workspace.Path, ".aspire");
@@ -75,7 +75,6 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var storage = host.Services.GetRequiredService<ITemporaryStorage>();
         Assert.IsType<PrivateTemporaryStorage>(storage);
         Assert.StartsWith(Path.Combine(home, "tmp") + Path.DirectorySeparatorChar, storage.GetTempPath());
-        Assert.IsType<TemporaryStorage>(host.Services.GetRequiredKeyedService<ITemporaryStorage>(typeof(DcpConnectionChecker)));
         Assert.NotNull(host.Services.GetRequiredService<IDcpConnectionChecker>());
     }
 

@@ -91,7 +91,7 @@ internal sealed class PlaywrightCliInstaller(
     {
         // The upstream generator chooses its own output directories. Generate in isolation,
         // then copy only to destinations belonging to the selected agents and scope.
-        var stagingDirectory = temporaryStorage.CreateTempSubdirectory("aspire-playwright-skills-");
+        var stagingDirectory = temporaryStorage.CreateTempSubdirectory("pwskills-");
         try
         {
             return await InstallAsync(stagingDirectory.FullName, selectedSkillDirectories, cancellationToken);
@@ -213,7 +213,7 @@ internal sealed class PlaywrightCliInstaller(
         }
 
         // Step 3: Download the tarball via npm pack.
-        var tempDir = temporaryStorage.CreateTempSubdirectory("aspire-playwright-").FullName;
+        var tempDir = temporaryStorage.CreateTempSubdirectory("pw-").FullName;
 
         try
         {
