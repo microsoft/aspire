@@ -376,8 +376,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             "agent init --agents opencode --scope project --skills aspire");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Empty(interaction.DisplayedRenderables);
-        Assert.DoesNotContain(interaction.DisplayedMessages,
+        Assert.Single(interaction.DisplayedRenderables);
+        Assert.Contains(interaction.DisplayedMessages,
             message => message.Message == AgentCommandStrings.InitCommand_AgentPluginSourcesExplanation);
         var configuration = AgentConfiguration.ReadObject(
             context.OpenCode.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project))!;

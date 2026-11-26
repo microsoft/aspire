@@ -2,6 +2,7 @@
   Sources:
           Name:  default
     Git source:  https://github.com/microsoft/aspire-skills
+       Git ref:  main
    Marketplace:  aspire-skills
        Plugins:  aspire@aspire-skills
 

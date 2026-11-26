@@ -338,7 +338,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutdatedSetting", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Read more about this configuration source.
         /// </summary>
