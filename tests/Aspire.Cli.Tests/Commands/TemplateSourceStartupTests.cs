@@ -23,6 +23,51 @@ namespace Aspire.Cli.Tests.Commands;
 public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData(null, null, null, true)]
+    [InlineData("false", null, null, false)]
+    [InlineData("false", true, null, true)]
+    [InlineData("false", true, false, false)]
+    public void ConfigSourceFlag_UsesStandardCliConfigurationPrecedence(string? environment, bool? global, bool? local, bool expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var workingDirectory = workspace.CreateDirectory("project");
+        if (global is { } globalValue)
+        {
+            new AspireConfigFile { Features = new() { [KnownFeatures.ConfigSourceEnabled] = globalValue } }.Save(home.FullName);
+        }
+        if (local is { } localValue)
+        {
+            new AspireConfigFile { Features = new() { [KnownFeatures.ConfigSourceEnabled] = localValue } }.Save(workingDirectory.FullName);
+        }
+
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.WorkingDirectory = workingDirectory.FullName;
+        using (RemoteExecutor.Invoke(static async (homePath, environmentValue, expectedValue) =>
+        {
+            Environment.SetEnvironmentVariable("ASPIRE_HOME", homePath);
+            Environment.SetEnvironmentVariable("ASPIRE_EXTENSION_ENDPOINT", null);
+            Environment.SetEnvironmentVariable("features__configSourceEnabled", environmentValue.Length == 0 ? null : environmentValue);
+            string[] args = ["template", "source", "list"];
+            using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan);
+            using var startupContext = CreateStartupContext(args, cancellationManager);
+            using var host = await Program.BuildApplicationAsync(args, startupContext).DefaultTimeout();
+
+            var service = host.Services.GetRequiredService<ConfigSourceService>();
+            if (bool.Parse(expectedValue))
+            {
+                service.EnsureEnabled();
+            }
+            else
+            {
+                Assert.Equal(ConfigSourceStrings.FeatureDisabled, Assert.Throws<ConfigSourceException>(service.EnsureEnabled).Message);
+            }
+        }, home.FullName, environment ?? "", expected.ToString(), options))
+        {
+        }
+    }
+
+    [Theory]
     [InlineData("template source list", true)]
     [InlineData("template source list --format json", true)]
     [InlineData("--log-level Debug template source list", true)]

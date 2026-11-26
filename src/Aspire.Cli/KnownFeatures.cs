@@ -25,6 +25,7 @@ internal sealed record FeatureMetadata(string Name, string Description, bool Def
 internal static class KnownFeatures
 {
     public static string FeaturePrefix => "features";
+    public static string ConfigSourceEnabled => "configSourceEnabled";
     public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
     public static string ShowDeprecatedPackages => "showDeprecatedPackages";
     public static string StagingChannelEnabled => "stagingChannelEnabled";
@@ -46,6 +47,11 @@ internal static class KnownFeatures
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
+        [ConfigSourceEnabled] = new(
+            ConfigSourceEnabled,
+            "Enable Git-backed configuration source discovery, template inheritance, update checks, and refresh",
+            DefaultValue: true),
+
         [UpdateNotificationsEnabled] = new(
             UpdateNotificationsEnabled,
             "Check if update notifications are disabled and set version check environment variable",

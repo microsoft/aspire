@@ -79,9 +79,13 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task New_NonInteractiveRequiresExplicitConfigurationSourceConsent()
-        => ConfigSourceTestContext.RunAsync(output, "sha1", context =>
-            context.AssertNonInteractiveConsentRequiredAsync());
+    public Task New_NonInteractiveRequiresExplicitConfigurationSourceConsentUnlessDisabled()
+        => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
+        {
+            await context.AssertNonInteractiveConsentRequiredAsync();
+            await context.SetConfigSourceEnabledAsync(false);
+            await context.CreateProjectAndAssertSourceDisabledAsync();
+        });
 
     [Fact]
     [CaptureWorkspaceOnFailure]
@@ -136,6 +140,10 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
             var original = await context.AssertSourceAppliedAsync("original");
             Assert.Equal(objectIdLength, original["configSource"]!["appliedVersion"]!.GetValue<string>().Length);
             await context.UpdateSourceAsync();
+            await context.SetConfigSourceEnabledAsync(false);
+            await context.AssertRefreshDisabledAsync();
+            await context.AssertConfigurationUnchangedAsync(original);
+            await context.SetConfigSourceEnabledAsync(true);
             await context.RefreshConfigurationAsync();
             await context.AssertConfigurationUpdatedAsync(original);
         });

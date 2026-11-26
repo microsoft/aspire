@@ -31,6 +31,26 @@ Source-driven writes to app configuration happen only during initial materializa
 
 ## Phase 1: Acquire remote configuration
 
+### Disable config-source activity
+
+`features.configSourceEnabled` defaults to `true`. To disable it in the global CLI configuration:
+
+```shell
+aspire config set features.configSourceEnabled false --global
+```
+
+The feature uses standard CLI precedence: the nearest configuration from the working
+directory overrides global configuration, which overrides the `features__configSourceEnabled`
+environment variable. Selecting another AppHost with `--apphost` does not change where the
+flag is read.
+
+When disabled, ordinary commands skip candidate detection, consent, Git acquisition,
+background update checks and notices, and runtime template inheritance from the config
+source. `--use-config-source` (including explicit `true`) and `aspire update --config-source`
+fail with instructions to re-enable the feature. `--use-config-source false` continues
+without writing a project opt-out. Saved bindings, previously copied settings, and
+independently configured template, skill, and integration sources are unaffected.
+
 ### Select a source
 
 During `aspire new`, `aspire init`, or adoption by `aspire update`, resolve a candidate source:

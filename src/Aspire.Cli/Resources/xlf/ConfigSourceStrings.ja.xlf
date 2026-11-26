@@ -67,6 +67,11 @@
         <target state="translated">お使いのマシンで構成ソースが検出されました。これにより、組織は Aspire の設定を共有して、開発エクスペリエンスをカスタマイズできます。</target>
         <note />
       </trans-unit>
+      <trans-unit id="FeatureDisabled">
+        <source>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</source>
+        <target state="new">Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</target>
+        <note>Do not translate "features.configSourceEnabled" or "true".</note>
+      </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
         <target state="translated">Git を開始できませんでした。この構成ソースを使用するには、Git がインストールされ、PATH で使用可能であることを確認してください。</target>
