@@ -17,9 +17,11 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class PauseWarningTests : DashboardTestContext
 {
     [Theory]
-    [InlineData(TimeFormat.TwelveHour, "Dec 21, 2025, 12:54 AM")]
-    [InlineData(TimeFormat.TwentyFourHour, "Dec 21, 2025, 0:54")]
-    public void Render_ShowsRelativeAgeAndAbsoluteTimeInTooltip(TimeFormat timeFormat, string absoluteTime)
+    [InlineData(TimeFormat.TwelveHour, 5, "5 minutes ago", "12:54:59 AM")]
+    [InlineData(TimeFormat.TwentyFourHour, 5, "5 minutes ago", "0:54:59")]
+    [InlineData(TimeFormat.TwelveHour, 65, "1h ago", "12/20/2025 11:54:59 PM")]
+    [InlineData(TimeFormat.TwentyFourHour, 65, "1h ago", "12/20/2025 23:54:59")]
+    public void Render_ShowsRelativeAgeAndAbsoluteTimeInTooltip(TimeFormat timeFormat, int minutes, string relativeAge, string absoluteTime)
     {
         // Fake timers so the 30s age refresh does not schedule real wall-clock callbacks in unit tests.
         var timeProvider = new TestTimeProvider { Timers = new FakeTimeProvider() };
@@ -27,7 +29,7 @@ public class PauseWarningTests : DashboardTestContext
         Services.AddLocalization();
         Services.AddFluentUIComponents();
         Services.AddSingleton<BrowserTimeProvider>(timeProvider);
-        var pausedAt = timeProvider.GetUtcNow().UtcDateTime.AddMinutes(-5);
+        var pausedAt = timeProvider.GetUtcNow().UtcDateTime.AddMinutes(-minutes);
 
         var cut = Render<PauseWarning>(builder =>
         {
@@ -38,7 +40,7 @@ public class PauseWarningTests : DashboardTestContext
         var root = cut.Find(".pause-warning");
 
         Assert.Equal(["class", "data-tooltip"], root.Attributes.Select(attribute => attribute.Name).Order());
-        Assert.Equal("Structured logs capture paused 5 minutes ago", cut.Find(".pause-warning-message").TextContent.Trim());
+        Assert.Equal($"Structured logs capture paused {relativeAge}", cut.Find(".pause-warning-message").TextContent.Trim());
         Assert.Equal("Structured logs capture paused", cut.Find(".pause-warning-title").TextContent.Trim());
         Assert.Equal($"Structured logs capture paused {absoluteTime}", root.GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
     }
@@ -66,7 +68,7 @@ public class PauseWarningTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal("Structured logs capture paused 1 minute ago", cut.Find(".pause-warning-message").TextContent.Trim());
-            Assert.Equal("Structured logs capture paused Dec 21, 2025, 12:59 AM", cut.Find(".pause-warning").GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
+            Assert.Equal("Structured logs capture paused 12:59:59 AM", cut.Find(".pause-warning").GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
         });
     }
 }
