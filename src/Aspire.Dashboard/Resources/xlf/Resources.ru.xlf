@@ -264,7 +264,7 @@
       </trans-unit>
       <trans-unit id="HomeSingleRequestCount">
         <source>{0} request</source>
-        <target state="new">{0} request</target>
+        <target state="translated">{0} запрос</target>
         <note>{0} is the request count, which is one.</note>
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">

@@ -129,27 +129,27 @@
       </trans-unit>
       <trans-unit id="ResourceTeardownMayContinue">
         <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
-        <target state="new">Resources may still be stopping in the background. Use {0} to wait until they are torn down.</target>
+        <target state="translated">리소스가 백그라운드에서 여전히 중지 중일 수 있습니다. 리소스가 완전히 삭제될 때까지 기다리려면 {0}을(를) 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownNotConfirmed">
         <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
-        <target state="new">Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</target>
+        <target state="translated">{0}의 리소스가 삭제되었는지 확인할 수 없습니다. 백그라운드에서 여전히 중지 중일 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownTimedOut">
         <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
-        <target state="new">The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</target>
+        <target state="translated">{0}의 리소스가 {1}초 이내에 삭제되지 않았습니다. 백그라운드에서 여전히 중지 중일 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownUnsupported">
         <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
-        <target state="new">{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</target>
+        <target state="translated">{0}은(는) 리소스가 삭제될 때까지 기다리는 기능을 지원하지 않으므로, 리소스가 백그라운드에서 여전히 중지 중일 수 있습니다. {1}을(를) 사용하려면 AppHost를 최신 Aspire 버전으로 업데이트하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesTornDown">
         <source>The resources of {0} were torn down.</source>
-        <target state="new">The resources of {0} were torn down.</target>
+        <target state="translated">{0}의 리소스가 삭제되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -174,17 +174,17 @@
       </trans-unit>
       <trans-unit id="TimeoutInvalid">
         <source>Timeout must be between 1 and {0} seconds.</source>
-        <target state="new">Timeout must be between 1 and {0} seconds.</target>
+        <target state="translated">시간 제한은 1초에서 {0}초 사이여야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutOptionDescription">
         <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
-        <target state="new">Maximum time in seconds to wait for resources to be torn down (requires --wait)</target>
+        <target state="translated">리소스가 삭제될 때까지 대기하는 최대 시간(초)(--wait 필요)</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutRequiresWait">
         <source>The {0} option requires the {1} option.</source>
-        <target state="new">The {0} option requires the {1} option.</target>
+        <target state="translated">{0} 옵션에는 {1} 옵션이 필요합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
@@ -204,12 +204,12 @@
       </trans-unit>
       <trans-unit id="WaitOptionDescription">
         <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
-        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <target state="translated">반환하기 전에 컨테이너와 같은 AppHost 리소스가 삭제될 때까지 기다리세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForResourceTeardown">
         <source>Waiting for the resources of {0} to be torn down...</source>
-        <target state="new">Waiting for the resources of {0} to be torn down...</target>
+        <target state="translated">{0}의 리소스가 삭제될 때까지 기다리는 중...</target>
         <note />
       </trans-unit>
     </body>

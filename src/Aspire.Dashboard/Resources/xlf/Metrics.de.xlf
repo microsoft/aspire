@@ -164,7 +164,7 @@
       </trans-unit>
       <trans-unit id="MetricsPinLimitReached">
         <source>Can't pin this metric. The limit is {0} pins per application. Select fewer resources or unpin existing metrics.</source>
-        <target state="new">Can't pin this metric. The limit is {0} pins per application. Select fewer resources or unpin existing metrics.</target>
+        <target state="translated">Diese Metrik kann nicht angeheftet werden. Der Grenzwert beträgt {0} Pins pro Anwendung. Wählen Sie weniger Ressourcen aus, oder heben Sie die Anheftung vorhandener Metriken auf.</target>
         <note>{0} is the maximum number of saved metric pins.</note>
       </trans-unit>
       <trans-unit id="MetricsPinnedEmpty">

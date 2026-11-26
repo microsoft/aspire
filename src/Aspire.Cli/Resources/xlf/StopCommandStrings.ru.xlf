@@ -174,7 +174,7 @@
       </trans-unit>
       <trans-unit id="TimeoutInvalid">
         <source>Timeout must be between 1 and {0} seconds.</source>
-        <target state="new">Timeout must be between 1 and {0} seconds.</target>
+        <target state="translated">Время ожидания должно составлять от 1 до {0} секунд.</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutOptionDescription">
@@ -184,7 +184,7 @@
       </trans-unit>
       <trans-unit id="TimeoutRequiresWait">
         <source>The {0} option requires the {1} option.</source>
-        <target state="new">The {0} option requires the {1} option.</target>
+        <target state="translated">Для параметра {0} требуется параметр {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">

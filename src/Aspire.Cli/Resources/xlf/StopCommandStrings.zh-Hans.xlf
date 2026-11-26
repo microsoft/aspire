@@ -129,27 +129,27 @@
       </trans-unit>
       <trans-unit id="ResourceTeardownMayContinue">
         <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
-        <target state="new">Resources may still be stopping in the background. Use {0} to wait until they are torn down.</target>
+        <target state="translated">资源可能仍在后台进行停止。请使用 {0} 来等待资源完成拆解。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownNotConfirmed">
         <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
-        <target state="new">Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</target>
+        <target state="translated">无法确认 {0} 的资源是否已完成拆解。它们可能仍在后台进行停止。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownTimedOut">
         <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
-        <target state="new">The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</target>
+        <target state="translated">{0} 的资源未在 {1} 秒内完成拆解。它们可能仍在后台进行停止。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownUnsupported">
         <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
-        <target state="new">{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</target>
+        <target state="translated">{0} 不支持等待其资源完成拆解，因此它们可能仍在后台进行停止。请将 AppHost 更新到较新的 Aspire 版本，以使用 {1}。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesTornDown">
         <source>The resources of {0} were torn down.</source>
-        <target state="new">The resources of {0} were torn down.</target>
+        <target state="translated">已拆解 {0} 的资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -174,17 +174,17 @@
       </trans-unit>
       <trans-unit id="TimeoutInvalid">
         <source>Timeout must be between 1 and {0} seconds.</source>
-        <target state="new">Timeout must be between 1 and {0} seconds.</target>
+        <target state="translated">超时必须介于 1 到 {0} 秒之间。</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutOptionDescription">
         <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
-        <target state="new">Maximum time in seconds to wait for resources to be torn down (requires --wait)</target>
+        <target state="translated">等待资源拆解的最长时间(以秒为单位；需要使用 --wait)</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutRequiresWait">
         <source>The {0} option requires the {1} option.</source>
-        <target state="new">The {0} option requires the {1} option.</target>
+        <target state="translated">{0} 选项需要 {1} 选项。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
@@ -204,12 +204,12 @@
       </trans-unit>
       <trans-unit id="WaitOptionDescription">
         <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
-        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <target state="translated">请等待 AppHost 的资源(例如容器)完成拆解，然后再返回</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForResourceTeardown">
         <source>Waiting for the resources of {0} to be torn down...</source>
-        <target state="new">Waiting for the resources of {0} to be torn down...</target>
+        <target state="translated">正在等待 {0} 的资源进行拆解…</target>
         <note />
       </trans-unit>
     </body>
