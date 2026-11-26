@@ -137,6 +137,8 @@ launching the AppHost. Shared run-ID plumbing is deferred.
 `mstest-tests/Playground.MSTest.csproj` is an executable MSTest 4.4.0 project with
 Microsoft.Testing.Extensions.TrxReport 2.4.0. Its local build files isolate it from
 the repository's xUnit runner setup, matching a consumer MSTest project.
+Arcade can compile this project, but its test traversal does not run the
+fixture because it needs the service started by the AppHost.
 `AddMsTest("mstest-tests", ...)` waits for the same `service` and receives
 `serviceEndpoint` through `MSTEST_SERVICE_URL`. Tests check `/`, `/health`, an
 opt-in failure, and a skipped example.
