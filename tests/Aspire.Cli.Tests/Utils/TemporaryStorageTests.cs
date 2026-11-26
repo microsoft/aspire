@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 
@@ -87,6 +89,66 @@ public class TemporaryStorageTests(ITestOutputHelper output)
         using var storage = CreateStorage(home);
         Assert.Throws<IOException>(storage.GetTempPath);
         Assert.False(Directory.Exists(home));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [PlatformSpecific(TestPlatforms.Windows)]
+    public void ExistingWindowsHomePermissionsArePreservedButTmpIsValidated(bool configureTmp)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var home = Directory.CreateDirectory(Path.Combine(workspace.Path, ".aspire"));
+        var directory = configureTmp ? Directory.CreateDirectory(Path.Combine(home.FullName, "tmp")) : home;
+        var security = directory.GetAccessControl();
+        security.AddAccessRule(new FileSystemAccessRule(
+            new SecurityIdentifier(WellKnownSidType.WorldSid, null), FileSystemRights.ReadAndExecute,
+            InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+        directory.SetAccessControl(security);
+        var before = directory.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All);
+        using var storage = CreateStorage(home.FullName);
+
+        if (configureTmp)
+        {
+            Assert.Throws<IOException>(storage.GetTempPath);
+        }
+        else
+        {
+            Assert.Equal(Path.Combine(home.FullName, "tmp"), Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(storage.GetTempPath())));
+        }
+
+        Assert.Equal(before, directory.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All));
+    }
+
+    [Fact]
+    [PlatformSpecific(TestPlatforms.Windows)]
+    public void AdministratorOwnedWindowsTmpIsAccepted()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var identity = WindowsIdentity.GetCurrent();
+        if (!new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
+        {
+            Assert.Skip("Setting the Administrators owner requires an elevated process.");
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var home = Path.Combine(workspace.Path, ".aspire");
+        var root = new DirectoryInfo(PrivateTemporaryStorage.GetRoot(home));
+        var security = root.GetAccessControl();
+        security.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
+        root.SetAccessControl(security);
+        using var storage = CreateStorage(home);
+
+        Assert.Equal(root.FullName, Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(storage.GetTempPath())));
     }
 
     [Fact]

@@ -130,7 +130,16 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
             throw new IOException($"Aspire temporary storage must not traverse a link at '{path}'.");
         }
 
-        CreatePrivateDirectory(path);
+        // The Aspire home can already contain logs and other shared CLI state with inherited ACLs.
+        // Only tmp and its descendants require private Windows permissions.
+        if (OperatingSystem.IsWindows() && allowReadAndTraverse)
+        {
+            Directory.CreateDirectory(path);
+        }
+        else
+        {
+            CreatePrivateDirectory(path);
+        }
         directory.Refresh();
         if (directory.LinkTarget is not null)
         {
@@ -166,7 +175,11 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
         var existing = directory.GetAccessControl();
         var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
         var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-        if (!user.Equals(existing.GetOwner(typeof(SecurityIdentifier))) ||
+        var owner = existing.GetOwner(typeof(SecurityIdentifier));
+        // Elevated processes can create Administrators-owned directories. This is the same
+        // privileged group already allowed in the DACL, not another ordinary user's ownership.
+        // https://learn.microsoft.com/windows/win32/secauthz/owner-of-a-new-object
+        if ((!user.Equals(owner) && !administrators.Equals(owner)) ||
             existing.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().Any(rule =>
                 rule.AccessControlType == AccessControlType.Allow && !user.Equals(rule.IdentityReference) &&
                 !system.Equals(rule.IdentityReference) && !administrators.Equals(rule.IdentityReference)))
