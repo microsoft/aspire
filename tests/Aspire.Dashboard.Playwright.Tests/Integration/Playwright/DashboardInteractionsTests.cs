@@ -393,6 +393,178 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task GridRemovedDuringInitialization_ReleasesControllerAndKeepsNavigationWorking()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.RouteAsync("**/Components/DataGrid/FluentDataGrid.razor.js*", async route =>
+            {
+                var response = await route.FetchAsync();
+                // Delay the real controller's return to .NET, so navigation disposes the grid while Initialize
+                // is pending. This reproduces https://github.com/microsoft/fluentui-blazor/issues/5580.
+                await route.FulfillAsync(new()
+                {
+                    Response = response,
+                    Body = await response.TextAsync() + """
+
+                        const initialize = Microsoft.FluentUI.Blazor.DataGrid.Initialize;
+                        Microsoft.FluentUI.Blazor.DataGrid.Initialize = async (...args) => {
+                            const controller = initialize(...args);
+                            if (!window.delayedGridElement) {
+                                window.delayedGridElement = args[0];
+                                window.lateGridControllerStops = 0;
+                                const stop = controller.stop;
+                                controller.stop = () => {
+                                    window.lateGridControllerStops++;
+                                    stop();
+                                };
+                                await new Promise(resolve => window.releaseGridInitialization = resolve);
+                            }
+                            return controller;
+                        };
+                        """
+                });
+            });
+
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+            await page.GotoAsync("/legacy/resources");
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
+            await page.WaitForFunctionAsync("() => !!window.releaseGridInitialization");
+            await page.GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuConsoleLogsTab, Exact = true }).ClickAsync();
+            await page.WaitForFunctionAsync("() => !window.delayedGridElement.isConnected");
+
+            await page.EvaluateAsync("() => window.releaseGridInitialization()");
+            await page.WaitForFunctionAsync("() => window.lateGridControllerStops === 1");
+
+            // A second server-handled navigation proves the circuit survived, rather than only checking an error banner.
+            await page.GetByRole(AriaRole.Link, new() { Name = Resources.Layout.NavMenuResourcesTab, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator(".main-grid .resource-row").First).ToBeVisibleAsync();
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "fluentui-grid-disposal-regression.png") });
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task LegacyDetailsSplitter_ResizesAndReopensAfterDismissal()
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync($"/legacy/resources?resource={InteractionsDashboardServerFixture.ParentResourceName}");
+            var details = page.Locator(".details-container");
+            await Assertions.Expect(details).ToBeVisibleAsync();
+            var summary = page.Locator(".summary-container");
+            var before = await summary.BoundingBoxAsync();
+            Assert.NotNull(before);
+            var resizeBar = page.Locator(".summary-details-container .fluent-multi-splitter-bar");
+            await Assertions.Expect(resizeBar).ToBeVisibleAsync();
+            var handle = await resizeBar.BoundingBoxAsync();
+            Assert.NotNull(handle);
+            await page.Mouse.MoveAsync(handle.X + handle.Width / 2, handle.Y + handle.Height / 2);
+            await page.Mouse.DownAsync();
+            await page.WaitForFunctionAsync("() => document.splitter?.Data?.size > 0");
+            await page.Mouse.MoveAsync(handle.X - 100, handle.Y + handle.Height / 2, new() { Steps = 10 });
+            var resized = await summary.BoundingBoxAsync();
+            Assert.NotNull(resized);
+            Assert.True(resized.Width < before.Width - 50, $"Expected summary width to shrink from {before.Width}, but was {resized.Width}.");
+            await page.Mouse.UpAsync();
+            await page.WaitForFunctionAsync("() => document.splitter.Data.size === 0");
+
+            await details.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.SummaryDetailsViewCloseView, Exact = true }).ClickAsync();
+            await Assertions.Expect(details).ToHaveCountAsync(0);
+            await page.GetByText(InteractionsDashboardServerFixture.ParentResourceName, new() { Exact = true }).First.ClickAsync();
+            await Assertions.Expect(details).ToBeVisibleAsync();
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "fluentui-legacy-splitter.png") });
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task SettingsDialog_ReopensAfterClosing(bool legacy)
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = legacy ? "legacy" : "new", Url = baseUrl }]);
+            await page.GotoAsync(legacy ? "/legacy/structuredlogs" : "/structuredlogs");
+            var settingsButton = page.Locator("#dashboard-settings-button");
+            await settingsButton.ClickAsync();
+            var dialog = page.GetByRole(AriaRole.Dialog);
+            await Assertions.Expect(dialog).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".language-select")).ToBeVisibleAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.MainLayoutSettingsDialogClose, Exact = true }).Last.ClickAsync();
+            await Assertions.Expect(dialog).Not.ToBeVisibleAsync();
+            await settingsButton.ClickAsync();
+            await Assertions.Expect(dialog).ToBeVisibleAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.MainLayoutSettingsDialogClose, Exact = true }).Last.ClickAsync();
+            await Assertions.Expect(dialog).Not.ToBeVisibleAsync();
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FilterDialog_SelectsOptionsThroughDropdowns(bool legacy)
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = legacy ? "legacy" : "new", Url = baseUrl }]);
+            await page.GotoAsync(legacy ? "/legacy/structuredlogs" : "/structuredlogs");
+            await page.Locator($"fluent-button[aria-label='{Resources.StructuredFiltering.AddFilter}']").ClickAsync();
+
+            var parameter = page.GetByRole(AriaRole.Combobox, new() { Name = Resources.Dialogs.FilterDialogParameterInputLabel, Exact = true });
+            await Assertions.Expect(parameter).ToBeVisibleAsync();
+            await Assertions.Expect(parameter).ToHaveTextAsync("Message");
+            await parameter.ClickAsync();
+            await page.Locator("fluent-listbox:popover-open fluent-option[text='Category']").ClickAsync();
+            await Assertions.Expect(parameter).ToHaveTextAsync("Category");
+
+            var condition = page.GetByRole(AriaRole.Combobox, new() { Name = Resources.Dialogs.FilterDialogConditionInputLabel, Exact = true });
+            await Assertions.Expect(condition).ToBeVisibleAsync();
+            await condition.ClickAsync();
+            await page.Locator("fluent-listbox:popover-open fluent-option[text='==']").ClickAsync();
+            await Assertions.Expect(condition).ToHaveTextAsync("==");
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FilterDialog_PreservesFreeformValueOnBlur(bool legacy)
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = legacy ? "legacy" : "new", Url = baseUrl }]);
+            await page.GotoAsync(legacy ? "/legacy/structuredlogs" : "/structuredlogs");
+            await page.Locator($"fluent-button[aria-label='{Resources.StructuredFiltering.AddFilter}']").ClickAsync();
+            var dialog = page.GetByRole(AriaRole.Dialog);
+            await Assertions.Expect(dialog).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByRole(AriaRole.Combobox, new() { Name = Resources.Dialogs.FilterDialogParameterInputLabel, Exact = true })).ToHaveTextAsync("Message");
+            var value = page.Locator("#filter-dialog-text-value input");
+            await value.FillAsync("fluent-5.1-freeform");
+            await value.PressAsync("Tab");
+            await Assertions.Expect(value).ToHaveValueAsync("fluent-5.1-freeform");
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Dialogs.FilterDialogApplyFilterButtonText, Exact = true }).ClickAsync();
+            await Assertions.Expect(dialog).ToHaveCountAsync(0);
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.StructuredFiltering.Filters, Exact = true })
+                .And(page.Locator("[aria-haspopup='menu']")).ClickAsync();
+            await Assertions.Expect(page.GetByText("fluent-5.1-freeform", new() { Exact = false }).First).ToBeVisibleAsync();
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"fluentui-filter-{(legacy ? "legacy" : "new")}.png") });
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task GridColumn_DoubleClickResizeHandle_AutoFitsColumnWidth()
     {
         await RunTestAsync(async page =>

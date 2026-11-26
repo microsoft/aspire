@@ -9,6 +9,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Utils;
 using Bunit;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
@@ -151,7 +152,7 @@ public sealed class DashboardMessageBarTests : DashboardTestContext
             builder.CloseComponent();
         });
 
-        var closeResults = new List<object?>();
+        var closeResult = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var messageBarService = Services.GetRequiredService<DashboardMessageBarService>();
         await cut.InvokeAsync(() => messageBarService.ShowAsync(
             new DashboardMessageBarContent
@@ -166,24 +167,22 @@ public sealed class DashboardMessageBarTests : DashboardTestContext
             DashboardUIHelpers.MessageBarSection,
             result =>
             {
-                closeResults.Add(result.Data);
+                closeResult.SetResult(result.Data);
                 return Task.CompletedTask;
             }));
 
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardMessageBar>()));
-        cut.Find(".dashboard-message-bar-actions a.dashboard-message-bar-link-action").Click();
+        await cut.Find(".dashboard-message-bar-actions a.dashboard-message-bar-link-action").ClickAsync(new MouseEventArgs());
 
         if (closeOnLinkClick)
         {
-            cut.WaitForAssertion(() =>
-            {
-                Assert.Equal([true], closeResults);
-                Assert.Empty(cut.FindComponents<DashboardMessageBar>());
-            });
+            cut.WaitForAssertion(() => Assert.Empty(cut.FindComponents<DashboardMessageBar>()));
+            // The close callback runs independently of the provider render.
+            Assert.Equal(true, await closeResult.Task.WaitAsync(DefaultWaitTimeout));
         }
         else
         {
-            Assert.Empty(closeResults);
+            Assert.False(closeResult.Task.IsCompleted);
             Assert.Single(cut.FindComponents<DashboardMessageBar>());
         }
     }

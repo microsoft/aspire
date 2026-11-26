@@ -36,6 +36,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private DashboardDialogReference? _openPageDialog;
     private TerminalDock? _terminalDock;
+    private MobileNavMenu? _mobileNavMenu;
     private string? _pendingReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
@@ -406,8 +407,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private Task LaunchHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.KeyboardShortcuts);
 
-    // The help dialog has a tab for AI agents, so launching the agents help opens it on that tab.
-    public Task LaunchAIAgentsAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.AIAgents);
+    private Task LaunchDocumentationHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.Documentation);
 
     private async Task LaunchHelpAsync(string? returnFocusElementId, HelpDialogTab tab)
     {
@@ -519,7 +519,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     // The logo and the app name open the dashboard's home, the table of every resource. Home has no selection, and
     // going there is a fresh start, so the stored selection is cleared: the overview doesn't restore it afterwards.
     // The links keep "/" as their address, so opening them in a new tab shows the same view.
-    private async Task GoToAllResourcesAsync()
+    internal async Task GoToAllResourcesAsync()
     {
         if (!DashboardClient.IsEnabled)
         {
@@ -542,6 +542,43 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     /// Raised when the brand starts a navigation to the dashboard's home, before the location changes.
     /// </summary>
     internal event Action? HomeNavigationStarting;
+
+    // The entries the current page lists at the top of the narrow layout's navigation menu, such as the resource views
+    // that the desktop header shows as tabs.
+    private Func<IEnumerable<MobileNavMenuEntry>>? _pageNavMenuEntries;
+
+    internal void SetPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>> entries)
+    {
+        _pageNavMenuEntries = entries;
+        RefreshPageNavMenu();
+    }
+
+    internal void RefreshPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
+        {
+            RefreshPageNavMenu();
+        }
+    }
+
+    // Only clears the entries if they're still the caller's, so a page being disposed doesn't remove the entries of the
+    // page that replaced it.
+    internal void ClearPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
+        {
+            _pageNavMenuEntries = null;
+            RefreshPageNavMenu();
+        }
+    }
+
+    private void RefreshPageNavMenu()
+    {
+        if (!_isDisposing && !ViewportInformation.IsDesktop && _isNavMenuOpen)
+        {
+            _mobileNavMenu?.RefreshPageEntries(_pageNavMenuEntries);
+        }
+    }
 
     // Whether the dashboard's home, "/", is showing: the table of every resource.
     private bool IsHome =>

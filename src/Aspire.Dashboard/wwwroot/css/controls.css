@@ -129,8 +129,7 @@ fluent-dropdown > [slot="control"] {
 }
 
 fluent-dropdown > button[slot="control"] {
-    /* Prevent the selected text from expanding a FluentField grid track past the dropdown width. */
-    width: 0;
+    width: auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -691,7 +690,6 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
 
 .pause-warning-title {
     font-weight: var(--aspire-font-weight-semibold);
-    padding-inline-end: 4px;
 }
 
 html,
@@ -802,11 +800,9 @@ body {
     background: var(--aspire-popup-background);
 }
 
-/* :focus too: opening a menu focuses its checked item without :focus-visible, and Fluent's own focus background is
-   a neutral grey that doesn't match the dashboard's tinted surfaces. */
+/* Menus move focus to an item on open. Don't highlight that item on pointer open unless it is hovered. */
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):hover,
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):state(active),
-:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):focus,
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):focus-visible {
     background-color: var(--aspire-menu-item-hover-background);
 }
@@ -911,6 +907,14 @@ fluent-menu-item:state(disabled) {
 
 .aspire-menu-container.mobile-nav-menu fluent-menu-item > .mobile-nav-menu-icon-active {
     color: var(--colorBrandForegroundLinkPressed);
+}
+
+.aspire-menu-container.mobile-nav-menu .mobile-nav-menu-error-count {
+    min-width: 20px;
+    margin-inline-start: var(--spacingHorizontalS);
+    padding: 1px 3px;
+    font-weight: var(--aspire-font-weight-regular);
+    vertical-align: middle;
 }
 
 .aspire-menu-container.mobile-nav-menu fluent-divider {
@@ -1191,6 +1195,14 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
 
 .property-grid-container .fluent-data-grid {
     --aspire-data-grid-cell-border-color: var(--datagrid-border-color);
+}
+
+[data-theme="dark"] .property-grid {
+    --datagrid-hover-color: var(--property-grid-row-hover-color);
+}
+
+[data-theme="dark"] .property-grid .fluent-data-grid {
+    --aspire-data-grid-cell-border-color: var(--property-grid-row-divider-color);
 }
 
 .property-grid-container .fluent-data-grid > thead > tr > th > fluent-button {

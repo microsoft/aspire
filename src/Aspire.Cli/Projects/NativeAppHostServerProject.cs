@@ -22,12 +22,13 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
     private readonly string _executable;
     private readonly IProcessExecutionFactory _processes;
     private readonly ILogger _logger;
+    private readonly ITemporaryStorage _temporaryStorage;
     private DirectoryInfo? _directory;
     private string? _generatedSdkDirectory;
     private int _preparationCount;
     private readonly List<string> _socketPaths = [];
 
-    public NativeAppHostServerProject(string appPath, string executable, IProcessExecutionFactory processes, ILogger logger)
+    public NativeAppHostServerProject(string appPath, string executable, IProcessExecutionFactory processes, ITemporaryStorage temporaryStorage, ILogger logger)
     {
         if (!Path.IsPathFullyQualified(executable) || !File.Exists(executable))
         {
@@ -36,6 +37,7 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
         AppDirectoryPath = appPath;
         _executable = executable;
         _processes = processes;
+        _temporaryStorage = temporaryStorage;
         _logger = logger;
     }
 
@@ -44,7 +46,7 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
     public string GetInstanceIdentifier() => AppDirectoryPath;
 
     internal static async Task<NativeAppHostServerProject> CreateAsync(string appPath, IBundleService bundleService,
-        IEnvironment environment, IProcessExecutionFactory processes, ILogger logger, CancellationToken cancellationToken)
+        IEnvironment environment, IProcessExecutionFactory processes, ITemporaryStorage temporaryStorage, ILogger logger, CancellationToken cancellationToken)
     {
         // Developer overrides still borrow bundle tooling for provider SDK preparation.
         var lease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "apphost-server-v2", cancellationToken).ConfigureAwait(false);
@@ -62,7 +64,7 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
                 }
             }
 
-            return new(appPath, path, processes, logger) { LayoutLease = lease };
+            return new(appPath, path, processes, temporaryStorage, logger) { LayoutLease = lease };
         }
         catch
         {
@@ -118,7 +120,7 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
             {
                 throw new InvalidOperationException("AppHost Server v2 provider SDK generation requires the matching Aspire bundle tooling and ATS contract.");
             }
-            _directory ??= Directory.CreateTempSubdirectory("aspire-apphost-server-");
+            _directory ??= _temporaryStorage.CreateTempSubdirectory("aspire-apphost-server-");
             var generatedSdkDirectory = Path.Combine(_directory.FullName, $"sdk-{++_preparationCount}");
             var requestPath = Path.Combine(_directory.FullName, "codegen-request.json");
             await File.WriteAllTextAsync(requestPath, new JsonObject

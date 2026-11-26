@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
         <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
-        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <target state="translated">Kanal kaynağı '{1}' devre dışı bırakıldığından, kaynak veya paket eşlemeleri devralındığından ya da kullanıcıya ait olduğundan '{0}' değiştirilemiyor. Bunun yerine NuGet yapılandırmasını el ile güncelleştirin.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
         <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
-        <target state="needs-review-translation">MSBuild {2} NuGet yapılandırmasını geçersiz kıldığından kanal '{0}' '{1}' için uygulanamıyor. Açık kanal güncelleştirmelerini etkinleştirmek için bu geçersiz kılmaları kaldırın. UpdatesGüncelleştirmeler açık bir kanala sahip olmadan desteklenmeye devam eder.</target>
+        <target state="translated">MSBuild {2} NuGet yapılandırmasını geçersiz kıldığından kanal '{0}' '{1}' için uygulanamıyor. Kanal güncelleştirmelerini etkinleştirmek için bu geçersiz kılmaları kaldırın. UpdatesKomut satırı veya yapılandırılmış kanal olmadan güncelleştirmeler desteklenmeye devam eder.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -84,7 +84,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredChannelNotFoundFormat">
         <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
-        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <target state="translated">Aspire yapılandırmasındaki kanal '{0}' kullanılamıyor. {1}</target>
         <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -114,49 +114,49 @@
       </trans-unit>
       <trans-unit id="DryRunBackupRecoveryFormat">
         <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
-        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <target state="translated">'{0}' geri yüklenemedi. Kurtarma yedeği '{1}''da saklandı. Yeniden denemeden önce yedeklemeyi el ile geri yükleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
         <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
-        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <target state="translated">Mevcut yedeklemeler yenilenmeden deneme çalışması iptal edildi. Yeniden denemeden önce, listelenen yedekleme dosyalarından orijinalleri geri yükleyin veya bunları bir kenara alın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunExistingBackupsFormat">
         <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
 {0}</source>
-        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+        <target state="translated">Daha önceki bir deneme çalışmasından alınan yedekler halihazırda mevcuttur. Değiştirmeden önce, gerekirse geri kazanım amacıyla bunları saklayın:
 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunOptionDescription">
         <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
-        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <target state="translated">Değişiklik önermeden veya uygulamadan, geçici NuGet önbelleklerini kullanarak açık bir .NET AppHost kanalı güncellemesini doğrulayın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
         <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
-        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <target state="translated">Var olan yedekler geçerli dosya içeriğiyle değiştirilsin mi? Bu işlem önceki kurtarma kopyalarını atar.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
         <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
-        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <target state="translated">--dry-run seçeneği, varsayılan değerden farklı açık bir --channel veya --quality seçeneği gerektirir ve --self veya --migrate seçenekleriyle bir arada kullanılamaz.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresDotNet">
         <source>--dry-run is supported only for .NET AppHosts.</source>
-        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <target state="translated">--dry-run seçeneği yalnızca .NET AppHost'lar için desteklenmektedir.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunSuccessful">
         <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
-        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <target state="translated">Kanal güncelleştirme doğrulaması başarılı oldu. Özgün dosyalar geri yüklendi; Güncelleştirme uygulanmadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunValidating">
         <source>Validating the channel update...</source>
-        <target state="new">Validating the channel update...</target>
+        <target state="translated">Kanal güncellemesinin doğrulanması...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -201,7 +201,7 @@
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
         <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
-        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <target state="translated">{1} projesi için {0} kanal güncelleştirmesi için doğrulama geri yüklemesi başarısız oldu. Güncelleştirme uygulanmadı. Ayrıntılar için geri yükleme çıkışını gözden geçirin.</target>
         <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
@@ -491,7 +491,7 @@
       </trans-unit>
       <trans-unit id="UsingConfiguredChannelFormat">
         <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
-        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <target state="translated">Aspire yapılandırmasındaki kanal '{0}' kullanılıyor. Geçersiz kılmak için --channel geçirin.</target>
         <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">

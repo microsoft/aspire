@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Tags describe the application rather than a single run, so they're kept in the browser's local storage under a key
+/// Tags describe the application rather than a single run, so they're kept in protected browser local storage under a key
 /// scoped to the application name, and every run of the application shows them. They aren't shared between browsers.
 /// Tags are keyed by the resource's display name because replica names have a random suffix that changes on every
 /// run; a tag therefore applies to every replica of a resource.
@@ -27,12 +27,15 @@ namespace Aspire.Dashboard.Model;
 public sealed class ResourceTagStore
 {
     internal const int MaxTagLength = 50;
+    internal const int MaxSavedTagAssignments = 50;
 
     private readonly LocalStorageSetting<Dictionary<string, List<string>>> _setting;
+    private readonly ILogger<ResourceTagStore> _logger;
 
-    public ResourceTagStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
+    public ResourceTagStore(ILocalStorage localStorage, LocalStorageLocks locks, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
     {
-        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger,
+        _logger = logger;
+        _setting = new(localStorage, locks, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
             NormalizeTags, TagsEqual, () => Changed?.Invoke());
     }
 
@@ -83,6 +86,12 @@ public sealed class ResourceTagStore
         return tagsByResource;
     }
 
+    internal static bool HasTag(ResourceViewModel resource, string tagName, IReadOnlyDictionary<string, IReadOnlyList<string>>? tagsByResource)
+    {
+        var tags = tagsByResource is null ? resource.AppHostTags : tagsByResource.GetValueOrDefault(resource.DisplayName);
+        return tags?.Contains(tagName, StringComparer.OrdinalIgnoreCase) is true;
+    }
+
     public IReadOnlyList<string> GetAllTags(IEnumerable<ResourceViewModel> resources) =>
         GetTagsByResource(resources).Values.SelectMany(tags => tags).Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.CurrentCultureIgnoreCase).ToArray();
@@ -92,17 +101,32 @@ public sealed class ResourceTagStore
     /// </summary>
     /// <param name="resourceName">The display name of the resource.</param>
     /// <param name="tag">The tag to add.</param>
-    /// <returns><see langword="true"/> when the tag was added; otherwise, <see langword="false"/> when the tag is empty or already assigned.</returns>
-    public bool AddTag(string resourceName, string tag)
+    internal Task<SettingUpdateResult> AddTagAsync(string resourceName, string tag)
     {
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
 
         if (NormalizeTag(tag) is not { } normalizedTag)
         {
-            return false;
+            return Task.FromResult(SettingUpdateResult.Unchanged);
         }
 
-        return _setting.Update(tagsByResource => AddTagCore(tagsByResource, resourceName, normalizedTag));
+        return _setting.UpdateAsync(tagsByResource =>
+        {
+            if (tagsByResource.Values.Sum(tags => tags.Count) >= MaxSavedTagAssignments)
+            {
+                // TODO: If users hit this limit, let them remove saved assignments they can't edit in the dashboard:
+                // assignments for removed resources and personal tags that are now declared by the AppHost.
+                if (!tagsByResource.TryGetValue(resourceName, out var tags) || !tags.Contains(normalizedTag, StringComparer.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("Cannot add a resource tag because the dashboard has reached the limit of {Limit} saved tag assignments.", MaxSavedTagAssignments);
+                    return SettingUpdateResult.LimitReached;
+                }
+
+                return SettingUpdateResult.Unchanged;
+            }
+
+            return AddTagCore(tagsByResource, resourceName, normalizedTag) ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged;
+        });
     }
 
     /// <summary>
@@ -110,22 +134,21 @@ public sealed class ResourceTagStore
     /// </summary>
     /// <param name="resourceName">The display name of the resource.</param>
     /// <param name="tag">The tag to remove.</param>
-    /// <returns><see langword="true"/> when the tag was removed; otherwise, <see langword="false"/>.</returns>
-    public bool RemoveTag(string resourceName, string tag)
+    internal Task<SettingUpdateResult> RemoveTagAsync(string resourceName, string tag)
     {
-        return _setting.Update(tagsByResource =>
+        return _setting.UpdateAsync(tagsByResource =>
         {
             if (!tagsByResource.TryGetValue(resourceName, out var tags) ||
                 tags.RemoveAll(t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)) == 0)
             {
-                return false;
+                return SettingUpdateResult.Unchanged;
             }
 
             if (tags.Count == 0)
             {
                 tagsByResource.Remove(resourceName);
             }
-            return true;
+            return SettingUpdateResult.Changed;
         });
     }
 
@@ -194,6 +217,7 @@ public sealed class ResourceTagStore
     private static Dictionary<string, List<string>> NormalizeTags(Dictionary<string, List<string>>? stored)
     {
         var tagsByResource = new Dictionary<string, List<string>>(StringComparers.ResourceName);
+        var assignmentCount = 0;
         foreach (var (resourceName, tags) in stored ?? [])
         {
             if (string.IsNullOrEmpty(resourceName) || tags is null)
@@ -203,9 +227,12 @@ public sealed class ResourceTagStore
 
             foreach (var tag in tags)
             {
-                if (NormalizeTag(tag) is { } normalizedTag)
+                if (NormalizeTag(tag) is { } normalizedTag && AddTagCore(tagsByResource, resourceName, normalizedTag))
                 {
-                    AddTagCore(tagsByResource, resourceName, normalizedTag);
+                    if (++assignmentCount == MaxSavedTagAssignments)
+                    {
+                        return tagsByResource;
+                    }
                 }
             }
         }

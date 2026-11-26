@@ -6,7 +6,7 @@ namespace Aspire.Tray;
 /// <summary>
 /// Keeps status artwork alive while a desktop panel may still be reading it.
 /// </summary>
-internal sealed class LinuxTrayIcons(string source) : IDisposable
+internal sealed class LinuxTrayIcons(string source, Aspire.Shared.ITemporaryStorage temporaryStorage) : IDisposable
 {
     private readonly Dictionary<TrayIconStatus, string> _paths = [];
     private DirectoryInfo? _directory;
@@ -21,7 +21,7 @@ internal sealed class LinuxTrayIcons(string source) : IDisposable
         {
             return source;
         }
-        _directory ??= Directory.CreateTempSubdirectory("aspire-tray-icons-");
+        _directory ??= temporaryStorage.CreateTempSubdirectory("aspire-tray-icons-");
         path = Path.Combine(_directory.FullName, $"{status}.png");
         Render(source, path, status);
         _paths.Add(status, path);

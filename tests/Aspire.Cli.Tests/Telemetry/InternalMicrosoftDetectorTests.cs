@@ -915,7 +915,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
                     startInfo.ArgumentList.Add(outputPath);
                 }
 
-                return new ProcessExecution(startInfo, NullLogger.Instance, options, new TestEnvironment());
+                return new ProcessExecution(startInfo, NullLogger.Instance, options, new TestEnvironment(), new Aspire.Shared.TemporaryStorage());
             }
         };
         var detector = CreateDetector(

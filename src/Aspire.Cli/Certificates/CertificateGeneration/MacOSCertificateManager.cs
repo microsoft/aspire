@@ -80,7 +80,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
         "and create a new untrusted developer certificate. " +
         "Use 'dotnet dev-certs https --trust' to trust the new certificate.";
 
-    public MacOSCertificateManager(ILogger logger) : base(logger)
+    public MacOSCertificateManager(ILogger logger, ITemporaryStorage temporaryStorage) : base(logger, temporaryStorage)
     {
     }
 
@@ -103,7 +103,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
             return oldTrustLevel;
         }
 
-        var tmpFile = Path.GetTempFileName();
+        var tmpFile = TemporaryStorage.GetTempFileName();
         try
         {
             // We can't guarantee that the temp file is in a directory with sensible permissions, but we're not exporting the private key
@@ -167,7 +167,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
     // Use verify-cert to verify the certificate for the SSL and X.509 Basic Policy.
     public override TrustLevel GetTrustLevel(X509Certificate2 certificate)
     {
-        var tmpFile = Path.GetTempFileName();
+        var tmpFile = TemporaryStorage.GetTempFileName();
         try
         {
             // We can't guarantee that the temp file is in a directory with sensible permissions, but we're not exporting the private key
@@ -218,7 +218,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
     private void RemoveAdminTrustRule(X509Certificate2 certificate)
     {
         Log.MacOSRemoveCertificateTrustRuleStart(GetDescription(certificate));
-        var certificatePath = Path.GetTempFileName();
+        var certificatePath = TemporaryStorage.GetTempFileName();
         try
         {
             var certBytes = certificate.Export(X509ContentType.Cert);
@@ -353,7 +353,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
         RandomNumberGenerator.Fill(passwordBytes.AsSpan()[0..35]);
         var password = Convert.ToBase64String(passwordBytes, 0, 36);
         var certBytes = certificate.Export(X509ContentType.Pfx, password);
-        var certificatePath = Path.GetTempFileName();
+        var certificatePath = TemporaryStorage.GetTempFileName();
         File.WriteAllBytes(certificatePath, certBytes);
 
         var processInfo = new ProcessStartInfo(

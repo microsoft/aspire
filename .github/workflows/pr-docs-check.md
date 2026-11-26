@@ -136,6 +136,7 @@ jobs:
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
           owner: microsoft
           repositories: aspire.dev
+          permission-pull-requests: read
       - name: Resolve drafted PR base
         id: drafted-pr-base
         if: needs.safe_outputs.outputs.created_pr_url != ''
@@ -285,6 +286,8 @@ safe-outputs:
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire.dev
+            # Reads the drafted PR base and requests the SME reviewer.
+            permission-pull-requests: write
         - name: Resolve drafted PR base
           id: drafted-pr-base
           if: needs.safe_outputs.outputs.created_pr_url != ''
@@ -328,6 +331,9 @@ safe-outputs:
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire
+            # Lists, minimizes, and creates comments on the source pull request.
+            permission-issues: write
+            permission-pull-requests: write
         - name: Post status comment on source PR
           uses: actions/github-script@v9.0.0
           env:
@@ -573,6 +579,10 @@ pre-agent-steps:
       repositories: |
         aspire
         aspire.dev
+      # Reads source PR and linked issue metadata, and aspire.dev branches.
+      permission-contents: read
+      permission-issues: read
+      permission-pull-requests: read
   - name: Resolve and check out target aspire.dev branch
     id: resolve-target
     env:

@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="XmlEncodedProjectName.AppHost/XmlEncodedProjectName.AppHost.csproj" />
+  <Project Path="XmlEncodedProjectName.Server/XmlEncodedProjectName.Server.csproj" />
+  <Project Path="frontend/frontend.esproj">
+    <Build />
+  </Project>
+</Solution>

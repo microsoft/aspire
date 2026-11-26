@@ -67,6 +67,7 @@ internal abstract class BaseCommand : Command
 
     protected AspireCliTelemetry Telemetry { get; }
     protected ConfigSourceService ConfigSources { get; }
+    protected ICliHostEnvironment HostEnvironment { get; }
 
     // Commands that start an AppHost or dashboard provide their own stopping message.
     // Other commands report a neutral cancellation.
@@ -83,6 +84,7 @@ internal abstract class BaseCommand : Command
         InteractionService = services.InteractionService;
         Telemetry = services.Telemetry;
         ConfigSources = services.ConfigSources;
+        HostEnvironment = services.HostEnvironment;
         SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
             _executionContext.ResetSourceTrustWarning();

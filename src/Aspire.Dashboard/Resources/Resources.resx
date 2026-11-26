@@ -371,6 +371,13 @@
     <value>Resource actions for {0}</value>
     <comment>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</comment>
   </data>
+  <data name="ResourcesGraphTagActionsButton" xml:space="preserve">
+    <value>Tag actions for {0}</value>
+    <comment>Accessible label and tooltip for the cog on a graph tag label. {0} is the tag name.</comment>
+  </data>
+  <data name="ResourcesGraphTagNoCommands" xml:space="preserve">
+    <value>No commands for this group</value>
+  </data>
   <data name="ResourcesHideTypes" xml:space="preserve">
     <value>Hide resource types</value>
   </data>
@@ -651,6 +658,9 @@
     <value>{0} · {1} requests, {2} failed</value>
     <comment>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</comment>
   </data>
+  <data name="HomeActivityBucketTraceHint" xml:space="preserve">
+    <value>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</value>
+  </data>
   <data name="HomeActivityLoading" xml:space="preserve">
     <value>Loading activity…</value>
   </data>
@@ -688,6 +698,10 @@
     <value>{0} requests</value>
     <comment>{0} is the request count.</comment>
   </data>
+  <data name="HomeSingleRequestCount" xml:space="preserve">
+    <value>{0} request</value>
+    <comment>{0} is the request count, which is one.</comment>
+  </data>
   <data name="HomeFailedCount" xml:space="preserve">
     <value>{0} failed</value>
     <comment>{0} is the failed request count.</comment>
@@ -711,6 +725,10 @@
   </data>
   <data name="ResourceTagsAdd" xml:space="preserve">
     <value>Add tag</value>
+  </data>
+  <data name="ResourceTagsLimitReached" xml:space="preserve">
+    <value>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</value>
+    <comment>{0} is the maximum number of user-added resource tag assignments.</comment>
   </data>
   <data name="ResourceTagsInputPlaceholder" xml:space="preserve">
     <value>Tag name</value>

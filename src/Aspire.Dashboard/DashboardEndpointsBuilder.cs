@@ -171,6 +171,11 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateLimit(limit) is { } invalidLimitResult)
+            {
+                return invalidLimitResult;
+            }
+
             if (follow == true)
             {
                 await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, search, cancellationToken), cancellationToken).ConfigureAwait(false);
@@ -203,6 +208,11 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateLimit(limit) is { } invalidLimitResult)
+            {
+                return invalidLimitResult;
+            }
+
             if (follow == true)
             {
                 await StreamNdjsonAsync(httpContext, service.FollowLogsAsync(resource, traceId, severity, search, cancellationToken), cancellationToken).ConfigureAwait(false);
@@ -232,6 +242,11 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateLimit(limit) is { } invalidLimitResult)
+            {
+                return invalidLimitResult;
+            }
+
             var response = await service.GetTracesAsync(resource, hasError, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
@@ -262,6 +277,21 @@ public static class DashboardEndpointsBuilder
             }
             return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
+    }
+
+    private static IResult? ValidateLimit(int? limit)
+    {
+        if (limit is <= 0)
+        {
+            return Results.BadRequest(new ProblemDetails
+            {
+                Title = "Invalid limit",
+                Detail = "The limit value must be greater than 0.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        return null;
     }
 
     private static async Task StreamNdjsonAsync(HttpContext httpContext, IAsyncEnumerable<string> items, CancellationToken cancellationToken)

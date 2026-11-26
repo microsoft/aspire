@@ -5,14 +5,17 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class UrlsColumnDisplayTests : DashboardTestContext
 {
-    [Fact]
-    public void Render_MoreThanMaxRenderedItems_RendersBoundedPayload()
+    [Theory]
+    [InlineData(false, ButtonAppearance.Primary)]
+    [InlineData(true, ButtonAppearance.Default)]
+    public void Render_MoreThanMaxRenderedItems_RendersBoundedPayload(bool neutralOverflowButton, ButtonAppearance expectedAppearance)
     {
         // Arrange
         const int totalUrls = 30;
@@ -30,6 +33,7 @@ public class UrlsColumnDisplayTests : DashboardTestContext
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.HasMultipleReplicas, false);
             builder.Add(p => p.DisplayedUrls, displayedUrls);
+            builder.Add(p => p.UseNeutralOverflowButton, neutralOverflowButton);
         });
 
         // Assert
@@ -41,6 +45,7 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         Assert.All(overflowItems.Skip(1), item => Assert.Null(item.GetAttribute("behavior")));
         Assert.Equal(20, overflowItems.Count);
         Assert.Equal("+10", cut.Find(".fluent-overflow-more fluent-button").TextContent.Trim());
+        Assert.Equal(expectedAppearance, cut.FindComponent<FluentButton>().Instance.Appearance);
 
         var popupItems = cut.FindAll(".url-overflow-popover .url-link");
         Assert.Equal(displayedUrls.Skip(20).Select(url => url.Text), popupItems.Select(item => item.TextContent.Trim()));
@@ -73,13 +78,13 @@ public class UrlsColumnDisplayTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_ShowFirstUrlOnly_ShowsFirstUrlAndListsTheRestBehindCount()
+    public void Render_AllUrlsEligibleForWidthAwareOverflow()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         FluentUISetupHelpers.SetupFluentOverflow(this);
         FluentUISetupHelpers.AddCommonDashboardServices(this);
 
-        var displayedUrls = CreateDisplayedUrls(5);
+        var displayedUrls = CreateDisplayedUrls(21);
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
 
         var cut = Render<UrlsColumnDisplay>(builder =>
@@ -87,42 +92,39 @@ public class UrlsColumnDisplayTests : DashboardTestContext
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.HasMultipleReplicas, false);
             builder.Add(p => p.DisplayedUrls, displayedUrls);
-            builder.Add(p => p.ShowFirstUrlOnly, true);
+            builder.Add(p => p.UseNeutralOverflowButton, true);
+            builder.Add(p => p.MaxRenderedItems, displayedUrls.Count);
         });
 
-        // One URL, however many fit, so a resource with many URLs doesn't need a wider column.
-        Assert.Empty(cut.FindAll("fluent-overflow"));
-        Assert.Equal([displayedUrls[0].Text], cut.FindAll(".first-url > *").Select(item => item.TextContent.Trim()));
-        Assert.Equal("+4", cut.Find(".url-button-neutral").TextContent.Trim());
-        Assert.Equal(displayedUrls.Skip(1).Select(url => url.Text), cut.FindAll(".url-overflow-popover .url-link").Select(item => item.TextContent.Trim()));
+        Assert.Equal(displayedUrls.Select(url => url.Text),
+            cut.FindAll("fluent-overflow > div:not(.fluent-overflow-more)").Select(item => item.TextContent.Trim()));
+        Assert.Equal("0", cut.Find("fluent-overflow").GetAttribute("pre-overflow-count"));
     }
 
     [Fact]
-    public void Render_ShowFirstUrlOnly_GivesEachCopyOfAResourceItsOwnAnchor()
+    public void Render_MultipleCopiesOfResource_UseDistinctOverflowAnchors()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         FluentUISetupHelpers.SetupFluentOverflow(this);
         FluentUISetupHelpers.AddCommonDashboardServices(this);
 
-        var displayedUrls = CreateDisplayedUrls(3);
+        var displayedUrls = CreateDisplayedUrls(21);
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
-
-        // A resource with several tags is listed once per tag group, so the list renders its URLs more than once.
         var first = RenderCopy();
         var second = RenderCopy();
 
-        var firstId = first.Find(".url-button-neutral").GetAttribute("id");
-        var secondId = second.Find(".url-button-neutral").GetAttribute("id");
-        Assert.NotEqual(firstId, secondId);
-        Assert.Equal($"anchor-name: --{firstId};", first.Find(".url-button-neutral").GetAttribute("style"));
-        Assert.Equal($"anchor-name: --{secondId};", second.Find(".url-button-neutral").GetAttribute("style"));
+        var firstAnchor = first.Find(".url-overflow-popover").GetAttribute("anchor-id");
+        var secondAnchor = second.Find(".url-overflow-popover").GetAttribute("anchor-id");
+        Assert.False(string.IsNullOrEmpty(firstAnchor));
+        Assert.False(string.IsNullOrEmpty(secondAnchor));
+        Assert.NotEqual(firstAnchor, secondAnchor);
 
         IRenderedComponent<UrlsColumnDisplay> RenderCopy() => Render<UrlsColumnDisplay>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.HasMultipleReplicas, false);
             builder.Add(p => p.DisplayedUrls, displayedUrls);
-            builder.Add(p => p.ShowFirstUrlOnly, true);
+            builder.Add(p => p.UseNeutralOverflowButton, true);
         });
     }
 

@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
@@ -23,6 +24,9 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class TelemetryTracesCommand : BaseCommand
 {
+    private const int MaxSpanNameLength = 50;
+    private const int MaxDbQueryTextLength = 200;
+
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<TelemetryTracesCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -240,7 +244,9 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             return;
         }
 
-        var table = new Table();
+        var rowLinkDashboardUrl = TelemetryCommandHelpers.GetRowLinkDashboardUrl(HostEnvironment, dashboardUrl);
+
+        var table = HostEnvironment.CreateTable();
         table.AddBoldColumn(TelemetryCommandStrings.HeaderTimestamp);
         table.AddBoldColumn(TelemetryCommandStrings.HeaderName);
         table.AddBoldColumn(TelemetryCommandStrings.HeaderSpans);
@@ -294,7 +300,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
                 ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(info.StartTimeNano.Value))
                 : "";
             var shortTraceId = OtlpHelpers.ToShortenedId(info.TraceId);
-            var traceLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, info.TraceId, shortTraceId);
+            var traceLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, rowLinkDashboardUrl, info.TraceId, shortTraceId);
             var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} [grey]{traceLink}[/]";
             table.AddRow(timestamp, nameColumn, info.SpanCount.ToString(CultureInfo.InvariantCulture), durationStr, statusText);
         }
@@ -325,8 +331,9 @@ internal sealed class TelemetryTracesCommand : BaseCommand
                     var duration = OtlpHelpers.CalculateDuration(span.StartTimeUnixNano, span.EndTimeUnixNano);
                     var startNano = (long)(span.StartTimeUnixNano ?? 0);
                     var hasError = span.Status?.Code == 2; // ERROR status
+                    var dbQueryText = GetDbQueryText(span);
 
-                    spans.Add(new SpanInfo(spanId, parentSpanId, resourceName, name, duration, startNano, hasError));
+                    spans.Add(new SpanInfo(spanId, parentSpanId, resourceName, name, duration, startNano, hasError, dbQueryText));
                 }
             }
         }
@@ -350,11 +357,12 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         InteractionService.DisplayMarkupLine($"[bold]Duration:[/] {TelemetryCommandHelpers.FormatDuration(totalDuration)}  [bold]Spans:[/] {spans.Count}");
         InteractionService.DisplayEmptyLine();
 
-        // Build tree and display
-        DisplaySpanTree(spans, dashboardUrl, traceId);
+        // Build tree and display. The trace link in the header is shown once, but each span row
+        // only links to the dashboard when the output is an interactive terminal.
+        DisplaySpanTree(spans, TelemetryCommandHelpers.GetRowLinkDashboardUrl(HostEnvironment, dashboardUrl), traceId);
     }
 
-    private void DisplaySpanTree(List<SpanInfo> spans, string dashboardUrl, string traceId)
+    private void DisplaySpanTree(List<SpanInfo> spans, string? dashboardUrl, string traceId)
     {
         // Build a lookup of children by parent ID
         var childrenByParent = spans
@@ -383,7 +391,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         Dictionary<string, List<SpanInfo>> childrenByParent,
         string indent,
         bool isLast,
-        string dashboardUrl,
+        string? dashboardUrl,
         string traceId,
         ref string? lastResource)
     {
@@ -409,15 +417,15 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var durationStr = TelemetryCommandHelpers.FormatDuration(span.Duration).PadLeft(8);
         var shortenedSpanId = OtlpHelpers.ToShortenedId(span.SpanId);
         var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, traceId, shortenedSpanId, spanId: span.SpanId);
-        var escapedName = span.Name.EscapeMarkup();
+        // Truncate before escaping markup so the cut cannot split an escaped "[[" or "]]" pair,
+        // which Spectre would reject as a malformed tag.
+        var displayName = FormatHelpers.TruncateText(span.Name, MaxSpanNameLength, "...").EscapeMarkup();
 
-        // Truncate long names
-        var maxNameLength = 50;
-        var displayName = escapedName.Length > maxNameLength
-            ? escapedName[..(maxNameLength - 3)] + "..."
-            : escapedName;
+        var dbQueryText = span.DbQueryText is { } queryText
+            ? $" [dim]{FormatDbQueryText(queryText).EscapeMarkup()}[/]"
+            : "";
 
-        InteractionService.DisplayMarkupLine($"{indent}{connector} [dim]{spanIdLink}[/] {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
+        InteractionService.DisplayMarkupLine($"{indent}{connector} [dim]{spanIdLink}[/] {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]{dbQueryText}");
 
         // Render children
         if (childrenByParent.TryGetValue(span.SpanId, out var children))
@@ -429,6 +437,84 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
     }
 
+    private static string? GetDbQueryText(OtlpSpanJson span)
+    {
+        // "db.query.text" is the current OpenTelemetry semantic convention; "db.statement" is the
+        // deprecated name still emitted by older instrumentation libraries.
+        // https://opentelemetry.io/docs/specs/semconv/database/database-spans/
+        return SharedAIHelpers.GetAttributeStringValue(span.Attributes, "db.query.text")
+            ?? SharedAIHelpers.GetAttributeStringValue(span.Attributes, "db.statement");
+    }
+
+    /// <summary>
+    /// Renders a database query on one line by escaping line breaks and tabs, and truncates it,
+    /// so the span tree stays one row per span without changing the query's spaces.
+    /// </summary>
+    private static string FormatDbQueryText(string queryText)
+    {
+        // Queries are commonly multi-line and indented, and literals can contain significant spaces, e.g.
+        //   SELECT o."Id", o."Total"
+        //       FROM "Orders" AS o
+        //       WHERE o."Name" = 'a  b'
+        // is rendered as
+        //   SELECT o."Id", o."Total"\n    FROM "Orders" AS o\n    WHERE o."Name" = 'a  b'
+        // Spaces are kept exactly so quoted values are not altered; '\r', '\n' and '\t' become
+        // visible two-character escapes. Leading and trailing whitespace of the whole query is trimmed
+        // because it carries no meaning and would otherwise show up as escape noise.
+        var trimmed = queryText.AsSpan().Trim();
+
+        // Lengths are measured in UTF-16 code units, but the query is walked one Unicode scalar
+        // value at a time so a non-BMP character (e.g. an emoji) is kept or dropped as a whole
+        // surrogate pair.
+        var escapedLength = 0;
+        foreach (var rune in trimmed.EnumerateRunes())
+        {
+            escapedLength += GetEscape(rune)?.Length ?? rune.Utf16SequenceLength;
+        }
+
+        var maxLength = escapedLength > MaxDbQueryTextLength ? MaxDbQueryTextLength - 3 : escapedLength;
+        var builder = new StringBuilder(MaxDbQueryTextLength);
+        var position = 0;
+        foreach (var rune in trimmed.EnumerateRunes())
+        {
+            var escape = GetEscape(rune);
+            var length = escape?.Length ?? rune.Utf16SequenceLength;
+
+            // Stop before a whole scalar value or escape that does not fit, so truncation never
+            // leaves a dangling backslash from a split escape sequence or an unpaired surrogate.
+            if (builder.Length + length > maxLength)
+            {
+                break;
+            }
+
+            if (escape is null)
+            {
+                builder.Append(trimmed.Slice(position, rune.Utf16SequenceLength));
+            }
+            else
+            {
+                builder.Append(escape);
+            }
+
+            position += rune.Utf16SequenceLength;
+        }
+
+        if (escapedLength > MaxDbQueryTextLength)
+        {
+            builder.Append("...");
+        }
+
+        return builder.ToString();
+
+        static string? GetEscape(Rune rune) => rune.Value switch
+        {
+            '\r' => "\\r",
+            '\n' => "\\n",
+            '\t' => "\\t",
+            _ => null
+        };
+    }
+
     private sealed record SpanInfo(
         string SpanId,
         string? ParentSpanId,
@@ -436,5 +522,6 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         string Name,
         TimeSpan Duration,
         long StartNano,
-        bool HasError);
+        bool HasError,
+        string? DbQueryText);
 }

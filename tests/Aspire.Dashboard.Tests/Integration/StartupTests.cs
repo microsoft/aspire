@@ -2,14 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Hosting;
 using Aspire.Otlp.Serialization;
 using Aspire.Shared;
@@ -18,6 +21,9 @@ using Google.Protobuf;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Protocol;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.DependencyInjection;
@@ -75,6 +81,43 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             var uri = new Uri(address);
             Assert.Equal("localhost", uri.Host);
             Assert.True(uri.Port > 0);
+        }
+    }
+
+    [Fact]
+    public async Task BlazorReceiveLimit_AccommodatesLargeSavedCustomizations()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var endpoint = Assert.Single(app.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>(), e => e.RoutePattern.RawText == "/_blazor");
+        var hubType = endpoint.Metadata.GetRequiredMetadata<HubMetadata>().HubType;
+        var hubOptions = (IOptions<HubOptions>)app.Services.GetRequiredService(
+            typeof(IOptions<>).MakeGenericType(typeof(HubOptions<>).MakeGenericType(hubType)));
+        var receiveLimit = Assert.IsType<long>(hubOptions.Value.MaximumReceiveMessageSize);
+        Assert.Equal(64 * 1024, receiveLimit);
+
+        var browser = new InMemoryBrowserLocalStorage();
+        var pins = Enumerable.Range(0, 50)
+            .Select(i => new MetricPin(new string('r', 62) + i.ToString("D2", CultureInfo.InvariantCulture),
+                new string('m', 128), new string('i', 255))).ToList();
+        await browser.Storage.SetAsync("pins", pins);
+
+        var groupKeys = Enumerable.Range(0, 50).Select(i => new string((char)('\u4e00' + i), 50)).ToArray();
+        var moves = Enumerable.Range(1, 48)
+            .Select(i => new RelativeOrderMove(groupKeys[i], groupKeys[i - 1], groupKeys[i + 1], PreferNext: true)).ToList();
+        await browser.Storage.SetAsync("groups", new Dictionary<string, List<RelativeOrderMove>> { ["Tags"] = moves });
+
+        var protocol = Assert.Single(app.Services.GetServices<IHubProtocol>(), p => p.Name == "blazorpack");
+        foreach (var protectedValue in browser.Items.Values)
+        {
+            // A successful browser JS interop response carries [handle, succeeded, result] as JSON inside the hub message.
+            // https://github.com/dotnet/aspnetcore/blob/v11.0.0/src/Components/Web.JS/src/Platform/Circuits/CircuitManager.ts
+            var resultJson = $"[1,true,{JsonSerializer.Serialize(protectedValue)}]";
+            var message = new InvocationMessage("EndInvokeJSFromDotNet", [1L, true, resultJson]);
+            var messageSize = protocol.GetMessageBytes(message).Length;
+            Assert.InRange(messageSize, 32 * 1024 + 1, receiveLimit);
         }
     }
 

@@ -341,7 +341,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using var runStore = new DashboardRunStore(
             CreateOptions(workspace),
             loggerFactory.CreateLogger<DashboardRunStore>(),
-            TimeProvider.System);
+            TimeProvider.System,
+            new Aspire.Shared.TemporaryStorage());
 
         Assert.Single(runStore.GetRuns());
 
@@ -403,6 +404,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             .AddSingleton(TimeProvider.System)
             .AddSingleton<PauseManager>()
             .AddSingleton<IKnownPropertyLookup, MockKnownPropertyLookup>()
+            .AddSingleton<Aspire.Shared.ITemporaryStorage, Aspire.Shared.TemporaryStorage>()
             .AddSingleton<DashboardRunStore>()
             .AddSingleton<IDashboardRunStore>(serviceProvider => serviceProvider.GetRequiredService<DashboardRunStore>())
             .AddSingleton<IRepositoryFactory, RepositoryFactory>()
@@ -575,7 +577,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using var runStore = new DashboardRunStore(
             CreateOptions(workspace, $"Create-{Guid.NewGuid():N}", DashboardPersistenceMode.Resume),
             logger,
-            TimeProvider.System);
+            TimeProvider.System,
+            new Aspire.Shared.TemporaryStorage());
 
         var creationLog = Assert.Single(
             testSink.Writes,
@@ -599,7 +602,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         var testSink = new TestSink();
         var logger = new TestLogger<DashboardRunStore>(new TestLoggerFactory(testSink, enabled: true));
-        using var secondRunStore = new DashboardRunStore(options, logger, TimeProvider.System);
+        using var secondRunStore = new DashboardRunStore(options, logger, TimeProvider.System, new Aspire.Shared.TemporaryStorage());
 
         Assert.Equal(firstDatabasePath, secondRunStore.DatabasePath);
         Assert.False(secondRunStore.SupportsRunSelection);
@@ -647,7 +650,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         var testSink = new TestSink();
         var logger = new TestLogger<DashboardRunStore>(new TestLoggerFactory(testSink, enabled: true));
-        using var secondRunStore = new DashboardRunStore(options, logger, TimeProvider.System);
+        using var secondRunStore = new DashboardRunStore(options, logger, TimeProvider.System, new Aspire.Shared.TemporaryStorage());
 
         Assert.Equal(databasePath, secondRunStore.DatabasePath);
         Assert.False(File.Exists(databasePath));
@@ -1165,6 +1168,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             options,
             NullLogger<DashboardRunStore>.Instance,
             new FixedTimeProvider(startedAt.AddMilliseconds(2)),
+            new Aspire.Shared.TemporaryStorage(),
             deletedRunDirectories.Add);
         await InitializeAndPublishRunAsync(pruningRunStore);
 
@@ -1176,6 +1180,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             options,
             NullLogger<DashboardRunStore>.Instance,
             new FixedTimeProvider(startedAt.AddMilliseconds(3)),
+            new Aspire.Shared.TemporaryStorage(),
             deletedRunDirectories.Add);
         await InitializeAndPublishRunAsync(nextPruningRunStore);
 
@@ -1285,6 +1290,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             options,
             logger,
             new FixedTimeProvider(startedAt),
+            new Aspire.Shared.TemporaryStorage(),
             directory => throw new IOException($"The directory '{directory}' is in use."));
         await InitializeAndPublishRunAsync(currentRunStore);
 
@@ -1703,7 +1709,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
     private static DashboardRunStore CreateRunStore(IOptions<DashboardOptions> options, TimeProvider? timeProvider = null)
     {
-        return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance, timeProvider ?? TimeProvider.System);
+        return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance, timeProvider ?? TimeProvider.System, new Aspire.Shared.TemporaryStorage());
     }
 
     private static DashboardDataSource CreateDataSource(

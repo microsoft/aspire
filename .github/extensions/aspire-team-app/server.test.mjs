@@ -138,6 +138,621 @@ test("mutating POST rejects cross-site loopback requests before saving preferenc
   await assert.rejects(readFile(preferencesPath, "utf8"), { code: "ENOENT" });
 });
 
+test("saved settings are available while the initial dashboard is loading", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    release: "13.1",
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseDashboard;
+  let signalDashboard;
+  const gate = new Promise((resolve) => { releaseDashboard = resolve; });
+  const started = new Promise((resolve) => { signalDashboard = resolve; });
+  t.after(() => releaseDashboard());
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("pullRequests(states:OPEN")) {
+      signalDashboard();
+      await gate;
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=initial-prefs-${Date.now()}`);
+  const entry = await server.startInstance("initial-prefs-test", () => {});
+  t.after(() => server.stopInstance("initial-prefs-test"));
+
+  const loading = fetch(new URL("api/state", entry.url));
+  await started;
+  const response = await fetch(new URL("api/prefs", entry.url));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).prefs.release, "13.1");
+  releaseDashboard();
+  assert.equal((await loading).status, 200);
+});
+
+test("cached Review and Ship reopen during another load and invalidate when inputs change", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock([makePrNode({ milestone: { title: "9.5" } })]);
+  let prRequests = 0;
+  let issueRequests = 0;
+  let releaseIssues;
+  let signalIssues;
+  const issueGate = new Promise((resolve) => { releaseIssues = resolve; });
+  const issueStarted = new Promise((resolve) => { signalIssues = resolve; });
+  t.after(() => releaseIssues());
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("pullRequests(states:OPEN")) prRequests++;
+    if (query.includes("issues(states:OPEN")) {
+      issueRequests++;
+      signalIssues();
+      await issueGate;
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=mode-cache-${Date.now()}`);
+  const entry = await server.startInstance("mode-cache-test", () => {});
+  t.after(() => server.stopInstance("mode-cache-test"));
+  const initial = await (await fetch(new URL("api/state", entry.url))).json();
+  const ship = await (await postJson(entry.url, "api/mode", { mode: "ship" })).json();
+  assert.equal(ship.dashboard.mode, "ship");
+  assert.ok(ship.dashboard.seq > initial.dashboard.seq);
+  assert.equal(prRequests, 1, "Ship must reuse Review's PR load");
+
+  const loadingIssues = postJson(entry.url, "api/mode", { mode: "issues" });
+  await issueStarted;
+  let timer;
+  const review = await Promise.race([
+    postJson(entry.url, "api/mode", { mode: "review" }).then((response) => response.json()),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("cached mode waited for Issues")), 2000); }),
+  ]).finally(() => clearTimeout(timer));
+  assert.equal(review.dashboard.mode, "review");
+  assert.ok(review.dashboard.seq > ship.dashboard.seq);
+  assert.equal(prRequests, 1);
+  releaseIssues();
+  const superseded = await (await loadingIssues).json();
+  assert.equal(superseded.dashboard.mode, "review");
+  assert.equal(superseded.dashboard.seq, review.dashboard.seq, "a superseded load must not republish the active board");
+
+  await (await postJson(entry.url, "api/mode", { mode: "issues" })).json();
+  assert.equal(issueRequests, 1, "the completed Issues load should be reused after switching away");
+  await (await postJson(entry.url, "api/prefs", { showDrafts: true })).json();
+  const refreshed = await (await postJson(entry.url, "api/mode", { mode: "review" })).json();
+  assert.equal(refreshed.prefs.showDrafts, true);
+  assert.equal(prRequests, 2, "a preference change must invalidate the previous Review snapshot");
+
+  const issuesBeforeRescan = issueRequests;
+  await server.rescanAccounts();
+  await (await postJson(entry.url, "api/mode", { mode: "issues" })).json();
+  assert.ok(issueRequests > issuesBeforeRescan, "credential rescans must invalidate other cached modes");
+});
+
+test("an older Review load cannot replace newer Ship and related Review snapshots", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseOld;
+  let signalOld;
+  let requests = 0;
+  const oldGate = new Promise((resolve) => { releaseOld = resolve; });
+  const oldStarted = new Promise((resolve) => { signalOld = resolve; });
+  t.after(() => releaseOld());
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("pullRequests(states:OPEN")) {
+      requests++;
+      if (requests === 1) {
+        signalOld();
+        await oldGate;
+        return jsonResponse({ data: { repository: { pullRequests: { nodes: [makePrNode()] } } } });
+      }
+      return jsonResponse({
+        data: { repository: { pullRequests: { nodes: [
+          makePrNode(),
+          makePrNode({ number: 2, url: "https://github.com/microsoft/aspire/pull/2" }),
+        ] } } },
+      });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=related-generation-${Date.now()}`);
+  const entry = await server.startInstance("related-generation-test", () => {});
+  t.after(() => server.stopInstance("related-generation-test"));
+
+  const oldReview = fetch(new URL("api/state", entry.url));
+  await oldStarted;
+  const ship = await (await postJson(entry.url, "api/mode", { mode: "ship" })).json();
+  assert.equal(ship.dashboard.counts.prs, 2);
+  releaseOld();
+  const oldResponse = await (await oldReview).json();
+  assert.equal(oldResponse.dashboard.mode, "ship");
+  assert.equal(oldResponse.dashboard.counts.prs, 2);
+  assert.equal(oldResponse.dashboard.seq, ship.dashboard.seq);
+  const review = await (await postJson(entry.url, "api/mode", { mode: "review" })).json();
+  assert.equal(review.dashboard.counts.prs, 2);
+  assert.equal(requests, 2);
+});
+
+test("the Accounts rescan route invalidates previously cached tabs", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "old-token";
+  const base = makeGitHubMock();
+  const issueTokens = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("issues(states:OPEN")) {
+      issueTokens.push(options.headers?.Authorization);
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=accounts-route-rescan-${Date.now()}`);
+  const entry = await server.startInstance("accounts-route-rescan-test", () => {});
+  t.after(() => server.stopInstance("accounts-route-rescan-test"));
+
+  await (await fetch(new URL("api/state", entry.url))).json();
+  await (await postJson(entry.url, "api/mode", { mode: "issues" })).json();
+  await (await postJson(entry.url, "api/mode", { mode: "review" })).json();
+  process.env.GH_TOKEN = "new-token";
+  const rescan = await (await fetch(new URL("api/accounts", entry.url))).json();
+  assert.equal(rescan.dashboard.mode, "review");
+  assert.ok(rescan.prefs);
+  await (await postJson(entry.url, "api/mode", { mode: "issues" })).json();
+  assert.deepEqual(issueTokens, ["bearer old-token", "bearer new-token"]);
+});
+
+test("credential rescan does not reuse or publish a stale in-flight tab", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "old-token";
+  const base = makeGitHubMock();
+  let releaseOld;
+  let signalOld;
+  let signalNew;
+  const oldGate = new Promise((resolve) => { releaseOld = resolve; });
+  const oldStarted = new Promise((resolve) => { signalOld = resolve; });
+  const newIdentityStarted = new Promise((resolve) => { signalNew = resolve; });
+  t.after(() => releaseOld());
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    const token = options.headers?.Authorization;
+    if (query.includes("viewer { login") && token === "bearer new-token") signalNew();
+    if (query.includes("issues(states:OPEN")) {
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    if (query.includes("pullRequests(states:OPEN")) {
+      if (token === "bearer old-token") {
+        signalOld();
+        await oldGate;
+        return jsonResponse({ data: { repository: { pullRequests: { nodes: [makePrNode({ title: "Old PR" })] } } } });
+      }
+      return jsonResponse({ data: { repository: { pullRequests: { nodes: [makePrNode({ title: "New PR" })] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=provider-rescan-race-${Date.now()}`);
+  const entry = await server.startInstance("provider-rescan-race-test", () => {});
+  t.after(() => server.stopInstance("provider-rescan-race-test"));
+
+  const oldReview = fetch(new URL("api/state", entry.url));
+  await oldStarted;
+  await (await postJson(entry.url, "api/mode", { mode: "issues" })).json();
+  process.env.GH_TOKEN = "new-token";
+  const rescan = server.rescanAccounts();
+  await newIdentityStarted;
+  let timer;
+  const newReview = await Promise.race([
+    postJson(entry.url, "api/mode", { mode: "review" }).then((response) => response.json()),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("joined the old-token load")), 2000); }),
+  ]).finally(() => clearTimeout(timer));
+  assert.equal(newReview.dashboard.mode, "review");
+  assert.equal(newReview.dashboard.lanes.flatMap((lane) => lane.items).find((item) => item.pr.number === 1).pr.title, "New PR");
+  releaseOld();
+  const [oldResponse] = await Promise.all([oldReview, rescan]);
+  const settled = await oldResponse.json();
+  assert.equal(settled.dashboard.mode, "review");
+  assert.equal(settled.dashboard.seq, newReview.dashboard.seq);
+  const current = await (await fetch(new URL("api/state", entry.url))).json();
+  assert.equal(current.dashboard.seq, newReview.dashboard.seq);
+});
+
+test("credential rescan suppresses partial updates from the old credential", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/one", "microsoft/two"], active: true } },
+  });
+  process.env.GH_TOKEN = "old-token";
+  const base = makeGitHubMock();
+  let releaseOldOne;
+  let releaseOldTwo;
+  let releaseNew;
+  let signalOld;
+  let signalOldReturned;
+  let signalNew;
+  const oldOneGate = new Promise((resolve) => { releaseOldOne = resolve; });
+  const oldTwoGate = new Promise((resolve) => { releaseOldTwo = resolve; });
+  const newGate = new Promise((resolve) => { releaseNew = resolve; });
+  const oldStarted = new Promise((resolve) => { signalOld = resolve; });
+  const oldReturned = new Promise((resolve) => { signalOldReturned = resolve; });
+  const newStarted = new Promise((resolve) => { signalNew = resolve; });
+  t.after(() => { releaseOldOne(); releaseOldTwo(); releaseNew(); });
+  globalThis.fetch = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : {};
+    const query = body.query ?? "";
+    const token = options.headers?.Authorization;
+    if (query.includes("issues(states:OPEN")) {
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    if (query.includes("pullRequests(states:OPEN")) {
+      const name = body.variables.name;
+      if (token === "bearer old-token") {
+        signalOld();
+        await (name === "one" ? oldOneGate : oldTwoGate);
+        if (name === "one") signalOldReturned();
+      } else {
+        signalNew();
+        await newGate;
+      }
+      const title = token === "bearer old-token" ? "Old PR" : "New PR";
+      const node = makePrNode({ title, url: `https://github.com/microsoft/${name}/pull/1` });
+      return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=partial-rescan-race-${Date.now()}`);
+  const entry = await server.startInstance("partial-rescan-race-test", () => {});
+  t.after(() => server.stopInstance("partial-rescan-race-test"));
+  const abort = new AbortController();
+  t.after(() => abort.abort());
+  const events = await fetch(new URL("events", entry.url), { signal: abort.signal });
+  const nextReview = readStateEvent(events.body.getReader(), (event) => event.dashboard.mode === "review");
+
+  const oldReview = fetch(new URL("api/state", entry.url));
+  await oldStarted;
+  await (await postJson(entry.url, "api/mode", { mode: "issues" })).json();
+  process.env.GH_TOKEN = "new-token";
+  const rescan = server.rescanAccounts();
+  const newReview = postJson(entry.url, "api/mode", { mode: "review" });
+  await newStarted;
+  releaseOldOne();
+  await oldReturned;
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseNew();
+  const firstReview = await nextReview;
+  assert.equal(firstReview.dashboard.lanes.flatMap((lane) => lane.items)[0].pr.title, "New PR");
+  releaseOldTwo();
+  await Promise.all([oldReview, newReview, rescan]);
+});
+
+test("returning to a cold tab reuses its load and restores its partial board", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    mode: "issues",
+    accounts: { "acct:octo": { repos: ["microsoft/one", "microsoft/two"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseSlow;
+  let signalSlow;
+  let prRequests = 0;
+  const slowGate = new Promise((resolve) => { releaseSlow = resolve; });
+  const slowStarted = new Promise((resolve) => { signalSlow = resolve; });
+  t.after(() => releaseSlow());
+  globalThis.fetch = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : {};
+    if ((body.query ?? "").includes("pullRequests(states:OPEN")) {
+      prRequests++;
+      const name = body.variables.name;
+      if (name === "two") { signalSlow(); await slowGate; }
+      const node = makePrNode({
+        url: `https://github.com/microsoft/${name}/pull/1`,
+        author: { __typename: "User", login: "davidfowl", avatarUrl: null },
+      });
+      return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=resume-cold-${Date.now()}`);
+  const entry = await server.startInstance("resume-cold-test", () => {});
+  t.after(() => server.stopInstance("resume-cold-test"));
+  await (await fetch(new URL("api/state", entry.url))).json();
+  const abort = new AbortController();
+  t.after(() => abort.abort());
+  const events = await fetch(new URL("events", entry.url), { signal: abort.signal });
+  const partialEvent = readStateEvent(events.body.getReader(), (event) =>
+    event.dashboard.mode === "review" && event.dashboard.loading && event.dashboard.attention.focus.length > 0);
+  const first = postJson(entry.url, "api/mode", { mode: "review" });
+  await slowStarted;
+  const partial = await partialEvent;
+  assert.deepEqual(partial.dashboard.attention.focus.map((item) => item.pr.repository), ["microsoft/one"]);
+  await (await postJson(entry.url, "api/mode", { mode: "issues" })).json();
+  const resumedEvents = await fetch(new URL("events", entry.url), { signal: abort.signal });
+  const resumedPartial = readStateEvent(resumedEvents.body.getReader(), (event) =>
+    event.dashboard.mode === "review" && event.dashboard.loading);
+  const second = postJson(entry.url, "api/mode", { mode: "review" });
+  const resumed = await resumedPartial;
+  assert.deepEqual(resumed.dashboard.attention.focus.map((item) => item.pr.repository), ["microsoft/one"]);
+  assert.ok(resumed.dashboard.seq > partial.dashboard.seq);
+  assert.equal(prRequests, 2, "returning to Review must not repeat either repository request");
+  releaseSlow();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+  assert.equal((await firstResult.json()).dashboard.mode, "review");
+  assert.equal((await secondResult.json()).dashboard.mode, "review");
+  assert.equal(prRequests, 2);
+});
+
+test("a cold tab that finishes after switching away is cached for the next visit", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    mode: "issues",
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubHealthMock();
+  let releaseHealth;
+  let signalHealth;
+  let healthRequests = 0;
+  const healthGate = new Promise((resolve) => { releaseHealth = resolve; });
+  const healthStarted = new Promise((resolve) => { signalHealth = resolve; });
+  t.after(() => releaseHealth());
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("issues(states:OPEN")) {
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    if (query.includes("query RepositoryHealth(")) {
+      healthRequests++;
+      signalHealth();
+      await healthGate;
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=completed-cold-${Date.now()}`);
+  const entry = await server.startInstance("completed-cold-test", () => {});
+  t.after(() => server.stopInstance("completed-cold-test"));
+  await (await fetch(new URL("api/state", entry.url))).json();
+  const health = postJson(entry.url, "api/mode", { mode: "health" });
+  await healthStarted;
+  await (await postJson(entry.url, "api/mode", { mode: "issues" })).json();
+  releaseHealth();
+  assert.equal((await (await health).json()).dashboard.mode, "issues");
+
+  const resumed = await (await postJson(entry.url, "api/mode", { mode: "health" })).json();
+  assert.equal(resumed.dashboard.mode, "health");
+  assert.equal(resumed.dashboard.health.items.length, 1);
+  assert.equal(healthRequests, 1);
+});
+
+test("a cold tab loads without waiting for the initial board", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseReview;
+  let signalReview;
+  let issueRequests = 0;
+  const reviewGate = new Promise((resolve) => { releaseReview = resolve; });
+  const reviewStarted = new Promise((resolve) => { signalReview = resolve; });
+  t.after(() => releaseReview());
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("pullRequests(states:OPEN")) {
+      signalReview();
+      await reviewGate;
+    } else if (query.includes("issues(states:OPEN")) {
+      issueRequests++;
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=parallel-cold-${Date.now()}`);
+  const entry = await server.startInstance("parallel-cold-test", () => {});
+  t.after(() => server.stopInstance("parallel-cold-test"));
+  const initial = fetch(new URL("api/state", entry.url));
+  await reviewStarted;
+  let timer;
+  const issues = await Promise.race([
+    postJson(entry.url, "api/mode", { mode: "issues" }).then((response) => response.json()),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("cold tab waited for Review")), 2000); }),
+  ]).finally(() => clearTimeout(timer));
+  assert.equal(issues.dashboard.mode, "issues");
+  assert.equal(issueRequests, 1);
+  releaseReview();
+  assert.equal((await (await initial).json()).dashboard.mode, "issues");
+  assert.equal(issueRequests, 1);
+});
+
+test("a superseded initial load joins the newer cold tab instead of refetching it", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseReview;
+  let releaseIssues;
+  let signalReview;
+  let signalIssues;
+  let issueRequests = 0;
+  const reviewGate = new Promise((resolve) => { releaseReview = resolve; });
+  const issueGate = new Promise((resolve) => { releaseIssues = resolve; });
+  const reviewStarted = new Promise((resolve) => { signalReview = resolve; });
+  const issuesStarted = new Promise((resolve) => { signalIssues = resolve; });
+  t.after(() => { releaseReview(); releaseIssues(); });
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("pullRequests(states:OPEN")) {
+      signalReview();
+      await reviewGate;
+    } else if (query.includes("issues(states:OPEN")) {
+      issueRequests++;
+      signalIssues();
+      await issueGate;
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=parallel-join-${Date.now()}`);
+  const entry = await server.startInstance("parallel-join-test", () => {});
+  t.after(() => server.stopInstance("parallel-join-test"));
+  const initial = fetch(new URL("api/state", entry.url));
+  await reviewStarted;
+  const loadingIssues = postJson(entry.url, "api/mode", { mode: "issues" });
+  await issuesStarted;
+  releaseReview();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(issueRequests, 1);
+  releaseIssues();
+  const [initialResponse, issuesResponse] = await Promise.all([initial, loadingIssues]);
+  assert.equal((await initialResponse.json()).dashboard.mode, "issues");
+  assert.equal((await issuesResponse.json()).dashboard.mode, "issues");
+  assert.equal(issueRequests, 1);
+});
+
+test("a cold Review streams actionable partial cards before slower repositories complete", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    mode: "issues",
+    accounts: { "acct:octo": { repos: ["microsoft/one", "microsoft/two"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseSlow;
+  let signalSlow;
+  let releaseIssues;
+  let signalIssues;
+  let blockIssues = false;
+  const slowGate = new Promise((resolve) => { releaseSlow = resolve; });
+  const slowStarted = new Promise((resolve) => { signalSlow = resolve; });
+  const issueGate = new Promise((resolve) => { releaseIssues = resolve; });
+  const issuesStarted = new Promise((resolve) => { signalIssues = resolve; });
+  t.after(() => { releaseSlow(); releaseIssues(); });
+  globalThis.fetch = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : {};
+    const query = body.query ?? "";
+    if (query.includes("issues(states:OPEN")) {
+      if (blockIssues) {
+        signalIssues();
+        await issueGate;
+      }
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    if (query.includes("pullRequests(states:OPEN")) {
+      const name = body.variables.name;
+      if (name === "two") {
+        signalSlow();
+        await slowGate;
+      }
+      const node = makePrNode({
+        url: `https://github.com/microsoft/${name}/pull/1`,
+        author: { __typename: "User", login: "davidfowl", avatarUrl: null },
+      });
+      return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=partial-review-${Date.now()}`);
+  const entry = await server.startInstance("partial-review-test", () => {}, sessionContext);
+  t.after(async () => { server.setAgentSend(null); await server.stopInstance("partial-review-test"); });
+  server.setAgentSend(async () => ({ messageId: "partial-action" }));
+  await (await fetch(new URL("api/state", entry.url))).json();
+  blockIssues = true;
+  const oldRefresh = postJson(entry.url, "api/refresh", {});
+  await issuesStarted;
+  const ac = new AbortController();
+  t.after(() => ac.abort());
+  const events = await fetch(new URL("events", entry.url), { signal: ac.signal });
+  const partialEvent = readStateEvent(events.body.getReader(), (event) =>
+    event.dashboard.mode === "review" && event.dashboard.loading === true);
+  const loading = postJson(entry.url, "api/mode", { mode: "review" });
+  await slowStarted;
+  const partial = await partialEvent;
+  assert.deepEqual(partial.dashboard.attention.focus.map((item) => item.pr.repository), ["microsoft/one"]);
+  releaseIssues();
+  await oldRefresh;
+  const action = { kind: "review", pr: { repository: "microsoft/one", number: 1 } };
+  assert.equal((await postAction(entry.url, action)).status, 200);
+  assert.equal((await postAction(entry.url, { ...action, pr: { repository: "microsoft/two", number: 1 } })).status, 400);
+
+  releaseSlow();
+  const complete = await (await loading).json();
+  assert.ok(complete.dashboard.seq > partial.dashboard.seq);
+  assert.notEqual(complete.dashboard.loading, true);
+  assert.deepEqual(complete.dashboard.attention.focus.map((item) => item.pr.repository), ["microsoft/one", "microsoft/two"]);
+});
+
+test("a cold Health board streams usable sources and waits to reorder until loading finishes", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/one", "microsoft/two"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseSlow;
+  let signalSlow;
+  const slowGate = new Promise((resolve) => { releaseSlow = resolve; });
+  const slowStarted = new Promise((resolve) => { signalSlow = resolve; });
+  t.after(() => releaseSlow());
+  globalThis.fetch = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : {};
+    if ((body.query ?? "").includes("query RepositoryHealth(")) {
+      const name = body.variables.name;
+      if (name === "two") {
+        signalSlow();
+        await slowGate;
+      }
+      return jsonResponse(githubHealthResponse(name));
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=partial-health-${Date.now()}`);
+  const entry = await server.startInstance("partial-health-test", () => {}, sessionContext);
+  t.after(async () => { server.setAgentSend(null); await server.stopInstance("partial-health-test"); });
+  server.setAgentSend(async () => ({ messageId: "partial-health-action" }));
+  await (await fetch(new URL("api/state", entry.url))).json();
+  const ac = new AbortController();
+  t.after(() => ac.abort());
+  const events = await fetch(new URL("events", entry.url), { signal: ac.signal });
+  const partialEvent = readStateEvent(events.body.getReader(), (event) =>
+    event.dashboard.mode === "health" && event.dashboard.loading && event.dashboard.health.items.length > 0);
+  const loading = postJson(entry.url, "api/mode", { mode: "health" });
+  await slowStarted;
+  const partial = await partialEvent;
+  const id = "github:github.com/microsoft/one";
+  assert.deepEqual(partial.dashboard.health.items.map((item) => item.id), [id]);
+  const action = { kind: "diagnose-health", target: "current-session", source: { id } };
+  assert.equal((await postHealthAction(entry.url, action)).status, 200);
+  const reorder = await postJson(entry.url, "api/health/order", { order: [id] });
+  assert.equal(reorder.status, 400);
+  assert.equal((await reorder.json()).code, "health_sources_loading");
+  releaseSlow();
+  const complete = await (await loading).json();
+  assert.equal(complete.dashboard.loading, false);
+  assert.ok(complete.dashboard.seq > partial.dashboard.seq);
+  assert.equal(complete.dashboard.health.items.length, 2);
+});
+
 test("Azure pipeline mutation routes validate input and reject stale removals", async (t) => {
   const pipeline = {
     id: "azdo:dnceng:internal:1602",
@@ -175,8 +790,8 @@ test("Azure pipeline mutation routes validate input and reject stale removals", 
     postJson(entry.url, "api/health/pipeline/remove", { id: pipeline.id }),
     postJson(entry.url, "api/health/pipeline/remove", { id: secondPipeline.id }),
   ]);
-  assert.equal(removed.status, 200);
-  assert.equal(removedSecond.status, 200);
+  assert.equal(removed.status, 200, JSON.stringify(await removed.clone().json()));
+  assert.equal(removedSecond.status, 200, JSON.stringify(await removedSecond.clone().json()));
   assert.deepEqual(JSON.parse(await readFile(preferencesPath, "utf8")).azurePipelines, []);
 
   const staleRemove = await postJson(entry.url, "api/health/pipeline/remove", { id: pipeline.id });
@@ -286,6 +901,78 @@ test("a fresh unauthenticated dashboard preserves diagnostics and navigation to 
   }
 });
 
+for (const stall of ["headers", "body"]) {
+  test(`navigation recovers from stalled GitHub ${stall} during a background refresh`, { timeout: 15_000 }, async (t) => {
+    await resetTestHome({
+      accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+    });
+    process.env.GH_TOKEN = "test-token";
+
+    const provider = http.createServer((_req, res) => {
+      if (stall === "body") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.write('{"data":');
+      }
+    });
+    await new Promise((resolve) => provider.listen(0, "127.0.0.1", resolve));
+    const providerUrl = `http://127.0.0.1:${provider.address().port}`;
+    t.after(async () => {
+      provider.closeAllConnections();
+      await new Promise((resolve) => provider.close(resolve));
+    });
+
+    // Shorten the real transport deadline, not the fetch implementation: the loopback provider
+    // really leaves headers or JSON unfinished, so this exercises cancellation of both waits.
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    const deadlines = [];
+    t.mock.method(AbortSignal, "timeout", (ms) => {
+      deadlines.push(ms);
+      return timeout(100);
+    });
+    const safety = new AbortController();
+    const safetyTimer = setTimeout(() => safety.abort(), 10_000);
+    t.after(() => { clearTimeout(safetyTimer); safety.abort(); });
+    let stalled = false;
+    let fetchStarted;
+    const base = makeGitHubMock();
+    globalThis.fetch = (url, options = {}) => {
+      const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+      if (stalled && String(url).startsWith("https://api.github.com") && query.includes("repository(")) {
+        fetchStarted?.();
+        return originalFetch(providerUrl, { ...options, signal: options.signal ?? safety.signal });
+      }
+      return base(url, options);
+    };
+    t.after(() => { globalThis.fetch = originalFetch; });
+
+    const server = await import(`./server.mjs?test=stalled-${stall}-${Date.now()}`);
+    const entry = await server.startInstance(`stalled-${stall}-test`, () => {});
+    t.after(() => server.stopInstance(`stalled-${stall}-test`));
+    await (await fetch(new URL("api/state", entry.url))).json();
+    stalled = true;
+
+    for (const mode of ["issues", "ship", "health", "review"]) {
+      const started = new Promise((resolve) => { fetchStarted = resolve; });
+      const background = server.refreshInBackground();
+      await started;
+      const response = await postJson(entry.url, "api/mode", { mode });
+      await background;
+      assert.equal(safety.signal.aborted, false, "navigation must settle without the test's emergency abort");
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      assert.equal(result.dashboard.mode, mode);
+      assert.ok(result.dashboard.errors.some((error) => error.includes("GitHub request timed out after 30 seconds")));
+      assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).mode, mode);
+    }
+    assert.ok(deadlines.length > 0);
+    assert.ok(deadlines.every((ms) => ms === 30_000));
+    stalled = false;
+    const retried = await server.forceRefresh();
+    assert.equal(retried.dashboard.mode, "review");
+    assert.deepEqual(retried.dashboard.errors, []);
+  });
+}
+
 test("applyHealthOrder keeps related provider sources contiguous", async () => {
   const server = await import(`./server.mjs?test=group-order-${Date.now()}`);
   const github = { id: "github:github.com/microsoft/aspire", groupId: "repository:github.com/microsoft/aspire" };
@@ -389,6 +1076,172 @@ test("an in-flight Health refresh preserves the saved order and complete card se
   assert.equal(final.dashboard.loading, false);
 });
 
+test("cold tab loads share one in-flight credential probe", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseIdentity;
+  let signalIdentity;
+  let identityRequests = 0;
+  const identityGate = new Promise((resolve) => { releaseIdentity = resolve; });
+  const identityStarted = new Promise((resolve) => { signalIdentity = resolve; });
+  t.after(() => releaseIdentity());
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("viewer { login")) {
+      identityRequests++;
+      signalIdentity();
+      await identityGate;
+    }
+    if (query.includes("issues(states:OPEN")) {
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=shared-auth-${Date.now()}`);
+  const entry = await server.startInstance("shared-auth-test", () => {});
+  t.after(() => server.stopInstance("shared-auth-test"));
+  const first = fetch(new URL("api/state", entry.url));
+  await identityStarted;
+  const second = postJson(entry.url, "api/mode", { mode: "issues" });
+  while (JSON.parse(await readFile(preferencesPath, "utf8")).mode !== "issues") {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  releaseIdentity();
+  await Promise.all([first, second]);
+  assert.equal(identityRequests, 1);
+});
+
+test("first-run account activation preserves concurrent tab selections", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({ mode: "review", accounts: {} });
+  process.env.GH_TOKEN = "test-token";
+  const base = makeGitHubMock();
+  let releaseIdentity;
+  let signalIdentity;
+  let issueRequests = 0;
+  let reviewRequests = 0;
+  const identityGate = new Promise((resolve) => { releaseIdentity = resolve; });
+  const identityStarted = new Promise((resolve) => { signalIdentity = resolve; });
+  t.after(() => releaseIdentity());
+  let signalModeLoaded;
+  let modeWasSaved = false;
+  const modeLoaded = new Promise((resolve) => { signalModeLoaded = resolve; });
+  const realRename = fs.rename;
+  const rename = t.mock.method(fs, "rename", async (...args) => {
+    const result = await realRename(...args);
+    modeWasSaved = true;
+    return result;
+  });
+  const realReadFile = fs.readFile;
+  const read = t.mock.method(fs, "readFile", async (...args) => {
+    const result = await realReadFile(...args);
+    if (modeWasSaved && args[0] === preferencesPath) signalModeLoaded();
+    return result;
+  });
+  syncBuiltinESMExports();
+  t.after(() => { rename.mock.restore(); read.mock.restore(); syncBuiltinESMExports(); });
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    if (query.includes("viewer { login")) {
+      signalIdentity();
+      await identityGate;
+    }
+    if (query.includes("issues(states:OPEN")) {
+      issueRequests++;
+      return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+    }
+    if (query.includes("pullRequests(states:OPEN")) reviewRequests++;
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=first-run-mode-${Date.now()}`);
+  const entry = await server.startInstance("first-run-mode-test", () => {});
+  t.after(() => server.stopInstance("first-run-mode-test"));
+  const first = fetch(new URL("api/state", entry.url));
+  await identityStarted;
+  const second = postJson(entry.url, "api/mode", { mode: "issues" });
+  await Promise.race([
+    modeLoaded,
+    second.then(async (response) => {
+      if (!modeWasSaved) {
+        throw new Error(`Mode selection finished before the identity probe: ${response.status} ${await response.text()}`);
+      }
+    }),
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseIdentity();
+  const [initial, selected] = await Promise.all([first, second]);
+  assert.equal((await initial.json()).dashboard.mode, "issues");
+  assert.equal((await selected.json()).dashboard.mode, "issues");
+  const { DEFAULT_REPOS } = await import("./github.mjs");
+  assert.equal(issueRequests, DEFAULT_REPOS.length);
+  assert.equal(reviewRequests, DEFAULT_REPOS.length);
+});
+
+test("a credential rescan supersedes in-flight probes and is shared by new tab loads", { timeout: 15_000 }, async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "old-token";
+  const base = makeGitHubMock();
+  let releaseOld;
+  let releaseNew;
+  let signalOld;
+  let signalNew;
+  let signalOldRepo;
+  const oldGate = new Promise((resolve) => { releaseOld = resolve; });
+  const newGate = new Promise((resolve) => { releaseNew = resolve; });
+  const oldStarted = new Promise((resolve) => { signalOld = resolve; });
+  const newStarted = new Promise((resolve) => { signalNew = resolve; });
+  const oldRepoStarted = new Promise((resolve) => { signalOldRepo = resolve; });
+  const loadTokens = [];
+  t.after(() => { releaseOld(); releaseNew(); });
+  globalThis.fetch = async (url, options = {}) => {
+    const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+    const token = options.headers?.Authorization;
+    if (query.includes("viewer { login")) {
+      if (token === "bearer old-token") { signalOld(); await oldGate; }
+      if (token === "bearer new-token") { signalNew(); await newGate; }
+    }
+    if (query.includes("r0: repository") && token === "bearer old-token") signalOldRepo();
+    if (query.includes("pullRequests(states:OPEN") || query.includes("issues(states:OPEN")) {
+      if (token === "bearer old-token" || token === "bearer new-token") loadTokens.push(token);
+      if (query.includes("issues(states:OPEN")) {
+        return jsonResponse({ data: { repository: { issues: { nodes: [] } } } });
+      }
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=auth-rescan-race-${Date.now()}`);
+  const entry = await server.startInstance("auth-rescan-race-test", () => {});
+  t.after(() => server.stopInstance("auth-rescan-race-test"));
+  const first = fetch(new URL("api/state", entry.url));
+  await oldStarted;
+  process.env.GH_TOKEN = "new-token";
+  const rescan = server.rescanAccounts();
+  await newStarted;
+  releaseOld();
+  await oldRepoStarted;
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(loadTokens, []);
+
+  const second = postJson(entry.url, "api/mode", { mode: "issues" });
+  while (JSON.parse(await readFile(preferencesPath, "utf8")).mode !== "issues") {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  releaseNew();
+  await Promise.all([first, second, rescan]);
+  assert.ok(loadTokens.length > 0);
+  assert.ok(loadTokens.every((token) => token === "bearer new-token"));
+});
+
 test("resolveAuth re-probes when account preferences change during credential probing", async (t) => {
   await resetTestHome({
     mode: "health",
@@ -451,7 +1304,9 @@ test("resolveAuth re-probes when account preferences change during credential pr
   });
   releaseProximaProbe();
 
-  const mutationDashboard = await (await mutation).json();
+  const mutationResponse = await mutation;
+  const mutationDashboard = await mutationResponse.json();
+  assert.equal(mutationResponse.status, 200, JSON.stringify(mutationDashboard));
   await (await initialState).json();
   assert.deepEqual(
     mutationDashboard.dashboard.activeAccounts
@@ -540,6 +1395,7 @@ test("GET reads are also pinned to the loopback origin (DNS rebinding can't read
   const rebindHost = `malicious.example:${port}`;
   assert.equal((await rawRequest(entry.url, "/events", { host: rebindHost })).status, 403);
   assert.equal((await rawRequest(entry.url, "/api/state", { host: rebindHost })).status, 403);
+  assert.equal((await rawRequest(entry.url, "/api/prefs", { host: rebindHost })).status, 403);
 
   // Control: a request carrying this server's own loopback Host (Node sets it from the url) is not
   // rejected by the guard, so the legitimate iframe still loads.
@@ -593,7 +1449,7 @@ test("a rejecting request-error logger does not become an unhandled rejection", 
   assert.deepEqual(rejections, []);
 });
 
-test("dashboard load retries after an inflight account probe rejection", async (t) => {
+test("an account recovers from a repository probe failure on rescan", async (t) => {
   await resetTestHome({
     accounts: {
       "acct:octo": {
@@ -647,13 +1503,42 @@ test("dashboard load retries after an inflight account probe rejection", async (
   t.after(() => server.stopInstance("inflight-retry-test"));
 
   const failed = await fetch(new URL("api/state", entry.url));
-  assert.equal(failed.status, 500);
+  assert.equal(failed.status, 200);
+  const failedPayload = await failed.json();
+  assert.equal(failedPayload.dashboard.authenticated, false);
+  assert.equal(failedPayload.dashboard.accounts[0].reason, "repo probe unavailable");
 
   failRepoProbe = false;
-  const retried = await fetch(new URL("api/state", entry.url));
+  const retried = await fetch(new URL("api/accounts", entry.url));
   assert.equal(retried.status, 200);
   const payload = await retried.json();
   assert.equal(payload.dashboard.authenticated, true);
+});
+
+test("dashboard load retries after account activation persistence fails", async (t) => {
+  await resetTestHome({ mode: "review", accounts: {} });
+  process.env.GH_TOKEN = "test-token";
+  globalThis.fetch = makeGitHubMock();
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const realWriteFile = fs.writeFile;
+  let failWrite = true;
+  const write = t.mock.method(fs, "writeFile", async (...args) => {
+    if (failWrite && String(args[0]).endsWith(".pending")) throw new Error("preference write failed");
+    return realWriteFile(...args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { write.mock.restore(); syncBuiltinESMExports(); });
+
+  const server = await import(`./server.mjs?test=inflight-activation-${Date.now()}`);
+  const entry = await server.startInstance("inflight-activation-test", () => {});
+  t.after(() => server.stopInstance("inflight-activation-test"));
+
+  const failed = await fetch(new URL("api/state", entry.url));
+  assert.equal(failed.status, 500);
+  failWrite = false;
+  const retried = await fetch(new URL("api/state", entry.url));
+  assert.equal(retried.status, 200);
+  assert.equal((await retried.json()).dashboard.authenticated, true);
 });
 
 test("PR and Health actions keep detached sessions enabled during a preference save", async (t) => {
@@ -1096,7 +1981,10 @@ test("api/state streams progress and a state snapshot to connected SSE clients",
         const record = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
         records.push(record);
-        if (record.startsWith("event: state")) return;
+        if (record.startsWith("event: state")) {
+          const dataLine = record.split("\n").find((line) => line.startsWith("data: "));
+          if (!JSON.parse(dataLine.slice(6)).dashboard.loading) return;
+        }
       }
     }
   })();
@@ -1109,7 +1997,11 @@ test("api/state streams progress and a state snapshot to connected SSE clients",
     new Promise((_, reject) => setTimeout(() => reject(new Error("timed out waiting for SSE state event")), 5000)),
   ]);
 
-  const stateRecord = records.find((r) => r.startsWith("event: state"));
+  const stateRecord = records.find((record) => {
+    if (!record.startsWith("event: state")) return false;
+    const dataLine = record.split("\n").find((line) => line.startsWith("data: "));
+    return !JSON.parse(dataLine.slice(6)).dashboard.loading;
+  });
   assert.ok(stateRecord, "expected an SSE state event");
   assert.ok(records.some((r) => r.startsWith("event: progress")), "expected an SSE progress event");
   const dataLine = stateRecord.split("\n").find((l) => l.startsWith("data: ")).slice(6);
@@ -1440,7 +2332,7 @@ test("an in-flight refresh keeps the last complete snapshot and does not stream 
     deletions: 0,
     changedFiles: 1,
     milestone: null,
-    labels: { nodes: [] },
+    labels: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
     assignees: { nodes: [] },
     reviewRequests: { nodes: [] },
     reviews: { nodes: [] },
@@ -1777,7 +2669,7 @@ function makePrNode(overrides = {}) {
     deletions: 0,
     changedFiles: 1,
     milestone: null,
-    labels: { nodes: [] },
+    labels: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
     assignees: { nodes: [] },
     reviewRequests: { nodes: [] },
     reviews: { nodes: [] },

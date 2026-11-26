@@ -5,11 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Match the EF9 health checks used by the referenced Pomelo integration. -->
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.23" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Using Include="Aspire.Tests.Utils" />
   </ItemGroup>
   <ItemGroup>
@@ -17,7 +12,7 @@
     <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.MySql\Aspire.Hosting.MySql.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.MySqlConnector\Aspire.MySqlConnector.csproj" />
-    <ProjectReference Include="..\..\src\Components\Aspire.Pomelo.EntityFrameworkCore.MySql\Aspire.Pomelo.EntityFrameworkCore.MySql.csproj" />
+    <ProjectReference Include="..\..\src\Components\Aspire.Microting.EntityFrameworkCore.MySql\Aspire.Microting.EntityFrameworkCore.MySql.csproj" />
   </ItemGroup>
 
   <ItemGroup>

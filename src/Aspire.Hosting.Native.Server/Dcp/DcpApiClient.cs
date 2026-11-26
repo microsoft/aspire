@@ -21,7 +21,7 @@ namespace Aspire.Hosting.Native.Dcp;
 internal sealed class DcpApiClient : IAsyncDisposable
 {
     private const string Api = "/apis/usvc-dev.developer.microsoft.com/v1/";
-    private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-native-dcp-");
+    private readonly DirectoryInfo _directory;
     private Process? _process;
     private Task? _output;
     private HttpClient? _client;
@@ -31,22 +31,15 @@ internal sealed class DcpApiClient : IAsyncDisposable
     private readonly Lock _cleanupGate = new();
     private Task? _cleanup;
 
-    public DcpApiClient() : this(new())
-    {
-    }
-
-    public DcpApiClient(NativeServerOptions options) : this(options, NullLogger.Instance)
-    {
-    }
-
-    public DcpApiClient(NativeServerOptions options, ILogger logger)
+    public DcpApiClient(NativeServerOptions options, ILogger logger, ITemporaryStorage temporaryStorage)
     {
         options.Validate();
         _options = options;
         _logger = logger;
+        _directory = temporaryStorage.CreateTempSubdirectory("aspire-native-dcp-");
     }
 
-    internal DcpApiClient(NativeServerOptions options, HttpClient client) : this(options)
+    internal DcpApiClient(NativeServerOptions options, HttpClient client, ITemporaryStorage temporaryStorage) : this(options, NullLogger.Instance, temporaryStorage)
     {
         client.Timeout = Timeout.InfiniteTimeSpan;
         _client = client;
@@ -242,37 +235,32 @@ internal sealed class DcpApiClient : IAsyncDisposable
         }
         finally
         {
+            var running = _process is { HasExited: false };
             try
             {
-                if (_process is { HasExited: false } process)
-                {
-                    try
-                    {
-                        process.Kill(entireProcessTree: true);
-                    }
-                    catch (InvalidOperationException) when (process.HasExited)
-                    {
-                        // A normal exit racing Kill must not skip the drain.
-                    }
-                    using var forcedExit = new CancellationTokenSource(_options.CleanupTimeout, _options.TimeProvider);
-                    await process.WaitForExitStatusAsync().WaitAsync(forcedExit.Token).ConfigureAwait(false);
-                }
-                if (_output is not null)
+                if (!running && _output is not null)
                 {
                     await _output.WaitAsync(_options.CleanupTimeout, _options.TimeProvider).ConfigureAwait(false);
                 }
             }
             finally
             {
-                _process?.Dispose();
                 _connection?.Dispose();
                 if (_connection is null)
                 {
                     _client?.Dispose();
                 }
-                if (Directory.Exists(_directory.FullName))
+                if (running)
                 {
-                    _directory.Delete(recursive: true);
+                    _logger.LogDebug("DCP did not exit during cleanup; leaving it to exit with its monitored parent.");
+                }
+                else
+                {
+                    _process?.Dispose();
+                    if (Directory.Exists(_directory.FullName))
+                    {
+                        _directory.Delete(recursive: true);
+                    }
                 }
             }
         }

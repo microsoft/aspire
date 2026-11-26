@@ -25,6 +25,11 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 
 ## Experimental API Warnings
 
+`ASPIRECONTAINERSHELLEXECUTION001` is no longer emitted: `ContainerResource.ShellExecution` is stable.
+Existing suppressions can be removed. Its behavior is unchanged: `null` and `false` pass arguments individually;
+`true` passes `-c` followed by space-joined arguments without quoting or escaping. The container entrypoint
+must already be a compatible shell (for example, `/bin/sh`); this property does not select one.
+
 `ASPIRECOMMAND001` is no longer produced. Required-command custom validation APIs are stable.
 Failed validation remains advisory: a warning is logged, but the resource is allowed to attempt to start.
 

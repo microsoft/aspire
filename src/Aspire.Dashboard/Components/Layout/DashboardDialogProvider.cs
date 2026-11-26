@@ -27,6 +27,9 @@ public class DashboardDialogProvider : ComponentBase, IDisposable
     public required NavigationDialogService DialogService { get; init; }
 
     [Inject]
+    public required DashboardDialogService DashboardDialogs { get; init; }
+
+    [Inject]
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
 
     [CascadingParameter]
@@ -48,7 +51,12 @@ public class DashboardDialogProvider : ComponentBase, IDisposable
     {
         try
         {
-            await InvokeAsync(DialogService.DismissAllAsync);
+            await InvokeAsync(() =>
+            {
+                // Invalidate queued confirmations before closing the current one and releasing its lock.
+                DashboardDialogs.CancelPendingConfirmations();
+                return DialogService.DismissAllAsync();
+            });
         }
         catch (Exception exception)
         {
