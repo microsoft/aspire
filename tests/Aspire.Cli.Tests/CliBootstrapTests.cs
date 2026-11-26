@@ -17,6 +17,8 @@ using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Shared;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
@@ -62,6 +64,19 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
             .Value;
         Assert.False(string.IsNullOrEmpty(bakedChannel));
         return bakedChannel!;
+    }
+
+    [Fact]
+    public async Task BuildApplication_UsesPrivateTemporaryStorageExceptForDcpSockets()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = Path.Combine(workspace.Path, ".aspire");
+        using var host = await BuildHostAsync(new Dictionary<string, string?> { ["ASPIRE_HOME"] = home });
+        var storage = host.Services.GetRequiredService<ITemporaryStorage>();
+        Assert.IsType<PrivateTemporaryStorage>(storage);
+        Assert.StartsWith(Path.Combine(home, "tmp") + Path.DirectorySeparatorChar, storage.GetTempPath());
+        Assert.IsType<TemporaryStorage>(host.Services.GetRequiredKeyedService<ITemporaryStorage>(typeof(DcpConnectionChecker)));
+        Assert.NotNull(host.Services.GetRequiredService<IDcpConnectionChecker>());
     }
 
     [Fact]

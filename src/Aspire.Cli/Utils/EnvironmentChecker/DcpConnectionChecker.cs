@@ -12,6 +12,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
@@ -26,7 +27,7 @@ internal sealed class DcpConnectionChecker(
     IProcessExecutionFactory processExecutionFactory,
     CliExecutionContext executionContext,
     IEnvironment environment,
-    ITemporaryStorage temporaryStorage,
+    [FromKeyedServices(typeof(DcpConnectionChecker))] ITemporaryStorage temporaryStorage,
     ILogger<DcpConnectionChecker> logger) : IDcpConnectionChecker
 {
     private static readonly TimeSpan s_connectionTimeout = TimeSpan.FromSeconds(20);

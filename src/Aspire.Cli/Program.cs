@@ -398,7 +398,9 @@ public class Program
         // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
         builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
-        builder.Services.AddSingleton<Aspire.Shared.ITemporaryStorage, Aspire.Shared.TemporaryStorage>();
+        builder.Services.AddSingleton<Aspire.Shared.ITemporaryStorage, Aspire.Shared.PrivateTemporaryStorage>();
+        // DCP needs a short, machine-local socket path; Aspire homes may be on NFS.
+        builder.Services.AddKeyedSingleton<Aspire.Shared.ITemporaryStorage, Aspire.Shared.TemporaryStorage>(typeof(DcpConnectionChecker));
         builder.Services.AddSingleton<IWindowsRegistryReader>(sp =>
         {
             var environment = sp.GetRequiredService<IEnvironment>();
