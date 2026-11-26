@@ -11,7 +11,7 @@ public sealed class E2ETelemetryTests(ITestOutputHelper output)
 {
     [Fact]
     public Task ChildProcessesInheritOptOutAndCanOverrideIt() =>
-        E2ETelemetryEnvironmentTests.ChildProcessesInheritOptOutAndCanOverrideIt();
+        E2ETelemetryEnvironment.VerifyChildProcessesInheritOptOutAndCanOverrideItAsync();
 
     [Theory]
     [InlineData(false)]
