@@ -441,7 +441,6 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         width = startWidth;
         handle.setPointerCapture(e.pointerId);
         handle.classList.add('resizing');
-        document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
         e.preventDefault();
     };
@@ -462,7 +461,6 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
             handle.releasePointerCapture(e.pointerId);
         }
         handle.classList.remove('resizing');
-        document.body.style.cursor = '';
         document.body.style.userSelect = '';
         if (width !== startWidth) {
             commit();
@@ -538,7 +536,7 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
             handle.removeEventListener('keydown', onKeyDown);
             handle.removeEventListener('dblclick', onDoubleClick);
             if (pointerId !== null) {
-                document.body.style.cursor = '';
+                handle.classList.remove('resizing');
                 document.body.style.userSelect = '';
             }
         }

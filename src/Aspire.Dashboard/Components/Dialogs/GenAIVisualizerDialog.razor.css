@@ -56,15 +56,6 @@
     line-height: 1;
 }
 
-.genai-visualizer-container ::deep .fluent-multi-splitter-bar {
-    margin-inline: 0;
-    flex-shrink: 0;
-}
-
-.genai-visualizer-container ::deep .fluent-multi-splitter-bar:not(:hover)::before {
-    opacity: 0;
-}
-
 ::deep .genai-message-tree {
     min-width: auto;
 }

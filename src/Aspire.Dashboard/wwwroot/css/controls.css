@@ -942,45 +942,96 @@ fluent-menu-item:state(disabled) {
     display: none;
 }
 
+body .fluent-multi-splitter {
+    --fluent-multi-splitter-bar-size: var(--aspire-splitter-hit-size);
+}
+
 body .fluent-multi-splitter > .fluent-multi-splitter-bar {
     background-color: transparent;
     z-index: 99;
-}
-
-.fluent-multi-splitter > .fluent-multi-splitter-bar:focus-visible {
-    outline: none;
-    background-color: var(--fluent-multi-splitter-background-color-active);
-    opacity: var(--fluent-multi-splitter-hover-opacity);
 }
 
 .fluent-multi-splitter > .fluent-multi-splitter-bar > span[part="resize"] {
     display: none;
 }
 
-.fluent-multi-splitter > .fluent-multi-splitter-bar::before {
+body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle)::before,
+body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle)::after {
     content: "";
     position: absolute;
+    inset: 0;
+    margin: auto;
     pointer-events: none;
-    background-color: var(--fluent-multi-splitter-background-color);
 }
 
-.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar::before {
-    inset-block: 0;
-    width: 1px;
+body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle)::before,
+body .fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"]:is(:hover, :active)::before {
+    --aspire-splitter-line-size: 1px;
+    background-color: var(--colorNeutralStroke3);
+    opacity: 1;
 }
 
+body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle)::after {
+    --aspire-splitter-line-size: 3px;
+    background-color: var(--colorBrandStroke1);
+    opacity: 0;
+}
+
+body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle):focus-visible {
+    outline: none;
+}
+
+body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle):focus-visible::before {
+    background-color: var(--colorBrandStroke1);
+}
+
+body :is(.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar[status="resizable"],
+    .aspire-splitter-handle[aria-orientation="vertical"]) {
+    cursor: col-resize;
+}
+
+:is(.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar, .aspire-splitter-handle[aria-orientation="vertical"])::before,
+:is(.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar, .aspire-splitter-handle[aria-orientation="vertical"])::after {
+    width: var(--aspire-splitter-line-size);
+}
+
+body :is(.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar[status="resizable"],
+    .aspire-splitter-handle[aria-orientation="horizontal"]) {
+    cursor: row-resize;
+}
+
+:is(.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar, .aspire-splitter-handle[aria-orientation="horizontal"])::before,
+:is(.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar, .aspire-splitter-handle[aria-orientation="horizontal"])::after {
+    height: var(--aspire-splitter-line-size);
+}
+
+body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle):hover::after {
+    opacity: 1;
+    transition: opacity 200ms ease 500ms;
+}
+
+body :is(.fluent-multi-splitter > .fluent-multi-splitter-bar[status="resizable"], .aspire-splitter-handle):is(:active, .resizing)::after {
+    opacity: 1;
+    transition: none;
+}
+
+/* A clamped divider can stop moving while the pointer continues across the page. */
+body:has(.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar[status="resizable"]:active,
+    .aspire-splitter-handle[aria-orientation="vertical"].resizing) * {
+    cursor: col-resize !important;
+}
+
+body:has(.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar[status="resizable"]:active,
+    .aspire-splitter-handle[aria-orientation="horizontal"].resizing) * {
+    cursor: row-resize !important;
+}
+
+/* Overlap the hit target across both panes so only the 1px line consumes space. */
 .fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar {
-    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
     margin-inline: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
 }
 
-.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar::before {
-    inset-inline: 0;
-    height: 1px;
-}
-
 .fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar {
-    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
     margin-block: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
 }
 
