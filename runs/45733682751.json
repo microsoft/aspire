@@ -1,0 +1,106 @@
+{
+  "run_id": 45733682751,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45733682751",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-26T02:14:07Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22647,
+    "title": "Add a CLI feature flag to disable config sources",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/cli-config-source-feature-flag",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22647",
+    "merged_at": "2026-11-26T01:08:23Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "7e8d54232984f5d51dc8f3fe7b61f41f469a52c6",
+    "failed_sha": "328f77eacd32d1d5517ce29f86438c6f51e797b9",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "b2baebe8864c718587bd7d13cfe5460a80f83062",
+        "message": "Fix flaky dashboard terminal window test (#22649)",
+        "html_url": "https://github.com/microsoft/aspire/commit/b2baebe8864c718587bd7d13cfe5460a80f83062",
+        "pull_request": {
+          "number": 22649,
+          "title": "Fix flaky dashboard terminal window test",
+          "url": "https://github.com/microsoft/aspire/pull/22649",
+          "merged_at": "2026-11-26T00:29:09Z"
+        }
+      },
+      {
+        "sha": "328f77eacd32d1d5517ce29f86438c6f51e797b9",
+        "message": "Add a CLI feature flag to disable config sources (#22647) Add a default-on CLI flag to pause Git-backed configuration sources without changing saved bindings or previously applied settings. Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/328f77eacd32d1d5517ce29f86438c6f51e797b9",
+        "pull_request": {
+          "number": 22647,
+          "title": "Add a CLI feature flag to disable config sources",
+          "url": "https://github.com/microsoft/aspire/pull/22647",
+          "merged_at": "2026-11-26T01:08:23Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "id": 139633117347,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45733682751/job/139633117347",
+      "classification": "main-repository-breakage",
+      "reason": "Deterministic assertion failure (Expected 5, Actual 6) in ResourcesLayoutActivityTests with no independent transient evidence.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 139633118585,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45733682751/job/139633118585",
+      "classification": "main-repository-breakage",
+      "reason": "DcpConnectionLifetimeTests parent-exit test times out on Windows, matching a recurring recorded mechanism on main.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.Session_WhenParentExits_StopsApiServerAndControllers(delayHandoff: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync(Boolean abruptParentExit, Boolean delayHandoff, Boolean useSymlink, Boolean preventGracefulStop) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 187\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync(Boolean abruptParentExit, Boolean delayHandoff, Boolean useSymlink, Boolean preventGracefulStop) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 249\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.Session_WhenParentExits_StopsApiServerAndControllers(Boolean delayHandoff) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 29\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\45rqfvv0.edr\nReady DCP process: PID=7096, start=1795657426070.\nReady DCP process: PID=8576, start=1795657426629.\n\n\n\n2026-11-26T01:43:46.180Z\tdebug\tdcp\tStarting DCP...\t{\"PID\": 7096, \"Exe\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"start-apiserver\", \"--monitor\", \"3148\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-aece5slp.yxs\\\\kubeconfig\", \"-v=debug\", \"--container-runtime\", \"docker\"], \"Version\": \"{\\\"version\\\":\\\"0.27.5\\\",\\\"commitHash\\\":\\\"600bc96061e534129bc93402658a365dac7049b5\\\",\\\"buildTimestamp\\\":\\\"2026-11-20T01:08:32Z\\\"}\"}\n2026-11-26T01:43:46.180Z\tinfo\tdcp.start-apiserver.monitor\tStarted monitoring process\t{\"PID\": 3148}\n2026-11-26T01:43:46.576Z\tdebug\tdcp.start-apiserver\tExtensions directory does not exist, extensions will not be loaded from this directory..\t{\"Directory\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\ext\"}\n2026-11-26T01:43:46.577Z\tinfo\tdcp.start-apiserver.api-server\tStarting API server...\n2026-11-26T01:43:46.581Z\tdebug\tdcp.start-apiserver.api-server\tkubeconfig saved successfully\n2026-11-26T01:43:46.592Z\tdebug\tdcp\tAdding GroupVersion usvc-dev.developer.microsoft.com v1 to ResourceManager\n2026-11-26T01:43:46.596Z\tdebug\tdcp\tAdding GroupVersion usvc-dev.developer.microsoft.com v2 to ResourceManager\n2026-11-26T01:43:46.627Z\tinfo\tdcp.start-apiserver.api-server\tAPI server started\t{\"Address\": \"::1\", \"Port\": 51696}\n2026-11-26T01:43:46.627Z\tdebug\tdcp.start-apiserver\tAbout to launch host services\n2026-11-26T01:43:46.627Z\tinfo\tdcp.start-apiserver.dcp-host\tStarting DCP controller host\n2026-11-26T01:43:46.627Z\tinfo\tdcp.start-apiserver.dcp-host\tStarted all services\t{\"count\": 1}\n2026-11-26T01:43:46.630Z\tdebug\tdcp.start-apiserver.os-executor\tProcess started successfully\t{\"PID\": 8576, \"Command\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"run-controllers\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-aece5slp.yxs\\\\kubeconfig\", \"--container-runtime\", \"docker\", \"-v=debug\", \"--notification-socket\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\dcp\\\\dcp-notify-sock-akebmzde\", \"--monitor\", \"7096\", \"--monitor-identity-time\", \"2026-11-26T01:43:46.070Z\"], \"CreationFlags\": 0, \"PID\": 8576}\n2026-11-26T01:43:46.630Z\tdebug\tdcp.start-apiserver.os-executor\tStarting waiting for process to exit\t{\"PID\": 8576}\n2026-11-26T01:43:46.677Z\tdebug\tdcp\tStarting DCP...\t{\"PID\": 8576, \"Exe\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"run-controllers\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-aece5slp.yxs\\\\kubeconfig\", \"--container-runtime\", \"docker\", \"-v=debug\", \"--notification-socket\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\dcp\\\\dcp-notify-sock-akebmzde\", \"--monitor\", \"7096\", \"--monitor-identity-time\", \"2026-11-26T01:43:46.070Z\"], \"Version\": \"{\\\"version\\\":\\\"0.27.5\\\",\\\"commitHash\\\":\\\"600bc96061e534129bc93402658a365dac7049b5\\\",\\\"buildTimestamp\\\":\\\"2026-11-20T01:08:32Z\\\"}\"}\n2026-11-26T01:43:46.693Z\tinfo\tdcp\tStarted monitoring process\t{\"PID\": 7096}\n2026-11-26T01:43:46.942Z\tdebug\tdcp\tSetting up notification receiver\t{\"SocketPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\dcp\\\\dcp-notify-sock-akebmzde\"}\n2026-11-26T01:43:46.955Z\tdebug\tdcp.start-apiserver\tNew client connected to notification stream\t{\"SubscriptionID\": 1}\n2026-11-26T01:43:46.963Z\tdebug\tdcp.ContainerOrchestrator\tRunning Docker command\t{\"ContainerRuntime\": \"docker\", \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe --version\"}\n2026-11-26T01:43:46.978Z\tdebug\tdcp.os-executor\tProcess started successfully\t{\"PID\": 7080, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"], \"CreationFlags\": 0, \"",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Same TimeoutException in TestLifetimeAsync as the recorded recurring Windows failure.",
+      "job_id": 139633118585,
+      "execution_id": "cf74631f-3be8-4486-8286-703862d091f4",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Layout.ResourcesLayoutActivityTests.Canvas_VisibleCadenceExpiresAndResumesWithoutPerMembershipPolling",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 5\nActual:   6",
+      "stack_trace": "   at Aspire.Dashboard.Components.Tests.Layout.ResourcesLayoutActivityTests.Canvas_VisibleCadenceExpiresAndResumesWithoutPerMembershipPolling() in /_/tests/Aspire.Dashboard.Components.Tests/Layout/ResourcesLayoutActivityTests.cs:line 363\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\bijcimtx.0do\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\bijcimtx.0do\n",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Assert.Equal count mismatch at ResourcesLayoutActivityTests.cs:363; no transient evidence in diagnostics.",
+      "job_id": 139633117347,
+      "execution_id": "4e795a7b-eeb4-4e4e-9afe-3d58be5bc06f",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-dcpconnectionlifetime-parent-exit-timeout-windows",
+    "dashboard-components-resourceslayoutactivity-canvas-cadence-count-mismatch"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "dashboard-components-resourceslayoutactivity-canvas-cadence-count-mismatch",
+  "type": "main-repository-breakage",
+  "title": "ResourcesLayoutActivityTests.Canvas_VisibleCadenceExpiresAndResumesWithoutPerMembershipPolling count mismatch",
+  "error_pattern": "Assert.Equal() Failure: Values differ\nExpected: 5\nActual:   6",
+  "occurrences": [
+    {
+      "run_id": 45733682751,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45733682751",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "observed_at": "2026-11-26T02:14:07Z",
+      "pr_number": 0
+    }
+  ]
+}
