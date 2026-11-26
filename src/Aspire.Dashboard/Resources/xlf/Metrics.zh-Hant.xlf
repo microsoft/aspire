@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
         <source>No metrics found</source>
-        <target state="needs-review-translation">沒有任何計量符合篩選條件</target>
+        <target state="new">No metrics found</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">
