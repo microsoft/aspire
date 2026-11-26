@@ -347,14 +347,22 @@ stop behavior is unchanged.
 By default, `aspire stop` returns once the AppHost process has exited. The AppHost's
 resources, such as containers, can still be stopping in the background at that point,
 so a start issued right away can find a container with a fixed name still running.
-Use `--wait` to return only after the resources have been torn down:
+Use `--wait` to return only after the resources that a normal shutdown removes have
+been torn down:
 
 ```bash
 aspire stop --wait
 ```
 
 With `--wait`, the AppHost tears its resources down before it exits and confirms when
-they are gone. The command waits up to 120 seconds for that confirmation; use
+they are gone. This covers the resources that a normal shutdown removes, such as
+executables and non-persistent containers. Persistent resources, such as containers
+configured with a persistent lifetime, are intentionally kept running by a normal
+shutdown, including with `--wait`. To remove them too, add `--force`
+(`aspire stop --wait --force`); the command then cleans up the persistent resources
+after the AppHost stops and reports when that cleanup completes.
+
+The command waits up to 120 seconds for the teardown confirmation; use
 `--timeout <seconds>` to change it (for example, `aspire stop --wait --timeout 300`).
 `--timeout` requires `--wait`. The command exits with code 17 if the wait times out and
 code 9 if the AppHost's Aspire version does not support waiting; the AppHost is stopped

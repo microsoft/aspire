@@ -214,13 +214,13 @@
     <value>The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</value>
   </data>
   <data name="WaitOptionDescription" xml:space="preserve">
-    <value>Wait until the AppHost's resources, such as containers, are torn down before returning</value>
+    <value>Wait until the AppHost's non-persistent resources, such as containers, are torn down before returning. Persistent resources are kept unless --force is also specified</value>
   </data>
   <data name="WaitingForResourceTeardown" xml:space="preserve">
-    <value>Waiting for the resources of {0} to be torn down...</value>
+    <value>Waiting for the non-persistent resources of {0} to be torn down...</value>
   </data>
   <data name="ResourcesTornDown" xml:space="preserve">
-    <value>The resources of {0} were torn down.</value>
+    <value>The non-persistent resources of {0} were torn down.</value>
   </data>
   <data name="ResourceTeardownTimedOut" xml:space="preserve">
     <value>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</value>

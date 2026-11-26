@@ -34,6 +34,7 @@ internal sealed partial class StopCommand : BaseCommand
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly DcpWorkloadCleanupService _dcpCleanupService;
     private readonly TimeProvider _timeProvider;
+    private readonly Lock _resourceTeardownExitCodeLock = new();
 
     // Per-invocation state. A command instance handles a single invocation.
     private bool _waitForResourceTeardown;
@@ -757,7 +758,11 @@ internal sealed partial class StopCommand : BaseCommand
                 string.Format(CultureInfo.CurrentCulture, StopCommandStrings.WaitingForResourceTeardown, appHostIdentifier),
                 () => connection.StopAppHostAndWaitForResourceCleanupAsync(linkedCts.Token)).ConfigureAwait(false);
 
-            return tornDown ? ResourceTeardownOutcome.TornDown : ResourceTeardownOutcome.NotConfirmed;
+            // An AppHost that observes the cancellation sent for an expired deadline abandons the cleanup and can
+            // still reply that it was not confirmed. That reply is the timeout, not a separate failure.
+            return tornDown ? ResourceTeardownOutcome.TornDown
+                : timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested ? ResourceTeardownOutcome.TimedOut
+                : ResourceTeardownOutcome.NotConfirmed;
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -787,9 +792,33 @@ internal sealed partial class StopCommand : BaseCommand
     private int DisplayTeardownError(int exitCode, string format, params object[] args)
     {
         InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, format, args));
-        Interlocked.CompareExchange(ref _resourceTeardownExitCode, exitCode, CliExitCodes.Success);
+
+        // AppHosts are stopped in parallel (for example with --all), so the command's exit code must not depend on
+        // which teardown failure is recorded first. Keep the failure with the highest precedence.
+        lock (_resourceTeardownExitCodeLock)
+        {
+            if (GetTeardownExitCodePrecedence(exitCode) > GetTeardownExitCodePrecedence(_resourceTeardownExitCode))
+            {
+                _resourceTeardownExitCode = exitCode;
+            }
+        }
+
         return exitCode;
     }
+
+    /// <summary>
+    /// Ranks resource teardown failures for the command's exit code: an unconfirmed teardown outranks a timeout, which
+    /// outranks an AppHost that does not support waiting. An unconfirmed teardown means the request itself failed
+    /// or the AppHost could not confirm the cleanup, which is the most actionable outcome; an unsupported AppHost
+    /// is a version limitation that applies regardless of the teardown.
+    /// </summary>
+    private static int GetTeardownExitCodePrecedence(int exitCode) => exitCode switch
+    {
+        CliExitCodes.FailedToDotnetRunAppHost => 3,
+        CliExitCodes.WaitTimeout => 2,
+        CliExitCodes.AppHostIncompatible => 1,
+        _ => 0
+    };
 
     private static int CompleteStopActivity(ProfilingTelemetry.ActivityScope activity, int exitCode)
     {

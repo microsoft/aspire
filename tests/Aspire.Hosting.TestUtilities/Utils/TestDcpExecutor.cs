@@ -47,7 +47,15 @@ internal sealed class TestDcpExecutor : IDcpExecutor
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+    /// <summary>
+    /// Handles <see cref="StopAndWaitForResourceCleanupAsync"/>. Defaults to reporting that the resources were cleaned up.
+    /// </summary>
+    /// <remarks>
+    /// Tests replace it to hold the cleanup open, for example by returning a task they complete later.
+    /// </remarks>
+    public Func<CancellationToken, Task<bool>> OnStopAndWaitForResourceCleanupAsync { get; set; } = _ => Task.FromResult(true);
+
+    public Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken) => OnStopAndWaitForResourceCleanupAsync(cancellationToken);
 
     public Task StopResourceAsync(IResourceReference resource, CancellationToken cancellationToken) => Task.CompletedTask;
 

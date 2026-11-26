@@ -295,7 +295,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The resources of {0} were torn down..
+        ///   Looks up a localized string similar to The non-persistent resources of {0} were torn down..
         /// </summary>
         internal static string ResourcesTornDown {
             get {
@@ -421,7 +421,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Waiting for the resources of {0} to be torn down....
+        ///   Looks up a localized string similar to Waiting for the non-persistent resources of {0} to be torn down....
         /// </summary>
         internal static string WaitingForResourceTeardown {
             get {
@@ -430,7 +430,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Wait until the AppHost's resources, such as containers, are torn down before returning.
+        ///   Looks up a localized string similar to Wait until the AppHost's non-persistent resources, such as containers, are torn down before returning. Persistent resources are kept unless --force is also specified.
         /// </summary>
         internal static string WaitOptionDescription {
             get {

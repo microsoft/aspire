@@ -966,14 +966,27 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Stopping AppHost and waiting for resource cleanup");
 
-        var response = await rpc.InvokeWithProfilingAsync<StopAppHostResponse>(
+        var responseTask = rpc.InvokeWithProfilingAsync<StopAppHostResponse>(
             _profilingTelemetry,
             "auxiliary",
             "StopAsync",
             [new StopAppHostRequest { WaitForResourceCleanup = true }],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
-        return response?.ResourcesCleanedUp is true;
+        // Canceling a StreamJsonRpc call only sends $/cancelRequest to the AppHost; the client keeps waiting for the
+        // AppHost to reply. Stop waiting as soon as the caller's token is canceled so an AppHost that never replies
+        // cannot hold the caller past its deadline. The abandoned call is observed below so its eventual failure is
+        // not reported as an unobserved task exception.
+        try
+        {
+            var response = await responseTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return response?.ResourcesCleanedUp is true;
+        }
+        catch (OperationCanceledException) when (!responseTask.IsCompleted)
+        {
+            _ = responseTask.ContinueWith(static task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            throw;
+        }
     }
 
     /// <summary>

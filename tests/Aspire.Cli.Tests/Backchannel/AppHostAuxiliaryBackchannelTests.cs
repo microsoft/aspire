@@ -106,6 +106,20 @@ public class AppHostAuxiliaryBackchannelTests
         await server.WaitForClientDisconnectAsync().DefaultTimeout();
     }
 
+    [Fact]
+    public async Task StopAppHostAndWaitForResourceCleanupAsync_WhenAppHostWithholdsResponse_StopsWaitingWhenCanceled()
+    {
+        using var server = TestAppHostBackchannelServer.Start(nameof(TestAppHostRpcTarget.StopAsync));
+        using var backchannel = await server.ConnectAsync().DefaultTimeout();
+        using var cancellation = new CancellationTokenSource();
+
+        var stopTask = backchannel.StopAppHostAndWaitForResourceCleanupAsync(cancellation.Token);
+        await server.WaitForStalledMethodEntryAsync().DefaultTimeout();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stopTask).DefaultTimeout();
+    }
+
     private sealed class TestAppHostBackchannelServer : IDisposable
     {
         private readonly TcpListener _listener;
@@ -182,7 +196,8 @@ public class AppHostAuxiliaryBackchannelTests
         [
             AuxiliaryBackchannelCapabilities.V1,
             AuxiliaryBackchannelCapabilities.V2,
-            AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+            AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1,
+            AuxiliaryBackchannelCapabilities.StopResourceCleanup_V1
         ];
 
         public TestAppHostRpcTarget(string? stalledMethod)
@@ -234,6 +249,17 @@ public class AppHostAuxiliaryBackchannelTests
             WatchResourcesRequest = request;
             yield return CreateResourceSnapshot();
             await Task.CompletedTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<StopAppHostResponse> StopAsync(StopAppHostRequest? request = null, CancellationToken cancellationToken = default)
+        {
+            _ = request;
+            _ = cancellationToken;
+
+            // A stalled stop ignores the cancellation notification, modeling an AppHost that never replies.
+            await StallIfRequestedAsync(nameof(StopAsync));
+
+            return new StopAppHostResponse { ResourcesCleanedUp = true };
         }
 
         private static ResourceSnapshot CreateResourceSnapshot() =>

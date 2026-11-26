@@ -1739,6 +1739,60 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task StopCommand_AllWait_ExitCodeDoesNotDependOnTeardownCompletionOrder(bool unsupportedReportsFirst)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var firstErrorDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        interactionService.DisplayErrorCallback = _ => firstErrorDisplayed.TrySetResult();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+
+        // An AppHost that cannot wait for teardown reports exit code 9; one whose teardown is not confirmed reports 2.
+        var unsupported = CreateConnection(Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "AppHost.cs"), int.MaxValue - 1);
+        unsupported.SupportsStopResourceCleanupV1 = false;
+        var unconfirmed = CreateConnection(Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "AppHost.cs"), int.MaxValue - 2);
+
+        // The AppHost that reports second waits until the other one has displayed its error.
+        if (unsupportedReportsFirst)
+        {
+            unconfirmed.StopAppHostAndWaitForResourceCleanupHandler = async _ =>
+            {
+                await firstErrorDisplayed.Task;
+                return false;
+            };
+        }
+        else
+        {
+            unconfirmed.StopAppHostAndWaitForResourceCleanupHandler = _ => Task.FromResult(false);
+            var stoppingUnsupported = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, Path.Combine("App1", "AppHost.cs"));
+            interactionService.ShowStatusGateAsync = statusText => statusText == stoppingUnsupported ? firstErrorDisplayed.Task : Task.CompletedTask;
+        }
+
+        monitor.AddConnection("socket.hash1", unsupported);
+        monitor.AddConnection("socket.hash2", unconfirmed);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("stop --all --wait").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        var expectedErrors = new[]
+        {
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownUnsupported, Path.Combine("App1", "AppHost.cs"), "--wait"),
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownNotConfirmed, Path.Combine("App2", "AppHost.cs"))
+        };
+        Assert.Equal(unsupportedReportsFirst ? expectedErrors : expectedErrors.Reverse(), interactionService.DisplayedErrors);
+    }
+
+    [Theory]
     [InlineData(false, CliExitCodes.AppHostIncompatible)]
     [InlineData(true, CliExitCodes.FailedToDotnetRunAppHost)]
     public async Task StopCommand_Wait_ReportsUnconfirmedResourceTeardown(bool supportsResourceCleanup, int expectedExitCode)
