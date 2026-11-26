@@ -1056,7 +1056,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
-        const string toggle = ".resource-pane-section-header button[aria-label='Expand or collapse Parameters']";
+        const string toggle = ".resource-pane-section-header [role='button'][aria-label='Expand or collapse Parameters']";
         const string link = ".resource-pane-section-header a[aria-label='Parameters, 2 parameters']";
 
         cut.WaitForAssertion(() => Assert.Equal("true", cut.Find(toggle).GetAttribute("aria-expanded")));
@@ -1145,7 +1145,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         if (collapseParameters)
         {
-            await cut.Find(".resource-pane-section-header button[aria-label='Expand or collapse Parameters']").ClickAsync(new MouseEventArgs());
+            await cut.Find(".resource-pane-section-header [role='button'][aria-label='Expand or collapse Parameters']").ClickAsync(new MouseEventArgs());
             Assert.Empty(cut.FindAll(".resource-row-kind-parameter"));
         }
 

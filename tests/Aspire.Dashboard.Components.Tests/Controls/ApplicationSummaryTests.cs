@@ -207,7 +207,9 @@ public class ApplicationSummaryTests : DashboardTestContext
             var bucketStart = new DateTime(now.Ticks / ApplicationSummary.s_activityBucketSize.Ticks * ApplicationSummary.s_activityBucketSize.Ticks, DateTimeKind.Utc);
             var bucketSummary = loc[nameof(ResourceStrings.HomeActivityBucketTooltip),
                 FormatHelpers.FormatTimeWithOptionalDate(Services.GetRequiredService<BrowserTimeProvider>(), bucketStart), "1", "1"];
-            Assert.Equal($"{bucketSummary}\n\n{loc[nameof(ResourceStrings.HomeActivityBucketTraceHint)]}",
+            var traceHint = loc[nameof(ResourceStrings.HomeActivityBucketTraceHint)];
+            var traceCaveat = loc[nameof(ResourceStrings.HomeActivityBucketTraceCaveat)];
+            Assert.Equal($"{bucketSummary}\n\n{traceHint}\n{traceCaveat}",
                 cut.Find(".home-chart-bar").GetAttribute("data-tooltip"));
             Assert.Equal(loc[nameof(ResourceStrings.HomeSingleRequestCount), "1"], cut.Find(".home-chart-max").TextContent);
         });
@@ -703,7 +705,9 @@ public class ApplicationSummaryTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll(".home-chart-bar"));
-            Assert.All(cut.FindAll(".home-stat-value").Skip(1), stat => Assert.NotEqual("–", stat.TextContent));
+            Assert.Collection(cut.FindAll(".home-stat-value").Skip(1),
+                stat => Assert.NotEmpty(stat.TextContent),
+                stat => Assert.NotEmpty(stat.TextContent));
         }, DefaultWaitTimeout);
         var requestRate = cut.Find(".home-stat-value").TextContent;
 
@@ -714,7 +718,9 @@ public class ApplicationSummaryTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Empty(cut.FindAll(".home-chart-bar"));
-            Assert.Equal(["–", "–"], cut.FindAll(".home-stat-value").Skip(1).Select(stat => stat.TextContent));
+            Assert.Collection(cut.FindAll(".home-stat-value").Skip(1),
+                stat => Assert.Contains("empty-data", stat.ClassList),
+                stat => Assert.Contains("empty-data", stat.ClassList));
             Assert.NotEqual(requestRate, cut.Find(".home-stat-value").TextContent);
         }, DefaultWaitTimeout);
     }
