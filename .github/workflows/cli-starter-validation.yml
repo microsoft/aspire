@@ -144,10 +144,20 @@ jobs:
             Copy-Item -Path $cliLogsDir -Destination $sharedLogsDir -Recurse -Force
           }
 
+      # upload-artifact fails if a file it found disappears before it reads it. Starter project
+      # dependency installers can still change node_modules after `aspire stop`, so upload an archive.
+      - name: Archive starter validation diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE/eng/scripts/stage-cli-starter-validation-diagnostics.ps1" `
+            -SourceRoot (Join-Path $env:RUNNER_TEMP 'aspire-cli-starter-validation') `
+            -DestinationRoot (Join-Path $env:RUNNER_TEMP 'aspire-cli-starter-validation-upload')
+
       - name: Upload starter validation diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cli-starter-validation-${{ inputs.artifactSuffix }}
-          path: ${{ runner.temp }}/aspire-cli-starter-validation
+          path: ${{ runner.temp }}/aspire-cli-starter-validation-upload/starter-validation.tar
           if-no-files-found: ignore

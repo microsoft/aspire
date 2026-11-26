@@ -15,5 +15,10 @@ public sealed class GetSpansRequest
     public bool? HasError { get; init; }
     public string[]? TextFragments { get; init; }
 
+    /// <summary>
+    /// Gets the maximum number of the latest matching spans available for paging.
+    /// </summary>
+    internal int? LatestItemCount { get; init; }
+
     internal IReadOnlyList<(string TraceId, string SpanId)>? SpanIdentities { get; init; }
 }

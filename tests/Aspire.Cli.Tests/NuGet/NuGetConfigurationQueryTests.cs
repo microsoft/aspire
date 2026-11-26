@@ -52,7 +52,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
             }
             """);
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage());
         var settings = service.GetNuGetSettings(appHostDirectory.FullName, TestContext.Current.CancellationToken);
         var channel = PackageChannel.CreateExplicitChannel(
             "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
@@ -113,7 +113,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
             }
             """);
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage());
         var settings = service.GetNuGetSettings(appHostDirectory.FullName, TestContext.Current.CancellationToken);
         Assert.True(Assert.Single(settings.Sources, source => source.Name == sdkSourceKey).IsIntegrationSource);
         var channel = PackageChannel.CreateExplicitChannel(
@@ -507,11 +507,12 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         var nuGetClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         var bundleNuGetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
             nuGetClient,
-            new TestConfigurationService());
+            new TestConfigurationService(), new Aspire.Shared.TemporaryStorage());
         return bundleNuGetService;
     }
 }

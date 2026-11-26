@@ -258,7 +258,7 @@ public class LocalDeveloperCertificateTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var tenant = Guid.NewGuid().ToString();
         var client = Guid.NewGuid().ToString();
-        var existing = builder.AddExistingEntraApplication("existing", tenant, client);
+        var existing = builder.AddExistingEntraIdApplication("existing", tenant, client);
         Assert.Throws<InvalidOperationException>(existing.RunWithLocalDeveloperCertificateCredential);
         var created = builder.AddEntraIdApplication("created").RunWithLocalDeveloperCertificateCredential();
         Assert.Throws<InvalidOperationException>(() => created.AsExistingApplication(tenant, client));

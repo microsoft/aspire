@@ -3,6 +3,7 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -16,7 +17,6 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -31,47 +31,121 @@ public partial class MainLayoutTests : DashboardTestContext
     private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
 
     [Fact]
-    public async Task HeaderHelp_IsSingleActionThatOpensHelpDialog()
+    public void OnInitialize_SecuredModeUnauthenticatedUser_Throws()
+    {
+        var authorizationContext = this.AddAuthorization();
+        authorizationContext.SetNotAuthorized();
+        SetupMainLayoutServices(configureOptions: options => options.Frontend.AuthMode = FrontendAuthMode.BrowserToken);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Render<MainLayout>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false))));
+        Assert.Equal("Dashboard authentication is required, but the current user is not authenticated.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HeaderHelp_IsSingleActionThatOpensDocumentationTab(bool isDesktop)
     {
         DialogParameters? capturedParameters = null;
-        var dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        object? capturedContent = null;
+        var dialogService = new TestDialogService(onShowDialog: (content, parameters) =>
         {
+            capturedContent = content;
             capturedParameters = parameters;
             return Task.CompletedTask;
         });
         SetupMainLayoutServices(dialogService: dialogService);
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
-            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+            new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
-        var helpButton = cut.Find($"#{MainLayout.HelpButtonId}");
-        Assert.Equal(Resources.Layout.MainLayoutHelp, helpButton.GetAttribute("aria-label"));
-        Assert.Equal("?", helpButton.GetAttribute("aria-keyshortcuts"));
-        Assert.Empty(cut.FindAll($"header a[aria-label='{Resources.Layout.MainLayoutAspireDashboardHelpLink}']"));
+        if (isDesktop)
+        {
+            var helpButton = cut.Find($"#{MainLayout.HelpButtonId}");
+            Assert.Equal(Resources.Layout.MainLayoutHelp, helpButton.GetAttribute("aria-label"));
+            Assert.Equal("?", helpButton.GetAttribute("aria-keyshortcuts"));
+            Assert.Empty(cut.FindAll($"header a[aria-label='{Resources.Layout.MainLayoutAspireDashboardHelpLink}']"));
 
-        await cut.InvokeAsync(() => helpButton.Click());
+            await cut.InvokeAsync(() => helpButton.Click());
+        }
+        else
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+            var menuItem = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Trim() == Resources.Layout.MainLayoutHelp);
+            await cut.InvokeAsync(() => menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent }));
+
+            Assert.Empty(cut.FindAll($"#{MobileNavMenu.MobileNavMenuId}"));
+        }
 
         Assert.NotNull(capturedParameters);
         Assert.Equal("HelpDialog", capturedParameters.Id);
         Assert.Equal(Resources.Layout.MainLayoutHelp, capturedParameters.Title);
+        Assert.Equal(HelpDialogTab.Documentation, capturedContent);
     }
 
-    [Theory]
-    [InlineData(".logo")]
-    [InlineData(".application-name")]
-    public async Task Logo_OpensAllResourcesOverviewWithoutRestoringSelection(string selector)
+    [Fact]
+    public async Task MobileMenu_RefreshesWhenPageEntriesAreRegisteredAndCleared()
+    {
+        SetupMainLayoutServices();
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        Func<IEnumerable<MobileNavMenuEntry>> entries = () => [new("page", "Page view", () => Task.CompletedTask)];
+        Func<IEnumerable<MobileNavMenuEntry>> previousEntries = () => [];
+
+        await cut.InvokeAsync(() => cut.Instance.SetPageNavMenuEntries(entries));
+        cut.WaitForAssertion(() => Assert.Equal("Page view", cut.Find("fluent-menu-item").GetAttribute("data-tooltip")));
+        await cut.InvokeAsync(() => cut.Instance.ClearPageNavMenuEntries(previousEntries));
+        Assert.Equal("Page view", cut.Find("fluent-menu-item").GetAttribute("data-tooltip"));
+        await cut.InvokeAsync(() => cut.Instance.ClearPageNavMenuEntries(entries));
+        cut.WaitForAssertion(() => Assert.Equal(Resources.Layout.MainLayoutHelp, cut.Find("fluent-menu-item").GetAttribute("data-tooltip")));
+    }
+
+    [Fact]
+    public async Task HeaderHome_OpensHomeWithoutRestoringSelection()
     {
         var stored = new Dictionary<string, object?>();
         SetupMainLayoutServices(
             sessionStorage: new TestSessionStorage { OnSetAsync = (key, value) => stored[key] = value },
             dashboardClient: new TestDashboardClient(isEnabled: true, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("/traces/resource/api");
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
-        await cut.InvokeAsync(() => cut.Find($"header {selector}").Click());
+        await cut.InvokeAsync(() => cut.Find("header a.brand-home").Click());
 
-        Assert.Equal(DashboardUrls.ResourceListUrl(), "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
+        // Home is the table of every resource, at its own URL, not the overview at /resources.
+        Assert.Equal(DashboardUrls.HomeUrl(), "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
         Assert.Empty(Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources]));
+    }
+
+    [Theory]
+    [InlineData("/", true)]
+    [InlineData("/?unrelated=value", true)]
+    [InlineData("/resources", false)]
+    [InlineData("/traces/resource/api", false)]
+    public void Brand_IsTheHomeButtonAndShowsWhenHomeIsCurrent(string url, bool expectCurrent)
+    {
+        SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: true,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(url);
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        // The logo and the name are one lockup, with a house after the name that says where they go.
+        var brand = Assert.Single(cut.FindAll("header .header-brand a"));
+        Assert.Contains("brand-home", brand.ClassList);
+        Assert.Equal("/", brand.GetAttribute("href"));
+        Assert.Empty(brand.QuerySelectorAll("a, button"));
+        Assert.Single(brand.QuerySelectorAll(".logo"));
+        Assert.Single(brand.QuerySelectorAll(".application-name .application-home-icon"));
+        // While home is showing, the lockup is marked current, which fills the house in.
+        Assert.Equal(expectCurrent, brand.ClassList.Contains("current"));
+        Assert.Equal(expectCurrent ? "page" : null, brand.GetAttribute("aria-current"));
+        // The tooltip gives the full name when it's truncated, below the link so it doesn't cover the adjacent tabs.
+        Assert.False(string.IsNullOrEmpty(brand.GetAttribute("data-tooltip")));
+        Assert.Equal("below", brand.GetAttribute("data-tooltip-positioning"));
     }
 
     [Theory]
@@ -168,7 +242,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -224,7 +297,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -265,7 +337,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -310,7 +381,7 @@ public partial class MainLayoutTests : DashboardTestContext
                     return (true, true);
                 }
 
-                if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview or BrowserStorageKeys.RecordingsStyle)
+                if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview)
                 {
                     return (false, null);
                 }
@@ -331,6 +402,44 @@ public partial class MainLayoutTests : DashboardTestContext
             readKeys);
         var messageBarProvider = _messageBarProvider!;
         messageBarProvider.WaitForAssertion(() => Assert.Single(messageBarProvider.FindComponents<DashboardMessageBar>()));
+    }
+
+    [Theory]
+    [InlineData("a.dashboard-message-bar-link-action", BrowserStorageKeys.DashboardFeedbackPromptDismissed)]
+    [InlineData("fluent-button.dashboard-message-bar-action", BrowserStorageKeys.DashboardFeedbackPromptDismissed)]
+    [InlineData("fluent-button.dashboard-message-bar-dismiss", BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession)]
+    public async Task DashboardFeedbackPrompt_Close_StoresDismissal(string selector, string expectedKey)
+    {
+        var dismissedKeySetTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var localStorage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key switch
+            {
+                BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey or BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey => (true, true),
+                _ => (false, null)
+            },
+            OnSetUnprotectedAsync = (key, _) => dismissedKeySetTcs.TrySetResult(key)
+        };
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = _ => (false, null),
+            OnSetAsync = (key, _) => dismissedKeySetTcs.TrySetResult(key)
+        };
+        SetupMainLayoutServices(localStorage: localStorage, sessionStorage: sessionStorage);
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        var messageBarProvider = _messageBarProvider!;
+        var link = messageBarProvider.WaitForElement("a.dashboard-message-bar-link-action");
+        Assert.Equal(DashboardFeedbackDialog.DiscussionUrl, link.GetAttribute("href"));
+        Assert.Equal("_blank", link.GetAttribute("target"));
+
+        messageBarProvider.Find(selector).Click();
+
+        Assert.Equal(expectedKey, await dismissedKeySetTcs.Task.DefaultTimeout());
     }
 
     [Theory]
@@ -363,7 +472,7 @@ public partial class MainLayoutTests : DashboardTestContext
         else
         {
             var menuItemName = expectedDialogId == "HelpDialog"
-                ? Resources.Layout.MainLayoutKeyboardShortcuts
+                ? Resources.Layout.MainLayoutHelp
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
@@ -414,11 +523,11 @@ public partial class MainLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void RecordingsMenuSetting_ShowsTheLiveRunMenuInsteadOfTheRecordingsButton(bool isDesktop)
+    public void ObsoleteRecordingsStylePreference_DoesNotChangeRunSelector(bool isDesktop)
     {
         var localStorage = new TestLocalStorage
         {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Menu") : (false, null)
+            OnGetUnprotectedAsync = key => key == "Aspire_Header_RecordingsStyle" ? (true, "Menu") : (false, null)
         };
         SetupMainLayoutServices(localStorage: localStorage);
 
@@ -427,17 +536,15 @@ public partial class MainLayoutTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardRunMenu>()));
-        Assert.Empty(cut.FindComponents<DashboardRunSelect>());
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardRunSelect>()));
+        Assert.Empty(cut.FindComponents<DashboardRunMenu>());
         Assert.Empty(cut.FindComponents<DashboardRunPill>());
-        var menuButton = Assert.Single(cut.FindComponent<DashboardRunMenu>().FindComponents<AspireMenuButton>());
-        Assert.Equal("Live run", menuButton.Instance.Text);
-        Assert.Equal(["Live run", "Learn about runs"], menuButton.Instance.ItemsProvider().Where(item => !item.IsDivider).Select(item => item.Text));
+        Assert.Equal("dialog", cut.Find($"#{MainLayout.RunSelectButtonId}").GetAttribute("aria-haspopup"));
         if (isDesktop)
         {
-            // Where it was before recordings had their own panel: with the header's buttons, ahead of the help button.
-            var menuIndex = cut.Markup.IndexOf("application-run-select", StringComparison.Ordinal);
-            Assert.True(menuIndex < cut.Markup.IndexOf($"id=\"{MainLayout.HelpButtonId}\"", StringComparison.Ordinal));
+            // Run selection is the first app-wide action after navigation.
+            var runSelectIndex = cut.Markup.IndexOf("application-run-select", StringComparison.Ordinal);
+            Assert.True(runSelectIndex < cut.Markup.IndexOf($"id=\"{MainLayout.HelpButtonId}\"", StringComparison.Ordinal));
         }
     }
 
@@ -509,11 +616,7 @@ public partial class MainLayoutTests : DashboardTestContext
             content = Assert.IsType<DashboardRunsDialogContent>(dialogContent);
             return Task.CompletedTask;
         });
-        var localStorage = new TestLocalStorage
-        {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Panel") : (false, null)
-        };
-        SetupMainLayoutServices(localStorage: localStorage, dialogService: dialogService, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        SetupMainLayoutServices(dialogService: dialogService, dashboardRunStore: runStore, sessionStorage: sessionStorage);
         await Services.GetRequiredService<DashboardViewPreferences>().EnsureLoadedAsync();
         var expectedHistoricalRunText = FormatHelpers.FormatDateTime(
             Services.GetRequiredService<BrowserTimeProvider>(),
@@ -706,23 +809,6 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public void DashboardRunSelect_FormatRunAge_UsesRelativeTime()
-    {
-        SetupMainLayoutServices();
-        var loc = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Layout>>();
-        var now = new DateTimeOffset(2025, 1, 10, 12, 0, 0, TimeSpan.Zero);
-
-        Assert.Equal("a moment ago", DashboardRunSelect.FormatRunAge(now.AddSeconds(-59), now, loc));
-        Assert.Equal("a moment ago", DashboardRunSelect.FormatRunAge(now.AddSeconds(5), now, loc));
-        Assert.Equal("1 minute ago", DashboardRunSelect.FormatRunAge(now.AddMinutes(-1), now, loc));
-        Assert.Equal("45 minutes ago", DashboardRunSelect.FormatRunAge(now.AddMinutes(-45).AddSeconds(-30), now, loc));
-        Assert.Equal("1h ago", DashboardRunSelect.FormatRunAge(now.AddMinutes(-60), now, loc));
-        Assert.Equal("23h ago", DashboardRunSelect.FormatRunAge(now.AddHours(-23).AddMinutes(-59), now, loc));
-        Assert.Equal("1 day ago", DashboardRunSelect.FormatRunAge(now.AddDays(-1), now, loc));
-        Assert.Equal("2 days ago", DashboardRunSelect.FormatRunAge(now.AddDays(-2).AddHours(-5), now, loc));
-    }
-
-    [Fact]
     public void DashboardRunSelect_FormatRunDuration_UsesRecordedEndTime()
     {
         var startedAtUtc = new DateTimeOffset(2025, 1, 2, 12, 0, 0, TimeSpan.Zero);
@@ -757,11 +843,7 @@ public partial class MainLayoutTests : DashboardTestContext
                 ? Task.FromResult<(bool Success, object? Value)>((false, false))
                 : runSelectionSource.Task
         };
-        var localStorage = new TestLocalStorage
-        {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Panel") : (false, null)
-        };
-        SetupMainLayoutServices(localStorage: localStorage, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var getRunsCallCount = runStore.GetRunsCallCount;
 
@@ -985,7 +1067,7 @@ public partial class MainLayoutTests : DashboardTestContext
         else
         {
             var menuItemName = expectedDialogId == "HelpDialog"
-                ? Resources.Layout.MainLayoutKeyboardShortcuts
+                ? Resources.Layout.MainLayoutHelp
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());

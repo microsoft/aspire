@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -12,7 +10,6 @@ public class ConnectionStringReference(IResourceWithConnectionString resource, b
 {
     private readonly ReferenceExpression? _connectionStringExpression;
 
-#pragma warning disable ASPIRECONNECTIONSTRINGS001
     internal ConnectionStringReference(
         IResourceWithConnectionString resource,
         bool optional,
@@ -24,7 +21,6 @@ public class ConnectionStringReference(IResourceWithConnectionString resource, b
         ValueName = valueName ?? throw new ArgumentNullException(nameof(valueName));
         _connectionStringExpression = connectionStringExpression;
     }
-#pragma warning restore ASPIRECONNECTIONSTRINGS001
 
     /// <summary>
     /// The resource that the connection string is referencing.
@@ -40,7 +36,6 @@ public class ConnectionStringReference(IResourceWithConnectionString resource, b
     /// Gets the logical and physical environment-variable names when this reference represents
     /// a generated connection-string injection, or <see langword="null"/> for a standalone value reference.
     /// </summary>
-    [Experimental("ASPIRECONNECTIONSTRINGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ConnectionStringEnvironmentVariableNames? EnvironmentVariableNames { get; }
 
     /// <summary>

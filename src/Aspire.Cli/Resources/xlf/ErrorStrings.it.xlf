@@ -169,32 +169,32 @@
       </trans-unit>
       <trans-unit id="GitAuthenticationFailed">
         <source>Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</source>
-        <target state="new">Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</target>
+        <target state="translated">Autenticazione Git non riuscita. Configurare le credenziali GIT o l'autenticazione SSH prima di eseguire questo comando; I prompt delle credenziali del terminale sono disabilitati.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitCommandFailed">
         <source>The Git command failed. Check the repository and selected reference.</source>
-        <target state="new">The Git command failed. Check the repository and selected reference.</target>
+        <target state="translated">Il comando Git non è riuscito. Controllare il repository e il riferimento selezionato.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitRepositoryUnavailable">
         <source>The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</source>
-        <target state="new">The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</target>
+        <target state="translated">Non è stato possibile accedere al repository Git. Controlla l'indirizzo, la connettività di rete e le autorizzazioni di accesso.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitTimedOut">
         <source>The Git operation timed out after two minutes.</source>
-        <target state="new">The Git operation timed out after two minutes.</target>
+        <target state="translated">Timeout dell'operazione Git dopo due minuti.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnattendedSshUnsupported">
         <source>Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</source>
-        <target state="new">Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</target>
+        <target state="translated">Git senza l'intervento dell'utente richiede un eseguibile OpenSSH verificato, non un comando SSH personalizzato o un wrapper. Eseguire il comando in modalità interattiva oppure selezionare OpenSSH con GIT_SSH e configurare le chiavi e le opzioni dell'host nel file di configurazione di OpenSSH, anziché usare GIT_SSH_COMMAND o core.sshCommand.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Non è possibile avviare Git. Installare Git e assicurarsi che sia incluso nel PATH.</target>
         <note />
       </trans-unit>
       <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="InvalidIntegrationSource">
         <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
-        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <target state="translated">Configurazione dell'origine di integrazione non valida in '{0}'. Specificare un'origine NuGet senza credenziali incorporate e, facoltativamente, un elenco non vuoto di modelli di pacchetto consentiti (ID esatti, prefissi che terminano in * o *).</target>
         <note>{0} is the configuration key. Do not translate NuGet or *.</note>
       </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
@@ -244,7 +244,7 @@
       </trans-unit>
       <trans-unit id="InvalidSourceName">
         <source>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
-        <target state="new">Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <target state="translated">Nome di origine non valido in '{0}'. I nomi delle origini devono avere una lunghezza compresa tra 1 e 64 lettere ASCII, cifre, punti, trattini o caratteri di sottolineatura, e iniziare con una lettera o un numero.</target>
         <note>{0} is the configuration key. Do not translate ASCII.</note>
       </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
@@ -279,7 +279,7 @@
       </trans-unit>
       <trans-unit id="NuGetSourceKeyAlreadyInUse">
         <source>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</source>
-        <target state="new">NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</target>
+        <target state="translated">La chiave di origine NuGet '{0}' è già riservata da un'altra origine o dalle relative impostazioni. Scegliere un'altra chiave di origine di integrazione o aggiornare manualmente la configurazione NuGet.</target>
         <note>{0} is the source key. Do not translate NuGet.</note>
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">

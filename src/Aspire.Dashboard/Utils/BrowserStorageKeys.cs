@@ -39,13 +39,12 @@ internal static class BrowserStorageKeys
     public const string ResourcePaneKinds = "Aspire_ResourcePane_Kinds";
     public const string ResourceListDensity = "Aspire_ResourcePane_Density";
     public const string GroupOverview = "Aspire_ResourceOverview_GroupView";
-    public const string RecordingsStyle = "Aspire_Header_RecordingsStyle";
     public const string LastSelectedResources = "Aspire_ResourcePane_LastSelectedResources";
-    public const string ResourceContentOpen = "Aspire_ResourcePane_ContentOpen";
 
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
     public const string ResourceTagsKeyPrefix = "Aspire_Resources_Tags_";
-    public const string ResourceOrderKeyPrefix = "Aspire_Resources_Order_";
+    public const string ResourceOrderKeyPrefix = "Aspire_Resources_OrderMoves_";
+    public const string GroupOrderKeyPrefix = "Aspire_Resources_GroupOrderMoves_";
     public const string MetricPinsKeyPrefix = "Aspire_Metrics_Pins_";
     public const string SplitterOrientationKeyPrefix = "Aspire_SplitterOrientation_";
     public const string SplitterSizeKeyPrefix = "Aspire_SplitterSize_";
@@ -65,6 +64,11 @@ internal static class BrowserStorageKeys
     public static string ResourceOrderKey(string applicationName)
     {
         return $"{ResourceOrderKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
+
+    public static string GroupOrderKey(string applicationName)
+    {
+        return $"{GroupOrderKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
     }
 
     public static string MetricPinsKey(string applicationName)

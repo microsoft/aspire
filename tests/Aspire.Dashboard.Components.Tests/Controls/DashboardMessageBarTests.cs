@@ -9,6 +9,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Utils;
 using Bunit;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
@@ -98,5 +99,91 @@ public sealed class DashboardMessageBarTests : DashboardTestContext
             Assert.DoesNotContain("markdown-container", messageElement.ClassList);
             Assert.Equal("Plain text message", messageElement.TextContent.Trim());
         });
+    }
+
+    [Theory]
+    [InlineData("https://example.com/feedback", "_blank")]
+    [InlineData("/resources", null)]
+    public async Task LinkAsAction_OpensExternalUrlsInNewTab(string linkUrl, string? expectedTarget)
+    {
+        FluentUISetupHelpers.SetupFluentButton(this);
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+
+        var cut = Render(builder =>
+        {
+            builder.OpenComponent<FluentMessageBarProvider>(0);
+            builder.AddComponentParameter(1, nameof(FluentMessageBarProvider.Section), DashboardUIHelpers.MessageBarSection);
+            builder.CloseComponent();
+        });
+
+        var messageBarService = Services.GetRequiredService<DashboardMessageBarService>();
+        await cut.InvokeAsync(() => messageBarService.ShowAsync(
+            new DashboardMessageBarContent
+            {
+                Message = "Message",
+                LinkText = "Open",
+                LinkUrl = linkUrl,
+                LinkAsAction = true
+            },
+            MessageBarIntent.Info,
+            DashboardUIHelpers.MessageBarSection));
+
+        cut.WaitForAssertion(() =>
+        {
+            var link = Assert.Single(cut.FindComponents<DashboardMessageBar>()).Find(".dashboard-message-bar-actions a.dashboard-message-bar-link-action");
+            Assert.Equal(linkUrl, link.GetAttribute("href"));
+            Assert.Equal(expectedTarget, link.GetAttribute("target"));
+            Assert.Equal(expectedTarget is null ? null : "noreferrer noopener", link.GetAttribute("rel"));
+        });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task LinkAsAction_CloseOnLinkClick_ClosesWithPrimaryResult(bool closeOnLinkClick)
+    {
+        FluentUISetupHelpers.SetupFluentButton(this);
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+
+        var cut = Render(builder =>
+        {
+            builder.OpenComponent<FluentMessageBarProvider>(0);
+            builder.AddComponentParameter(1, nameof(FluentMessageBarProvider.Section), DashboardUIHelpers.MessageBarSection);
+            builder.CloseComponent();
+        });
+
+        var closeResult = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var messageBarService = Services.GetRequiredService<DashboardMessageBarService>();
+        await cut.InvokeAsync(() => messageBarService.ShowAsync(
+            new DashboardMessageBarContent
+            {
+                Message = "Message",
+                LinkText = "Open",
+                LinkUrl = "https://example.com/feedback",
+                LinkAsAction = true,
+                CloseOnLinkClick = closeOnLinkClick
+            },
+            MessageBarIntent.Info,
+            DashboardUIHelpers.MessageBarSection,
+            result =>
+            {
+                closeResult.SetResult(result.Data);
+                return Task.CompletedTask;
+            }));
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardMessageBar>()));
+        await cut.Find(".dashboard-message-bar-actions a.dashboard-message-bar-link-action").ClickAsync(new MouseEventArgs());
+
+        if (closeOnLinkClick)
+        {
+            cut.WaitForAssertion(() => Assert.Empty(cut.FindComponents<DashboardMessageBar>()));
+            // The close callback runs independently of the provider render.
+            Assert.Equal(true, await closeResult.Task.WaitAsync(DefaultWaitTimeout));
+        }
+        else
+        {
+            Assert.False(closeResult.Task.IsCompleted);
+            Assert.Single(cut.FindComponents<DashboardMessageBar>());
+        }
     }
 }

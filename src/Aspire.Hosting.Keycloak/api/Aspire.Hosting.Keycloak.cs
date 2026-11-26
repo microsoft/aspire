@@ -49,5 +49,7 @@ namespace Aspire.Hosting.ApplicationModel
         public ParameterResource AdminPasswordParameter { get { throw null; } }
 
         public ParameterResource? AdminUserNameParameter { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

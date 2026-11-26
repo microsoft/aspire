@@ -12,6 +12,7 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -31,6 +32,105 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Path = "aspire.config.json",
         AppliedVersion = "version-1"
     };
+
+    [Theory]
+    [InlineData("new --use-config-source")]
+    [InlineData("init --use-config-source true")]
+    [InlineData("update --use-config-source")]
+    [InlineData("update --config-source")]
+    [InlineData("template source list --format json --use-config-source")]
+    public async Task DisabledSource_RejectsExplicitRequests(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CreateCreationServices(workspace, disableConfigSource: true);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Equal(ConfigSourceStrings.FeatureDisabled, Assert.Single(interaction.DisplayedErrors));
+        Assert.Empty(interaction.DisplayedRawText);
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        AssertNoConfigSourceGit(provider);
+    }
+
+    [Theory]
+    [InlineData("new aspire-empty --language csharp --version 17.0.0 --name CreatedProject --output created-project", "created-project", true)]
+    [InlineData("init --file-based --language csharp --use-config-source false", ".", false)]
+    public async Task DisabledSource_CreationSkipsSourceWithoutRecordingOptOut(string commandLine, string outputDirectory, bool explicitUrl)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CreateCreationServices(workspace, disableConfigSource: true);
+        services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = explicitUrl ? "not a valid repository" : null
+        }));
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        services.AddSingleton<IInternalMicrosoftDetector>(detector);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse($"{commandLine} --suppress-agent-init --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var config = AspireConfigFile.Load(Path.Combine(workspace.Path, outputDirectory));
+        Assert.NotNull(config);
+        Assert.Null(config.ConfigSource);
+        Assert.Equal(0, detector.Calls);
+        AssertNoConfigSourceGit(provider);
+    }
+
+    [Fact]
+    public async Task DisabledSource_AdvisoryCheckLeavesBindingAndPreviouslyCopiedSettingsIntact()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string configuration = """
+            {
+              "features": { "configSourceEnabled": false },
+              "configSource": {
+                "repository": "https://git.example/configuration",
+                "path": "aspire.config.json",
+                "appliedVersion": "version-1"
+              },
+              "skillSources": { "team": { "repository": "example/team" } }
+            }
+            """;
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await File.WriteAllTextAsync(path, configuration, cancellationToken);
+        using var provider = CreateCreationServices(workspace).BuildServiceProvider();
+        var service = provider.GetRequiredService<ConfigSourceService>();
+
+        service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, cancellationToken);
+        await service.WaitForChecksAsync().DefaultTimeout();
+        service.NotifyIfUpdateAvailable();
+
+        AssertNoConfigSourceGit(provider);
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path, cancellationToken));
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Empty(interaction.DisplayedMessages);
+    }
+
+    [Fact]
+    public async Task DisabledSource_TemplateDiscoveryStillIncludesIndependentGlobalSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CreateCreationServices(workspace, disableConfigSource: true).BuildServiceProvider();
+        var globalPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true);
+        Directory.CreateDirectory(Path.GetDirectoryName(globalPath)!);
+        await File.WriteAllTextAsync(globalPath, """
+            { "templateSources": { "global": { "repository": "https://git.example/templates" } } }
+            """, TestContext.Current.CancellationToken);
+
+        var sources = await provider.GetRequiredService<ConfiguredTemplateSourceService>()
+            .GetSourcesAsync(TestContext.Current.CancellationToken);
+
+        var source = Assert.Single(sources);
+        Assert.Equal("global", source.Key);
+        Assert.Equal("https://git.example/templates", source.Value.Template?.Repository);
+        AssertNoConfigSourceGit(provider);
+    }
 
     [Theory]
     [InlineData("stop", true, false)]
@@ -565,6 +665,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--channel daily")]
     [InlineData("--quality stable")]
     [InlineData("--nuget-config-dir .")]
+    [InlineData("--dry-run")]
     public void UpdateConfigSource_RejectsIncompatibleOptions(string option)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1560,12 +1661,23 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ConfigSourceStrings.GitTimeout, Assert.Single(interaction.DisplayedErrors));
     }
 
-    private IServiceCollection CreateCreationServices(TemporaryWorkspace workspace)
+    private static void AssertNoConfigSourceGit(ServiceProvider provider)
+    {
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        Assert.Empty(git.ResolutionModes);
+        Assert.Empty(git.FetchModes);
+    }
+
+    private IServiceCollection CreateCreationServices(TemporaryWorkspace workspace, bool disableConfigSource = false)
     {
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: "stable");
             options.InteractionServiceFactory = _ => new TestInteractionService();
+            if (disableConfigSource)
+            {
+                options.DisabledFeatures = [KnownFeatures.ConfigSourceEnabled];
+            }
         });
         services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
         {

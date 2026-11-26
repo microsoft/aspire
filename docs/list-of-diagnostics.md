@@ -25,11 +25,34 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 
 ## Experimental API Warnings
 
+`ASPIRECONTAINERSHELLEXECUTION001` is no longer emitted: `ContainerResource.ShellExecution` is stable.
+Existing suppressions can be removed. Its behavior is unchanged: `null` and `false` pass arguments individually;
+`true` passes `-c` followed by space-joined arguments without quoting or escaping. The container entrypoint
+must already be a compatible shell (for example, `/bin/sh`); this property does not select one.
+
+`ASPIRECOMMAND001` is no longer produced. Required-command custom validation APIs are stable.
+Failed validation remains advisory: a warning is logged, but the resource is allowed to attempt to start.
+
+`ASPIREDENO001` is no longer emitted: the Deno hosting APIs are stable. Existing
+suppressions can be removed. See [Deno runtime and publishing](../src/Aspire.Hosting.JavaScript/README.md#deno-runtime-and-publishing)
+for runtime requirements and run/publish behavior.
+
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |
+| `ASPIRECOMPUTE002` | Warning | Kubernetes persistent-volume resources, access modes, and Kubernetes/AKS persistent-volume extension methods remain experimental. Compute-environment host-address and endpoint-property mapping contracts are stable and no longer require this suppression. | [src/Aspire.Hosting.Kubernetes/KubernetesPersistentVolumeResource.cs](../src/Aspire.Hosting.Kubernetes/KubernetesPersistentVolumeResource.cs), [KubernetesPersistentVolumeExtensions](../src/Aspire.Hosting.Kubernetes/KubernetesPersistentVolumeExtensions.cs), [AzureKubernetesPersistentVolumeExtensions](../src/Aspire.Hosting.Azure.Kubernetes/AzureKubernetesPersistentVolumeExtensions.cs) |
 | `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
 | `ASPIREPIPELINES005` | Warning | Pipeline output diffing APIs are experimental and may change or be removed in future releases. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs](../src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs) |
+
+Connection-string physical-name metadata (`ConnectionStringEnvironmentVariableNames` and
+`ConnectionStringReference.EnvironmentVariableNames`) is stable and no longer produces
+`ASPIRECONNECTIONSTRINGS001`. Existing suppressions of that diagnostic can be removed.
+
+### Retired Experimental API Warnings
+
+| Diagnostic ID | Description | Location |
+| ------------- | ----------- | -------- |
+| `ASPIREMCP001` | MCP endpoint declaration via `WithMcpServer` is stable and no longer requires suppression. This declares an existing server for Aspire tooling discovery and proxying; it does not implement or configure an MCP transport. | [src/Aspire.Hosting/McpServerResourceBuilderExtensions.cs](../src/Aspire.Hosting/McpServerResourceBuilderExtensions.cs) |
 
 ## Analyzer Warnings
 
@@ -47,3 +70,4 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 | Diagnostic ID | Description | Location |
 | ------------- | ----------- | -------- |
 | `ASPIREAZUREFUNCTIONS001` | Directory-based Azure Functions app APIs are experimental pending API review and may change or be removed. Suppress this diagnostic to opt in. | [src/Aspire.Hosting.Azure.Functions](../src/Aspire.Hosting.Azure.Functions) |
+| `ASPIRERESOURCETRAITS001` | Resource trait and display-order APIs (`WithTrait`, `WithTags`, `WithDisplayOrder`, `TraitAnnotation`, `DisplayOrderAnnotation`) are experimental and may change or be removed. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/ResourceTraitBuilderExtensions.cs](../src/Aspire.Hosting/ResourceTraitBuilderExtensions.cs) |

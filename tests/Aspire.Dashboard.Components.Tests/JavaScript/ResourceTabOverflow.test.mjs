@@ -10,6 +10,11 @@ let frames;
 let observers;
 let registrationIds;
 let nav;
+let documentListeners;
+
+class FakeElement {
+    closest() { return this; }
+}
 
 function setGlobal(name, value) {
     globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
@@ -39,7 +44,21 @@ beforeEach(() => {
     });
     setGlobal("cancelAnimationFrame", id => frames.delete(id));
     setGlobal("window", new EventTarget());
-    setGlobal("document", { body: {}, querySelector: () => nav });
+    documentListeners = new Map();
+    setGlobal("Element", FakeElement);
+    setGlobal("document", {
+        body: {},
+        activeElement: null,
+        elements: new Map(),
+        querySelector: () => nav,
+        getElementById(id) { return this.elements.get(id) ?? null; },
+        addEventListener(type, listener) { documentListeners.set(type, listener); },
+        removeEventListener(type, listener) {
+            if (documentListeners.get(type) === listener) {
+                documentListeners.delete(type);
+            }
+        },
+    });
     setGlobal("getComputedStyle", () => ({ display: "flex" }));
     nav = {
         clientWidth: 350,
@@ -132,6 +151,66 @@ test("cleanup after DOM removal disconnects observers and cancels pending measur
     assert.equal(frames.size, 0);
     flushFrames();
     assert.deepEqual(previous.reports, []);
+});
+
+test("keyboard focus moves to the same tab when navigation re-creates the strip", () => {
+    const current = register();
+    const previous = Object.assign(new FakeElement(), { id: "tab-Console", isConnected: true });
+    documentListeners.get("focusin")({ target: previous });
+
+    // The navigation removes the focused tab with its strip, so focus falls to the page.
+    previous.isConnected = false;
+    document.activeElement = document.body;
+    const replacement = { id: "tab-Console", focus() { document.activeElement = this; } };
+    document.elements.set("tab-Console", replacement);
+    current.body.callback();
+
+    assert.equal(document.activeElement, replacement);
+});
+
+test("focus elsewhere isn't moved to a tab when the strip is re-created", () => {
+    const current = register();
+    const previous = Object.assign(new FakeElement(), { id: "tab-Console", isConnected: true });
+    documentListeners.get("focusin")({ target: previous });
+    const search = { id: "search" };
+    documentListeners.get("focusin")({ target: null });
+    previous.isConnected = false;
+    document.activeElement = search;
+    document.elements.set("tab-Console", { id: "tab-Console", focus() { document.activeElement = this; } });
+    current.body.callback();
+
+    assert.equal(document.activeElement, search);
+});
+
+test("cleanup removes the focus listener", () => {
+    const current = register();
+    assert.equal(documentListeners.has("focusin"), true);
+    unregisterTabOverflow(current.registrationId);
+    assert.equal(documentListeners.has("focusin"), false);
+});
+
+test("a plain click on a tab link is left to the layout, and a modified click to the browser", () => {
+    const current = register();
+    const tab = new FakeElement();
+    const click = options => {
+        const event = {
+            target: tab, button: 0, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, defaultPrevented: false,
+            preventDefault() { this.defaultPrevented = true; },
+            ...options,
+        };
+        documentListeners.get("click")(event);
+        return event.defaultPrevented;
+    };
+
+    assert.equal(click({}), true);
+    for (const modifier of ["ctrlKey", "shiftKey", "altKey", "metaKey"]) {
+        assert.equal(click({ [modifier]: true }), false, modifier);
+    }
+    assert.equal(click({ button: 1 }), false);
+    assert.equal(click({ target: Object.assign(new FakeElement(), { closest: () => null }) }), false);
+
+    unregisterTabOverflow(current.registrationId);
+    assert.equal(documentListeners.has("click"), false);
 });
 
 test("navigation that replaces only the tab list reconnects its content observer", () => {

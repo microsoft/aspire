@@ -23,15 +23,14 @@ public sealed class TemplateResourceAssertionsTests(TemplateResourceAssertionsTe
         new("Container", "cache", "Running", "registry.example.test/redis:latest")
     ];
 
-    // Templates and other app tests open the dashboard in its default density, compact, whose rows show the state
-    // as a dot, so the helper must read the state at every density.
+    // The helper must read the state at either density, including compact rows that show it as a dot.
     [Theory]
     [InlineData("/resources", true)]
     [InlineData("/resources", false)]
     [InlineData("/graph", true)]
     [InlineData("/graph", false)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task TemplateHelper_ValidatesSidebarAndDetailsWithoutCards(string path, bool useDefaultDensity)
+    public async Task TemplateHelper_ValidatesSidebarAndDetailsWithoutCards(string path, bool useCompactDensity)
     {
         await RunTestAsync(async page =>
         {
@@ -50,7 +49,7 @@ public sealed class TemplateResourceAssertionsTests(TemplateResourceAssertionsTe
 
             Assert.Equal(s_expectedResources.OrderBy(resource => resource.Name), rows.OrderBy(resource => resource.Name));
             Assert.Equal(originalUrl, page.Url);
-        }, useDefaultDensity);
+        }, useCompactDensity);
     }
 
     [Theory]

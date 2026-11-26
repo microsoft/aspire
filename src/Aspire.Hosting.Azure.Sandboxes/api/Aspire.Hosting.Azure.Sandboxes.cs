@@ -75,10 +75,8 @@ namespace Aspire.Hosting.Azure
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public ApplicationModel.ReferenceExpression GetEndpointPropertyExpression(ApplicationModel.EndpointReferenceExpression endpointReferenceExpression) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
     }
 

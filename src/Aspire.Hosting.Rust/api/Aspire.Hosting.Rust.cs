@@ -69,6 +69,8 @@ namespace Aspire.Hosting.Rust
     public partial class RustAppResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {
         public RustAppResource(string name, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public sealed partial class RustCargoArgsCallbackContext

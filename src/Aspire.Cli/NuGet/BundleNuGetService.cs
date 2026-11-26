@@ -87,6 +87,7 @@ internal sealed class BundleNuGetService : INuGetService
     private readonly ILogger<BundleNuGetService> _logger;
     private readonly INuGetClient _nuGetClient;
     private readonly IConfigurationService _configurationService;
+    private readonly ITemporaryStorage _temporaryStorage;
 
     internal Func<byte[]> SourceIdentityKeyFactory { get; init; }
         = static () => RandomNumberGenerator.GetBytes(NuGetSourceIdentity.KeySizeInBytes);
@@ -94,12 +95,16 @@ internal sealed class BundleNuGetService : INuGetService
     public BundleNuGetService(
         ILogger<BundleNuGetService> logger,
         INuGetClient nuGetClient,
-        IConfigurationService configurationService)
+        IConfigurationService configurationService,
+        ITemporaryStorage temporaryStorage)
     {
         _logger = logger;
         _nuGetClient = nuGetClient;
         _configurationService = configurationService;
+        _temporaryStorage = temporaryStorage;
     }
+
+    internal ITemporaryStorage TemporaryStorage => _temporaryStorage;
 
     public async Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
@@ -175,6 +180,8 @@ internal sealed class BundleNuGetService : INuGetService
         }
         catch (NuGetOperationException ex)
         {
+            // Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+            // Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
             var redactedOutput = PackageSourceRedactor.RedactOccurrences(ex.Output, sensitiveSources);
             _logger.LogError("Package restore failed");
             _logger.LogError("Package restore stderr: {Error}", redactedOutput);
@@ -371,16 +378,20 @@ internal sealed class BundleNuGetService : INuGetService
         (string Id, string Version) package,
         NuGetPackageOperationConfiguration configuration,
         string globalPackagesFolder,
+        bool bypassCaches,
         CancellationToken cancellationToken)
     {
-        var directory = Directory.CreateTempSubdirectory("aspire-package-acquisition-");
+        var directory = bypassCaches
+            ? DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.Combine(
+                globalPackagesFolder, $".sdk-acquisition-{Guid.NewGuid():N}"))
+            : _temporaryStorage.CreateTempSubdirectory("aspire-package-acquisition-");
         try
         {
             var settings = GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, protectIntegrationSources: false, cancellationToken);
             await _nuGetClient.AcquirePackageAsync(
                 package, directory.FullName,
                 configuration.EffectiveWorkingDirectory.FullName, globalPackagesFolder,
-                settings.SensitiveSourceValues, cancellationToken);
+                settings.SensitiveSourceValues, bypassCaches, cancellationToken);
         }
         catch (NuGetOperationException exception)
         {
@@ -513,6 +524,7 @@ internal sealed class BundleNuGetService : INuGetService
         overlay = overlay with { GlobalPackagesFolder = globalPackagesFolder };
         return parentDirectory is null
             ? await TemporaryNuGetConfigFile.CreateAsync(
+                _temporaryStorage,
                 path => WriteNuGetConfig(overlay, path, cancellationToken)).ConfigureAwait(false)
             : await TemporaryNuGetConfigFile.CreateAsync(
                 parentDirectory,

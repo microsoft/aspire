@@ -81,26 +81,6 @@ public partial class DashboardRunSelect : ComponentBase
 
     private string FormatRunDate(DateTimeOffset startedAtUtc) => FormatHelpers.FormatDateTime(TimeProvider, startedAtUtc.UtcDateTime);
 
-    internal static string FormatRunAge(DateTimeOffset startedAtUtc, DateTimeOffset utcNow, IStringLocalizer<LayoutResources> loc)
-    {
-        // Clamp so a start time slightly in the future (clock skew between processes) reads as "a moment ago".
-        var age = utcNow - startedAtUtc;
-        if (age < TimeSpan.Zero)
-        {
-            age = TimeSpan.Zero;
-        }
-
-        return age switch
-        {
-            { TotalMinutes: < 1 } => loc[nameof(LayoutResources.DashboardRunSelectMomentAgo)],
-            { TotalMinutes: < 2 } => loc[nameof(LayoutResources.DashboardRunSelectMinuteAgo)],
-            { TotalHours: < 1 } => loc[nameof(LayoutResources.DashboardRunSelectMinutesAgo), (int)age.TotalMinutes],
-            { TotalDays: < 1 } => loc[nameof(LayoutResources.DashboardRunSelectHoursAgo), (int)age.TotalHours],
-            { TotalDays: < 2 } => loc[nameof(LayoutResources.DashboardRunSelectDayAgo)],
-            _ => loc[nameof(LayoutResources.DashboardRunSelectDaysAgo), (int)age.TotalDays]
-        };
-    }
-
     internal static string? FormatRunDuration(DashboardRunDescriptor run)
     {
         // Runs that didn't shut down cleanly have no end time, so their duration is unknown.

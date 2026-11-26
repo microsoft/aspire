@@ -28,9 +28,6 @@
   "thirdPartyNotices": "https://aka.ms/aspire/third-party-notices",
   "groupIdentity": "Aspire.Empty",
   "guids": [
-    "F98A6C4E-E01C-44BB-BCC9-4C23F1CD09CD",
-    "8CD1957F-C0E5-454E-8BDC-88F84DD58303",
-    "1C1883BC-2DC4-4D49-82A6-9909F00D385D",
     "98048C9C-BF28-46BA-A98E-63767EE5E3A8"
   ],
   "sources": [
@@ -41,7 +38,6 @@
         {
           "condition": "(hostIdentifier != \"dotnetcli\" && hostIdentifier != \"dotnetcli-preview\")",
           "exclude": [
-            "*.sln",
             "*.slnx"
           ]
         }
@@ -66,12 +62,24 @@
       "replaces": "net10.0",
       "defaultValue": "net10.0"
     },
+    "HostIdentifier": {
+      "type": "parameter",
+      "datatype": "string"
+    },
     "AspireVersion": {
       "type": "parameter",
       "description": "The version of Aspire to use.",
       "displayName": "Aspire version",
-      "datatype": "string",
-      "defaultValue": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!"
+      "datatype": "choice",
+      "choices": [
+        {
+          "choice": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
+          "displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
+          "description": "Chooses Aspire !!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!"
+        }
+      ],
+      "defaultValue": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
+      "isEnabled": "(HostIdentifier != \"aspirecli\")"
     },
     "hostIdentifier": {
       "type": "bind",
@@ -225,6 +233,13 @@
       "defaultValue": "false",
       "description": "Whether to turn off HTTPS."
     },
+    "XmlEncodedProjectName": {
+      "type": "derived",
+      "datatype": "string",
+      "replaces": "XmlEncodedProjectName",
+      "valueSource": "name",
+      "valueTransform": "xmlEncode"
+    },
     "LocalhostTld": {
       "type": "parameter",
       "datatype": "bool",
@@ -274,7 +289,7 @@
   },
   "primaryOutputs": [
     {
-      "path": "AspireApplication.1.sln",
+      "path": "AspireApplication.1.slnx",
       "condition": "(hostIdentifier == \"dotnetcli\" || hostIdentifier == \"dotnetcli-preview\")"
     },
     {

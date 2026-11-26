@@ -10,6 +10,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using NuGet.Commands;
 using NuGet.Configuration;
@@ -58,6 +59,7 @@ internal interface INuGetClient
         string workingDirectory,
         string globalPackagesFolder,
         IReadOnlyList<string> sensitiveSources,
+        bool bypassCaches,
         CancellationToken cancellationToken);
 
     Task WriteManifestAsync(
@@ -140,6 +142,7 @@ internal sealed class NuGetOperationException(string output)
 internal sealed class NuGetClient(
     IFeatures features,
     IEnvironment environment,
+    ITemporaryStorage temporaryStorage,
     ILogger<NuGetClient> logger) : INuGetClient
 {
     private const string RuntimeIdentifierGraphResourceName = "Aspire.Cli.RuntimeIdentifierGraph.json";
@@ -178,7 +181,7 @@ internal sealed class NuGetClient(
         IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
         => RestoreAsync(packages, framework, runtimeIdentifier, outputPath, sources, nugetConfigPaths,
-            workingDirectory, globalPackagesFolderOverride, sensitiveSources, acquireOnly: false, cancellationToken);
+            workingDirectory, globalPackagesFolderOverride, sensitiveSources, acquireOnly: false, bypassCaches: false, cancellationToken);
 
     public Task AcquirePackageAsync(
         (string Id, string Version) package,
@@ -186,6 +189,7 @@ internal sealed class NuGetClient(
         string workingDirectory,
         string globalPackagesFolder,
         IReadOnlyList<string> sensitiveSources,
+        bool bypassCaches,
         CancellationToken cancellationToken)
         // Like MSBuild's SDK resolver, exclude assets and use an exact version. The framework
         // only satisfies NuGet's package-spec requirement; SDK acquisition must not depend on
@@ -193,7 +197,7 @@ internal sealed class NuGetClient(
         // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/Microsoft.Build.NuGetSdkResolver/RestoreRunnerEx.cs
         => RestoreAsync([package], FrameworkConstants.CommonFrameworks.NetStandard.GetShortFolderName(),
             runtimeIdentifier: null, outputPath, sources: [], nugetConfigPaths: [],
-            workingDirectory, globalPackagesFolder, sensitiveSources, acquireOnly: true, cancellationToken);
+            workingDirectory, globalPackagesFolder, sensitiveSources, acquireOnly: true, bypassCaches, cancellationToken);
 
     private async Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
@@ -206,6 +210,7 @@ internal sealed class NuGetClient(
         string? globalPackagesFolderOverride,
         IReadOnlyList<string> sensitiveSources,
         bool acquireOnly,
+        bool bypassCaches,
         CancellationToken cancellationToken)
     {
         using var operation = BeginOperation(sensitiveSources);
@@ -236,7 +241,7 @@ internal sealed class NuGetClient(
                 packageSources,
                 settings,
                 globalPackagesFolderOverride,
-                acquireOnly);
+                acquireOnly, bypassCaches);
 
             var dgSpec = new DependencyGraphSpec();
             dgSpec.AddProject(packageSpec);
@@ -245,7 +250,11 @@ internal sealed class NuGetClient(
             var providerCache = new RestoreCommandProvidersCache();
             var dgProvider = new DependencyGraphSpecRequestProvider(providerCache, dgSpec, settings);
 
-            using var cacheContext = new SourceCacheContext();
+            using var cacheContext = new SourceCacheContext
+            {
+                NoCache = bypassCaches,
+                DirectDownload = bypassCaches
+            };
             var restoreArgs = new RestoreArgs
             {
                 CacheContext = cacheContext,
@@ -256,7 +265,7 @@ internal sealed class NuGetClient(
                 MachineWideSettings = machineWideSettings,
             };
 
-            NativeAotNuGetTrustStore.Initialize(output, _diagnosticLogger, environment);
+            NativeAotNuGetTrustStore.Initialize(output, _diagnosticLogger, environment, temporaryStorage);
 
             var results = await RestoreRunner.RunAsync(restoreArgs, cancellationToken).ConfigureAwait(false);
             var summary = results.Count > 0 ? results[0] : null;
@@ -299,7 +308,8 @@ internal sealed class NuGetClient(
         List<PackageSource> sources,
         ISettings settings,
         string? globalPackagesFolderOverride,
-        bool acquireOnly)
+        bool acquireOnly,
+        bool bypassCaches)
     {
         var projectName = "AspireRestore";
         var projectPath = Path.Combine(outputPath, "project.json");
@@ -350,7 +360,7 @@ internal sealed class NuGetClient(
         {
             restoreMetadata.Sources.Add(source);
         }
-        if (acquireOnly)
+        if (acquireOnly && !bypassCaches)
         {
             restoreMetadata.FallbackFolders = pathContext.FallbackPackageFolders.ToList();
         }
@@ -1265,6 +1275,8 @@ internal sealed class NuGetClient(
     /// The helper's stderr was the only diagnostic channel back to the CLI: the CLI logged it and put it into the
     /// exception message when the operation failed. This buffers the same text for <see cref="NuGetOperationException"/>
     /// and also streams each entry to the debug log, where the CLI logged successful operations' stderr.
+    /// Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+    /// Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
     /// </remarks>
     private sealed class NuGetOperationOutput(
         ILogger logger,
@@ -1392,6 +1404,8 @@ internal sealed class NuGetClient(
                 sensitiveSources = _sensitiveSources;
             }
 
+            // Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+            // Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
             logger.LogDebug(
                 "{Message}",
                 PackageSourceRedactor.RedactOccurrences(data, sensitiveSources));
@@ -1461,7 +1475,7 @@ internal sealed class NuGetClient(
         private static readonly object s_lock = new();
         private static bool s_initialized;
 
-        public static void Initialize(NuGetOperationOutput output, INuGetLogger diagnosticLogger, IEnvironment environment)
+        public static void Initialize(NuGetOperationOutput output, INuGetLogger diagnosticLogger, IEnvironment environment, ITemporaryStorage temporaryStorage)
         {
             if (s_initialized ||
                 !environment.IsLinux() ||
@@ -1481,7 +1495,7 @@ internal sealed class NuGetClient(
 
                 try
                 {
-                    InitializeFromEmbeddedResources(diagnosticLogger);
+                    InitializeFromEmbeddedResources(diagnosticLogger, temporaryStorage);
                     s_initialized = true;
                 }
                 catch (Exception ex)
@@ -1493,10 +1507,10 @@ internal sealed class NuGetClient(
             }
         }
 
-        private static void InitializeFromEmbeddedResources(INuGetLogger diagnosticLogger)
+        private static void InitializeFromEmbeddedResources(INuGetLogger diagnosticLogger, ITemporaryStorage temporaryStorage)
         {
             var previousSdkRoot = AppContext.GetData("Microsoft.DotNet.Sdk.Root");
-            var rootDirectory = Directory.CreateTempSubdirectory("aspire-nuget-trust-");
+            var rootDirectory = temporaryStorage.CreateTempSubdirectory("aspire-nuget-trust-");
             try
             {
                 var trustedRootsDirectory = Directory.CreateDirectory(

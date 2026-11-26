@@ -3264,9 +3264,9 @@ function checkPatchCommits(patchText, updates = null, readBaseTexts) {
             reasons.push('unexpected-commit-header');
             continue;
         }
-        // gh-aw v0.89.17 embeds this transport annotation after the mbox separator.
+        // gh-aw v1.2.2 embeds this transport annotation after the mbox separator.
         // Its value is a SHA only, never a free-text extension header.
-        // https://github.com/github/gh-aw/blob/v0.89.17/actions/setup/js/generate_git_patch.cjs
+        // https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/generate_git_patch.cjs
         if (headers.has('x-gh-aw-base-commit') && !/^[0-9a-f]{40}$/.test(headers.get('x-gh-aw-base-commit'))) {
             reasons.push('invalid-base-commit');
         }
@@ -3443,7 +3443,7 @@ function collectReportCounts(alerts, codeScanning) {
 }
 
 // Safe-output types whose agent-authored text the conclusion job would publish in issues
-// (`missing_tool`, `missing_data`, `report_incomplete`) have no fixed template, so only
+// (`report_missing_tool`, `report_missing_data`, `report_incomplete`) have no fixed template, so only
 // these types survive the scrub.
 const PUBLIC_OUTPUT_TYPES = new Set(['create_pull_request', 'push_to_pull_request_branch', 'approve_dependabot_pr', 'noop']);
 
@@ -3465,7 +3465,7 @@ function projectPublicOutput(item) {
     if (item.type === 'approve_dependabot_pr') {
         valid &&= /^[0-9a-f]{40}$/.test(output.head_sha);
     } else if (item.type === 'create_pull_request' || item.type === 'push_to_pull_request_branch') {
-        // gh-aw v0.89.17 adds transport fields such as head_repo, base_branch, and
+        // gh-aw v1.2.2 adds transport fields such as head_repo, base_branch, and
         // base_commit. Keep the fields needed to apply the checked patch, but not
         // unchecked tool arguments or local checkout paths such as repo_cwd.
         const metadata = {
@@ -3649,7 +3649,7 @@ async function scrubAgentOutputs({ core, github, context, fs, env, workDir, read
     };
     // am transport has two canonical names (default and repo-scoped). Neither opaque
     // bundles nor agent-chosen filenames may become public artifact carriers.
-    // https://github.com/github/gh-aw/blob/v0.89.17/actions/setup/js/git_patch_utils.cjs
+    // https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/git_patch_utils.cjs
     const allowedArtifacts = new Set(['aw-auto-sec-security-updates.patch', 'aw-microsoft-aspire-auto-sec-security-updates.patch']);
     if (artifactNames.some(name => !allowedArtifacts.has(name) || !fs.lstatSync(path.join(workDir, name)).isFile())) {
         return reject([{ source: 'patch-artifacts', reason: 'unsupported-artifact' }]);

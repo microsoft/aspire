@@ -2212,11 +2212,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Word wrap.
+        ///   Looks up a localized string similar to Disable word wrap.
         /// </summary>
-        public static string TextVisualizerWordWrap {
+        public static string TextVisualizerWordWrapOff {
             get {
-                return ResourceManager.GetString("TextVisualizerWordWrap", resourceCulture);
+                return ResourceManager.GetString("TextVisualizerWordWrapOff", resourceCulture);
             }
         }
     }

@@ -95,217 +95,217 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="DashboardFeedbackBack">
         <source>Back</source>
-        <target state="new">Back</target>
+        <target state="translated">Atrás</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackContinue">
         <source>Continue</source>
-        <target state="new">Continue</target>
+        <target state="translated">Continuar</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopied">
         <source>Feedback copied to the clipboard.</source>
-        <target state="new">Feedback copied to the clipboard.</target>
+        <target state="translated">Comentarios copiados en el Portapapeles.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopiedAndOpened">
         <source>Feedback copied. Paste it into the GitHub discussion to share it.</source>
-        <target state="new">Feedback copied. Paste it into the GitHub discussion to share it.</target>
+        <target state="translated">Comentarios copiados. Péguelo en la discusión de GitHub para compartirlo.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopy">
         <source>Copy feedback</source>
-        <target state="new">Copy feedback</target>
+        <target state="translated">Copiar comentarios</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyAndOpen">
         <source>Copy and open discussion</source>
-        <target state="new">Copy and open discussion</target>
+        <target state="translated">Copiar y abrir discusión</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyFailed">
         <source>The clipboard could not be accessed. Copy the preview manually.</source>
-        <target state="new">The clipboard could not be accessed. Copy the preview manually.</target>
+        <target state="translated">No se pudo tener acceso al Portapapeles. Copie la vista previa manualmente.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyOpenAndSwitch">
         <source>Open new discussion and switch</source>
-        <target state="new">Open new discussion and switch</target>
+        <target state="translated">Abrir nueva discusión y cambiar</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDescription">
         <source>Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</source>
-        <target state="new">Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</target>
+        <target state="translated">Sus respuestas permanecen en este explorador hasta que las copie. GitHub se abre en una nueva pestaña para que pueda revisar y enviar los comentarios usted mismo.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDialogTitle">
         <source>Share dashboard feedback</source>
-        <target state="new">Share dashboard feedback</target>
+        <target state="translated">Compartir comentarios del panel</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDifficultiesLabel">
         <source>What was harder or less clear than in the previous dashboard?</source>
-        <target state="new">What was harder or less clear than in the previous dashboard?</target>
+        <target state="translated">¿Qué fue más difícil o menos claro que en el panel anterior?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationLabel">
         <source>How long have you used the new dashboard?</source>
-        <target state="new">How long have you used the new dashboard?</target>
+        <target state="translated">¿Cuánto tiempo ha usado el nuevo panel?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationLessThanOneHour">
         <source>Less than an hour</source>
-        <target state="new">Less than an hour</target>
+        <target state="translated">Menos de una hora</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationMoreThanOneWeek">
         <source>More than a week</source>
-        <target state="new">More than a week</target>
+        <target state="translated">Más de una semana</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationNotSpecified">
         <source>I'd rather not say</source>
-        <target state="new">I'd rather not say</target>
+        <target state="translated">Prefiero no decirlo</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationOneDay">
         <source>About a day</source>
-        <target state="new">About a day</target>
+        <target state="translated">Acerca de un día</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationTwoToSevenDays">
         <source>2 to 7 days</source>
-        <target state="new">2 to 7 days</target>
+        <target state="translated">De 2 a 7 días</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackMarkdownTitle">
         <source>Dashboard experience feedback</source>
-        <target state="new">Dashboard experience feedback</target>
+        <target state="translated">Comentarios sobre la experiencia del panel</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackMissingLabel">
         <source>What is missing from the new dashboard?</source>
-        <target state="new">What is missing from the new dashboard?</target>
+        <target state="translated">¿Qué falta en el nuevo panel?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeAppHost">
         <source>With an AppHost</source>
-        <target state="new">With an AppHost</target>
+        <target state="translated">Con un AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeLabel">
         <source>How do you run the dashboard?</source>
-        <target state="new">How do you run the dashboard?</target>
+        <target state="translated">¿Cómo se ejecuta el panel?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeStandalone">
         <source>Standalone, for telemetry only</source>
-        <target state="new">Standalone, for telemetry only</target>
+        <target state="translated">Independiente, solo para telemetría</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackOtherPlaceholder">
         <source>Tell us what happened</source>
-        <target state="new">Tell us what happened</target>
+        <target state="translated">Díganos qué ha ocurrido</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPreviewDisclosure">
         <source>Preview copied feedback</source>
-        <target state="new">Preview copied feedback</target>
+        <target state="translated">Vista previa de los comentarios copiados</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPreviewLabel">
         <source>Your feedback</source>
-        <target state="new">Your feedback</target>
+        <target state="translated">Sus comentarios</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptIgnore">
         <source>Don't ask again</source>
-        <target state="new">Don't ask again</target>
+        <target state="translated">No volver a preguntar</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptMessage">
         <source>We'd love your feedback on the new experience.</source>
-        <target state="new">We'd love your feedback on the new experience.</target>
+        <target state="translated">Nos encantaría conocer sus comentarios sobre la nueva experiencia.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptShare">
         <source>Share feedback</source>
-        <target state="new">Share feedback</target>
+        <target state="translated">Compartir comentarios</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptTitle">
         <source>Welcome to the new Aspire dashboard!</source>
-        <target state="new">Welcome to the new Aspire dashboard!</target>
+        <target state="translated">Le damos la bienvenida al nuevo panel de Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
-        <target state="new">I couldn't find my application URLs</target>
+        <target state="translated">No pude encontrar las direcciones URL de mi aplicación</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonMissingFeature">
         <source>A feature I need is missing</source>
-        <target state="new">A feature I need is missing</target>
+        <target state="translated">Falta una característica que necesito</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonNavigation">
         <source>It was hard to find my way around</source>
-        <target state="new">It was hard to find my way around</target>
+        <target state="translated">Me ha resultado difícil encontrar mi camino</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonOther">
         <source>Another reason</source>
-        <target state="new">Another reason</target>
+        <target state="translated">Otro motivo</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonPerformanceOrAccessibility">
         <source>It was slow or hard to use with assistive technology</source>
-        <target state="new">It was slow or hard to use with assistive technology</target>
+        <target state="translated">Fue lento o difícil de usar con tecnología de asistencia</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonTelemetryWorkflow">
         <source>The telemetry workflow didn't work for me</source>
-        <target state="new">The telemetry workflow didn't work for me</target>
+        <target state="translated">El flujo de trabajo de telemetría no funcionó para mí</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonTerminals">
         <source>The terminals didn't work for me</source>
-        <target state="new">The terminals didn't work for me</target>
+        <target state="translated">Los terminales no funcionaron para mí</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonsLabel">
         <source>What made you go back? Select all that apply.</source>
-        <target state="new">What made you go back? Select all that apply.</target>
+        <target state="translated">¿Qué le hizo volver atrás? Seleccione todo lo que sea aplicable.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackSkipAndSwitch">
         <source>Skip and switch</source>
-        <target state="new">Skip and switch</target>
+        <target state="translated">Omitir y cambiar</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepOneTitle">
         <source>Why are you going back to the previous dashboard?</source>
-        <target state="new">Why are you going back to the previous dashboard?</target>
+        <target state="translated">¿Por qué va a volver al panel anterior?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepProgress">
         <source>Step {0} of 2</source>
-        <target state="new">Step {0} of 2</target>
+        <target state="translated">Paso {0} de 2</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepTwoDescription">
         <source>Both questions are optional, but your answers help us decide what to improve.</source>
-        <target state="new">Both questions are optional, but your answers help us decide what to improve.</target>
+        <target state="translated">Ambas preguntas son opcionales, pero sus respuestas nos ayudan a decidir qué mejorar.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepTwoTitle">
         <source>Is there anything else you want to tell us?</source>
-        <target state="new">Is there anything else you want to tell us?</target>
+        <target state="translated">¿Hay algo más que quiera decirnos?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackSwitchToLegacy">
         <source>Switch to previous dashboard</source>
-        <target state="new">Switch to previous dashboard</target>
+        <target state="translated">Cambiar al panel anterior</target>
         <note />
       </trans-unit>
       <trans-unit id="DialogCloseButtonText">
@@ -630,22 +630,22 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="HelpDialogAspireDocumentationDescription">
         <source>Get started with Aspire, its integrations and deployment.</source>
-        <target state="new">Get started with Aspire, its integrations and deployment.</target>
+        <target state="translated">Empiece a trabajar con Aspire, sus integraciones e implementaciones.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogAspireDocumentationTitle">
         <source>Aspire documentation</source>
-        <target state="new">Aspire documentation</target>
+        <target state="translated">Documentación de Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryNavigation">
         <source>General</source>
-        <target state="needs-review-translation">Navegación en todo el sitio</target>
+        <target state="translated">General</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPageNavigation">
         <source>Dashboard navigation</source>
-        <target state="needs-review-translation">Navegación de páginas</target>
+        <target state="translated">Navegación del panel</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPanels">
@@ -655,37 +655,37 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="HelpDialogCategoryResourceGraph">
         <source>Resource graph</source>
-        <target state="new">Resource graph</target>
+        <target state="translated">Gráfico de recurso</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryTelemetry">
         <source>Logs &amp; telemetry</source>
-        <target state="new">Logs &amp; telemetry</target>
+        <target state="translated">Registros y telemetría</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCommunityHeading">
         <source>Community and support</source>
-        <target state="new">Community and support</target>
+        <target state="translated">Comunidad y soporte técnico</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardDocumentationDescription">
         <source>Guides and reference for using the Aspire dashboard.</source>
-        <target state="new">Guides and reference for using the Aspire dashboard.</target>
+        <target state="translated">Guías y referencia para usar el panel de Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardFeedbackDescription">
         <source>Share feedback about the evolving dashboard experience.</source>
-        <target state="new">Share feedback about the evolving dashboard experience.</target>
+        <target state="translated">Comparta comentarios sobre la experiencia en evolución del panel.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardFeedbackTitle">
         <source>Dashboard feedback</source>
-        <target state="new">Dashboard feedback</target>
+        <target state="translated">Comentarios del panel</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardVersion">
         <source>Aspire dashboard version {0}</source>
-        <target state="new">Aspire dashboard version {0}</target>
+        <target state="translated">Versión del panel de Información de Aspire {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDecreasePanelSize">
@@ -695,27 +695,27 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="HelpDialogDiscordDescription">
         <source>Chat with the Aspire team and community.</source>
-        <target state="new">Chat with the Aspire team and community.</target>
+        <target state="translated">Chatee con el equipo de Aspire y la comunidad.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDiscordTitle">
         <source>Discord</source>
-        <target state="new">Discord</target>
+        <target state="translated">Discord</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDocumentationTab">
         <source>Documentation</source>
-        <target state="new">Documentation</target>
+        <target state="translated">Documentación</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameDescription">
         <source>In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</source>
-        <target state="new">In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</target>
+        <target state="translated">En el gráfico de recurso, seleccione Reproducir Aspire Outage o ponga el foco en el gráfico y pulse O para jugar a un juego protagonizado por sus recursos. Pulse Esc para volver al gráfico.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameTitle">
         <source>Aspire Outage</source>
-        <target state="new">Aspire Outage</target>
+        <target state="translated">Aspire Outage</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
@@ -725,62 +725,62 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">
         <source>Console logs (all resources)</source>
-        <target state="needs-review-translation">Ir a Registros de consola</target>
+        <target state="translated">Registros de consola (todos los recursos)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToExtensions">
         <source>Extensions</source>
-        <target state="new">Extensions</target>
+        <target state="translated">Extensiones</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToGraph">
         <source>Resource graph</source>
-        <target state="new">Resource graph</target>
+        <target state="translated">Resource Graph</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToHelp">
         <source>Keyboard shortcuts</source>
-        <target state="needs-review-translation">Ir a Ayuda</target>
+        <target state="translated">Métodos abreviados de teclado</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToMetrics">
         <source>Metrics</source>
-        <target state="needs-review-translation">Ir a Métricas</target>
+        <target state="translated">Métricas</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToParameters">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">Parámetros</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToResources">
         <source>Resources</source>
-        <target state="needs-review-translation">Ir a Recursos</target>
+        <target state="translated">Recursos</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToSettings">
         <source>Settings</source>
-        <target state="needs-review-translation">Ir a Configuración</target>
+        <target state="translated">Configuración</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToStructuredLogs">
         <source>Structured logs</source>
-        <target state="needs-review-translation">Ir a Registros estructurados</target>
+        <target state="translated">Registros estructurados</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTelemetrySources">
         <source>Telemetry sources</source>
-        <target state="new">Telemetry sources</target>
+        <target state="translated">Orígenes de telemetría</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
-        <target state="needs-review-translation">Ir a terminales</target>
+        <target state="translated">Terminales</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
         <source>Traces</source>
-        <target state="needs-review-translation">Ir a Seguimientos</target>
+        <target state="translated">Trazas</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogIncreasePanelSize">
@@ -795,32 +795,32 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="HelpDialogLearnHeading">
         <source>Learn</source>
-        <target state="new">Learn</target>
+        <target state="translated">Aprender</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogOpensInNewTab">
         <source>Opens in a new tab</source>
-        <target state="new">Opens in a new tab</target>
+        <target state="translated">Se abre en una nueva pestaña</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogPlayGame">
         <source>Play Aspire Outage, when the graph has focus</source>
-        <target state="new">Play Aspire Outage, when the graph has focus</target>
+        <target state="translated">Juegue a Aspire Outage cuando el gráfico tenga el foco</target>
         <note>Aspire Outage is the name of a game.</note>
       </trans-unit>
       <trans-unit id="HelpDialogRepoDescription">
         <source>Source code, releases and issues on GitHub.</source>
-        <target state="new">Source code, releases and issues on GitHub.</target>
+        <target state="translated">Código fuente, versiones y problemas en GitHub.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogReportIssueDescription">
         <source>Found a bug or have an idea? Open an issue on GitHub.</source>
-        <target state="new">Found a bug or have an idea? Open an issue on GitHub.</target>
+        <target state="translated">¿Ha encontrado un error o tiene una idea? Abrir una incidencia en GitHub.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogReportIssueTitle">
         <source>Report an issue</source>
-        <target state="new">Report an issue</target>
+        <target state="translated">Informar de un problema</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogResetPanelSize">
@@ -830,7 +830,7 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="HelpDialogShortcutsHint">
         <source>Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</source>
-        <target state="new">Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</target>
+        <target state="translated">Use accesos directos fuera de los campos de texto y la entrada del terminal. Los accesos directos de panel se aplican a un panel de detalles abierto. Presione {0} en un terminal para enfocar sus controles antes de usar los accesos directos del panel.</target>
         <note>{0} is the F6 key, rendered as a keyboard key.</note>
       </trans-unit>
       <trans-unit id="HelpDialogTogglePanelOpen">
@@ -845,7 +845,7 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="HelpDialogToggleTerminalDock">
         <source>Toggle terminal dock</source>
-        <target state="needs-review-translation">Alternar terminal</target>
+        <target state="translated">Alternar base de terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionButtonCancel">
@@ -985,7 +985,7 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="SettingsDialogAppearanceGroup">
         <source>Appearance</source>
-        <target state="new">Appearance</target>
+        <target state="translated">Apariencia</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDarkTheme">
@@ -995,27 +995,27 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperience">
         <source>Dashboard experience</source>
-        <target state="new">Dashboard experience</target>
+        <target state="translated">Experiencia del panel</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceDescription">
         <source>Choose which dashboard experience to use.</source>
-        <target state="new">Choose which dashboard experience to use.</target>
+        <target state="translated">Elija qué experiencia de panel usar.</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceNew">
         <source>New dashboard</source>
-        <target state="new">New dashboard</target>
+        <target state="translated">Nuevo panel</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperiencePrevious">
         <source>Previous dashboard</source>
-        <target state="new">Previous dashboard</target>
+        <target state="translated">Panel anterior</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceSelectorLabel">
         <source>Experience</source>
-        <target state="new">Experience</target>
+        <target state="translated">Experiencia</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardLogsAndTelemetry">
@@ -1025,7 +1025,7 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="SettingsDialogDataAndTelemetryGroup">
         <source>Data and telemetry</source>
-        <target state="new">Data and telemetry</target>
+        <target state="translated">Datos y telemetría</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDotNetRuntimeVersion">
@@ -1035,17 +1035,17 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="SettingsDialogExperienceGroup">
         <source>Dashboard experience</source>
-        <target state="new">Dashboard experience</target>
+        <target state="translated">Experiencia del panel</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverview">
         <source>Overview layout</source>
-        <target state="new">Overview layout</target>
+        <target state="translated">Diseño de información general</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
         <source>Summary</source>
-        <target state="new">Summary</target>
+        <target state="translated">Resumen</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguage">
@@ -1055,7 +1055,7 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="SettingsDialogLanguageAndTimeGroup">
         <source>Language and time</source>
-        <target state="new">Language and time</target>
+        <target state="translated">Idioma y hora</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguagePageReloads">
@@ -1070,17 +1070,17 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensity">
         <source>Resource list density</source>
-        <target state="new">Resource list density</target>
+        <target state="translated">Densidad de la lista de recursos</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensityComfortable">
         <source>Comfortable</source>
-        <target state="new">Comfortable</target>
+        <target state="translated">Cómodo</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensityCompact">
         <source>Compact</source>
-        <target state="new">Compact</target>
+        <target state="translated">Compacto</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
@@ -1285,9 +1285,9 @@ Configure la aplicación para exportar registros, seguimientos y métricas media
         <target state="translated">Seleccionar formato</target>
         <note />
       </trans-unit>
-      <trans-unit id="TextVisualizerWordWrap">
-        <source>Word wrap</source>
-        <target state="new">Word wrap</target>
+      <trans-unit id="TextVisualizerWordWrapOff">
+        <source>Disable word wrap</source>
+        <target state="translated">Deshabilitar el ajuste automático de línea</target>
         <note />
       </trans-unit>
     </body>

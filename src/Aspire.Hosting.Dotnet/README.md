@@ -252,22 +252,27 @@ guidance when it detects this cross-operating-system failure.
 
 Set `Destination` to `ContainerImageDestination.Archive` in `WithContainerBuildOptions` to save an SDK-built
 image as an archive. An archive-only SDK build does not require Docker or Podman to be running; layering files
-from another container still requires a container runtime. Docker supports layered archives in Docker format
-because the layering build must use Docker's local image store before `docker image save` exports the result.
-Use Podman when container-file layering must produce an OCI-format archive.
+from another container still requires a container runtime. With Docker, the layering build uses Docker's local
+image store and `docker image save` exports the result. Docker Engine 25 or later is required for
+`ContainerImageFormat.Oci`, because older engines do not write an OCI image layout; Podman supports both formats.
 
 Layered archive publishing uses private temporary image tags and does not overwrite or delete an existing
 local image with the configured destination name and tag. The archive still contains that configured image
 identity. Temporary images are cleaned up after publishing, including when a build fails or is canceled.
 
 For .NET SDK publishing, a non-existent `OutputPath` with any filename extension is an explicit archive
-filename. This includes custom extensions such as `image.custom`, not only `.tar` or `.tar.gz`. A path without
-an extension is interpreted as a directory. End a dotted directory path with the platform's directory separator
-to make its intent explicit, for example `artifacts.v1\` on Windows. Prefer an explicit archive filename when
-configuring output consumed by other tools.
+filename. This includes custom extensions such as `image.custom`, not only `.tar`. A path without an extension,
+a path ending in the platform's directory separator, or an existing directory is a directory, and the archive is
+written to `<LocalImageName>.tar` in that directory. A registry-qualified name is flattened into one file name;
+for example, `team/program` is written to `team-program.tar`. Prefer an explicit archive filename when configuring
+output consumed by other tools.
 
-These are the .NET SDK's path conventions; Dockerfile/container-runtime publishing has its own output
-conventions. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
+Archives are always written as uncompressed tar files, matching the .NET SDK. A `.tar.gz` or `.tgz` filename
+does not compress the archive, and Aspire logs a warning when one is configured. The filename, location, and
+format are the same whether or not `PublishWithContainerFiles` layers files into the image.
+
+These conventions are based on the .NET SDK's, but Aspire chooses the directory filename itself.
+Dockerfile/container-runtime publishing has its own output conventions. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
 
 ### Other publishing options
 

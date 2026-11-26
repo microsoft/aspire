@@ -2,6 +2,7 @@
   "createNuGetConfig": true,
   "symbolInfo": {
     "Framework": { "isHidden": true },
+    "HostIdentifier": { "isHidden": true },
     "AspireVersion": { "isHidden": true },
     "appHostHttpPort": { "isHidden": true },
     "appHostHttpsPort": { "isHidden": true },

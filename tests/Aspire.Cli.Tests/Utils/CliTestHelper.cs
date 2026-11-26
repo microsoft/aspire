@@ -245,6 +245,7 @@ internal static class CliTestHelper
         // pattern as production wiring in Program.cs.
         services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         services.AddSingleton<IEnvironment, TestEnvironment>();
+        services.AddSingleton<Aspire.Shared.ITemporaryStorage, Aspire.Shared.TemporaryStorage>();
         services.AddSingleton<ProfileCaptureState>();
         services.AddSingleton<ProfileCaptureService>();
 
@@ -536,7 +537,7 @@ internal sealed class CliServiceCollectionTestOptions
         var cache = serviceProvider.GetRequiredService<IMemoryCache>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var fallbackParser = serviceProvider.GetRequiredService<FallbackProjectParser>();
-        return new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, serviceProvider.GetRequiredService<BundleNuGetService>());
+        return new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, serviceProvider.GetRequiredService<BundleNuGetService>(), serviceProvider.GetRequiredService<FileLoggerProvider>());
     };
 
     public Func<IServiceProvider, ICliHostEnvironment> CliHostEnvironmentFactory { get; set; } = (IServiceProvider serviceProvider) =>

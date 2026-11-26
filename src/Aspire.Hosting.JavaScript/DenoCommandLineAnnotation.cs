@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDENO001 // Deno APIs use this implementation type internally
-
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.JavaScript;
@@ -26,7 +23,6 @@ internal enum DenoCommandMode
 /// <summary>
 /// The Deno inspector flavor.
 /// </summary>
-[Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum DenoInspectMode
 {
     /// <summary><c>--inspect</c> — attach a debugger; execution starts immediately.</summary>
@@ -42,7 +38,6 @@ public enum DenoInspectMode
 /// <summary>
 /// Controls how Deno manages a local <c>node_modules</c> directory.
 /// </summary>
-[Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum DenoNodeModulesDirMode
 {
     /// <summary>Do not use a local <c>node_modules</c> directory.</summary>
@@ -58,7 +53,6 @@ public enum DenoNodeModulesDirMode
 /// <summary>
 /// A granular Deno permission grant/denial (for example <c>--allow-net</c> or <c>--deny-read</c>).
 /// </summary>
-[Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum DenoPermissionKind
 {
     /// <summary>Network access controlled by <c>--allow-net</c> or <c>--deny-net</c>.</summary>

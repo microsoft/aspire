@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE003 // Bicep extension declarations are experimental.
+#pragma warning disable ASPIREAZURE004 // Bicep extension declarations are experimental.
 
 using System.Diagnostics;
 using System.Text;
@@ -128,7 +128,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         }
         source.Append(compiledBicep.Value);
 
-        var generationPath = Directory.CreateTempSubdirectory("aspire").FullName;
+        var generationPath = s_temporaryStorage.CreateTempSubdirectory("aspire").FullName;
         var moduleSourcePath = Path.Combine(generationPath, "main.bicep");
         File.WriteAllText(moduleSourcePath, source.ToString());
 

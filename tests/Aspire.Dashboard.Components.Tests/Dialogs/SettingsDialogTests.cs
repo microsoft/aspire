@@ -76,7 +76,6 @@ public sealed class SettingsDialogTests : DashboardTestContext
             {
                 BrowserStorageKeys.ResourceListDensity => (true, "Compact"),
                 BrowserStorageKeys.GroupOverview => (true, "Resources"),
-                BrowserStorageKeys.RecordingsStyle => (true, "Menu"),
                 _ => (false, null)
             },
             OnSetUnprotectedAsync = (key, value) => stored[key] = value
@@ -101,7 +100,6 @@ public sealed class SettingsDialogTests : DashboardTestContext
         Assert.Equal(ThemeManager.ThemeSettingDark, themeManager.SelectedTheme);
         Assert.Equal("Comfortable", stored[BrowserStorageKeys.ResourceListDensity]);
         Assert.Equal("Graph", stored[BrowserStorageKeys.GroupOverview]);
-        Assert.Equal(RecordingsStyle.Menu, preferences.RecordingsStyle);
         Assert.Equal(["Dark", "Comfortable", "Graph", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
     }
 
