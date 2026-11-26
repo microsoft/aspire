@@ -27,7 +27,7 @@ public class TagEnrichmentProcessorTests
         Assert.Equal(
             [TelemetryPropertyKeys.DashboardBuildId, TelemetryPropertyKeys.InternalMicrosoft, TelemetryPropertyKeys.DashboardVersion,
                 TelemetryPropertyKeys.DeploymentEnvironmentName, TelemetryPropertyKeys.DeviceId, TelemetryPropertyKeys.MacAddressHash,
-                TelemetryPropertyKeys.OsName, TelemetryPropertyKeys.OsType, TelemetryPropertyKeys.OsVersion, TelemetryPropertyKeys.RuntimeVersion],
+                TelemetryPropertyKeys.OsName, TelemetryPropertyKeys.OsType, TelemetryPropertyKeys.OsVersion],
             activity.TagObjects.Select(tag => tag.Key).Order(StringComparer.Ordinal));
     }
 
