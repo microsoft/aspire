@@ -528,7 +528,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         var originalBranch = (await RunGitOutputAsync(workspace.Path, ["branch", "--show-current"])).Trim();
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "checkout", "-b", "config/preview");
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), """{"custom":"preview"}""");
-        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "Preview configuration");
+        await GitTestHelper.CommitAsync(workspace.Path, outputHelper, "-am", "Preview configuration");
         var expectedCommit = (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "checkout", originalBranch);
         var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
@@ -548,7 +548,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, """{"custom":"pinned"}""");
         var expectedCommit = (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), """{"custom":"latest"}""");
-        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "New configuration");
+        await GitTestHelper.CommitAsync(workspace.Path, outputHelper, "-am", "New configuration");
         var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
 
         var (commit, _, configuration) = await client.AcquireAsync(
@@ -574,14 +574,14 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         var original = await client.CheckAsync(source, workspace.CreateDirectory("first-check").FullName, TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "unrelated.txt"), "Unrelated change");
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "add", "unrelated.txt");
-        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-m", "Unrelated commit");
+        await GitTestHelper.CommitAsync(workspace.Path, outputHelper, "-m", "Unrelated commit");
 
         var unchanged = await client.CheckAsync(source, workspace.CreateDirectory("unchanged-check").FullName, TestContext.Current.CancellationToken);
 
         Assert.NotEqual(original.Commit, unchanged.Commit);
         Assert.Equal(original.Version, unchanged.Version);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), "invalid JSON is not read during a version check");
-        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "Change configuration");
+        await GitTestHelper.CommitAsync(workspace.Path, outputHelper, "-am", "Change configuration");
         var directory = workspace.CreateDirectory("changed-check");
         var changed = await client.CheckAsync(source, directory.FullName, TestContext.Current.CancellationToken);
         var pinned = await client.CheckAsync(new() { Repository = source.Repository, Path = source.Path, Ref = original.Commit },
@@ -630,7 +630,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         var entry = await RunGitOutputAsync(workspace.Path, ["ls-files", "--stage", AspireConfigFile.FileName]);
         var objectId = entry.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1];
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "update-index", "--cacheinfo", $"120000,{objectId},{AspireConfigFile.FileName}");
-        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-m", "Add symlink configuration");
+        await GitTestHelper.CommitAsync(workspace.Path, outputHelper, "-m", "Add symlink configuration");
 
         var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
         var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
@@ -661,16 +661,14 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, """{"custom":"original"}""", objectFormat);
-        var originalCommit = (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
-        var originalVersion = (await RunGitOutputAsync(workspace.Path, ["rev-parse", $"HEAD:{AspireConfigFile.FileName}"])).Trim();
-        var branch = (await RunGitOutputAsync(workspace.Path, ["branch", "--show-current"])).Trim();
+        var (originalCommit, originalVersion) = await ReadConfigRevisionAsync(workspace.Path);
         var source = new ConfigSource
         {
             Repository = workspace.Path,
             Path = AspireConfigFile.FileName,
             Ref = selector switch
             {
-                "branch" => branch,
+                "branch" => (await RunGitOutputAsync(workspace.Path, ["branch", "--show-current"])).Trim(),
                 "commit" => originalCommit,
                 _ => null
             }
@@ -698,9 +696,10 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.Equal(objectFormat == "sha256" ? 64 : 40, acquired.Metadata.Version.Length);
 
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), """{"custom":"updated"}""", token);
-        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "Update configuration");
-        var expectedCommit = selector == "commit" ? originalCommit : (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
-        var expectedVersion = selector == "commit" ? originalVersion : (await RunGitOutputAsync(workspace.Path, ["rev-parse", $"HEAD:{AspireConfigFile.FileName}"])).Trim();
+        await GitTestHelper.CommitAsync(workspace.Path, outputHelper, "-am", "Update configuration");
+        var (expectedCommit, expectedVersion) = selector == "commit"
+            ? (originalCommit, originalVersion)
+            : await ReadConfigRevisionAsync(workspace.Path);
 
         var refreshed = await service.AcquireAsync(source, force: true, token);
         var updatedCheck = await client.CheckAsync(source, workspace.CreateDirectory("updated-check").FullName, token);
@@ -720,14 +719,21 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
 
     private async Task CreateRepositoryAsync(TemporaryWorkspace workspace, string path, string json, string objectFormat = "sha1")
     {
-        await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "init", $"--object-format={objectFormat}");
-        await GitTestHelper.ConfigureGitIdentityAsync(workspace.Path, outputHelper);
         var configPath = Path.Combine(workspace.Path, path.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
         await File.WriteAllTextAsync(configPath, json);
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "add", "--", path);
-        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-m", "Add configuration");
+        await GitTestHelper.CommitAsync(workspace.Path, outputHelper, "-m", "Add configuration");
+    }
+
+    private static async Task<(string Commit, string Version)> ReadConfigRevisionAsync(string directory)
+    {
+        // rev-parse emits one ID per argument, e.g. "<commit-id>\n<config-blob-id>\n".
+        var output = await RunGitOutputAsync(directory, ["rev-parse", "HEAD", $"HEAD:{AspireConfigFile.FileName}"]);
+        var ids = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Assert.Equal(2, ids.Length);
+        return (ids[0], ids[1]);
     }
 
     private static async Task<string> RunGitOutputAsync(string directory, string[] arguments)
