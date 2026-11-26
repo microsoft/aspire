@@ -59,8 +59,8 @@ internal abstract class BaseCommand : Command
 
     /// <summary>
     /// For commands with <see cref="Command.TreatUnmatchedTokensAsErrors"/> set to false, whether an unknown
-    /// option before the "--" separator is an error instead of being forwarded with the other unmatched tokens.
-    /// Bare (non-option) tokens and everything after "--" are still forwarded.
+    /// option before the "--" separator that is a prefix of known options (a likely typo, e.g. "--isol") is an
+    /// error instead of being forwarded. Other unknown options, bare tokens and everything after "--" are still forwarded.
     /// </summary>
     protected virtual bool RejectsUnknownOptionsBeforeDoubleDash => false;
 
@@ -139,7 +139,7 @@ internal abstract class BaseCommand : Command
         // that collide with CLI option names to the resource command's second-pass parser should
         // use the "--" separator (e.g. "aspire resource mydb cmd -- --AppHost primary").
         // Commands that opt in via RejectsUnknownOptionsBeforeDoubleDash (run, start) also reject
-        // any other unknown option before "--" (e.g. "--isol" instead of "--isolated").
+        // prefixes of known options before "--" (e.g. "--isol" instead of "--isolated").
         var unrecognizedOptionError = ParseResultHelper.CheckForUnrecognizedOptions(this, parseResult, RejectsUnknownOptionsBeforeDoubleDash);
         if (unrecognizedOptionError is not null)
         {

@@ -805,13 +805,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("run --totally-bogus-flag", "run")]
-    [InlineData("run --custom-arg value", "run")]
-    [InlineData("run somearg --custom-arg", "run")]
-    [InlineData("run --totally-bogus-flag -- --other-arg", "run")]
-    [InlineData("run -x", "run")]
-    [InlineData("start --totally-bogus-flag", "start")]
-    public async Task BaseCommand_UnknownOptionBeforeDoubleDash_ReturnsError(string args, string commandName)
+    [InlineData("run --de", "run")]
+    [InlineData("run --de -- --other-arg", "run")]
+    public async Task BaseCommand_AmbiguousOptionPrefixBeforeDoubleDash_ReturnsError(string args, string commandName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
@@ -837,6 +833,10 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [InlineData("run --isolated -- --isol", new[] { "--isol" })]
     [InlineData("run somearg other", new[] { "somearg", "other" })]
     [InlineData("run somearg -- --custom-arg", new[] { "somearg", "--custom-arg" })]
+    [InlineData("run --totally-bogus-flag", new[] { "--totally-bogus-flag" })]
+    [InlineData("run --custom-arg value", new[] { "--custom-arg", "value" })]
+    [InlineData("run -x", new[] { "-x" })]
+    [InlineData("run --environment Staging", new[] { "--environment", "Staging" })]
     public async Task BaseCommand_AppHostArgs_ArePassedThroughWithoutError(string args, string[] expectedUnmatchedTokens)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
