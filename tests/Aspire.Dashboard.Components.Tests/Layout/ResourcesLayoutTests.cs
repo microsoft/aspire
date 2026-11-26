@@ -529,6 +529,106 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Single(JSInterop.Invocations["unregisterPaneResizer"]);
     }
 
+    [Fact]
+    public async Task StartupJsInterop_OverlappingRendersShareSingleInitAndReconcileMidInitResizerToggle()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var module = JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
+        var initHandler = module.Setup<bool>("initializeResourcesLayout", _ => true);
+        module.SetupVoid("disposeResourcesLayout", _ => true).SetVoidResult();
+        module.SetupVoid("registerPaneResizer", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterPaneResizer", _ => true).SetVoidResult();
+
+        // Home starts in full-canvas mode (registerResizer = false).
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.HomeUrl());
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+
+        Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]);
+        Assert.Equal("false", cut.Find(".resources-layout").GetAttribute("data-pane-interactions-ready"));
+
+        // Re-render and dock the resource list (ShowResizer becomes true) while initializeResourcesLayout is still in flight.
+        cut.Render();
+        ResourceSetupHelpers.ToggleResourceList(cut);
+
+        // Overlapping renders share the single in-flight initialization rather than starting a second one.
+        Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]);
+        Assert.Empty(JSInterop.Invocations["registerPaneResizer"]);
+
+        await cut.InvokeAsync(() => initHandler.SetResult(false));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("true", cut.Find(".resources-layout").GetAttribute("data-pane-interactions-ready"));
+            Assert.Single(JSInterop.Invocations["registerPaneResizer"]);
+        });
+        Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]);
+    }
+
+    [Fact]
+    public void StartupJsInterop_FaultedInitRetriesOnNextRender()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var module = JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
+        module.Setup<bool>("initializeResourcesLayout", _ => true)
+            .SetException(new JSDisconnectedException("The circuit disconnected."));
+        module.SetupVoid("disposeResourcesLayout", _ => true).SetVoidResult();
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+
+        Assert.Single(JSInterop.Invocations["initializeResourcesLayout"]);
+        Assert.Equal("false", cut.Find(".resources-layout").GetAttribute("data-pane-interactions-ready"));
+        Assert.False(Renderer.UnhandledException.IsCompleted);
+
+        // Once the circuit recovers, the next render retries initialization and flips interactions ready.
+        module.Setup<bool>("initializeResourcesLayout", _ => true).SetResult(true);
+        cut.Render();
+
+        cut.WaitForAssertion(() => Assert.Equal("true", cut.Find(".resources-layout").GetAttribute("data-pane-interactions-ready")));
+        Assert.Equal(2, JSInterop.Invocations["initializeResourcesLayout"].Count);
+    }
+
+    [Fact]
+    public async Task Dispose_WhileJsModuleImportInFlight_DisposesModuleAndSkipsDisposeResourcesLayout()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var importTcs = new TaskCompletionSource<IJSObjectReference>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var importStartedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            new TestDashboardClient(isEnabled: true,
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<IJSRuntime>(new InterceptingJSRuntime(JSInterop.JSRuntime, (identifier, args) =>
+            {
+                if (identifier == "import" && args is [string path] && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal))
+                {
+                    importStartedTcs.TrySetResult();
+                    return new ValueTask<IJSObjectReference>(importTcs.Task);
+                }
+
+                return null;
+            })));
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        await importStartedTcs.Task.DefaultTimeout();
+
+        await cut.Instance.DisposeAsync();
+
+        var fakeModule = new TrackingJSObjectReference();
+        importTcs.SetResult(fakeModule);
+        await fakeModule.DisposedTask.DefaultTimeout();
+
+        Assert.True(fakeModule.IsDisposed);
+        Assert.Empty(fakeModule.InvokedIdentifiers);
+        Assert.Empty(JSInterop.Invocations["disposeResourcesLayout"]);
+    }
+
     [Theory]
     [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, "MyFrontend.csproj")]
     [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, "postgres:17")]

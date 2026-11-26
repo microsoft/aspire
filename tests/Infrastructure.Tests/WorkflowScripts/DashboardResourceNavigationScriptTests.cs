@@ -22,4 +22,17 @@ public class DashboardResourceNavigationScriptTests(ITestOutputHelper output)
 
         Assert.Equal(0, result.ExitCode);
     }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ResourcesLayoutInitRegistersAndDisposesHandlers()
+    {
+        using var command = new NodeCommand(output)
+            .WithWorkingDirectory(RepoRoot.Path)
+            .WithTimeout(TimeSpan.FromSeconds(60));
+        var result = await command.ExecuteScriptAsync(Path.Combine(RepoRoot.Path,
+            "tests", "Aspire.Dashboard.Components.Tests", "JavaScript", "ResourcesLayoutInit.test.mjs"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
 }

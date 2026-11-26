@@ -1217,7 +1217,8 @@ public partial class MainLayoutTests : DashboardTestContext
         await initialThemeModeSetTcs.Task.DefaultTimeout();
 
         Assert.Single(JSInterop.Invocations["Blazor.theme.setThemeMode"]);
-        // Initial render relies on app-theme-bootstrap.js / app-theme.js top-level setup and skips importing app-theme.js.
+        // MainLayout skips its own duplicate initial import of app-theme.js and updateTheme
+        // (in production BrowserThemeResolver still imports app-theme.js inside EnsureInitializedAsync).
         Assert.Empty(JSInterop.Invocations["updateTheme"]);
         Assert.Equal(0, JSInterop.Invocations["import"].Count(i => i.Arguments is ["/js/app-theme.js"]));
 
@@ -1232,6 +1233,85 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(ThemeManager.ThemeSettingLight, Assert.Single(updateInvocation.Arguments));
         Assert.Equal(2, JSInterop.Invocations["Blazor.theme.setThemeMode"].Count);
         Assert.Equal(ThemeManager.ThemeSettingLight, themeManager.EffectiveTheme);
+    }
+
+    [Fact]
+    public async Task Dispose_WhileKeydownRegistrationInFlight_UnregistersAndSkipsGlobalListener()
+    {
+        var registerTcs = new TaskCompletionSource<IJSObjectReference>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var registerStartedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Services.AddSingleton<IJSRuntime>(new InterceptingJSRuntime(JSInterop.JSRuntime, (identifier, _) =>
+        {
+            if (identifier == "window.registerGlobalKeydownListener")
+            {
+                registerStartedTcs.TrySetResult();
+                return new ValueTask<IJSObjectReference>(registerTcs.Task);
+            }
+
+            return null;
+        }));
+        SetupMainLayoutServices();
+        var unregisterTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        JSInterop.SetupVoid("window.unregisterGlobalKeydownListener", _ =>
+        {
+            unregisterTcs.TrySetResult();
+            return true;
+        }).SetVoidResult();
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        await registerStartedTcs.Task.DefaultTimeout();
+
+        await cut.Instance.DisposeAsync();
+
+        var fakeHandlers = new TrackingJSObjectReference();
+        registerTcs.SetResult(fakeHandlers);
+        await unregisterTcs.Task.DefaultTimeout();
+        await fakeHandlers.DisposedTask.DefaultTimeout();
+
+        var unregisterInvocation = Assert.Single(JSInterop.Invocations["window.unregisterGlobalKeydownListener"]);
+        Assert.Same(fakeHandlers, Assert.Single(unregisterInvocation.Arguments));
+        Assert.True(fakeHandlers.IsDisposed);
+        Assert.False(Services.GetRequiredService<ShortcutManager>().IsShortcutAvailable(AspireKeyboardShortcut.Help));
+    }
+
+    [Fact]
+    public async Task Dispose_WhileLazyThemeImportInFlight_DisposesImportedModuleWithoutUpdatingTheme()
+    {
+        var importTcs = new TaskCompletionSource<IJSObjectReference>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var importStartedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Services.AddSingleton<IJSRuntime>(new InterceptingJSRuntime(JSInterop.JSRuntime, (identifier, args) =>
+        {
+            if (identifier == "import" && args is ["/js/app-theme.js"])
+            {
+                importStartedTcs.TrySetResult();
+                return new ValueTask<IJSObjectReference>(importTcs.Task);
+            }
+
+            return null;
+        }));
+        SetupMainLayoutServices();
+        JSInterop.SetupVoid("window.unregisterGlobalKeydownListener", _ => true).SetVoidResult();
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        var themeManager = Services.GetRequiredService<ThemeManager>();
+        var raiseTask = cut.InvokeAsync(() => themeManager.RaiseThemeChangedAsync(ThemeManager.ThemeSettingLight));
+        await importStartedTcs.Task.DefaultTimeout();
+
+        await cut.Instance.DisposeAsync();
+
+        var fakeThemeModule = new TrackingJSObjectReference();
+        importTcs.SetResult(fakeThemeModule);
+        await raiseTask.DefaultTimeout();
+
+        Assert.True(fakeThemeModule.IsDisposed);
+        Assert.Empty(fakeThemeModule.InvokedIdentifiers);
     }
 
     private void SetupMainLayoutServices(
