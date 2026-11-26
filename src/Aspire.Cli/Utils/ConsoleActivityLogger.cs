@@ -56,6 +56,7 @@ internal sealed class ConsoleActivityLogger
 
     private const string InProgressSymbol = "→";
     private const string InfoSymbol = "i";
+    private const string AzureDevOpsLoggingCommandPrefix = "##vso[";
     private const int SummaryTimelineWidth = 28;
     private const int SummaryTimelineTicks = 4;
 
@@ -779,6 +780,14 @@ internal sealed class ConsoleActivityLogger
                     markup.Append(symbol).Append(' ').Append(highlightedLine);
                 }
                 var markupString = markup.ToString();
+                if (StringUtils.RemoveMarkup(line).Contains(AzureDevOpsLoggingCommandPrefix, StringComparison.Ordinal))
+                {
+                    // Spectre hard-wraps at the console width. A line break inside an Azure DevOps
+                    // logging command makes the agent reject it, so write these lines unwrapped.
+                    _console.Profile.Out.Writer.WriteLine(StringUtils.RemoveMarkup(markupString));
+                    continue;
+                }
+
                 try
                 {
                     _console.MarkupLine(markupString);

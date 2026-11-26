@@ -256,7 +256,7 @@ public partial class TerminalDockTests
         }
 
         Assert.Same(failure, await Renderer.UnhandledException.DefaultTimeout());
-        await Renderer.Dispatcher.InvokeAsync(() => component.DisposeAsync().AsTask()).DefaultTimeout();
+        await DisposeOnRendererDispatcherAsync(() => component.DisposeAsync().AsTask()).DefaultTimeout();
 
         Assert.Equal(failedStage switch
         {

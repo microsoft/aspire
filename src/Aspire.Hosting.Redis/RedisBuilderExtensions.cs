@@ -194,12 +194,13 @@ public static class RedisBuilderExtensions
         {
             redisBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                // If a TLS certificate is configured, ensure the Redis resource has an HTTPS endpoint and
-                // configure the environment variables to use it.
+                // Keep the primary endpoint for TLS clients and use the conventional target ports
+                // for both protocols without changing the configured host port.
                 redisBuilder
-                    .WithEndpoint(targetPort: 6380, name: RedisResource.SecondaryEndpointName)
+                    .WithEndpoint(targetPort: 6379, name: RedisResource.SecondaryEndpointName)
                     .WithEndpoint(RedisResource.PrimaryEndpointName, e =>
                     {
+                        e.TargetPort = 6380;
                         e.UriScheme = RedisResource.TlsRedisScheme;
                         e.TlsEnabled = true;
                     })

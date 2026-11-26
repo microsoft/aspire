@@ -18,19 +18,33 @@ The popup includes search; filter and grouping buttons are available only in the
 
 Use **Group resources**, beside **Filters** in the resources pane, to group
 the list by **Tags**, **Resource type**, or **State**. **None** restores the default nested resource list.
-Groups can be collapsed or selected to view all of their resources together. Search matches group names as
-well as resources, and the grouping preference is remembered across navigation and reloads.
+Click a group name to select its items together, or click its chevron to expand or collapse it.
+This also works for sections like **Parameters** when grouping is set to **None**.
+Ctrl-click (Cmd-click on macOS) a selected group to remove its items from the selection. Removing the last
+selected items returns to **All resources** in Overview without restoring the previous selection.
+Shift-click a row to select the visible range from the last selected item, including expanded **Parameters** rows.
+Grouping adds no extra indentation; nested resources still indent under their parent in **None**.
+Search matches group names as well as resources, and the grouping preference is remembered across navigation and reloads.
 Tag grouping replaces the separate Tags navigation entry; resources with multiple tags appear under each tag,
 with untagged resources initially listed last. Telemetry sources keep their ungrouped list.
+The **...** menu on each group header lists commands for that group's resources. Parameter commands are
+available on individual parameter rows, not as bulk actions.
 
 When search and filters are clear, drag a group's header handle to move the entire group, or focus its
-handle and press **Alt+Up** or **Alt+Down**. Each grouping mode has its own saved order in the AppHost
-settings database. New groups are appended, and temporarily absent groups retain their position when they return.
+handle and press **Alt+Up** or **Alt+Down**. Group moves are saved per grouping mode in protected browser local storage.
+New groups follow the default sort. A saved move places the group on the chosen side of the original drop
+target, using the other neighbor from the drop position if the target is missing.
 
 With grouping set to **None** and no search or filters active, drag a resource's reorder handle to move it
 before or after a sibling. Alternatively, focus the handle and press **Alt+Up** or **Alt+Down**.
-Children stay under their parent. Order is stored alongside tags in the AppHost's application settings database
-and survives dashboard and AppHost restarts; new resources are appended to their sibling list.
+Children stay under their parent. The ungrouped pane uses AppHost display priority for its default sort,
+including for resources discovered after the dashboard opens. Resources with a priority of zero or no
+priority are sorted by type and name. Grouped views do not use display priority.
+Only custom moves are saved in protected browser local storage. The dashboard applies them to the current default order,
+so new resources are still sorted normally. A move places the resource on the chosen side of the original
+drop target. If the target is missing or no longer a sibling, the move falls back to the other neighbor
+from the drop position. If the dashboard can no longer decrypt saved moves, it uses the default order.
+Routine key rotation does not reset saved moves as long as the keys that protected them remain available.
 Persistent containers show a pin after their state and resource type.
 
 Resource rows are muted when they do not apply to the current tab or have not sent that type of
@@ -71,7 +85,8 @@ to open the resource drawer. Its filters and footer stay outside the scrolling r
 ## Exporting the resource graph
 
 In **Resources > Graph**, select **Export as Mermaid** in the graph controls to open a dialog showing the generated
-Mermaid source. Use **Copy to clipboard** to copy the source or **Download** to save it as `resources.mmd`.
+Mermaid source. In the dialog footer, use **Copy to clipboard** to copy the source or **Download** to save it as `resources.mmd`.
+Long lines wrap by default. Select **Disable word wrap** in the dialog header to view them on a single line.
 The diagram includes the currently visible resources and their connections, respecting search, resource filters,
 and the **Show hidden resources** setting. Parameters are not included. Resource labels match the dashboard graph,
 including replica names; resource values, endpoints, and other configuration are not exported.

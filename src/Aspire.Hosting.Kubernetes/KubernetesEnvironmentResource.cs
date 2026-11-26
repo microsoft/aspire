@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
@@ -400,7 +399,6 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     }
 
     /// <inheritdoc/>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
@@ -1526,10 +1524,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 var patchJson = System.Text.Json.JsonSerializer.Serialize(patchOperations);
 
                 // Write patch to a temp file to avoid shell escaping issues with kubectl -p
-                var patchTempDir = Directory.CreateTempSubdirectory(".aspire-gateway-patch");
+                var patchTempDir = context.Services.GetRequiredService<IFileSystemService>().TempDirectory.CreateTempSubdirectory(".aspire-gateway-patch");
                 try
                 {
-                    var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
+                    var patchFilePath = Path.Combine(patchTempDir.Path, "patch.json");
                     await File.WriteAllTextAsync(patchFilePath, patchJson, context.CancellationToken).ConfigureAwait(false);
 
                     // Use --field-manager=helm so Helm becomes the registered owner of the
@@ -1571,7 +1569,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 }
                 finally
                 {
-                    try { patchTempDir.Delete(recursive: true); } catch { }
+                    patchTempDir.Dispose();
                 }
 
                 // Transfer field ownership to Helm using server-side apply with a minimal
@@ -1638,11 +1636,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         var certPem = cert.ExportCertificatePem();
         var keyPem = ecdsa.ExportECPrivateKeyPem();
 
-        var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-discovery");
+        var tempDir = context.Services.GetRequiredService<IFileSystemService>().TempDirectory.CreateTempSubdirectory(".aspire-tls-discovery");
         try
         {
-            var certPath = Path.Combine(tempDir.FullName, "tls.crt");
-            var keyPath = Path.Combine(tempDir.FullName, "tls.key");
+            var certPath = Path.Combine(tempDir.Path, "tls.crt");
+            var keyPath = Path.Combine(tempDir.Path, "tls.key");
             await File.WriteAllTextAsync(certPath, certPem, context.CancellationToken).ConfigureAwait(false);
             await File.WriteAllTextAsync(keyPath, keyPem, context.CancellationToken).ConfigureAwait(false);
 
@@ -1679,23 +1677,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
         finally
         {
-            DeleteTempDirSafely(tempDir, context.Logger);
-        }
-    }
-
-    // Best-effort cleanup for kubectl/cert temp directories. Swallowing OperationCanceledException
-    // here would mask shutdown signals; instead narrow to file-system failures (a transient
-    // antivirus lock or permission issue) and surface them at debug level so the next deploy
-    // attempt - or `aspire run` with verbose logging - can diagnose if leakage occurs.
-    private static void DeleteTempDirSafely(DirectoryInfo tempDir, ILogger logger)
-    {
-        try
-        {
-            tempDir.Delete(recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogDebug(ex, "Failed to delete temporary directory '{TempDir}'.", tempDir.FullName);
+            tempDir.Dispose();
         }
     }
 
@@ -1972,10 +1954,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 });
             var patchJson = System.Text.Json.JsonSerializer.Serialize(ops);
 
-            var patchTempDir = Directory.CreateTempSubdirectory(".aspire-gateway-fields");
+            var patchTempDir = context.Services.GetRequiredService<IFileSystemService>().TempDirectory.CreateTempSubdirectory(".aspire-gateway-fields");
             try
             {
-                var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
+                var patchFilePath = Path.Combine(patchTempDir.Path, "patch.json");
                 await File.WriteAllTextAsync(patchFilePath, patchJson, context.CancellationToken).ConfigureAwait(false);
 
                 var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json --patch-file \"{patchFilePath}\"";
@@ -2017,7 +1999,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             finally
             {
-                DeleteTempDirSafely(patchTempDir, context.Logger);
+                patchTempDir.Dispose();
             }
         }
     }
@@ -2153,10 +2135,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 minimal["spec"] = System.Text.Json.Nodes.JsonNode.Parse(spec.GetRawText());
             }
 
-            var tempDir = Directory.CreateTempSubdirectory(".aspire-gateway-ownership");
+            var tempDir = context.Services.GetRequiredService<IFileSystemService>().TempDirectory.CreateTempSubdirectory(".aspire-gateway-ownership");
             try
             {
-                var manifestPath = Path.Combine(tempDir.FullName, "gateway.json");
+                var manifestPath = Path.Combine(tempDir.Path, "gateway.json");
                 await File.WriteAllTextAsync(manifestPath, minimal.ToJsonString(), context.CancellationToken).ConfigureAwait(false);
 
                 var applyArgs = $"apply --server-side --field-manager=helm --force-conflicts -f \"{manifestPath}\"";
@@ -2188,7 +2170,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             finally
             {
-                DeleteTempDirSafely(tempDir, context.Logger);
+                tempDir.Dispose();
             }
         }
         catch (System.Text.Json.JsonException ex)
@@ -2275,11 +2257,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             var certPem = cert.ExportCertificatePem();
             var keyPem = ecdsa.ExportECPrivateKeyPem();
 
-            var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-bootstrap");
+            var tempDir = context.Services.GetRequiredService<IFileSystemService>().TempDirectory.CreateTempSubdirectory(".aspire-tls-bootstrap");
             try
             {
-                var certPath = Path.Combine(tempDir.FullName, "tls.crt");
-                var keyPath = Path.Combine(tempDir.FullName, "tls.key");
+                var certPath = Path.Combine(tempDir.Path, "tls.crt");
+                var keyPath = Path.Combine(tempDir.Path, "tls.key");
                 await File.WriteAllTextAsync(certPath, certPem, context.CancellationToken).ConfigureAwait(false);
                 await File.WriteAllTextAsync(keyPath, keyPem, context.CancellationToken).ConfigureAwait(false);
 
@@ -2313,7 +2295,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             finally
             {
-                DeleteTempDirSafely(tempDir, context.Logger);
+                tempDir.Dispose();
             }
         }
     }

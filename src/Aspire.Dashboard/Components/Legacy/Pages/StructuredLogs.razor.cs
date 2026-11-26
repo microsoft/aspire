@@ -437,12 +437,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     }
 
-    private string? PauseText => PauseManager.AreStructuredLogsPaused(out var startTime)
-        ? string.Format(
-            CultureInfo.CurrentCulture,
-            Loc[nameof(Dashboard.Resources.StructuredLogs.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
-        : null;
+    private DateTime? PausedAt => PauseManager.AreStructuredLogsPaused(out var startTime) ? startTime : null;
 
     public void Dispose()
     {

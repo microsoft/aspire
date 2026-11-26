@@ -503,11 +503,11 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         Assert.Equal("Blue", option.GetAttribute("text"));
         Assert.Equal("Blu", Assert.Single(option.QuerySelectorAll("mark")).TextContent);
 
-        var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, SelectViewModel<string>>>());
+        var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, string>>());
         Assert.True(component.Instance.Immediate);
         Assert.Equal(FluentUIExtensions.InputDelay, component.Instance.ImmediateDelay);
         Assert.Null(component.Instance.OptionText!(null));
-        await component.InvokeAsync(() => component.Instance.ValueChanged.InvokeAsync(null));
+        await component.InvokeAsync(() => component.Instance.SelectedItemsChanged.InvokeAsync([]));
         Assert.Equal("blu", viewModel.Inputs[0].Value);
     }
 
@@ -526,12 +526,13 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         Assert.Single(cut.FindAll("fluent-dropdown[type='combobox'] fluent-option[freeform] output"));
         await cut.Find("fluent-dropdown[type='combobox']").FocusInAsync(new());
         await cut.Find("fluent-dropdown[type='combobox']").TriggerEventAsync("ontextimmediate", new ChangeEventArgs { Value = typedValue });
+        await cut.Find("fluent-dropdown[type='combobox']").TriggerEventAsync("ondropdownchange", new DropdownEventArgs { SelectedOptions = "", FreeformValue = typedValue });
         await cut.Find("fluent-dropdown[type='combobox']").FocusOutAsync(new());
 
         Assert.Equal(typedValue, viewModel.Inputs[0].Value);
-        var component = cut.FindComponent<FluentCombobox<SelectViewModel<string>, SelectViewModel<string>>>();
+        var component = cut.FindComponent<FluentCombobox<SelectViewModel<string>, string>>();
         Assert.Equal(typedValue, component.Instance.ImmediateText);
-        Assert.Equal(typedValue, component.Instance.Value?.Name);
+        Assert.Equal(typedValue, Assert.Single(component.Instance.SelectedItems).Name);
     }
 
     [Fact]
@@ -555,7 +556,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         await cut.Find("fluent-dropdown[type='combobox']").FocusOutAsync(new());
 
         Assert.Equal("blue", viewModel.Inputs[0].Value);
-        Assert.Equal("Blue", cut.FindComponent<FluentCombobox<SelectViewModel<string>, SelectViewModel<string>>>().Instance.ImmediateText);
+        Assert.Equal("Blue", cut.FindComponent<FluentCombobox<SelectViewModel<string>, string>>().Instance.ImmediateText);
         Assert.Equal(("blue", true), Assert.Single(updates));
     }
 
@@ -627,9 +628,9 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         update.InputsDialog.InputItems[0].ValidationErrors.Add("Choose another color.");
         await cut.InvokeAsync(() => viewModel.UpdateInteractionAsync(update));
 
-        var component = cut.FindComponent<FluentCombobox<SelectViewModel<string>, SelectViewModel<string>>>();
+        var component = cut.FindComponent<FluentCombobox<SelectViewModel<string>, string>>();
         Assert.Equal("blue", viewModel.Inputs[0].Value);
-        Assert.Equal("blue", component.Instance.Value?.Id);
+        Assert.Equal("blue", Assert.Single(component.Instance.SelectedItems).Id);
         Assert.Equal("Blue", component.Instance.ImmediateText);
         Assert.Equal("Choose another color.", Assert.Single(cut.FindComponent<EditForm>().Instance.EditContext!.GetValidationMessages()));
         Assert.Empty(updates);
@@ -649,8 +650,8 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         });
         var cut = getCut();
 
-        var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, SelectViewModel<string>>>());
-        Assert.Equal(value, component.Instance.Value?.Id);
+        var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, string>>());
+        Assert.Equal(value, Assert.Single(component.Instance.SelectedItems).Id);
         Assert.Equal(value, viewModel.Inputs[0].Value);
         Assert.Equal(expectedText, component.Instance.ImmediateText);
         Assert.Contains(JSInterop.Invocations, invocation =>

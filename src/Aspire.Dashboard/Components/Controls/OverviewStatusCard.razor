@@ -1,0 +1,55 @@
+@using Aspire.Dashboard.Components.Controls.PropertyValues
+
+<section class="overview-card overview-status-card" style="@Style" aria-labelledby="overview-status-title">
+    <div class="overview-status-header">
+        <span class="card-header-icon" aria-hidden="true">
+            <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+        </span>
+        <h2 id="overview-status-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewStatusTitle)]</h2>
+        @if (ResourcesLayout is { } layout)
+        {
+            <div class="overview-status-actions">
+                @if (HideCommandButtons)
+                {
+                    @(layout.RenderResourceMenuButton(Resource, isRow: false))
+                }
+                else
+                {
+                    @(layout.RenderResourceActions(Resource, showLabels: true, row: null))
+                }
+            </div>
+        }
+    </div>
+    <div class="overview-status-grid">
+        <PropertyGrid TItem="StatusProperty"
+                      Items="@_properties"
+                      IsValueMaskedChanged="OnSourceMaskedChanged"
+                      FitNameColumn="true"
+                      GenerateHeader="DataGridGeneratedHeaderType.None"
+                      RowSize="DataGridRowSize.Small">
+            <ContentAfterValue Context="property">
+                @switch (property.Kind)
+                {
+                    case StatusPropertyKind.DisplayName:
+                        <ResourceNameValue Resource="@Resource" Value="@property.Text" FormatName="@FormatName" />
+                        break;
+                    case StatusPropertyKind.State:
+                        <ResourceStateValue Resource="@Resource" Value="@property.Text" HighlightText="" />
+                        break;
+                    case StatusPropertyKind.HealthState:
+                        <ResourceHealthStateValue Resource="@Resource" Value="@property.Text" HighlightText="" />
+                        break;
+                    case StatusPropertyKind.Lifetime:
+                        <span data-tooltip="@property.Tooltip" aria-description="@property.Tooltip">@property.Text</span>
+                        break;
+                    case StatusPropertyKind.ExitError:
+                        <span class="status-error">@property.Text</span>
+                        break;
+                    case StatusPropertyKind.Source:
+                        <span class="overview-status-source">@property.Text</span>
+                        break;
+                }
+            </ContentAfterValue>
+        </PropertyGrid>
+    </div>
+</section>

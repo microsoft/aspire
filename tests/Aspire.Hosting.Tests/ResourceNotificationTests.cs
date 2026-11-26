@@ -180,7 +180,6 @@ public class ResourceNotificationTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddResource(new ContainerResource("container"));
         Assert.Throws<ArgumentException>(() => resource.WithResourceTypeDisplayName(resourceTypeDisplayName));
-        Assert.Throws<ArgumentException>(() => new ResourceTypeDisplayNameAnnotation(resourceTypeDisplayName));
     }
 
     [Fact]

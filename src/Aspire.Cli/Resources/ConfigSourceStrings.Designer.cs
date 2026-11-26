@@ -178,6 +178,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry..
+        /// </summary>
+        internal static string FeatureDisabled {
+            get {
+                return ResourceManager.GetString("FeatureDisabled", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Git could not be started. Ensure Git is installed and available on PATH to use this configuration source..
         /// </summary>
         internal static string GitNotFound {
@@ -196,7 +205,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to --config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir..
+        ///   Looks up a localized string similar to --config-source cannot be combined with --self, --migrate, --dry-run, --channel, --quality, or --nuget-config-dir..
         /// </summary>
         internal static string IncompatibleOptions {
             get {

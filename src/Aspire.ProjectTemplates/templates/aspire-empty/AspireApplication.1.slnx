@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="XmlEncodedProjectName.AppHost/XmlEncodedProjectName.AppHost.csproj" />
+  <Project Path="XmlEncodedProjectName.ServiceDefaults/XmlEncodedProjectName.ServiceDefaults.csproj" />
+</Solution>

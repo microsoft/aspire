@@ -12,8 +12,30 @@ permissions:
 
 jobs:
   update-dependencies:
+    name: Update ${{ matrix.group.name }} dependencies
     runs-on: ubuntu-latest
     if: ${{ github.repository == 'microsoft/aspire' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each group becomes its own pull request so that one package that can't
+        # be updated (for example, because it isn't mirrored yet) doesn't block
+        # the rest. dotnet-outdated's --include/--exclude filters match any
+        # package whose name contains the value (case-insensitive). Every package
+        # must belong to exactly one group, so the catch-all group excludes the
+        # filters of every other group, and the Azure group excludes OpenTelemetry
+        # so packages like Azure.Monitor.OpenTelemetry.Exporter move with the
+        # other OpenTelemetry packages.
+        group:
+          - name: OpenTelemetry
+            branch: update-dependencies-opentelemetry
+            filters: --include OpenTelemetry
+          - name: Azure
+            branch: update-dependencies-azure
+            filters: --include Azure --exclude OpenTelemetry
+          - name: other
+            branch: update-dependencies
+            filters: --exclude OpenTelemetry --exclude Azure
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -25,14 +47,18 @@ jobs:
       - name: Rewrite nuget.config
         run: ./dotnet.sh new nugetconfig --force
 
+      # Pinned because update-dependencies-version-properties.cs depends on the
+      # shape of the changes dotnet-outdated makes. Check that app when updating.
       - name: Install dotnet-outdated
-        run: ./dotnet.sh tool install --global dotnet-outdated-tool
+        run: ./dotnet.sh tool install --global dotnet-outdated-tool --version 4.9.0
 
       - name: Update packages
         continue-on-error: true
         env:
           DOTNET_ROOT: ${{ github.workspace }}/.dotnet  # Even when calling the tool via ./dotnet.sh, dotnet tools require DOTNET_ROOT set to use the restored framework
-        run: ./dotnet.sh outdated --no-restore -u --exclude Microsoft.FluentUI.AspNetCore ./Aspire.slnx || echo "Some dependencies could not be updated, but continuing workflow."
+          FILTERS: ${{ matrix.group.filters }}
+        # FILTERS is intentionally unquoted so it splits into separate arguments.
+        run: ./dotnet.sh outdated --no-restore -u --exclude Microsoft.FluentUI.AspNetCore $FILTERS ./Aspire.slnx || echo "Some dependencies could not be updated, but continuing workflow."
 
       - name: Revert all changes except Directory.Packages.props files
         run: |
@@ -40,6 +66,19 @@ jobs:
           git add "**/Directory.Packages.props"
           rm nuget.config
           git checkout -- .
+
+      # dotnet-outdated records new versions in Directory.Packages.props, bypassing
+      # the $(...Version) properties in eng/Versions.props that other files (such
+      # as the project templates) read. Move them into eng/Versions.props.
+      #
+      # The previous step staged dotnet-outdated's edits, so stage the final files
+      # too. Otherwise, when every update is rejected, the stale index makes the
+      # create-pull-request action try to commit with no remaining changes.
+      - name: Restore version properties
+        run: |
+          git show HEAD:Directory.Packages.props > "$RUNNER_TEMP/Directory.Packages.props"
+          ./dotnet.sh run .github/workflows/update-dependencies-version-properties.cs -- "$RUNNER_TEMP/Directory.Packages.props"
+          git add Directory.Packages.props eng/Versions.props
 
       - name: Generate GitHub App Token
         id: app-token
@@ -57,13 +96,15 @@ jobs:
         uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
-          branch: update-dependencies
-          commit-message: "[Automated] Updating package dependencies"
-          title: "[Automated] Update dependencies"
-          body: "Auto-generated update to the package dependencies. In order for this PR to be green, it will require all of the new dependencies to be [mirrored to our AzDO NuGet feeds](https://github.com/dotnet/arcade/blob/main/Documentation/MirroringPackages.md). Any updates made outside of the first itemgroup in Directory.Packages.props should be reverted as those are packages that get updated through arcade's dependency flow."
+          branch: ${{ matrix.group.branch }}
+          commit-message: "[Automated] Updating ${{ matrix.group.name }} package dependencies"
+          title: "[Automated] Update ${{ matrix.group.name }} dependencies"
+          body: "Auto-generated update to the ${{ matrix.group.name }} package dependencies. In order for this PR to be green, it will require all of the new dependencies to be [mirrored to our AzDO NuGet feeds](https://github.com/dotnet/arcade/blob/main/Documentation/MirroringPackages.md). Any updates made outside of the first itemgroup in Directory.Packages.props should be reverted as those are packages that get updated through arcade's dependency flow."
 
+      # Only the catch-all group reports a missing PR. The smaller groups often
+      # have no updates, which is expected rather than a failure.
       - name: Create Issue if PR Not Created
-        if: ${{ !steps.create-pr.outputs.pull-request-number }}
+        if: ${{ matrix.group.name == 'other' && !steps.create-pr.outputs.pull-request-number }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |

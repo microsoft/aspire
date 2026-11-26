@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -39,11 +40,13 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         StringComparer.OrdinalIgnoreCase);
 
     private readonly IEnvironment _environment;
+    private readonly ITemporaryStorage _temporaryStorage;
     private readonly ILogger<ProcessExecutionFactory> _logger;
 
-    public ProcessExecutionFactory(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
+    public ProcessExecutionFactory(IEnvironment environment, ITemporaryStorage temporaryStorage, ILogger<ProcessExecutionFactory> logger)
     {
         _environment = environment;
+        _temporaryStorage = temporaryStorage;
         _logger = logger;
     }
 
@@ -82,7 +85,7 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             }
         }
 
-        return new ProcessExecution(startInfo, effectiveLogger, options, _environment);
+        return new ProcessExecution(startInfo, effectiveLogger, options, _environment, _temporaryStorage);
     }
 
     public IProcessExecution CreateExecution(ProcessStartInfo startInfo, ProcessInvocationOptions options)
@@ -121,7 +124,7 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         // through the caller's parent-seeded environment.
         RemoveInheritedEnvironmentVariables(childStartInfo.Environment, options.EnvironmentVariableFilter);
 
-        return new ProcessExecution(childStartInfo, effectiveLogger, options, _environment);
+        return new ProcessExecution(childStartInfo, effectiveLogger, options, _environment, _temporaryStorage);
     }
 
     /// <summary>

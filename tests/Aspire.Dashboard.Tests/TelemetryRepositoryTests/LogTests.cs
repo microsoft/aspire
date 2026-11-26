@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Threading.Channels;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -90,6 +91,72 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var propertyKeys = await repositoryContext.Repository.GetLogPropertyKeysAsync(resources[0].ResourceKey, TestContext.Current.CancellationToken);
         Assert.Collection(propertyKeys,
             s => Assert.Equal("Log", s));
+    }
+
+    [Fact]
+    public async Task GetOverviewLogs_CountsSeveritiesAndReturnsLatestMatchingPreview()
+    {
+        using var context = await CreateRepositoryAsync();
+        var repository = context.Repository;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "api", instanceId: "1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime, message: "warning", severity: SeverityNumber.Warn),
+                            CreateLogRecord(time: s_testTime.AddSeconds(1), message: "error", severity: SeverityNumber.Error),
+                            CreateLogRecord(time: s_testTime.AddSeconds(1), message: "fatal", severity: SeverityNumber.Fatal),
+                            CreateLogRecord(time: s_testTime.AddSeconds(2), message: "info", severity: SeverityNumber.Info),
+                            CreateLogRecord(time: s_testTime.AddSeconds(3), message: "unspecified", severity: SeverityNumber.Unspecified)
+                        }
+                    }
+                }
+            },
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "api", instanceId: "2"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime.AddSeconds(3), message: "healthy", severity: SeverityNumber.Info),
+                            CreateLogRecord(time: s_testTime.AddSeconds(4), message: "unspecified healthy", severity: SeverityNumber.Unspecified)
+                        }
+                    }
+                }
+            }
+        });
+
+        var attention = await repository.GetOverviewLogsAsync([new("API", "1")], 3, errorsOnly: false, cancellationToken);
+        Assert.Equal((5, 1, 2), (attention.TotalCount, attention.WarningCount, attention.ErrorCount));
+        Assert.Equal(["error", "fatal", "warning"], attention.Recent.Select(l => l.Message));
+
+        var errors = await repository.GetOverviewLogsAsync([], 1, errorsOnly: true, cancellationToken);
+        Assert.Equal((7, 2), (errors.TotalCount, errors.ErrorCount));
+        Assert.Equal("error", Assert.Single(errors.Recent).Message);
+
+        var healthy = await repository.GetOverviewLogsAsync([new("api", "2")], 3, errorsOnly: false, cancellationToken);
+        Assert.Equal((2, 0, 0), (healthy.TotalCount, healthy.WarningCount, healthy.ErrorCount));
+        Assert.Equal(["unspecified healthy", "healthy"], healthy.Recent.Select(l => l.Message));
+
+        var healthyErrors = await repository.GetOverviewLogsAsync([new("api", "2")], 3, errorsOnly: true, cancellationToken);
+        Assert.Equal(0, healthyErrors.ErrorCount);
+        Assert.Empty(healthyErrors.Recent);
+
+        var empty = await repository.GetOverviewLogsAsync([new("api", "missing")], 3, errorsOnly: false, cancellationToken);
+        Assert.Equal(0, empty.TotalCount);
+        Assert.Empty(empty.Recent);
     }
 
     [Fact]
@@ -1824,6 +1891,45 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
 public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
 {
+    [Fact]
+    public async Task GetOverviewLogs_ResourceDeletedAfterRead_SkipsMissingPreviewRow()
+    {
+        using var context = await CreateRepositoryAsync();
+        var repository = Assert.IsType<SqliteTelemetryRepository>(context.Repository);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        await repository.AddLogsAsync(new AddContext(), [
+            CreateErrorLogs("remaining", time),
+            CreateErrorLogs("deleted", time.AddSeconds(1))
+        ]);
+
+        var rows = repository.ReadOverviewLogRows([], recentCount: 5, errorsOnly: true, cancellationToken);
+        await repository.ClearSelectedSignalsAsync(new()
+        {
+            ["deleted-TestId"] = [AspireDataType.Resource]
+        });
+
+        var overview = repository.MaterializeOverviewLogs(rows);
+
+        Assert.Equal((2, 0, 2), (overview.TotalCount, overview.WarningCount, overview.ErrorCount));
+        var log = Assert.Single(overview.Recent);
+        Assert.Equal("remaining error", log.Message);
+        Assert.Equal(new ResourceKey("remaining", "TestId"), log.Resource.ResourceKey);
+
+        static ResourceLogs CreateErrorLogs(string name, DateTime time) => new()
+        {
+            Resource = CreateResource(name: name, instanceId: "TestId"),
+            ScopeLogs =
+            {
+                new ScopeLogs
+                {
+                    Scope = CreateScope(),
+                    LogRecords = { CreateLogRecord(time: time, message: $"{name} error", severity: SeverityNumber.Error) }
+                }
+            }
+        };
+    }
+
     [Fact]
     public async Task GetLogSummaries_MoreThanSqliteVariableLimit_ReturnsTraceDisplayData()
     {

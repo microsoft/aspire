@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
@@ -14,6 +15,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Xunit;
@@ -24,6 +26,28 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 
 public class TerminalWindowTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(FrontendAuthMode.BrowserToken)]
+    [InlineData(FrontendAuthMode.OpenIdConnect)]
+    public void Initialize_SecuredModeUnauthenticatedUser_Throws(FrontendAuthMode authMode)
+    {
+        var authorizationContext = this.AddAuthorization();
+        authorizationContext.SetNotAuthorized();
+        var client = new TestDashboardClient(isEnabled: true,
+            terminalChannelProvider: () => Channel.CreateUnbounded<WatchTerminalsUpdate>());
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        Services.GetRequiredService<IOptions<DashboardOptions>>().Value.Frontend.AuthMode = authMode;
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Render<RouteView>(builder => builder
+            .Add(p => p.RouteData, new RouteData(typeof(TerminalWindow), new Dictionary<string, object?>
+            {
+                [nameof(TerminalWindow.TerminalId)] = "shell"
+            }))));
+        Assert.Equal("Dashboard authentication is required, but the current user is not authenticated.", exception.Message);
+        Assert.Equal(0, client.TerminalSubscriptionCount);
+        Assert.Equal([], JSInterop.Invocations.Where(i => i.Identifier == "initTerminal"));
+    }
+
     [Theory]
     [InlineData("shell")]
     [InlineData("shell-instance")]
@@ -285,6 +309,37 @@ public class TerminalWindowTests : DashboardTestContext
         Assert.Equal(Resources.TerminalStrings.TerminalWindowEnded, cut.Find(".terminal-window-ended").TextContent);
         Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Equal([], JSInterop.Invocations.Where(i => i.Identifier == "initTerminal"));
+    }
+
+    [Theory]
+    [InlineData(FrontendAuthMode.BrowserToken)]
+    [InlineData(FrontendAuthMode.OpenIdConnect)]
+    public async Task Initialize_SecuredModeAuthenticatedUser_ShowsTerminal(FrontendAuthMode authMode)
+    {
+        var authorizationContext = this.AddAuthorization();
+        authorizationContext.SetAuthorized("test-user");
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var subscriptionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = new TestDashboardClient(isEnabled: true,
+            terminalChannelProvider: () =>
+            {
+                subscriptionStarted.TrySetResult();
+                return updates;
+            });
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        Services.GetRequiredService<IOptions<DashboardOptions>>().Value.Frontend.AuthMode = authMode;
+
+        var cut = Render<RouteView>(builder => builder
+            .Add(p => p.RouteData, new RouteData(typeof(TerminalWindow), new Dictionary<string, object?>
+            {
+                [nameof(TerminalWindow.TerminalId)] = "shell"
+            })));
+
+        Assert.Equal("api/apphost-terminal?terminalId=shell", cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery);
+        // Subscription starts on a background task without triggering a render.
+        await subscriptionStarted.Task.DefaultTimeout();
+        Assert.Equal(1, client.TerminalSubscriptionCount);
+        TerminalSetupHelpers.AssertSingleTerminalConnection(this, "ws://localhost/api/apphost-terminal?terminalId=shell");
     }
 
     [Theory]

@@ -398,14 +398,15 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     var graphIcons = new GraphIconsDto(
                         new GraphMenuIconDto(
                             Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                            LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
+                            LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value,
+                            TagLabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton)].Value),
                         new GraphHiddenIconDto(
                             Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
                             Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value),
                         // The Aspire Outage game is only offered by the new dashboard's overview graph.
                         Game: null);
 
-                    await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
+                    await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons, false);
                     _graphInitialized = true;
                     await UpdateResourceGraphResourcesAsync();
                     await UpdateResourceGraphSelectedAsync();
@@ -459,8 +460,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private List<ResourceDto> GetResourceGraphResources()
     {
-        var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
+        var activeResources = ResourceGraphMapper.OrderResources(_resourceByName.Values.Where(Filter));
+        return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver, r.AppHostTags)).ToList();
     }
 
     private Task ExportResourceGraphAsync()
@@ -479,6 +480,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private class ResourcesInterop(Resources resources)
     {
+        [JSInvokable]
+        public Task<bool> TagGroupContextMenu(string tagName, int clientX, int clientY) =>
+            resources.ShowTagGroupContextMenuAsync(tagName, clientX, clientY);
+
         [JSInvokable]
         public async Task SelectResource(string id)
         {
@@ -724,6 +729,25 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             await contextMenu.OpenAsync(clientX, clientY);
             StateHasChanged();
         }
+    }
+
+    private async Task<bool> ShowTagGroupContextMenuAsync(string tagName, int clientX, int clientY)
+    {
+        var items = ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, ResourceContextMenuHeaderId,
+            () => ResourceGraphMapper.GetTagMembers(_resourceByName.Values.Where(Filter), tagName, tagStore: null),
+            (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
+            ExecuteResourceCommandAsync);
+        if (_contextMenu is not { } contextMenu || items.Count == 0)
+        {
+            Logger.LogDebug("The graph menu for tag '{TagName}' is no longer available.", tagName);
+            return false;
+        }
+
+        _contextMenuItems.Clear();
+        _contextMenuItems.AddRange(items);
+        await contextMenu.OpenAsync(clientX, clientY);
+        StateHasChanged();
+        return true;
     }
 
     private async Task ShowResourceDetailsAsync(ResourceViewModel resource, string? focusElementId)

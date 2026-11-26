@@ -131,6 +131,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HomeActivityBucketTooltip", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to View traces with spans that started in this interval. Some traces may not include a request counted in this bar..
+        /// </summary>
+        public static string HomeActivityBucketTraceHint {
+            get {
+                return ResourceManager.GetString("HomeActivityBucketTraceHint", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Requests per 30 seconds over the last 15 minutes.
@@ -510,6 +519,15 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to {0} request.
+        /// </summary>
+        public static string HomeSingleRequestCount {
+            get {
+                return ResourceManager.GetString("HomeSingleRequestCount", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Slowest endpoints.
         /// </summary>
@@ -1645,6 +1663,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Tag actions for {0}.
+        /// </summary>
+        public static string ResourcesGraphTagActionsButton {
+            get {
+                return ResourceManager.GetString("ResourcesGraphTagActionsButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No commands for this group.
+        /// </summary>
+        public static string ResourcesGraphTagNoCommands {
+            get {
+                return ResourceManager.GetString("ResourcesGraphTagNoCommands", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Zoom in.
         /// </summary>
         public static string ResourcesGraphZoomInButton {
@@ -1794,6 +1830,12 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceTagsAdd {
             get {
                 return ResourceManager.GetString("ResourceTagsAdd", resourceCulture);
+            }
+        }
+
+        public static string ResourceTagsLimitReached {
+            get {
+                return ResourceManager.GetString("ResourceTagsLimitReached", resourceCulture);
             }
         }
         

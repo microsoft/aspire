@@ -266,7 +266,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(span.StartTimeUnixNano.Value))
             : "";
         var shortSpanId = OtlpHelpers.ToShortenedId(spanId);
-        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, traceId, shortSpanId, spanId: spanId);
+        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, TelemetryCommandHelpers.GetRowLinkDashboardUrl(HostEnvironment, dashboardUrl), traceId, shortSpanId, spanId: spanId);
         var durationStr = TelemetryCommandHelpers.FormatDuration(duration);
         var resourceColor = _resourceColorMap.GetColor(resourceName);
 

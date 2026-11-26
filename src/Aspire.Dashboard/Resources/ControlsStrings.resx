@@ -493,8 +493,9 @@
   <data name="ClearSignalsButtonTitle" xml:space="preserve">
     <value>Remove data</value>
   </data>
-  <data name="PauseWarningTitle" xml:space="preserve">
-    <value>Capture paused</value>
+  <data name="PauseWarningText" xml:space="preserve">
+    <value>{0} capture paused</value>
+    <comment>{0} is the type of captured data.</comment>
   </data>
   <data name="LinkTextColumnHeader" xml:space="preserve">
     <value>Text</value>

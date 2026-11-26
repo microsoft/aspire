@@ -76,6 +76,8 @@ internal sealed class SkillSource
 
     internal static IReadOnlyList<SkillSource> Resolve(IConfiguration configuration)
     {
+        // Validate the registration shape for actionable errors. This does not verify
+        // the safety of content supplied by the accepted marketplace or catalog.
         var section = configuration.GetSection(SectionName);
         if (section.Value is not null)
         {

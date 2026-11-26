@@ -30,7 +30,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
     [InlineData(1024, 768)]
     [InlineData(1440, 900)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ResourceNavigation_CloseOrDropdownReturnsToListAndSelectAllReopensContent(int width, int height)
+    public async Task ResourceNavigation_HomeOrDropdownReturnsToListAndSelectAllReopensContent(int width, int height)
     {
         await RunTestAsync(async page =>
         {
@@ -39,13 +39,11 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             await page.GotoAsync("/resources/tag-a");
             var pane = page.Locator(".resource-pane");
             var content = page.Locator(".resource-content");
-            var close = page.Locator(".detail-page-close");
             var picker = page.Locator(".resource-picker");
             var row = pane.Locator("[data-resource-name='tag-b'] .resource-row-link");
 
             if (width <= 768)
             {
-                await Assertions.Expect(close).ToHaveCountAsync(0);
                 await Assertions.Expect(picker).ToBeVisibleAsync();
                 await picker.ClickAsync();
                 await Assertions.Expect(row).ToBeVisibleAsync();
@@ -58,10 +56,8 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             }
             else
             {
-                await Assertions.Expect(close).ToBeVisibleAsync();
                 await Assertions.Expect(picker).ToHaveCountAsync(0);
-                await close.ClickAsync();
-                await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+                await ResourcePaneNavigation.GoHomeAsync(page);
                 await Assertions.Expect(content).Not.ToBeVisibleAsync();
             }
 
@@ -77,13 +73,12 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             }
             else
             {
-                await close.ClickAsync();
+                await ResourcePaneNavigation.GoHomeAsync(page);
             }
             await pane.Locator(".resource-row-all .resource-row-link").ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources$"));
             await Assertions.Expect(content).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas,.drawer-open")).ToHaveCountAsync(0);
-            await Assertions.Expect(close).ToHaveCountAsync(width <= 768 ? 0 : 1);
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
         });
     }
@@ -121,8 +116,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
         });
     }
 
-    // The full resource list lives on the Overview tab, so the data tabs have no page-level close button to open it.
-    // Their own back links and the tabs cover navigation there.
+    // The data tabs open their content beside the docked list, at their own URLs, without the home table.
     [Theory]
     [InlineData("/traces?type=server")]
     [InlineData("/structuredlogs?logLevel=error")]
@@ -130,7 +124,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
     [InlineData("/traces/detail/missing?resource=tag-a&type=server")]
     [InlineData("/metrics/resource/tag-a/meter/Test")]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task DataTabs_HaveNoPageCloseButton(string url)
+    public async Task DataTabs_OpenTheirContentBesideTheList(string url)
     {
         await RunTestAsync(async page =>
         {
@@ -457,30 +451,36 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             var link = row.Locator(".resource-row-link");
             await Assertions.Expect(link).ToHaveAttributeAsync("data-resource-unavailable-reason", Resources.Layout.ResourcePaneNoStructuredLogs);
 
-            foreach (var (tabId, path, reason) in new (string, string, string?)[]
+            foreach (var (tabId, label, path, reason) in new (string, string, string, string?)[]
             {
-                ("Traces", "traces", Resources.Layout.ResourcePaneNoTraces),
-                ("Metrics", "metrics", Resources.Layout.ResourcePaneNoMetrics),
-                ("Console", "consolelogs", null),
-                ("StructuredLogs", "structuredlogs", Resources.Layout.ResourcePaneNoStructuredLogs)
+                ("Traces", Resources.Layout.NavMenuTracesTab, "traces", Resources.Layout.ResourcePaneNoTraces),
+                ("Metrics", Resources.Layout.NavMenuMetricsTab, "metrics", Resources.Layout.ResourcePaneNoMetrics),
+                ("Console", Resources.Layout.NavMenuConsoleLogsTab, "consolelogs", null),
+                ("StructuredLogs", Resources.StructuredLogs.StructuredLogsHeader, "structuredlogs", Resources.Layout.ResourcePaneNoStructuredLogs)
             })
             {
                 if (width <= 768)
                 {
                     await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true }).ClickAsync();
                     await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
-                }
-                var navigation = page.Locator(".resource-tabs-nav");
-                var tab = navigation.Locator($"#tab-{tabId}");
-                if (await tab.IsVisibleAsync())
-                {
-                    await tab.ClickAsync();
+                    // A narrow layout lists the views in the navigation menu instead of a tab strip.
+                    var menu = await ResourcePaneNavigation.OpenNavMenuAsync(page);
+                    await ResourcePaneNavigation.NavMenuItem(menu, label).ClickAsync();
                 }
                 else
                 {
-                    var compact = navigation.Locator(".resource-tabs-compact-button");
-                    await (await compact.IsVisibleAsync() ? compact : navigation.Locator(".resource-tabs-overflow-button")).ClickAsync();
-                    await page.Locator($"#tab-{tabId}-menu-item").ClickAsync();
+                    var navigation = page.Locator(".resource-tabs-nav");
+                    var tab = navigation.Locator($"#tab-{tabId}");
+                    if (await tab.IsVisibleAsync())
+                    {
+                        await tab.ClickAsync();
+                    }
+                    else
+                    {
+                        var compact = navigation.Locator(".resource-tabs-compact-button");
+                        await (await compact.IsVisibleAsync() ? compact : navigation.Locator(".resource-tabs-overflow-button")).ClickAsync();
+                        await page.Locator($"#tab-{tabId}-menu-item").ClickAsync();
+                    }
                 }
                 await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex($"/{path}/resource/tag-a$"));
                 if (width <= 768)

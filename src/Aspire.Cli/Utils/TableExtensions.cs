@@ -11,6 +11,27 @@ namespace Aspire.Cli.Utils;
 internal static class TableExtensions
 {
     /// <summary>
+    /// Creates a table shaped for the current standard output.
+    /// </summary>
+    /// <remarks>
+    /// When stdout is not an interactive terminal (redirected to a file, a pipe, or an agent's
+    /// tool call), box-drawing borders add several multi-byte characters per cell without
+    /// conveying any data, so the table is rendered without borders and keeps only the
+    /// space-aligned columns.
+    /// </remarks>
+    public static Table CreateTable(this ICliHostEnvironment hostEnvironment)
+    {
+        var table = new Table();
+
+        if (!hostEnvironment.SupportsInteractiveOutput)
+        {
+            table.Border(TableBorder.None);
+        }
+
+        return table;
+    }
+
+    /// <summary>
     /// Adds a column with a bold header to the table.
     /// </summary>
     public static Table AddBoldColumn(this Table table, string header, bool noWrap = false, int? width = null)

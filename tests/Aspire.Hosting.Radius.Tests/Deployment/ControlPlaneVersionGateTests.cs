@@ -221,6 +221,7 @@ public class ControlPlaneVersionGateTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
                 NullLogger.Instance,
+                new TestFileSystemService().TempDirectory,
                 "kind-radius",
                 runner.RunAsync,
                 CancellationToken.None));
@@ -242,6 +243,7 @@ public class ControlPlaneVersionGateTests
 
         await RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
             NullLogger.Instance,
+            new TestFileSystemService().TempDirectory,
             "kind-radius",
             runner.RunAsync,
             CancellationToken.None);
@@ -262,6 +264,7 @@ public class ControlPlaneVersionGateTests
 
         await RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
             NullLogger.Instance,
+            new TestFileSystemService().TempDirectory,
             "kind-radius",
             runner.RunAsync,
             CancellationToken.None);
@@ -292,7 +295,7 @@ public class ControlPlaneVersionGateTests
     public async Task ControlPlaneGate_WithAnUnreadableEnvironment_SkipsInsteadOfFailing()
     {
         await RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
-            NullLogger.Instance, kubeContext: null, ThrowingRunner, CancellationToken.None);
+            NullLogger.Instance, new TestFileSystemService().TempDirectory, kubeContext: null, ThrowingRunner, CancellationToken.None);
 
         await RunWithAsync((fileName, _) => fileName == "kubectl" ? null : new ProcessRunResult(0, ""));
         await RunWithAsync((fileName, _) => fileName == "kubectl" ? new ProcessRunResult(1, "") : new ProcessRunResult(0, ""));
@@ -313,6 +316,7 @@ public class ControlPlaneVersionGateTests
         static Task RunWithAsync(Func<string, string[], ProcessRunResult?> run)
             => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
                 NullLogger.Instance,
+                new TestFileSystemService().TempDirectory,
                 "kind-radius",
                 (fileName, arguments, environment, cancellationToken) => Task.FromResult(run(fileName, arguments)),
                 CancellationToken.None);

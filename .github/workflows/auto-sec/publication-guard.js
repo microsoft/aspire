@@ -1,6 +1,6 @@
-// Harden gh-aw v0.89.17's live streams and post-agent publication steps.
+// Harden gh-aw v1.2.2's live streams and post-agent publication steps.
 // Apply this pass after compilation until the compiler supports these boundaries:
-// https://github.com/github/gh-aw/blob/v0.89.17/pkg/workflow/compiler_yaml_post_agent.go
+// https://github.com/github/gh-aw/blob/v1.2.2/pkg/workflow/compiler_yaml_post_agent.go
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -17,6 +17,56 @@ const PRIVATE_TELEMETRY_STEPS = new Set([
     'Generate observability summary',
 ]);
 const PRIVATE_DIAGNOSTIC_STEPS = new Set(['Detect agent errors', 'Redact secrets in logs']);
+// These github-script steps only query GET /rate_limit with the workflow token and
+// log the returned quota counters; they read no agent-writable data. Accept only the
+// complete audited step, line for line, and fail closed on any other property or
+// statement (a lookalike step could otherwise read private logs before the scrub):
+//   - name: Log GitHub rate limits at agent end
+//     if: always()
+//     continue-on-error: true
+//     uses: actions/github-script@<sha> # v9.0.0
+//     with:
+//       github-token: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || ... }}
+//       script: |
+//         ...
+//         await fetchAndLogRateLimit(github, 'agent_end', true);
+// https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/github_rate_limit_logger.cjs
+const RATE_LIMIT_STEPS = new Map([
+    ['Log GitHub rate limits at agent start', { operation: 'agent_start', condition: null }],
+    ['Log GitHub rate limits at agent end', { operation: 'agent_end', condition: 'always()' }],
+]);
+const RATE_LIMIT_TOKEN = '${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}';
+const RATE_LIMIT_SCRIPT = [
+    "const path = require('path');",
+    "const actionsDir = path.join(process.env.RUNNER_TEMP, 'gh-aw', 'actions');",
+    "const { setupGlobals } = require(path.join(actionsDir, 'setup_globals.cjs'));",
+    'setupGlobals(core, github, context, exec, io, getOctokit);',
+    "const { fetchAndLogRateLimit } = require(path.join(actionsDir, 'github_rate_limit_logger.cjs'));",
+];
+
+function isRateLimitStep(step, name) {
+    const audited = RATE_LIMIT_STEPS.get(name);
+    if (!audited) {
+        return false;
+    }
+    const expected = [
+        `      - name: ${name}`,
+        ...(audited.condition ? [`        if: ${audited.condition}`] : []),
+        '        continue-on-error: true',
+        /^        uses: actions\/github-script@[0-9a-f]{40}(?: # v\d+\.\d+\.\d+)?$/,
+        '        with:',
+        `          github-token: ${RATE_LIMIT_TOKEN}`,
+        '          script: |',
+        ...RATE_LIMIT_SCRIPT.map(line => `            ${line}`),
+        `            await fetchAndLogRateLimit(github, '${audited.operation}', true);`,
+    ];
+    const lines = step.replace(/\r\n/g, '\n').replace(/\n+$/, '').split('\n');
+    if (lines.length !== expected.length
+        || !lines.every((line, i) => typeof expected[i] === 'string' ? line === expected[i] : expected[i].test(line))) {
+        throw new Error('auto-sec publication guard: unexpected rate-limit step');
+    }
+    return true;
+}
 const PRIVATE_STDIO_PREFIX = 'exec >/dev/null 2>&1';
 
 function withholdTelemetry(step, newline, condition) {
@@ -30,7 +80,7 @@ function withholdTelemetry(step, newline, condition) {
 function suppressPrivateStreams(step, newline, gateway) {
     // Redirect the host shell before launching AWF/the harness, including background
     // gateway children. Deleting logs later cannot retract already forwarded chunks.
-    // https://github.com/github/gh-aw/blob/v0.89.17/actions/setup/js/process_runner.cjs
+    // https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/process_runner.cjs
     const runs = [...step.matchAll(/^        run: ([^\r\n]+)\r?$/gm)];
     if (runs.length !== 1 || /^        uses:/m.test(step)) {
         throw new Error('auto-sec publication guard: unexpected private execution step');
@@ -118,6 +168,8 @@ function guardPublications(workflow) {
                 // Withhold their classifications too; the runner still records the
                 // execution step's real exit status, without parsing private logs.
                 guardedStep = withholdTelemetry(step[0], newline, condition?.[1]);
+            } else if (isRateLimitStep(step[0], name)) {
+                continue;
             } else if (name !== 'Mount MCP servers as CLIs' || steps.indexOf(step) >= steps.indexOf(executions[0])) {
                 guardedStep = suppressPrivateStreams(step[0], newline, step === gateways[0]);
             }
@@ -142,7 +194,7 @@ function guardPublications(workflow) {
         if (PRIVATE_TELEMETRY_STEPS.has(name)) {
             // Deleted telemetry must not become fabricated zero metrics, nor should
             // framework summaries read agent-writable files outside the artifact root.
-            // https://github.com/github/gh-aw/blob/v0.89.17/actions/setup/js/generate_observability_summary.cjs
+            // https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/generate_observability_summary.cjs
             guardedStep = withholdTelemetry(step[0], newline, guardedCondition);
         }
         if (/^      - name: Upload agent (?:output fallback artifact|artifacts)\r?$/m.test(step[0])) {

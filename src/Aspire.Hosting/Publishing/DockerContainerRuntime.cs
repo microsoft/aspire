@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Formats.Tar;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Shared;
@@ -13,9 +14,6 @@ namespace Aspire.Hosting.Publishing;
 
 internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContainerRuntime>
 {
-    private const string LocalImageOciArchiveNotSupportedMessage =
-        "Docker cannot export an OCI archive when container-file layering references locally built images. " +
-        "Use ContainerImageFormat.Docker for this archive or run the publish with Podman.";
     private readonly ILogger<DockerContainerRuntime> _logger;
 
     public DockerContainerRuntime(ILogger<DockerContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
@@ -159,7 +157,6 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             switch (options.ImageFormat)
             {
                 case ContainerImageFormat.Oci:
-                    throw new DistributedApplicationException(LocalImageOciArchiveNotSupportedMessage);
                 case ContainerImageFormat.Docker:
                 case null:
                     break;
@@ -234,10 +231,60 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
                 processResult.ProcessOutput,
                 processResult.TotalProcessOutputLineCount);
         }
+
+        if (options.ImageFormat == ContainerImageFormat.Oci)
+        {
+            EnsureOciImageLayout(
+                ResourceExtensions.GetContainerImageArchivePath(options.OutputPath!, imageName),
+                imageName);
+        }
     }
 
     /// <summary>
-    /// Builds the arguments that save a locally built image as a Docker archive.
+    /// Verifies that a <c>docker image save</c> archive is also an OCI image layout.
+    /// </summary>
+    private static void EnsureOciImageLayout(string archivePath, string imageName)
+    {
+        // Docker has no separate OCI save format. Docker Engine 25+ writes an OCI image layout
+        // alongside the legacy Docker metadata, so the same archive serves both consumers:
+        //   blobs/sha256/<digest>
+        //   index.json
+        //   manifest.json
+        //   oci-layout
+        //   repositories   (classic image store only)
+        // Older engines write only manifest.json and repositories, which OCI consumers cannot read.
+        // https://docs.docker.com/engine/release-notes/25.0/
+        // https://github.com/opencontainers/image-spec/blob/v1.1.1/image-layout.md
+        var hasLayoutFile = false;
+        var hasIndex = false;
+        using (var archive = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (var reader = new TarReader(archive))
+        {
+            while ((!hasLayoutFile || !hasIndex) && reader.GetNextEntry(copyData: false) is { } entry)
+            {
+                var entryName = entry.Name;
+                while (entryName.StartsWith("./", StringComparison.Ordinal))
+                {
+                    entryName = entryName[2..];
+                }
+
+                hasLayoutFile |= string.Equals(entryName, "oci-layout", StringComparison.Ordinal);
+                hasIndex |= string.Equals(entryName, "index.json", StringComparison.Ordinal);
+            }
+        }
+
+        if (!hasLayoutFile || !hasIndex)
+        {
+            throw new DistributedApplicationException(
+                $"Docker did not write an OCI image layout when saving '{imageName}'. Exporting a ContainerImageFormat.Oci archive " +
+                "for container-file layering requires Docker Engine 25 or later. Upgrade Docker, use ContainerImageFormat.Docker " +
+                "for this archive, or run the publish with a container runtime that can save OCI archives, such as Podman.");
+        }
+    }
+
+    /// <summary>
+    /// Builds the arguments that save a locally built image as a Docker archive. Docker Engine 25+
+    /// writes an archive that is also an OCI image layout.
     /// </summary>
     internal static string BuildSaveArguments(string imageName, ContainerImageBuildOptions options)
     {

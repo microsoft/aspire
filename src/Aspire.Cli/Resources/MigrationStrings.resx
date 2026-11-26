@@ -120,6 +120,9 @@
   <data name="NothingToMigrate" xml:space="preserve">
     <value>Nothing to migrate. The current project is already using the latest recommended Aspire conventions.</value>
   </data>
+  <data name="NoAutomaticMigrationsAppHostSdkObsolete" xml:space="preserve">
+    <value>No automatic migrations apply. This AppHost still uses Aspire.AppHost.Sdk (ASPIRE012), which is obsolete. See https://aka.ms/aspire/diagnostics/aspire012 for how to migrate.</value>
+  </data>
   <data name="AvailableMigrationsHeader" xml:space="preserve">
     <value>The following migrations will be applied:</value>
   </data>

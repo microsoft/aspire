@@ -261,11 +261,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var nuGetClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         var nuGetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
             nuGetClient,
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") })
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage())
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };
@@ -387,7 +388,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
         var nuGetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") })
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage())
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };
@@ -1511,6 +1512,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var settingsClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
 
         PrebuiltAppHostServer CreateServer(string source)
@@ -2396,7 +2398,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var nugetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
             nuGetClient,
-            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") })
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") }, new Aspire.Shared.TemporaryStorage())
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };
@@ -3164,8 +3166,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var dotNetCliRunner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            BuildAsyncCallback = (projectFilePath, _, options, _) =>
             {
+                Assert.True(options.NoAutoResponse);
                 generatedProject = XDocument.Load(projectFilePath.FullName);
                 WriteClosureInputs(
                     projectFilePath.Directory!,
@@ -3292,6 +3295,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var settingsClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         var nuGetClient = new FakeNuGetClient
         {
@@ -4588,6 +4592,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var settingsClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         var nuGetClient = new FakeNuGetClient
         {
@@ -5047,6 +5052,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var settingsClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         return new FakeNuGetClient
         {
@@ -5059,6 +5065,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var settingsClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
+            new Aspire.Shared.TemporaryStorage(),
             NullLogger<NuGetClient>.Instance);
         return new FakeNuGetClient
         {

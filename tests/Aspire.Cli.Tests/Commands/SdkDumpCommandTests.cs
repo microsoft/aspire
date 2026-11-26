@@ -282,7 +282,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(scannerPath);
         Assert.Equal(repoRoot, factory.RestoreRootConfigDirectory);
         Assert.NotNull(scannerFiles);
-        Assert.Empty(scannerFiles);
+        Assert.Equal([Path.Combine(scannerPath, "aspire.config.json")], scannerFiles);
         Assert.False(Directory.Exists(scannerPath));
     }
 

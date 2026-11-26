@@ -10,8 +10,8 @@ namespace Aspire.Cli.Utils;
 ///
 /// On Windows a running process holds an exclusive lock on its executable,
 /// so <see cref="Directory.Delete(string, bool)"/> throws
-/// <see cref="UnauthorizedAccessException"/>. Rather than failing the entire
-/// operation, these helpers rename the locked item to
+/// <see cref="UnauthorizedAccessException"/>. The synchronous deletion helpers
+/// rename the locked item to
 /// <c>{name}.old.{tickcount}</c> and let the caller proceed. The stale
 /// renamed items are best-effort cleaned up on subsequent invocations via
 /// <see cref="TryCleanupOldItems"/>.
@@ -55,6 +55,48 @@ internal static class FileDeleteHelper
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Deletes a directory recursively, retrying transient I/O and access failures
+    /// for up to two seconds before rethrowing the final failure.
+    /// Unlike <see cref="TryDeleteDirectory"/>, this does not rename locked content.
+    /// </summary>
+    internal static async Task DeleteDirectoryWithRetryAsync(string path, TimeProvider timeProvider, CancellationToken cancellationToken)
+    {
+        var delay = TimeSpan.FromMilliseconds(20);
+        var maxDelay = TimeSpan.FromMilliseconds(250);
+        var retryBudget = TimeSpan.FromSeconds(2);
+        var start = timeProvider.GetTimestamp();
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Directory.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Windows can briefly reject deletion of a child's loaded DLLs even after
+                // its exit is observed. Retry deletion without extending shutdown or moving
+                // scanner content outside the invocation's cleanup boundary.
+                var remaining = retryBudget - timeProvider.GetElapsedTime(start);
+                if (remaining <= TimeSpan.Zero)
+                {
+                    throw;
+                }
+
+                await Task.Delay(delay < remaining ? delay : remaining, timeProvider, cancellationToken).ConfigureAwait(false);
+                delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, maxDelay.Ticks));
+            }
+        }
     }
 
     /// <summary>

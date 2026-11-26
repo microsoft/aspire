@@ -2,8 +2,21 @@
 set -eu
 
 ubuntu_apt_mirror="${1:-}"
+ubuntu_sources_file="/etc/apt/sources.list.d/ubuntu.sources"
+default_sources_directory="/etc/apt/aspire-default-ubuntu-sources"
 
 if [ -z "$ubuntu_apt_mirror" ]; then
+    # Derived Java/Go images inherit the base image's mirror configuration.
+    # Restore the original files, not just an empty ARG, for default-source retries.
+    if [ -d "$default_sources_directory" ]; then
+        for source in sources.list sources.list.d/ubuntu.sources; do
+            if [ -f "$default_sources_directory/$source" ]; then
+                cp "$default_sources_directory/$source" "/etc/apt/$source"
+            else
+                rm -f "/etc/apt/$source"
+            fi
+        done
+    fi
     exit 0
 fi
 
@@ -34,7 +47,17 @@ fi
 
 ubuntu_apt_mirror="${ubuntu_apt_mirror%/}"
 ubuntu_apt_components="${UBUNTU_APT_COMPONENTS:-main restricted universe multiverse}"
-ubuntu_sources_file="/etc/apt/sources.list.d/ubuntu.sources"
+
+# Keep one pristine snapshot across base and derived layers, including absence
+# of a legacy sources.list. Other repositories (NodeSource, GitHub) are untouched.
+if [ ! -d "$default_sources_directory" ]; then
+    mkdir -p "$default_sources_directory/sources.list.d"
+    for source in sources.list sources.list.d/ubuntu.sources; do
+        if [ -f "/etc/apt/$source" ]; then
+            cp "/etc/apt/$source" "$default_sources_directory/$source"
+        fi
+    done
+fi
 
 mkdir -p "$(dirname "$ubuntu_sources_file")"
 

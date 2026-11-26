@@ -66,6 +66,13 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Resource snapshot version capability: snapshots include monotonic versions that can be used for ordering.
     /// </summary>
     public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
+
+    /// <summary>
+    /// Stop resource cleanup capability: <c>StopAsync</c> honors <see cref="StopAppHostRequest.WaitForResourceCleanup"/>
+    /// by tearing down the application resources before it responds, and reports the outcome in
+    /// <see cref="StopAppHostResponse.ResourcesCleanedUp"/>.
+    /// </summary>
+    public const string StopResourceCleanup_V1 = "stop-resource-cleanup.v1";
 }
 
 /// <summary>
@@ -420,18 +427,38 @@ internal sealed class StopAppHostRequest : BackchannelRequest
     /// </summary>
     public int? ExitCode { get; init; }
 
+    /// <summary>
+    /// Gets a value indicating whether the AppHost should tear down its resources before responding.
+    /// </summary>
+    /// <remarks>
+    /// Only honored by AppHosts that advertise <see cref="AuxiliaryBackchannelCapabilities.StopResourceCleanup_V1"/>.
+    /// Older AppHosts ignore it and initiate a regular stop.
+    /// </remarks>
+    public bool? WaitForResourceCleanup { get; init; }
+
     /// <inheritdoc />
     public override StopAppHostRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
     {
         TraceContext = traceContext,
-        ExitCode = ExitCode
+        ExitCode = ExitCode,
+        WaitForResourceCleanup = WaitForResourceCleanup
     };
 }
 
 /// <summary>
 /// Response from stopping the AppHost.
 /// </summary>
-internal sealed class StopAppHostResponse { }
+internal sealed class StopAppHostResponse
+{
+    /// <summary>
+    /// Gets a value indicating whether the AppHost confirmed that its resources were torn down before responding.
+    /// </summary>
+    /// <remarks>
+    /// <see langword="null"/> when <see cref="StopAppHostRequest.WaitForResourceCleanup"/> was not requested or the
+    /// AppHost does not support it.
+    /// </remarks>
+    public bool? ResourcesCleanedUp { get; init; }
+}
 
 /// <summary>
 /// Request for executing a resource command.

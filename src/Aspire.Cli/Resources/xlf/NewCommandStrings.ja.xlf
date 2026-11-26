@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BuiltInTemplates">
         <source>Built-in templates</source>
-        <target state="new">Built-in templates</target>
+        <target state="translated">組み込みテンプレート</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelOptionDescription">
@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredTemplateConflictingOptions">
         <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
-        <target state="new">Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</target>
+        <target state="translated">構成されたソースのテンプレートを --source、--version、--channel、または --language と組み合わせることはできません。</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="InvalidConfiguredTemplateSource">
         <source>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</source>
-        <target state="new">Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</target>
+        <target state="translated">絶対 'path' を持つソース オブジェクト、または 'repository' と省略可能な 'ref'/'path' を持つソース オブジェクトが必要です。'aspire template source add' を使用してソースを構成します。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -64,17 +64,17 @@
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
         <source>Could not create the local template ({0}): {1}</source>
-        <target state="new">Could not create the local template ({0}): {1}</target>
+        <target state="translated">ローカル テンプレート ({0}) を作成できませんでした: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateLoadFailed">
         <source>Could not load the local template: {0}</source>
-        <target state="new">Could not load the local template: {0}</target>
+        <target state="translated">ローカル テンプレートを読み込めませんでした: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateSelectionRequiresInteraction">
         <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
-        <target state="new">The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</target>
+        <target state="translated">ディレクトリに複数のテンプレートが含まれています。対話的に実行して 1 つを選択するか、--template-path に単一のテンプレートのディレクトリを指定してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
@@ -89,12 +89,12 @@
       </trans-unit>
       <trans-unit id="NoConfiguredTemplateSources">
         <source>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</source>
-        <target state="new">No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</target>
+        <target state="translated">使用可能なテンプレート ソースが構成されていません。'--path' または '--repository' を指定して 'aspire template source add &lt;name&gt;' を使用します。ソースはグローバルに保存されます。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
-        <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <target state="translated">'{0}' に .NET テンプレートが見つかりませんでした。ディレクトリまたはそのいずれかのサブディレクトリに .template.config/template.json ファイルが必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
@@ -174,212 +174,212 @@
       </trans-unit>
       <trans-unit id="TemplateCommandDescription">
         <source>Manage project templates.</source>
-        <target state="new">Manage project templates.</target>
+        <target state="translated">プロジェクト テンプレートを管理します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
         <source>The template directory '{0}' does not exist.</source>
-        <target state="new">The template directory '{0}' does not exist.</target>
+        <target state="translated">テンプレート ディレクトリ '{0}' が存在しません。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathConflictingOptions">
         <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
-        <target state="new">--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</target>
+        <target state="translated">--template-path および --template-repository は、空でない値が必要であり、テンプレート サブコマンド、--source、--version、--channel、または --language と組み合わせることができません。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathOptionDescription">
         <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
-        <target state="new">Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</target>
+        <target state="translated">アンパックした .NET テンプレート パッケージ ディレクトリへのパス (--template-repository を指定した場合は、リポジトリからの相対パス)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitExited">
         <source>Git failed with exit code {0}: {1}</source>
-        <target state="new">Git failed with exit code {0}: {1}</target>
+        <target state="translated">Git が終了コード {0} で失敗しました: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitFailed">
         <source>Could not access the template repository: {0}</source>
-        <target state="new">Could not access the template repository: {0}</target>
+        <target state="translated">テンプレート リポジトリにアクセスできませんでした: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Git を開始できませんでした。Git をインストールし、PATH にあることを確認してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryOptionDescription">
         <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
-        <target state="new">Clone a Git repository containing templates; --template-path is relative to its root</target>
+        <target state="translated">テンプレートを含む Git リポジトリをクローンします。--template-path はそのルートからの相対パスです</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
         <source>Template repository paths must be relative and stay within the repository without traversing symbolic links.</source>
-        <target state="new">Template repository paths must be relative and stay within the repository without traversing symbolic links.</target>
+        <target state="translated">テンプレート リポジトリのパスは相対パスで指定し、シンボリック リンクをたどってリポジトリの外に出ないようにする必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">
         <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
-        <target state="new">Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</target>
+        <target state="translated">テンプレート リポジトリの参照 '{0}' をコミット SHA に解決できませんでした。ブランチ、タグ、または完全なコミット SHA を指定してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefOptionDescription">
         <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
-        <target state="new">Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</target>
+        <target state="translated">テンプレート リポジトリのブランチ、タグ、または完全なコミット SHA (--template-repository が必要。既定値はリモート HEAD)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
-        <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <target state="translated">--template-repository-ref には、--template-repository と、空でない ref 値が必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAddDescription">
         <source>Add a named template source to global configuration after confirming you trust it.</source>
-        <target state="new">Add a named template source to global configuration after confirming you trust it.</target>
+        <target state="translated">信頼できることを確認してから、名前付きテンプレート ソースをグローバル構成に追加します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAdded">
         <source>Template source '{0}' added to global configuration.</source>
-        <target state="new">Template source '{0}' added to global configuration.</target>
+        <target state="translated">テンプレート ソース '{0}' がグローバル構成に追加されました。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAlreadyExists">
         <source>A template source with this name already exists. Remove it before adding a replacement.</source>
-        <target state="new">A template source with this name already exists. Remove it before adding a replacement.</target>
+        <target state="translated">この名前のテンプレート ソースは既に存在します。置換を追加する前に削除してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceCannotExtendString">
         <source>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</source>
-        <target state="new">This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</target>
+        <target state="translated">このソースは文字列です。オブジェクト フィールドを設定する前に、'aspire config delete {0} --global' を使用して削除してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceCommandDescription">
         <source>Manage global template sources.</source>
-        <target state="new">Manage global template sources.</target>
+        <target state="translated">グローバル テンプレート ソースを管理します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceConfigurationHeader">
         <source>Configuration</source>
-        <target state="new">Configuration</target>
+        <target state="translated">構成</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceDisplayNameInvalid">
         <source>Expected a display name string without control characters, or null to use the source alias.</source>
-        <target state="new">Expected a display name string without control characters, or null to use the source alias.</target>
+        <target state="translated">制御文字を含まない表示名の文字列、またはソース エイリアスを使用する場合の null 値が必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceExplanation">
         <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
-        <target state="new">One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</target>
+        <target state="translated">1 つ以上のテンプレート ソースが構成されています。テンプレート ソースを使用すると、組織は Aspire テンプレートを共有して開発エクスペリエンスをカスタマイズできます。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceInvalidRepository">
         <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
-        <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
+        <target state="translated">パスワード、トークン、クエリ、フラグメントを含まない HTTPS または SSH の Git リポジトリ URL が必要です。SSH ユーザー名は使用できます。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceLegacyConfiguration">
         <source>Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</source>
-        <target state="new">Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</target>
+        <target state="translated">テンプレート ソースには aspire.config.json が必要です。'aspire config info' を実行してレガシのグローバル構成を移行してから、もう一度実行してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListDescription">
         <source>List named template sources without discovering templates.</source>
-        <target state="new">List named template sources without discovering templates.</target>
+        <target state="translated">テンプレートを検出せずに、名前付きテンプレート ソースを一覧表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListEmpty">
         <source>No template sources are configured. Use 'aspire template source add' to add one.</source>
-        <target state="new">No template sources are configured. Use 'aspire template source add' to add one.</target>
+        <target state="translated">テンプレート ソースが構成されていません。'aspire template source add' を使用して追加します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceMissingLocation">
         <source>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</source>
-        <target state="new">Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</target>
+        <target state="translated">ローカル ソースには絶対 'path' を、Git ソースには 'repository' を指定します。'ref' には 'repository' が必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameDescription">
         <source>The name of the template source.</source>
-        <target state="new">The name of the template source.</target>
+        <target state="translated">テンプレート ソースの名前。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">
         <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
-        <target state="new">Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <target state="translated">テンプレート ソース名には、ASCII の英字、数字、ドット、ハイフン、アンダースコアを 1 ～ 64 文字使用できます。先頭は英字または数字にする必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNotFound">
         <source>Template source '{0}' was not found in global configuration.</source>
-        <target state="new">Template source '{0}' was not found in global configuration.</target>
+        <target state="translated">テンプレート ソース '{0}' がグローバル構成に見つかりませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcePathDescription">
         <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
-        <target state="new">An absolute local template directory, or a repository-relative directory when --repository is specified.</target>
+        <target state="translated">絶対パスで指定したローカル テンプレート ディレクトリ、または --repository が指定されている場合はリポジトリからの相対パスで指定したディレクトリ。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceReadFailed">
         <source>Could not read global template sources. Check the configuration file's JSON format and file permissions.</source>
-        <target state="new">Could not read global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <target state="translated">グローバル テンプレート ソースを読み取れませんでした。構成ファイルの JSON 形式とファイルのアクセス許可を確認します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRefDescription">
         <source>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</source>
-        <target state="new">A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</target>
+        <target state="translated">Git ブランチ、タグ、または完全なコミット SHA です（--repository が必要。既定値は HEAD）。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRemoveDescription">
         <source>Remove a named template source from global configuration.</source>
-        <target state="new">Remove a named template source from global configuration.</target>
+        <target state="translated">名前付きテンプレート ソースをグローバル構成から削除します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRemoved">
         <source>Template source '{0}' removed from global configuration.</source>
-        <target state="new">Template source '{0}' removed from global configuration.</target>
+        <target state="translated">テンプレート ソース '{0}' がグローバル構成から削除されました。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRepositoryDescription">
         <source>An HTTPS or SSH Git repository URL containing templates.</source>
-        <target state="new">An HTTPS or SSH Git repository URL containing templates.</target>
+        <target state="translated">テンプレートを含む HTTPS または SSH Git リポジトリの URL。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceSearchFailed">
         <source>Could not search template source '{0}': {1}</source>
-        <target state="new">Could not search template source '{0}': {1}</target>
+        <target state="translated">テンプレート ソース '{0}' を検索できませんでした: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceSettingInvalid">
         <source>Invalid template setting '{0}': {1}</source>
-        <target state="new">Invalid template setting '{0}': {1}</target>
+        <target state="translated">テンプレート設定 '{0}' が無効です: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceStringRequired">
         <source>Expected a nonempty string without control characters.</source>
-        <target state="new">Expected a nonempty string without control characters.</target>
+        <target state="translated">制御文字を含まない空でない文字列が必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceTrustPrompt">
         <source>Do you trust template source '{0}' ({1})?</source>
-        <target state="new">Do you trust template source '{0}' ({1})?</target>
+        <target state="translated">テンプレート ソース '{0}' ({1}) を信頼しますか?</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceUnknownField">
         <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
-        <target state="new">Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</target>
+        <target state="translated">不明なソース フィールドです。'path'、'repository'、'ref'、または 'displayName' を使用してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceWriteFailed">
         <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
-        <target state="new">Could not update global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <target state="translated">グローバル テンプレート ソースを更新できませんでした。構成ファイルの JSON 形式とファイルのアクセス許可を確認します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceYesOptionDescription">
         <source>Trust the template source and skip confirmation.</source>
-        <target state="new">Trust the template source and skip confirmation.</target>
+        <target state="translated">テンプレート ソースを信頼して、確認をスキップします。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcesMustBeObject">
         <source>The global 'templateSources' setting must be an object containing named template sources.</source>
-        <target state="new">The global 'templateSources' setting must be an object containing named template sources.</target>
+        <target state="translated">グローバル 'templateSources' 設定は、名前付きテンプレート ソースを含むオブジェクトである必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
