@@ -22,8 +22,11 @@ internal sealed class DcpConnectionTestProcess(
     internal const string SessionDirectoryFileName = "dcp-session-directory";
     internal const string StandardOutputFileName = "dcp-stdout.log";
     internal const string StandardErrorFileName = "dcp-stderr.log";
-    internal const int StartupAndReadinessTimeoutSeconds = 30;
-    private const int ControllerReadinessTimeoutSeconds = 60;
+    private static readonly TimeSpan s_startupTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_controllerReadinessTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan s_apiReadinessTimeout = TimeSpan.FromSeconds(30);
+
+    internal static TimeSpan ControllerStartupAndReadinessTimeout => s_startupTimeout + s_controllerReadinessTimeout;
 
     public string FileName => inner.FileName;
     public IReadOnlyList<string> Arguments => inner.Arguments;
@@ -107,7 +110,7 @@ internal sealed class DcpConnectionTestProcess(
             }
         };
         DcpConnectionChecker.DcpConnectionTestSession session;
-        using (var startup = new CancellationTokenSource(TimeSpan.FromSeconds(StartupAndReadinessTimeoutSeconds)))
+        using (var startup = new CancellationTokenSource(s_startupTimeout))
         {
             session = await DcpConnectionChecker.DcpConnectionTestSession.StartAsync(
                 dcpDirectory,
@@ -127,8 +130,7 @@ internal sealed class DcpConnectionTestProcess(
         {
             var process = Assert.Single(recordingFactory.CreatedExecutions);
             var sessionDirectory = Assert.IsType<string>(process.EnvironmentVariables["DCP_SESSION_FOLDER"]);
-            var readinessTimeout = TimeSpan.FromSeconds(
-                startControllers ? ControllerReadinessTimeoutSeconds : StartupAndReadinessTimeoutSeconds);
+            var readinessTimeout = startControllers ? s_controllerReadinessTimeout : s_apiReadinessTimeout;
             using (var readiness = new CancellationTokenSource(readinessTimeout))
             {
                 await WaitForApiAsync(Path.Combine(sessionDirectory, "kubeconfig"), readiness.Token);

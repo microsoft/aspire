@@ -167,8 +167,9 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             processes.Add(Process.GetProcessById(apiServer.ProcessId));
             if (includeControllers)
             {
-                // Account for process startup and controller readiness, plus a buffer for slower CI machines.
-                var treeReadinessTimeout = TimeSpan.FromSeconds(2 * DcpConnectionTestProcess.StartupAndReadinessTimeoutSeconds)
+                // The helper reports the API server's PID before it waits for the kubeconfig.
+                // Allow both helper phases to finish before timing out the pipe reads.
+                var treeReadinessTimeout = DcpConnectionTestProcess.ControllerStartupAndReadinessTimeout
                     + TestConstants.DefaultTimeoutTimeSpan;
                 var tree = await readiness.ReadTreeAsync(treeReadinessTimeout);
                 Assert.Equal(apiServer, tree[0]);

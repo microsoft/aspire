@@ -441,21 +441,19 @@ internal sealed class DcpConnectionChecker(
         private async Task<bool> ForceStopAsync()
         {
             // IMPORTANT: Killing DCP is acceptable ONLY because this DCP instance exists solely for the
-            // `aspire doctor` connectivity health check. It runs a bare API server (plus its controller
-            // process) in a private session folder, Aspire never creates any API objects in it (the probe
-            // only calls GET /version), so it manages no containers, executables, networks, or other
-            // resources that a forced kill could orphan. A DCP instance that runs an AppHost must NOT be
+            // `aspire doctor` connectivity health check. It runs only the API server in a private session
+            // folder. The probe calls GET /version and creates no API objects, so there are no workloads
+            // or networks that a forced kill could orphan. A DCP instance that runs an AppHost must NOT be
             // stopped this way: it has to be shut down gracefully so it can clean up the resources it owns.
             //
             // The graceful stop request fails exactly when the probe found DCP unhealthy (no kubeconfig,
             // TLS or authentication failures, or an unresponsive API server). Leaving DCP for --monitor would
             // keep it alive until the CLI exits, which in a long-lived `aspire agent mcp` server could be
-            // indefinitely and would accumulate one orphan pair of processes per failed doctor run.
+            // indefinitely and would leave another API server running after each failed doctor run.
             _logger.LogDebug("DCP doctor process {ProcessId} did not stop gracefully; killing its process tree.", _process.ProcessId);
 
             try
             {
-                // Kill the whole tree so the controller process started by `dcp start-apiserver` does not outlive it.
                 _process.Kill(entireProcessTree: true);
             }
             catch (InvalidOperationException) when (_process.HasExited)
