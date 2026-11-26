@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Launching an AppHost from Visual Studio now builds path-based project resources first, avoiding 500 errors on clean launches.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-11-11T21:12:12Z",
+  "lastMergedAt": "2026-11-11T21:12:12Z",
+  "name": "Visual Studio launch for unbuilt project resources",
+  "owner": "karolz-ms",
+  "prs": [
+    22081
+  ]
+}

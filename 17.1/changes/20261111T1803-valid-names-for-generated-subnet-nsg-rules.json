@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Allow/deny rules generated from subnet shorthand no longer put raw CIDRs in ARM rule names, so Bicep no longer rejects them (BCP170).",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-11-11T18:03:39Z",
+  "lastMergedAt": "2026-11-11T18:03:39Z",
+  "name": "Valid names for generated subnet NSG rules",
+  "owner": "adamint",
+  "prs": [
+    22099
+  ]
+}

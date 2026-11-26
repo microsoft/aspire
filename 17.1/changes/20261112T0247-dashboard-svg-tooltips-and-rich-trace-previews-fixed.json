@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "SVG tooltips in the dashboard work again and rich trace previews are restored.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛠️",
+  "firstMergedAt": "2026-11-12T02:47:34Z",
+  "lastMergedAt": "2026-11-12T02:47:34Z",
+  "name": "Dashboard SVG tooltips and rich trace previews fixed",
+  "owner": "JamesNK",
+  "prs": [
+    22138
+  ]
+}

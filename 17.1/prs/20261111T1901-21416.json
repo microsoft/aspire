@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Included in changelog entry",
+  "mergedAt": "2026-11-11T19:01:05Z",
+  "number": 21416,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "included",
+  "title": "Fix VS Code resource attach name resolution"
+}

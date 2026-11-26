@@ -1,0 +1,26 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource sidebar icons and content match the All resources view, endpoint details and link names are aligned, relationship graph labels are smaller with more text width, telemetry footers show unified counts and pause indicators, and expanded grid actions are simpler.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎛️",
+  "firstMergedAt": "2026-11-11T17:08:44Z",
+  "lastMergedAt": "2026-11-12T16:11:33Z",
+  "name": "Polished resources layout and sidebar",
+  "owner": "JamesNK",
+  "prs": [
+    22145,
+    22134,
+    22137,
+    22149,
+    22135,
+    22136,
+    22192,
+    22147
+  ]
+}

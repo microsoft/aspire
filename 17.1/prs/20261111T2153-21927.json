@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only fake timer change",
+  "mergedAt": "2026-11-11T21:53:30Z",
+  "number": 21927,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "excluded",
+  "title": "Scope E2E state file bridge fake timers to each test's async context"
+}

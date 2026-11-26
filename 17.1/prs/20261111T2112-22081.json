@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Included in changelog entry",
+  "mergedAt": "2026-11-11T21:12:12Z",
+  "number": 22081,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "included",
+  "title": "Fix Visual Studio launch for unbuilt project resources"
+}

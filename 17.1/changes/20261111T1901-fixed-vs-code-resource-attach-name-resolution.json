@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Attaching the debugger to AppHost resources now resolves resource names correctly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-11-11T19:01:05Z",
+  "lastMergedAt": "2026-11-11T19:01:05Z",
+  "name": "Fixed VS Code resource attach name resolution",
+  "owner": "ellahathaway",
+  "prs": [
+    21416
+  ]
+}

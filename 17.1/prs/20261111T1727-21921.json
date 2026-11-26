@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only E2E reporting change",
+  "mergedAt": "2026-11-11T17:27:42Z",
+  "number": 21921,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "excluded",
+  "title": "Report Java debug startup timeout E2E failures separately from cleanup"
+}

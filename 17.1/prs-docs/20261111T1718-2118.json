@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs repo maintenance, unrelated to milestone changes",
+  "mergedAt": "2026-11-11T17:18:51Z",
+  "number": 2118,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "excluded",
+  "title": "Fail release sync when the release branch is not updated"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only fake timer change",
+  "mergedAt": "2026-11-11T21:51:19Z",
+  "number": 21922,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "excluded",
+  "title": "Scope VS Code extension spawnCli fake timers to the test's async context"
+}

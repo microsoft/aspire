@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Dependency/SDK bump",
+  "mergedAt": "2026-11-11T20:41:18Z",
+  "number": 22070,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "excluded",
+  "title": "Update .NET servicing dependencies and adopt .NET 11 GA"
+}

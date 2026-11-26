@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included in changelog entry",
+  "mergedAt": "2026-11-11T19:02:23Z",
+  "number": 21446,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "included",
+  "title": "Fix lost resource logger announcements for concurrent subscriber watchers"
+}

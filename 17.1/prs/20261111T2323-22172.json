@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Release-engineering workflow change",
+  "mergedAt": "2026-11-11T23:23:38Z",
+  "number": 22172,
+  "runDate": "2026-11-26T06:10:00Z",
+  "status": "excluded",
+  "title": "Target release/17.0 in scheduled API and ATS diff workflows"
+}
