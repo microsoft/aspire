@@ -276,37 +276,14 @@
     overflow: hidden;
 }
 
-/* The resizer straddles the pane's right border so it's easy to grab. */
+/* Center the hit target over the last pixel of the pane's grid track. */
 .resource-pane-resizer {
     position: absolute;
-    top: 0;
-    right: -4px;
-    bottom: 0;
+    inset-block: 0;
+    right: calc((1px - var(--aspire-splitter-hit-size)) / 2);
     z-index: 5;
-    width: 8px;
-    cursor: col-resize;
+    width: var(--aspire-splitter-hit-size);
     touch-action: none;
-}
-
-.resource-pane-resizer::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 3px;
-    width: 2px;
-    background: transparent;
-    transition: background-color .15s;
-}
-
-.resource-pane-resizer:hover::after,
-.resource-pane-resizer.resizing::after,
-.resource-pane-resizer:focus-visible::after {
-    background: var(--colorBrandStroke1);
-}
-
-.resource-pane-resizer:focus-visible {
-    outline: none;
 }
 
 .resource-pane-head {
@@ -1170,7 +1147,7 @@
         border-right: 0;
     }
 
-    .resource-pane::after {
+    .resource-pane:not(:has(> .resource-pane-resizer))::after {
         content: "";
         position: absolute;
         inset: 0 0 0 auto;

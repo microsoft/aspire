@@ -71,13 +71,13 @@
                 @if (PageViewModel.Instruments?.Count > 0)
                 {
                     // Collapsed property only allows us to show Panel1 (which is the metric selector)
-                    // but we want to only show Panel2 on mobile. So, hide the bar handle and reduce width to 0
-                    // on mobile.
+                    // but we want to only show Panel2 on mobile. Collapse the first pane; the shared styles hide its bar.
                     <div class="metrics-splitter" @ref="_metricsSplitterElement">
                     <FluentMultiSplitter Style="height:100%"
-                                         BarSize="@(ViewportInformation.IsDesktop ? "calc(var(--spacingHorizontalS) + var(--strokeWidthThin))" : "0")"
                                          OnResize="HandleMetricsSplitterResize">
                         <FluentMultiSplitterPane Size="@(ViewportInformation.IsDesktop ? _metricGroupsPaneSize : "0")"
+                                                 Max="@($"{InstrumentPaneMaxWidth}px")"
+                                                 Style="@($"max-width: {InstrumentPaneMaxWidth}px")"
                                                  Collapsed="@(!ViewportInformation.IsDesktop)">
                             @if (ViewportInformation.IsDesktop)
                             {

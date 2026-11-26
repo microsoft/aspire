@@ -1,3 +1,12 @@
+.genai-visualizer-container ::deep .fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar {
+    /* Keep the full hit target between the panes: 4px on each side of the 1px line. */
+    margin-inline: 0;
+}
+
+.genai-visualizer-container ::deep .fluent-multi-splitter > .fluent-multi-splitter-bar:not(:focus-visible)::before {
+    opacity: 0;
+}
+
 ::deep .span-messages-container {
     background: var(--main-container-background-color);
     color: var(--colorNeutralForeground1);
@@ -54,15 +63,6 @@
     font-size: var(--aspire-font-size-secondary);
     font-weight: var(--aspire-font-weight-regular);
     line-height: 1;
-}
-
-.genai-visualizer-container ::deep .fluent-multi-splitter-bar {
-    margin-inline: 0;
-    flex-shrink: 0;
-}
-
-.genai-visualizer-container ::deep .fluent-multi-splitter-bar:not(:hover)::before {
-    opacity: 0;
 }
 
 ::deep .genai-message-tree {

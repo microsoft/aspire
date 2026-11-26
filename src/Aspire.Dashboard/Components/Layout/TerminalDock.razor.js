@@ -78,6 +78,7 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
         pointerId = e.pointerId;
         dragChanged = false;
         grabber.setPointerCapture(e.pointerId);
+        grabber.classList.add('resizing');
         grabber.focus({ preventScroll: true });
         e.preventDefault();
     };
@@ -97,6 +98,7 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
             return;
         }
         pointerId = null;
+        grabber.classList.remove('resizing');
         if (grabber.hasPointerCapture(e.pointerId)) {
             grabber.releasePointerCapture(e.pointerId);
         }
@@ -171,6 +173,7 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
 
     resizeRegistrations.set(dockElement, () => {
         disposed = true;
+        grabber.classList.remove('resizing');
         if (updateTimer !== null) {
             clearTimeout(updateTimer);
             updateTimer = null;
