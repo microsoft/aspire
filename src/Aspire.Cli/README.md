@@ -74,6 +74,14 @@ C# AppHosts created with Aspire 17 or later use package directives instead of th
 | `doctor` | Diagnose Aspire environment issues and verify setup. |
 | `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
+| `admire` | Animate the Aspire logo and display the CLI version. |
+
+`aspire admire` fills the terminal window in the normal screen buffer with an
+animated braille logo spraying from the mouse pointer, then fades in
+`Aspire <version>` beneath it. After a short hold, the particles return to the
+moving pointer in staggered waves and the command exits. Mouse tracking starts
+at the centre until the first mouse event. Redirected output and terminals
+without ANSI support receive a static text logo instead. Press Ctrl+C to cancel.
 
 ### Setting secrets
 

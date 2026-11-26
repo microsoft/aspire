@@ -1,8 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Tui;
+using Hex1b;
+using Hex1b.Input;
+using Hex1b.Surfaces;
+using Hex1b.Theming;
+using Hex1b.Tokens;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -38,46 +46,145 @@ public class AdmireCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(100, 32)]
+    [InlineData(24, 14)]
+    [InlineData(8, 2)]
+    public async Task Admire_AnimationFormsLogoThenRevealsVersion(int width, int height)
+    {
+        var app = new AdmireSplashApp("17.0.0");
+        var forming = new Surface(width, height);
+        app.Render(forming, AdmireSplashApp.FormationDurationMs / 2);
+        var formed = new Surface(width, height);
+        app.Render(formed, AdmireSplashApp.FormationDurationMs);
+        var final = new Surface(width, height);
+        app.Render(final, AdmireSplashApp.ExitStartMs);
+        var exiting = new Surface(width, height);
+        app.Render(exiting, AdmireSplashApp.ExitStartMs + AdmireSplashApp.ExitTravelMs / 2);
+        var exited = new Surface(width, height);
+        app.Render(exited, AdmireSplashApp.TotalDurationMs);
+        await Verifier.Verify($"Forming:\n{GetSurfaceText(forming)}\n\nFormed:\n{GetSurfaceText(formed)}\n\nFinal:\n{GetSurfaceText(final)}\n\nExiting:\n{GetSurfaceText(exiting)}\n\nExited:\n{GetSurfaceText(exited)}", "txt")
+            .UseDirectory("../Snapshots").UseParameters(width, height);
+    }
+
+    [Fact]
+    public void Admire_VersionFadesInAfterFormation()
+    {
+        var app = new AdmireSplashApp("17.0.0");
+        var halfway = new Surface(100, 32);
+        app.Render(halfway, AdmireSplashApp.FormationDurationMs + AdmireSplashApp.CaptionFadeDurationMs / 2);
+        var final = new Surface(100, 32);
+        app.Render(final, AdmireSplashApp.ExitStartMs);
+        Assert.Equal("A", halfway[43, 26].Character);
+        Assert.Equal(Hex1bColor.FromRgb(115, 115, 115), halfway[43, 26].Foreground);
+        Assert.Equal(Hex1bColor.FromRgb(230, 230, 230), final[43, 26].Foreground);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Admire_Interactive_AnimatesToCompleteLogo(bool narrow)
+    public async Task Admire_FlowUsesNormalBufferAndEnablesMouse(bool resize)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var interaction = new TestInteractionService();
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var recording = Path.Combine(workspace.WorkspaceRoot.FullName, "admire.cast");
+        var presentation = new HeadlessPresentationAdapter(100, 32);
+        var runTask = new AdmireSplashApp("17.0.0").RunAsync(Hex1bTerminal.CreateBuilder()
+            .WithPresentation(presentation).WithDimensions(100, 32).WithAsciinemaRecording(recording), CancellationToken.None);
+        if (resize)
         {
-            options.InteractionServiceFactory = _ => interaction;
-            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
-            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityVersion: "17.0.0-preview.1", identityCommit: "2d325b13709752ba");
-        }).BuildServiceProvider();
-        if (narrow)
-        {
-            provider.GetRequiredService<ConsoleEnvironment>().Out.Profile.Width = 50;
+            presentation.TriggerResize(60, 24);
         }
+        await runTask.DefaultTimeout(AdmireSplashApp.TotalDurationMs + 10000);
 
-        var result = await provider.GetRequiredService<RootCommand>().Parse("admire").InvokeAsync().DefaultTimeout();
+        // Asciinema v2 writes a header followed by [seconds, "o", ANSI text].
+        var output = new List<string>();
+        foreach (var line in File.ReadLines(recording).Skip(1))
+        {
+            using var json = JsonDocument.Parse(line);
+            if (json.RootElement[1].GetString() == "o")
+            {
+                output.Add(json.RootElement[2].GetString()!);
+            }
+        }
+        Assert.True(output.Count > 2);
+        Assert.Empty(Regex.Matches(string.Concat(output), "\u001b\\[\\?(?:47|1047|1049)h"));
+        var text = string.Concat(output);
+        Assert.Contains("\u001b[?1003h", text);
+        Assert.Contains("\u001b[?1006h", text);
+        Assert.Contains("Aspire 17.0.0", text);
+    }
 
-        Assert.Equal(0, result);
-        Assert.True(interaction.DisplayedLiveRenderables.Count > 2);
-        Assert.Empty(interaction.DisplayedRawText);
-        var writer = new StringWriter();
-        var console = CliServiceCollectionTestOptions.CreateAnsiConsole(writer, ansi: false);
-        console.Write(interaction.DisplayedLiveRenderables[^1]);
-        var rendered = string.Join(Environment.NewLine, writer.ToString().TrimEnd('\r', '\n')
-            .Split(Environment.NewLine).Select(line => line.TrimEnd()));
-        Assert.Equal(ExpectedLogo("17.0.0", wide: !narrow, solid: true, commit: "2d325b1370"), rendered);
+    [Fact]
+    public async Task Admire_FlowCanBeCancelled()
+    {
+        using var stopping = new CancellationTokenSource();
+        stopping.CancelAfter(TimeSpan.FromMilliseconds(100));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new AdmireSplashApp("17.0.0")
+            .RunAsync(Hex1bTerminal.CreateBuilder().WithHeadless(), stopping.Token)).DefaultTimeout();
+    }
 
-        var colorWriter = new StringWriter();
-        var colorConsole = CliServiceCollectionTestOptions.CreateAnsiConsole(colorWriter);
-        colorConsole.Profile.Capabilities.ColorSystem = Spectre.Console.ColorSystem.TrueColor;
-        colorConsole.Write(interaction.DisplayedLiveRenderables[^1]);
-        var colorOutput = colorWriter.ToString();
-        Assert.Contains("\u001b[38;2;81;43;212m", colorOutput);
-        Assert.Contains("\u001b[38;2;116;85;221m", colorOutput);
-        Assert.Contains("\u001b[38;2;151;128;229m", colorOutput);
-        Assert.Contains("\u001b[38;2;185;170;238m", colorOutput);
-        Assert.Contains("\u001b[38;2;220;213;246m", colorOutput);
-        Assert.Contains("\u001b[38;2;116;85;221m▀", colorOutput);
+    [Fact]
+    public void Admire_ParticlesSprayFromMouseAndSteerToMovingExit()
+    {
+        var left = new AdmireSplashApp("17.0.0");
+        var right = new AdmireSplashApp("17.0.0");
+        left.MoveMouse(10, 5);
+        right.MoveMouse(90, 27);
+        var leftSpray = new Surface(100, 32);
+        var rightSpray = new Surface(100, 32);
+        left.Render(leftSpray, 100);
+        right.Render(rightSpray, 100);
+        Assert.True(GetParticleCentre(leftSpray).X < GetParticleCentre(rightSpray).X);
+
+        var firstExit = AdmireSplashApp.ExitStartMs + AdmireSplashApp.ExitStaggerMs;
+        left.Render(new Surface(100, 32), firstExit);
+        right.Render(new Surface(100, 32), firstExit);
+        left.MoveMouse(90, 27);
+        right.MoveMouse(10, 5);
+        var leftSteered = new Surface(100, 32);
+        var rightSteered = new Surface(100, 32);
+        left.Render(leftSteered, firstExit + AdmireSplashApp.ExitTravelMs / 2);
+        right.Render(rightSteered, firstExit + AdmireSplashApp.ExitTravelMs / 2);
+        var leftCentre = GetParticleCentre(leftSteered);
+        var rightCentre = GetParticleCentre(rightSteered);
+        Assert.True(leftCentre.X > rightCentre.X);
+        Assert.True(leftCentre.Y > rightCentre.Y);
+
+        var exited = new Surface(100, 32);
+        left.Render(exited, AdmireSplashApp.TotalDurationMs);
+        Assert.All(Enumerable.Range(0, exited.Height), y =>
+            Assert.All(Enumerable.Range(0, exited.Width), x => Assert.True(exited[x, y].IsTransparent)));
+    }
+
+    [Fact]
+    public async Task Admire_MouseInputUpdatesSprayOrigin()
+    {
+        var app = new AdmireSplashApp("17.0.0");
+        var expected = new AdmireSplashApp("17.0.0");
+        expected.MoveMouse(10, 5);
+        await new AdmireSplashApp.MouseTrackingFilter(app).OnInputAsync(
+            [new SgrMouseToken(MouseButton.None, MouseAction.Move, 10, 5, Hex1bModifiers.None, 35)], TimeSpan.Zero);
+        var actualSurface = new Surface(100, 32);
+        var expectedSurface = new Surface(100, 32);
+        app.Render(actualSurface, 100);
+        expected.Render(expectedSurface, 100);
+        Assert.Equal(GetSurfaceText(expectedSurface), GetSurfaceText(actualSurface));
+    }
+
+    private static (double X, double Y) GetParticleCentre(Surface surface)
+    {
+        var cells = (from y in Enumerable.Range(0, surface.Height)
+                     from x in Enumerable.Range(0, surface.Width)
+                     where !surface[x, y].IsTransparent && surface[x, y].Character[0] is >= '\u2800' and <= '\u28ff'
+                     select (X: x, Y: y)).ToArray();
+        Assert.NotEmpty(cells);
+        return (cells.Average(cell => cell.X), cells.Average(cell => cell.Y));
+    }
+
+    private static string GetSurfaceText(Surface surface)
+    {
+        return string.Join('\n', Enumerable.Range(0, surface.Height).Select(y =>
+            string.Concat(Enumerable.Range(0, surface.Width).Select(x =>
+                surface[x, y].IsTransparent ? " " : surface[x, y].Character)).TrimEnd()));
     }
 
     [Theory]

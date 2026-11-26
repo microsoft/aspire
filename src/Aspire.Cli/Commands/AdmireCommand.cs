@@ -5,8 +5,8 @@ using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Spectre.Console;
-using Spectre.Console.Rendering;
+using Aspire.Cli.Tui;
+using Hex1b;
 
 namespace Aspire.Cli.Commands;
 
@@ -44,29 +44,26 @@ internal sealed class AdmireCommand(CommonCommandServices services, ConsoleEnvir
         var commitLine = string.IsNullOrEmpty(commit)
             ? null
             : string.Format(CultureInfo.CurrentCulture, RootCommandStrings.AdmireCommitFormat, commit[..Math.Min(commit.Length, 10)]);
-        var rows = CreateRows(version, commitLine, consoleEnvironment.Out.Profile.Width);
-
-        // Live rendering needs cursor control; no-ANSI terminals receive one static frame.
+        // Redirected and no-ANSI terminals cannot host a flow app.
         if (!HostEnvironment.SupportsInteractiveOutput || !HostEnvironment.SupportsAnsi)
         {
+            var rows = CreateRows(version, commitLine, consoleEnvironment.Out.Profile.Width);
             // The lightest segment uses a half block as a color key; replace it with a
             // full-height shade so the monochrome logo has no horizontal gaps.
             InteractionService.DisplayRawText(string.Join(Environment.NewLine, rows.Select(row => row.Title + row.Logo.Replace('▄', '░'))));
         }
         else
         {
-            await InteractionService.DisplayLiveAsync(new Text(string.Empty), async update =>
+            try
             {
-                for (var count = 1; count <= rows.Count; count++)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    update(new Rows(rows.Take(count).Select(CreateRenderable)));
-                    if (count < rows.Count)
-                    {
-                        await Task.Delay(40, cancellationToken);
-                    }
-                }
-            });
+                await new AdmireSplashApp(version).RunAsync(Hex1bTerminal.CreateBuilder()
+                    .WithDimensions(consoleEnvironment.Out.Profile.Width, consoleEnvironment.Out.Profile.Height), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Ctrl+C in raw mode cancels the flow, not the command's outer token.
+                return CommandResult.Cancelled();
+            }
         }
 
         return CommandResult.Success();
@@ -105,27 +102,5 @@ internal sealed class AdmireCommand(CommonCommandServices services, ConsoleEnvir
 
         rows.Add((string.Empty, string.Empty, false));
         return rows;
-    }
-
-    private static IRenderable CreateRenderable((string Title, string Logo, bool IsWordmark) row)
-    {
-        if (row.Title.Length == 0 && row.Logo.Length == 0)
-        {
-            return new Text(" ");
-        }
-
-        var logo = row.Logo
-            .Replace("█", "[rgb(81,43,212)]█[/]", StringComparison.Ordinal)
-            .Replace("▓", "[rgb(116,85,221)]█[/]", StringComparison.Ordinal)
-            .Replace("▒", "[rgb(151,128,229)]█[/]", StringComparison.Ordinal)
-            .Replace("░", "[rgb(185,170,238)]█[/]", StringComparison.Ordinal)
-            .Replace("▄", "[rgb(220,213,246)]█[/]", StringComparison.Ordinal);
-        var title = row.Title.EscapeMarkup();
-        if (row.IsWordmark)
-        {
-            title = title.Replace("▀", "[/][rgb(116,85,221)]▀[/][rgb(81,43,212)]", StringComparison.Ordinal);
-        }
-        var titleColor = row.IsWordmark ? "rgb(81,43,212)" : "white";
-        return new Markup($"[{titleColor}]{title}[/]{logo}");
     }
 }
