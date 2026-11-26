@@ -1,0 +1,91 @@
+{
+  "run_id": 45743196425,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45743196425",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-26T03:05:13Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21527,
+    "title": "Add resource-bound aspire test with experimental live collectors",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-aspire-test-lifetime",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21527",
+    "merged_at": "2026-11-26T02:33:10Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "7e8d54232984f5d51dc8f3fe7b61f41f469a52c6",
+    "failed_sha": "16f52aeb827e6415fa1e1d318a98dcdad607bcc5",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "b2baebe8864c718587bd7d13cfe5460a80f83062",
+        "message": "Fix flaky dashboard terminal window test (#22649)",
+        "html_url": "https://github.com/microsoft/aspire/commit/b2baebe8864c718587bd7d13cfe5460a80f83062",
+        "pull_request": {
+          "number": 22649,
+          "title": "Fix flaky dashboard terminal window test",
+          "url": "https://github.com/microsoft/aspire/pull/22649",
+          "merged_at": "2026-11-26T00:29:09Z"
+        }
+      },
+      {
+        "sha": "328f77eacd32d1d5517ce29f86438c6f51e797b9",
+        "message": "Add a CLI feature flag to disable config sources (#22647) Add a default-on CLI flag to pause Git-backed configuration sources without changing saved bindings or previously applied settings. Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/328f77eacd32d1d5517ce29f86438c6f51e797b9",
+        "pull_request": {
+          "number": 22647,
+          "title": "Add a CLI feature flag to disable config sources",
+          "url": "https://github.com/microsoft/aspire/pull/22647",
+          "merged_at": "2026-11-26T01:08:23Z"
+        }
+      },
+      {
+        "sha": "16f52aeb827e6415fa1e1d318a98dcdad607bcc5",
+        "message": "Add resource-bound aspire test with experimental live collectors (#21527) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `a59c24f38ed49a18059c953b917e78e3883c0067` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8/10 | ↑ Current Release CLI build with banned-API analysis and 132 command/reporter tests passed after integrating pinned main and updating both system-temp guards.<br>↑ Historical ho",
+        "html_url": "https://github.com/microsoft/aspire/commit/16f52aeb827e6415fa1e1d318a98dcdad607bcc5",
+        "pull_request": {
+          "number": 21527,
+          "title": "Add resource-bound aspire test with experimental live collectors",
+          "url": "https://github.com/microsoft/aspire/pull/21527",
+          "merged_at": "2026-11-26T02:33:10Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 139653721952,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45743196425/job/139653721952",
+      "classification": "main-repository-breakage",
+      "reason": "DcpConnectionLifetimeTests timed out at the same TestLifetimeAsync phase as prior recurring main failures.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.Session_WhenBundleDirectoryIsSymlinked_RecognizesControllers",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync(Boolean abruptParentExit, Boolean delayHandoff, Boolean useSymlink, Boolean preventGracefulStop) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 200\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.TestLifetimeAsync(Boolean abruptParentExit, Boolean delayHandoff, Boolean useSymlink, Boolean preventGracefulStop) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 249\n   at Aspire.Cli.Tests.Utils.DcpConnectionLifetimeTests.Session_WhenBundleDirectoryIsSymlinked_RecognizesControllers() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\DcpConnectionLifetimeTests.cs:line 47\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\5pd33tyw.efd\nReady DCP process: PID=8564, start=1795660960917.\nReady DCP process: PID=7112, start=1795660964612.\n\n\n\n2026-11-26T02:42:43.236Z\tdebug\tdcp\tStarting DCP...\t{\"PID\": 8564, \"Exe\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\Aspire.Cli.Tests\\\\Workspace\\\\5pd33tyw.efd\\\\linked-dcp\\\\dcp.exe\", \"Args\": [\"start-apiserver\", \"--monitor\", \"7820\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-04rsskzx.eq5\\\\kubeconfig\", \"-v=debug\", \"--container-runtime\", \"docker\"], \"Version\": \"{\\\"version\\\":\\\"0.27.5\\\",\\\"commitHash\\\":\\\"600bc96061e534129bc93402658a365dac7049b5\\\",\\\"buildTimestamp\\\":\\\"2026-11-20T01:08:32Z\\\"}\"}\n2026-11-26T02:42:43.236Z\tinfo\tdcp.start-apiserver.monitor\tStarted monitoring process\t{\"PID\": 7820}\n2026-11-26T02:42:44.426Z\tdebug\tdcp.start-apiserver\tExtensions directory does not exist, extensions will not be loaded from this directory..\t{\"Directory\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\ext\"}\n2026-11-26T02:42:44.428Z\tinfo\tdcp.start-apiserver.api-server\tStarting API server...\n2026-11-26T02:42:44.434Z\tdebug\tdcp.start-apiserver.api-server\tkubeconfig saved successfully\n2026-11-26T02:42:44.453Z\tdebug\tdcp\tAdding GroupVersion usvc-dev.developer.microsoft.com v1 to ResourceManager\n2026-11-26T02:42:44.488Z\tdebug\tdcp\tAdding GroupVersion usvc-dev.developer.microsoft.com v2 to ResourceManager\n2026-11-26T02:42:44.598Z\tinfo\tdcp.start-apiserver.api-server\tAPI server started\t{\"Address\": \"::1\", \"Port\": 50935}\n2026-11-26T02:42:44.598Z\tdebug\tdcp.start-apiserver\tAbout to launch host services\n2026-11-26T02:42:44.598Z\tinfo\tdcp.start-apiserver.dcp-host\tStarting DCP controller host\n2026-11-26T02:42:44.599Z\tinfo\tdcp.start-apiserver.dcp-host\tStarted all services\t{\"count\": 1}\n2026-11-26T02:42:44.617Z\tdebug\tdcp.start-apiserver.os-executor\tProcess started successfully\t{\"PID\": 7112, \"Command\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"run-controllers\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-04rsskzx.eq5\\\\kubeconfig\", \"--container-runtime\", \"docker\", \"-v=debug\", \"--notification-socket\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\dcp\\\\dcp-notify-sock-npjokgas\", \"--monitor\", \"8564\", \"--monitor-identity-time\", \"2026-11-26T02:42:40.917Z\"], \"CreationFlags\": 0, \"PID\": 7112}\n2026-11-26T02:42:44.617Z\tdebug\tdcp.start-apiserver.os-executor\tStarting waiting for process to exit\t{\"PID\": 7112}\n2026-11-26T02:42:44.852Z\tdebug\tdcp\tStarting DCP...\t{\"PID\": 7112, \"Exe\": \"D:\\\\a\\\\aspire\\\\aspire\\\\.nuget\\\\packages\\\\microsoft.developercontrolplane.windows-amd64\\\\0.27.5\\\\tools\\\\dcp.exe\", \"Args\": [\"run-controllers\", \"--kubeconfig\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aspire-dcp-doctor-04rsskzx.eq5\\\\kubeconfig\", \"--container-runtime\", \"docker\", \"-v=debug\", \"--notification-socket\", \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\dcp\\\\dcp-notify-sock-npjokgas\", \"--monitor\", \"8564\", \"--monitor-identity-time\", \"2026-11-26T02:42:40.917Z\"], \"Version\": \"{\\\"version\\\":\\\"0.27.5\\\",\\\"commitHash\\\":\\\"600bc96061e534129bc93402658a365dac7049b5\\\",\\\"buildTimestamp\\\":\\\"2026-11-20T01:08:32Z\\\"}\"}\n2026-11-26T02:42:44.920Z\tinfo\tdcp\tStarted monitoring process\t{\"PID\": 8564}\n2026-11-26T02:42:44.928Z\tdebug\tdcp\tSetting up notification receiver\t{\"SocketPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\dcp\\\\dcp-notify-sock-npjokgas\"}\n2026-11-26T02:42:44.961Z\tdebug\tdcp.start-apiserver\tNew client connected to notification stream\t{\"SubscriptionID\": 1}\n2026-11-26T02:42:45.018Z\tinfo\tdcp.start-apiserver.api-server.adminHttpHandler\tAPI server changed status\t{\"OldStatus\": \"Running\", \"NewStatus\": \"Stopping\"}\n2026-11-26T02:42:45.019Z\tinfo\tdcp.start-apiserver\tShutting down...\n2026-11-26T02:42:45.019Z\tdebug\tdcp.start-apiserver\tInvoking BeforeApiSrvShutdown event handler.\t{\"ResourceCleanup\": \"None\"}\n2026-11-",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Same deterministic TimeoutException in TestLifetimeAsync recurring across consecutive main runs.",
+      "job_id": 139653721952,
+      "execution_id": "007e8e2c-3d1d-4eae-928b-32264f73b6c1",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-dcpconnectionlifetime-parent-exit-timeout-windows"
+  ]
+}
