@@ -106,9 +106,9 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
             throw new IOException("Aspire temporary storage requires an existing absolute user home directory.");
         }
 
-        ValidateRoot(home, allowReadAndTraverse: true);
+        ValidateRoot(home, isHome: true);
         var root = Path.Combine(home, "tmp");
-        ValidateRoot(root, allowReadAndTraverse: false);
+        ValidateRoot(root, isHome: false);
         return root;
     }
 
@@ -122,7 +122,7 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
         return CreateWindowsDirectory(path);
     }
 
-    private static void ValidateRoot(string path, bool allowReadAndTraverse)
+    private static void ValidateRoot(string path, bool isHome)
     {
         var directory = new DirectoryInfo(path);
         if (directory.LinkTarget is not null || (directory.Exists && (directory.Attributes & FileAttributes.ReparsePoint) != 0))
@@ -130,9 +130,9 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
             throw new IOException($"Aspire temporary storage must not traverse a link at '{path}'.");
         }
 
-        // The Aspire home can already contain logs and other shared CLI state with inherited ACLs.
-        // Only tmp and its descendants require private Windows permissions.
-        if (OperatingSystem.IsWindows() && allowReadAndTraverse)
+        // The CLI can create its home before allocating temporary storage, using the user's umask
+        // or inherited ACLs. Only tmp and its descendants require private permissions.
+        if (isHome)
         {
             Directory.CreateDirectory(path);
         }
@@ -146,11 +146,10 @@ internal sealed class PrivateTemporaryStorage : ITemporaryStorage, IDisposable
             throw new IOException($"Aspire temporary storage must not traverse a link at '{path}'.");
         }
 
-        if (!OperatingSystem.IsWindows())
+        if (!isHome && !OperatingSystem.IsWindows())
         {
             var mode = File.GetUnixFileMode(path);
-            var allowed = allowReadAndTraverse ? DirectoryMode | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute : DirectoryMode;
-            if ((mode & ~allowed) != 0 || (mode & DirectoryMode) != DirectoryMode)
+            if (mode != DirectoryMode)
             {
                 throw new IOException($"Unsupported permissions on Aspire temporary storage '{path}'. Set its permissions to 0700.");
             }

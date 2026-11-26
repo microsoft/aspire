@@ -151,6 +151,31 @@ public class TemporaryStorageTests(ITestOutputHelper output)
         Assert.Equal(root.FullName, Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(storage.GetTempPath())));
     }
 
+    [Theory]
+    [InlineData(UnixFileMode.GroupWrite)]
+    [InlineData(UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)]
+    [PlatformSpecific(TestPlatforms.Linux | TestPlatforms.OSX)]
+    public void ExistingUnixHomePermissionsArePreserved(UnixFileMode additionalMode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var home = Directory.CreateDirectory(Path.Combine(workspace.Path, ".aspire"));
+        var privateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+        var mode = privateMode | UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute | additionalMode;
+        File.SetUnixFileMode(home.FullName, mode);
+        using var storage = CreateStorage(home.FullName);
+        var session = Path.TrimEndingDirectorySeparator(storage.GetTempPath());
+
+        Assert.Equal(mode, File.GetUnixFileMode(home.FullName));
+        Assert.Equal(privateMode, File.GetUnixFileMode(Path.Combine(home.FullName, "tmp")));
+        Assert.Equal(privateMode, File.GetUnixFileMode(session));
+    }
+
     [Fact]
     public void WritableRootsAndLinksAreRejectedWithoutRepair()
     {
