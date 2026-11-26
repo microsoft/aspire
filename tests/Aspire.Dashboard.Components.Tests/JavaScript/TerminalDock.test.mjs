@@ -47,7 +47,13 @@ afterEach(() => {
 
 function createRegistration() {
     const captures = new Set();
+    const classes = new Set();
     const grabber = Object.assign(new EventTarget(), {
+        classList: {
+            add(name) { classes.add(name); },
+            remove(name) { classes.delete(name); },
+            contains(name) { return classes.has(name); },
+        },
         focus() { document.activeElement = grabber; },
         setPointerCapture(id) { captures.add(id); },
         hasPointerCapture(id) { return captures.has(id); },
@@ -313,6 +319,10 @@ test("drag and viewport changes share one throttled update", () => {
 
     runPendingTimer();
     assert.deepEqual(invocations, [{ method: "SetHeightAsync", height: 400, viewportHeight: 800 }]);
+
+    assert.ok(grabber.classList.contains("resizing"));
+    terminalDock.unregisterResizeHandle(dockElement);
+    assert.ok(!grabber.classList.contains("resizing"));
 });
 
 test("pointer release flushes a pending drag update", () => {
@@ -325,6 +335,7 @@ test("pointer release flushes a pending drag update", () => {
 
     dispatch(grabber, "pointerup", { pointerId: 1 });
 
+    assert.ok(!grabber.classList.contains("resizing"));
     assert.equal(timers.size, 0);
     assert.deepEqual(invocations, [{ method: "SetHeightAsync", height: 400, viewportHeight: 900 }]);
 });
