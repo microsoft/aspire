@@ -1251,6 +1251,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             logger,
             cancellationToken).ConfigureAwait(false);
 
+        if (connect is not null)
+        {
+            // Connect resolution can await container runtime detection, during which a secret can be assigned or
+            // replaced. Re-read the add-only redaction history after that await so the filter sees every secret
+            // value known by the time the command is published, not only those known when environment values were
+            // redacted above.
+            var connectSecretValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
+            connect = OmitConnectContainingSecretValue(connect, resourceEvent.ResourceId, connectSecretValues);
+        }
+
         return new ResourceSnapshot
         {
             Name = resourceEvent.ResourceId,
@@ -1275,7 +1285,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Properties = properties,
             McpServer = mcpServer,
             Commands = commands,
-            Connect = OmitConnectContainingSecretValue(connect, resourceEvent.ResourceId, secretParameterValues)
+            Connect = connect
         };
     }
 
@@ -1305,13 +1315,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// dropped rather than masked because a command with a masked argument would no longer run. A short secret value
     /// that happens to occur in an unrelated command only hides that command, which fails safe.
     /// </remarks>
-    private ResourceSnapshotConnect? OmitConnectContainingSecretValue(ResourceSnapshotConnect? connect, string resourceName, HashSet<string> secretParameterValues)
+    private ResourceSnapshotConnect? OmitConnectContainingSecretValue(ResourceSnapshotConnect connect, string resourceName, HashSet<string> secretParameterValues)
     {
-        if (connect is null)
-        {
-            return null;
-        }
-
         foreach (var secretValue in secretParameterValues)
         {
             // An empty value would match every string; it cannot leak anything.
@@ -1320,7 +1325,13 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 continue;
             }
 
+            // A container command wraps its script in a single-quoted `sh -c` string, which writes each embedded
+            // quote as '\'' (see ConnectCommandResolver.FormatContainerCommand). A secret containing a quote then
+            // appears only in escaped form, yet running the command still reconstructs the original value.
+            var escapedSecretValue = ConnectCommandResolver.EscapeForSingleQuotedShellString(secretValue);
+
             if (connect.Command.Contains(secretValue, StringComparison.Ordinal) ||
+                connect.Command.Contains(escapedSecretValue, StringComparison.Ordinal) ||
                 connect.Tool.Contains(secretValue, StringComparison.Ordinal) ||
                 connect.Append?.Contains(secretValue, StringComparison.Ordinal) == true ||
                 connect.Note?.Contains(secretValue, StringComparison.Ordinal) == true)

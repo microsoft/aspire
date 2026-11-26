@@ -152,7 +152,7 @@ internal static class ConnectCommandResolver
     /// </remarks>
     internal static string FormatContainerCommand(string runtime, string containerName, string script)
     {
-        var quotedScript = script.Replace("'", "'\\''", StringComparison.Ordinal);
+        var quotedScript = EscapeForSingleQuotedShellString(script);
 
         // -i forwards stdin so interactive clients stay open and piped input (for example a SQL script read with
         // psql -f -) reaches the client. -t is deliberately omitted: a TTY fails when stdin is not a terminal, as in
@@ -161,6 +161,12 @@ internal static class ConnectCommandResolver
         // https://docs.podman.io/en/latest/markdown/podman-exec.1.html.
         return $"{runtime} exec -i {containerName} sh -c '{quotedScript} \"$@\"' sh";
     }
+
+    /// <summary>
+    /// Escapes text for use inside a single-quoted POSIX shell string by writing each <c>'</c> as <c>'\''</c>.
+    /// </summary>
+    internal static string EscapeForSingleQuotedShellString(string value)
+        => value.Replace("'", "'\\''", StringComparison.Ordinal);
 
     internal static bool CanResolveWithoutSecrets(object? valueProvider, IResource owner, out string? reason)
     {

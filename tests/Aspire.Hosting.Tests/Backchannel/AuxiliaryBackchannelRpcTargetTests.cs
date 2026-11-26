@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
@@ -230,6 +231,88 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("tool-cli --local", Assert.Single(result, r => r.Name == "public").Connect?.Command);
 
         await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_OmitsContainerConnectCommandContainingShellEscapedSecretParameterValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "docker"));
+
+        builder.AddParameter("dbpassword", "s3'cret-value", secret: true);
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        var secretContainer = builder.AddContainer("db", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client --password s3'cret-value"));
+        var publicContainer = builder.AddContainer("public", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client --local"));
+#pragma warning restore ASPIRECONNECT001
+
+        // The app is not started because starting would run the containers. Published state is enough to build snapshots.
+        using var app = builder.Build();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(secretContainer.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+        await notificationService.PublishUpdateAsync(publicContainer.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        Assert.Null(Assert.Single(result, r => r.Name == "db").Connect);
+        Assert.Equal("docker exec -i public sh -c 'exec client --local \"$@\"' sh", Assert.Single(result, r => r.Name == "public").Connect?.Command);
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_OmitsConnectCommandContainingSecretAssignedDuringContainerRuntimeDetection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var resolveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseResolve = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runtime = new FakeContainerRuntime(name: "docker");
+        runtime.ResolveAsyncCallback = async cancellationToken =>
+        {
+            resolveStarted.TrySetResult();
+            await releaseResolve.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return runtime;
+        };
+        builder.Services.AddFakeContainerRuntime(runtime);
+
+        var secret = builder.AddParameter("dbpassword", secret: true);
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        var container = builder.AddContainer("db", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client --password late-s3cret"));
+#pragma warning restore ASPIRECONNECT001
+
+        // The app is not started because starting would run the container. Published state is enough to build snapshots.
+        using var app = builder.Build();
+
+        // The secret is unresolved while the snapshot's environment values are redacted.
+        secret.Resource.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(container.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var snapshotsTask = target.GetResourceSnapshotsAsync();
+
+        // Resolve the secret while the connect command waits for container runtime detection.
+        await resolveStarted.Task.DefaultTimeout();
+        secret.Resource.WaitForValueTcs.SetResult("late-s3cret");
+        releaseResolve.SetResult();
+
+        var result = await snapshotsTask.DefaultTimeout();
+
+        Assert.Null(Assert.Single(result, r => r.Name == "db").Connect);
     }
 
     [Fact]
