@@ -17,7 +17,7 @@ public class LinuxTrayIconsTests
     public async Task StatusArtwork(string status)
     {
         var source = Path.Combine(AppContext.BaseDirectory, "Assets", "aspire.png");
-        using var icons = new LinuxTrayIcons(source);
+        using var icons = new LinuxTrayIcons(source, new Aspire.Shared.TemporaryStorage());
 
         var path = icons.GetPath(Enum.Parse<TrayIconStatus>(status));
 
@@ -48,7 +48,7 @@ public class LinuxTrayIconsTests
         Assert.False(File.ReadAllBytes(source).AsSpan().SequenceEqual(File.ReadAllBytes(rewritten)));
         Assert.True(LinuxPngComparer.HaveSamePixels(source, rewritten));
 
-        using var icons = new LinuxTrayIcons(source);
+        using var icons = new LinuxTrayIcons(source, new Aspire.Shared.TemporaryStorage());
         Assert.False(LinuxPngComparer.HaveSamePixels(
             icons.GetPath(TrayIconStatus.Running), icons.GetPath(TrayIconStatus.Attention)));
         Assert.False(LinuxPngComparer.HaveSamePixels(
@@ -81,7 +81,7 @@ public class LinuxTrayIconsTests
         var source = Path.Combine(AppContext.BaseDirectory, "Assets", "aspire.png");
         string rendered;
         string directory;
-        using (var icons = new LinuxTrayIcons(source))
+        using (var icons = new LinuxTrayIcons(source, new Aspire.Shared.TemporaryStorage()))
         {
             Assert.Equal(source, icons.GetPath(TrayIconStatus.Idle));
             rendered = icons.GetPath(TrayIconStatus.Running);
@@ -98,7 +98,7 @@ public class LinuxTrayIconsTests
     public void InvalidArtworkFailsExplicitly()
     {
         using var directory = new TestTrayStateDirectory();
-        using var icons = new LinuxTrayIcons(directory.CreateAppHost("invalid.png"));
+        using var icons = new LinuxTrayIcons(directory.CreateAppHost("invalid.png"), new Aspire.Shared.TemporaryStorage());
 
         var error = Assert.Throws<InvalidOperationException>(() => icons.GetPath(TrayIconStatus.Running));
 

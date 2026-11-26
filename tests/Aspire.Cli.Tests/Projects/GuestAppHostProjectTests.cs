@@ -77,7 +77,7 @@ public class GuestAppHostProjectTests : IDisposable
             appHostServerProjectFactory: new TestAppHostServerProjectFactory
             {
                 CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(
-                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), NullLogger.Instance))
+                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), new Aspire.Shared.TemporaryStorage(), NullLogger.Instance))
             },
             serverSessionFactory: sessionFactory);
 
@@ -2323,7 +2323,7 @@ public class GuestAppHostProjectTests : IDisposable
             appHostServerProjectFactory: new TestAppHostServerProjectFactory
             {
                 CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(
-                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), NullLogger.Instance))
+                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), new Aspire.Shared.TemporaryStorage(), NullLogger.Instance))
             },
             serverSessionFactory: sessions);
         string[] arguments = step is null ? [] : ["--operation", "publish", "--step", step];
@@ -2734,6 +2734,7 @@ public class GuestAppHostProjectTests : IDisposable
             appHostConfigurationProjector: new AppHostConfigurationProjector(
                 configurationService,
                 effectiveEnvironment),
+            temporaryStorage: new Aspire.Shared.TemporaryStorage(),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: fileLoggerProvider,
             profilingTelemetry: _profilingTelemetry,

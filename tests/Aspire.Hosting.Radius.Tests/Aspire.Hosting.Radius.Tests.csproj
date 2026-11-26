@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
+    <Compile Include="$(TestsSharedDir)TestFileSystemService.cs" Link="shared/TestFileSystemService.cs" />
   </ItemGroup>
 
   <ItemGroup>

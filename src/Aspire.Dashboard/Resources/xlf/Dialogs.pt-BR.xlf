@@ -1287,7 +1287,7 @@ Configure seu aplicativo para exportar logs, rastreamentos e métricas usando [O
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrapOff">
         <source>Disable word wrap</source>
-        <target state="new">Disable word wrap</target>
+        <target state="translated">Desabilitar quebra automática de linha</target>
         <note />
       </trans-unit>
     </body>

@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="XmlEncodedProjectName.ApiService/XmlEncodedProjectName.ApiService.csproj" />
+  <Project Path="XmlEncodedProjectName.AppHost/XmlEncodedProjectName.AppHost.csproj" />
+  <Project Path="XmlEncodedProjectName.ServiceDefaults/XmlEncodedProjectName.ServiceDefaults.csproj" />
+  <!--#if (TestFx != 'None') -->
+  <Project Path="XmlEncodedProjectName.Tests/XmlEncodedProjectName.Tests.csproj" />
+  <!--#endif -->
+  <Project Path="XmlEncodedProjectName.Web/XmlEncodedProjectName.Web.csproj" />
+</Solution>

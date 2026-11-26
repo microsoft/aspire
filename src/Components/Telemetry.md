@@ -337,7 +337,7 @@ Aspire.Oracle.EntityFrameworkCore:
 - Metric names:
   - none
 
-Aspire.Pomelo.EntityFrameworkCore.MySql:
+Aspire.Microting.EntityFrameworkCore.MySql:
 - Log categories:
   - "Microsoft.EntityFrameworkCore.ChangeTracking"
   - "Microsoft.EntityFrameworkCore.Database.Command"

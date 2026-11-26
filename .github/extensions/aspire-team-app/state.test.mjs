@@ -84,6 +84,45 @@ test("failed preference replacement preserves saved settings and removes the pen
   assert.deepEqual(await readdir(dirname(preferencesPath)), ["preferences.json"]);
 });
 
+test("preference replacement retries transient access conflicts", async (t) => {
+  await rm(artifactsRoot, { recursive: true, force: true });
+  const before = { ...DEFAULT_PREFS, detachedSessions: true };
+  await savePrefs(before);
+  const originalRename = fs.rename;
+  let attempts = 0;
+  const rename = t.mock.method(fs, "rename", async (...args) => {
+    if (++attempts < 3) throw Object.assign(new Error("file in use"), { code: "EPERM" });
+    return originalRename(...args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { rename.mock.restore(); syncBuiltinESMExports(); });
+
+  await savePrefs({ ...before, detachedSessions: false });
+
+  assert.equal(attempts, 3);
+  assert.deepEqual(await loadPrefs(), { ...before, detachedSessions: false });
+  assert.deepEqual(await readdir(dirname(preferencesPath)), ["preferences.json"]);
+});
+
+test("preference replacement reports persistent access conflicts", async (t) => {
+  await rm(artifactsRoot, { recursive: true, force: true });
+  const before = { ...DEFAULT_PREFS, detachedSessions: true };
+  await savePrefs(before);
+  let attempts = 0;
+  const rename = t.mock.method(fs, "rename", async () => {
+    attempts++;
+    throw Object.assign(new Error("access denied"), { code: "EPERM" });
+  });
+  syncBuiltinESMExports();
+  t.after(() => { rename.mock.restore(); syncBuiltinESMExports(); });
+
+  await assert.rejects(savePrefs({ ...before, detachedSessions: false }), { code: "EPERM" });
+
+  assert.equal(attempts, 5);
+  assert.deepEqual(await loadPrefs(), before);
+  assert.deepEqual(await readdir(dirname(preferencesPath)), ["preferences.json"]);
+});
+
 test("background updates apply automatically by default", () => {
   assert.equal(DEFAULT_PREFS.autoApplyUpdates, true);
 });

@@ -42,29 +42,63 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal("Dashboard authentication is required, but the current user is not authenticated.", exception.Message);
     }
 
-    [Fact]
-    public async Task HeaderHelp_IsSingleActionThatOpensHelpDialog()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HeaderHelp_IsSingleActionThatOpensDocumentationTab(bool isDesktop)
     {
         DialogParameters? capturedParameters = null;
-        var dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        object? capturedContent = null;
+        var dialogService = new TestDialogService(onShowDialog: (content, parameters) =>
         {
+            capturedContent = content;
             capturedParameters = parameters;
             return Task.CompletedTask;
         });
         SetupMainLayoutServices(dialogService: dialogService);
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
-            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+            new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
-        var helpButton = cut.Find($"#{MainLayout.HelpButtonId}");
-        Assert.Equal(Resources.Layout.MainLayoutHelp, helpButton.GetAttribute("aria-label"));
-        Assert.Equal("?", helpButton.GetAttribute("aria-keyshortcuts"));
-        Assert.Empty(cut.FindAll($"header a[aria-label='{Resources.Layout.MainLayoutAspireDashboardHelpLink}']"));
+        if (isDesktop)
+        {
+            var helpButton = cut.Find($"#{MainLayout.HelpButtonId}");
+            Assert.Equal(Resources.Layout.MainLayoutHelp, helpButton.GetAttribute("aria-label"));
+            Assert.Equal("?", helpButton.GetAttribute("aria-keyshortcuts"));
+            Assert.Empty(cut.FindAll($"header a[aria-label='{Resources.Layout.MainLayoutAspireDashboardHelpLink}']"));
 
-        await cut.InvokeAsync(() => helpButton.Click());
+            await cut.InvokeAsync(() => helpButton.Click());
+        }
+        else
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+            var menuItem = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Trim() == Resources.Layout.MainLayoutHelp);
+            await cut.InvokeAsync(() => menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent }));
+
+            Assert.Empty(cut.FindAll($"#{MobileNavMenu.MobileNavMenuId}"));
+        }
 
         Assert.NotNull(capturedParameters);
         Assert.Equal("HelpDialog", capturedParameters.Id);
         Assert.Equal(Resources.Layout.MainLayoutHelp, capturedParameters.Title);
+        Assert.Equal(HelpDialogTab.Documentation, capturedContent);
+    }
+
+    [Fact]
+    public async Task MobileMenu_RefreshesWhenPageEntriesAreRegisteredAndCleared()
+    {
+        SetupMainLayoutServices();
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        Func<IEnumerable<MobileNavMenuEntry>> entries = () => [new("page", "Page view", () => Task.CompletedTask)];
+        Func<IEnumerable<MobileNavMenuEntry>> previousEntries = () => [];
+
+        await cut.InvokeAsync(() => cut.Instance.SetPageNavMenuEntries(entries));
+        cut.WaitForAssertion(() => Assert.Equal("Page view", cut.Find("fluent-menu-item").GetAttribute("data-tooltip")));
+        await cut.InvokeAsync(() => cut.Instance.ClearPageNavMenuEntries(previousEntries));
+        Assert.Equal("Page view", cut.Find("fluent-menu-item").GetAttribute("data-tooltip"));
+        await cut.InvokeAsync(() => cut.Instance.ClearPageNavMenuEntries(entries));
+        cut.WaitForAssertion(() => Assert.Equal(Resources.Layout.MainLayoutHelp, cut.Find("fluent-menu-item").GetAttribute("data-tooltip")));
     }
 
     [Fact]
@@ -438,7 +472,7 @@ public partial class MainLayoutTests : DashboardTestContext
         else
         {
             var menuItemName = expectedDialogId == "HelpDialog"
-                ? Resources.Layout.MainLayoutKeyboardShortcuts
+                ? Resources.Layout.MainLayoutHelp
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
@@ -1033,7 +1067,7 @@ public partial class MainLayoutTests : DashboardTestContext
         else
         {
             var menuItemName = expectedDialogId == "HelpDialog"
-                ? Resources.Layout.MainLayoutKeyboardShortcuts
+                ? Resources.Layout.MainLayoutHelp
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());

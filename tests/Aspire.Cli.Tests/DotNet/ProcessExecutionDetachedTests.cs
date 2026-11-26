@@ -126,7 +126,7 @@ public class ProcessExecutionDetachedTests(ITestOutputHelper outputHelper)
         Func<string, bool>? environmentVariableFilter = null,
         IReadOnlyDictionary<string, string>? environment = null)
     {
-        var factory = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance);
         return factory.CreateExecution(
             fileName,
             arguments.ToArray(),

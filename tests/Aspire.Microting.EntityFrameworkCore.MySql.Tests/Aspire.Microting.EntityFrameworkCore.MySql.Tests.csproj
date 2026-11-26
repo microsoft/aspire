@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(RepoRoot)src\Components\Aspire.Microting.EntityFrameworkCore.MySql\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="$(RepoRoot)src\Aspire.Hosting.MySql\MySqlContainerImageTags.cs" />
+
+    <!-- this file is included as a link, as both components rely on different versions of EF (for now) -->
+    <Compile Include="..\Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests\TestDbContext.cs" Link="TestDbContext.cs" />
+    <Compile Include="..\Aspire.MySqlConnector.Tests\MySqlContainerFixture.cs" Link="MySqlContainerFixture.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.MySql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
+    <ProjectReference Include="..\..\src\Components\Aspire.Microting.EntityFrameworkCore.MySql\Aspire.Microting.EntityFrameworkCore.MySql.csproj" />
+  </ItemGroup>
+
+</Project>

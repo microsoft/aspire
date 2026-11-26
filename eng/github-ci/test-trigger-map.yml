@@ -158,6 +158,7 @@ path_rules:
   - paths:
       - src/Directory.Build.props
       - src/Directory.Build.targets
+      - src/BannedSymbols.txt
       - tests/Directory.Build.props
       - tests/Directory.Build.targets
       - tests/Directory.Packages.props
@@ -433,6 +434,11 @@ path_rules:
       - eng/scripts/load-cli-e2e-images.sh
     targets: [test:Aspire.Cli.EndToEnd.Tests]
     reason: builds or loads the CLI E2E images consumed only by Aspire.Cli.EndToEnd.Tests
+  - paths:
+      - eng/scripts/build-cli-e2e-images.sh
+      - eng/scripts/run-bounded-image-build.ts
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests]
+    reason: shared image build entry point and its shell behavior tests
   - paths:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]

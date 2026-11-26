@@ -32,6 +32,8 @@ public abstract class NewUpAndBuildStandaloneTemplateTestsBase(ITestOutputHelper
 
             Assert.True(error is null, $"Expected to throw an exception with message: {error}");
 
+            AssertSolutionFile(project, templateName, includesTests: templateName == "aspire-starter" && !string.IsNullOrEmpty(extraArgs));
+
             if (templateName == "aspire-starter")
             {
                 await AssertStarterAspNetCoreTemplateContentAsync(project, tfm);

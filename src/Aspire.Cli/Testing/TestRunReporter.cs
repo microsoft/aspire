@@ -605,7 +605,7 @@ internal sealed class TestRunReporter
         // Artifacts need the same directory boundary as filesystem-backed IPC: Unix 0700,
         // protected owner-only Windows ACLs supplied at creation, and no symlink traversal.
         SocketPermissionHelper.CreateDirectory(path, repairExisting,
-            executionContext.WorkingDirectory.FullName, executionContext.HomeDirectory.FullName, Path.GetTempPath());
+            executionContext.WorkingDirectory.FullName, executionContext.HomeDirectory.FullName, TemporaryStorage.SystemTempPath);
     }
 
     private static void ValidateAncestors(string path, CliExecutionContext executionContext)
@@ -614,7 +614,7 @@ internal sealed class TestRunReporter
         for (var current = new DirectoryInfo(path).Parent; current is not null; current = current.Parent)
         {
             if (string.Equals(current.FullName, executionContext.HomeDirectory.FullName, comparison) ||
-                string.Equals(current.FullName, Path.TrimEndingDirectorySeparator(Path.GetTempPath()), comparison))
+                string.Equals(current.FullName, Path.TrimEndingDirectorySeparator(TemporaryStorage.SystemTempPath), comparison))
             {
                 break;
             }

@@ -149,8 +149,7 @@ public interface IDistributedApplicationBuilder
     /// used by Aspire, enabling testability and consistent temp file management.
     /// </para>
     /// <para>
-    /// Resources and infrastructure code should use this service instead of static methods like
-    /// <see cref="Path.GetTempPath"/> or <see cref="Directory.CreateTempSubdirectory(string?)"/> to ensure
+    /// Resources and infrastructure code should use this service instead of system temporary storage APIs to ensure
     /// consistent directory management across the application.
     /// </para>
     /// </remarks>

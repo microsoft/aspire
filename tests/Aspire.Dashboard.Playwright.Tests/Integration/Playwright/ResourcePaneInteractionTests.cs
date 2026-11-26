@@ -99,13 +99,13 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
 
             // Switching tabs keeps all resources selected, including when returning to the overview.
-            await ClickResourceTabAndWaitForRenderAsync(page, () => page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab }).ClickAsync());
+            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
-            await Assertions.Expect(page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab })).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab })).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
 
             await Assertions.Expect(page.GetByRole(AriaRole.Region, new() { Name = Resources.Layout.NavMenuConsoleLogsTab, Exact = true })).ToBeVisibleAsync();
-            await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
+            await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
             await Assertions.Expect(selectAll).ToContainTextAsync(Resources.Layout.ResourceHeaderAllResources);
@@ -552,7 +552,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             var pane = page.Locator(".resource-pane");
             var tagGroup = pane.GetByRole(AriaRole.Group, new LocatorGetByRoleOptions { Name = tag });
             await Assertions.Expect(tagGroup.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = resourceName })).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator("fluent-tab[aria-selected='true']")).ToHaveAccessibleNameAsync(Resources.Layout.ResourceTabOverview);
+            await Assertions.Expect(page.Locator("a.resource-tab[aria-current='page']")).ToHaveAccessibleNameAsync(Resources.Layout.ResourceTabOverview);
 
             // Grouping is remembered when reloading a resource URL.
             await page.GotoAsync($"/resources/{resourceName}");
@@ -562,7 +562,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await page.GetByRole(AriaRole.Menuitemradio, new PageGetByRoleOptions { Name = Resources.Layout.ResourcePaneGroupingNone, Exact = true }).ClickAsync();
             await Assertions.Expect(tagGroup).ToHaveCountAsync(0);
             await Assertions.Expect(pane.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = resourceName })).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator("fluent-tab[aria-selected='true']")).ToHaveAccessibleNameAsync(Resources.Layout.ResourceTabOverview);
+            await Assertions.Expect(page.Locator("a.resource-tab[aria-current='page']")).ToHaveAccessibleNameAsync(Resources.Layout.ResourceTabOverview);
         });
     }
 

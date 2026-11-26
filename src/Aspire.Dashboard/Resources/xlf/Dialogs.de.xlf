@@ -1287,7 +1287,7 @@ Konfigurieren Sie Ihre App so, dass sie Protokolle, Traces und Metriken über [O
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrapOff">
         <source>Disable word wrap</source>
-        <target state="new">Disable word wrap</target>
+        <target state="translated">Zeilenumbruch deaktivieren</target>
         <note />
       </trans-unit>
     </body>

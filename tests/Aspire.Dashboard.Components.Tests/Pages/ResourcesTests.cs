@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -528,8 +528,8 @@ public partial class ResourcesTests : DashboardTestContext
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, client);
         var store = Services.GetRequiredService<ResourceTagStore>();
         await store.EnsureLoadedAsync();
-        store.AddTag("api", "backend");
-        store.AddTag("api", "Personal");
+        await store.AddTagAsync("api", "backend");
+        await store.AddTagAsync("api", "Personal");
 
         var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
         module.SetupVoid("initializeResourcesGraph", _ => true).SetVoidResult();
@@ -549,9 +549,9 @@ public partial class ResourcesTests : DashboardTestContext
         }
 
         cut.WaitForAssertion(() => AssertTags("Backend", "API", "Personal"));
-        await cut.InvokeAsync(() => store.AddTag("api", "Shared"));
+        await cut.InvokeAsync(() => store.AddTagAsync("api", "Shared"));
         cut.WaitForAssertion(() => AssertTags("Backend", "API", "Personal", "Shared"));
-        await cut.InvokeAsync(() => store.RemoveTag("api", "Personal"));
+        await cut.InvokeAsync(() => store.RemoveTagAsync("api", "Personal"));
         cut.WaitForAssertion(() => AssertTags("Backend", "API", "Shared"));
     }
 

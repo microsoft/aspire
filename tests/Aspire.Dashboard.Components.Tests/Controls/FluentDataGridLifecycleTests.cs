@@ -80,11 +80,8 @@ public sealed class FluentDataGridLifecycleTests : DashboardTestContext
         import.SetResult(module);
         await initializeStarted.Task.DefaultTimeout();
 
-        // Removing the grid disposes it, and its module, while the initialization is pending. This test resumes on the
-        // thread pool while the dispatcher may still be finishing the grid's work item, so the removal runs on the
-        // dispatcher: from another thread, DisposeComponentsAsync queues the removal there but clears its list of
-        // rendered components right away, and the queued removal can then find nothing to remove.
-        await Renderer.Dispatcher.InvokeAsync(DisposeComponentsAsync);
+        // Remove the grid and dispose its module while initialization is still pending.
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
         Assert.Equal(1, module.DisposeCount);
 
         // The initialization completes after disposal, so the grid's OnAfterRenderAsync resumes. Its continuation is
