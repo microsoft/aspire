@@ -496,7 +496,8 @@ fluent-dropdown fluent-option {
     background-color: var(--aspire-popup-background);
 }
 
-fluent-dropdown fluent-option[selected],
+/* Fluent reflects the live selection in current-selected; selected is only the default. */
+fluent-dropdown fluent-option[current-selected],
 fluent-dropdown fluent-option:not(:state(disabled)):hover,
 fluent-dropdown fluent-option:not(:state(disabled)):state(active),
 fluent-dropdown fluent-option:not(:state(disabled)):focus-visible {
@@ -513,7 +514,7 @@ fluent-dropdown fluent-option:state(active) {
     border: none;
 }
 
-fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover {
+fluent-dropdown fluent-option[current-selected]:not(:state(disabled)):hover {
     background-color: var(--aspire-dropdown-option-selected-hover-background);
 }
 
@@ -523,19 +524,19 @@ fluent-dropdown fluent-option::part(content) {
 
 /* Fluent's selected checkmark is inside shadow DOM and uses currentColor. Make the host
    transparent to hide it globally, then restore the option text through its exposed part. */
-fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover,
-fluent-dropdown fluent-option[selected]:not(:state(disabled)):state(active),
-fluent-dropdown fluent-option[selected]:not(:state(disabled)):focus-visible {
+fluent-dropdown fluent-option[current-selected],
+fluent-dropdown fluent-option[current-selected]:not(:state(disabled)):hover,
+fluent-dropdown fluent-option[current-selected]:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option[current-selected]:not(:state(disabled)):focus-visible {
     position: relative;
     color: transparent;
 }
 
-fluent-dropdown fluent-option[selected]::part(content) {
+fluent-dropdown fluent-option[current-selected]::part(content) {
     color: var(--aspire-dropdown-option-foreground);
 }
 
-fluent-dropdown fluent-option[selected]::before {
+fluent-dropdown fluent-option[current-selected]::before {
     position: absolute;
     top: 7px;
     left: 1px;
@@ -1156,6 +1157,11 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     justify-content: center;
     align-items: center;
     font-weight: var(--aspire-font-weight-semibold);
+}
+
+.aspire-empty-content.aspire-page-empty-content {
+    height: auto;
+    padding: 58px var(--spacingHorizontalXL) var(--spacingVerticalXL);
 }
 
 .aspire-empty-message {

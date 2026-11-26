@@ -162,11 +162,6 @@
         <target state="translated">互動式終端機輸入</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalMinimize">
-        <source>Minimize terminal</source>
-        <target state="translated">最小化終端機</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
         <target state="translated">終端機無法連線或初始化其轉譯器。檢查資源是否正在執行，且您的瀏覽器支援 WebGPU 或 WebGL2，然後重新連線以再試一次。您仍然可以檢視此資源的控制台記錄。</target>

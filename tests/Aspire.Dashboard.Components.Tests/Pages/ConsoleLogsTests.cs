@@ -3,6 +3,7 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -213,6 +214,47 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
         // The placeholder has no ID; downloading uses the requested name.
         Assert.StartsWith("missing-", instance.GetFileName());
+    }
+
+    [Fact]
+    public async Task ModernLayout_HiddenResourceLink_StreamsLogsWithoutRevealingResource()
+    {
+        var viewport = CreateViewport(isDesktop: true);
+        var hidden = ModelTestHelpers.CreateResource(resourceName: "hidden-instance", displayName: "hidden", state: KnownResourceState.Running, hidden: true);
+        var visible = ModelTestHelpers.CreateResource(resourceName: "visible", state: KnownResourceState.Running);
+        var hiddenLogs = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var visibleLogs = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [hidden, visible],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            consoleLogsChannelProvider: name => name == hidden.Name ? hiddenLogs : visibleLogs);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client, services => services.AddSingleton<ConsoleLogsManager>());
+        FluentUISetupHelpers.SetupFluentList(this);
+        FluentUISetupHelpers.SetupFluentAnchor(this);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var url = DashboardUrls.ConsoleLogsUrl("hidden");
+        navigation.NavigateTo(url);
+        string? resourceName = "hidden";
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Components.Pages.ConsoleLogs>(0);
+            builder.AddAttribute(1, nameof(Components.Pages.ConsoleLogs.ResourceName), resourceName);
+            builder.CloseComponent();
+        }));
+        await hiddenLogs.Writer.WriteAsync([new ResourceLogLine(1, "Hidden output", IsErrorMessage: false)]);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["Hidden output"], cut.FindComponent<LogViewer>().Instance.LogEntries!.GetEntries().Select(e => e.RawContent));
+            Assert.Equal(navigation.ToAbsoluteUri(url).AbsoluteUri, navigation.Uri);
+            Assert.Equal(["visible"], cut.Instance.GetPaneRows().Select(r => r.Resource.Name));
+        });
+
+        resourceName = null;
+        navigation.NavigateTo(DashboardUrls.ConsoleLogsUrl());
+        cut.Render();
+        await visibleLogs.Writer.WriteAsync([new ResourceLogLine(1, "Visible output", IsErrorMessage: false)]);
+        cut.WaitForAssertion(() =>
+            Assert.Equal(["Visible output"], cut.FindComponent<LogViewer>().Instance.LogEntries!.GetEntries().Select(e => e.RawContent)));
     }
 
     [Fact]

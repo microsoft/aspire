@@ -22,31 +22,6 @@
     color: var(--colorNeutralForeground2);
 }
 
-.resource-overview.terminal-focused {
-    display: flex;
-    overflow: hidden;
-    padding-bottom: var(--layout-top-padding);
-}
-
-.terminal-focused > .overview-grid {
-    flex: 1;
-    display: flex;
-    min-width: 0;
-    min-height: 0;
-}
-
-/* Keep the cards and terminal mounted so minimizing restores their state without reconnecting. */
-.terminal-focused > .overview-grid > :not(.overview-terminal-card),
-.terminal-focused > .overview-grid ::deep > .overview-status-card {
-    display: none;
-}
-
-.resource-overview.terminal-focused > .overview-grid > .overview-terminal-card {
-    flex: 1;
-    height: auto;
-    min-height: 0;
-}
-
 .overview-grid {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -581,12 +556,7 @@ a.overview-stat:focus-visible {
 }
 
 .overview-terminal ::deep .terminal-footer {
-    min-height: 36px;
-    padding: 3px 8px;
-}
-
-.overview-terminal ::deep .terminal-focus-hint {
-    font-size: var(--aspire-font-size-secondary);
+    display: none;
 }
 
 .overview-console-line {

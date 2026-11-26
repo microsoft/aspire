@@ -26,7 +26,7 @@
     </StableSectionContent>
 }
 
-<div class="resource-overview @(IsTerminalFocused ? "terminal-focused" : null)" tabindex="-1"
+<div class="resource-overview" tabindex="-1"
      data-resource-name="@Resource?.Name" data-resource-subscription="@_subscribedResourceName">
     @if (ResourcesLayout is null || !ResourcesLayout.IsLoaded)
     {
@@ -93,7 +93,7 @@
         var showEndpoints = urls.Count > 0;
         var showTerminal = CanShowTerminal(resource);
         var showConsole = !showTerminal;
-        var showOverviewTerminal = showTerminal && (IsTerminalFocused || !TerminalDockState.IsResourceOpen(resource.Name));
+        var showOverviewTerminal = showTerminal && !TerminalDockState.IsResourceOpen(resource.Name);
         var properties = GetVisibleProperties();
         var environmentVariables = GetVisibleEnvironmentVariables(resource);
         var healthReports = GetHealthReports(resource);
@@ -265,19 +265,28 @@
                            aria-label="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]">
                             <FluentIcon Value="@(new Icons.Regular.Size16.Book())" Color="Color.Primary" />
                         </a>
-                        @CardActionButton(
-                            IsTerminalFocused ? TerminalLoc[nameof(TerminalStrings.TerminalMinimize)] : TerminalLoc[nameof(TerminalStrings.TerminalExpand)],
-                            IsTerminalFocused ? new Icons.Regular.Size16.ArrowMinimize() : new Icons.Regular.Size16.ArrowExpand(),
-                            ToggleTerminalFocus)
+                        <TerminalWindowButton Class="overview-card-action"
+                                              IconColor="Color.Primary"
+                                              Label="@TerminalLoc[nameof(TerminalStrings.TerminalToolbarOpenInWindow)]"
+                                              TerminalKey="@($"resource:{resourceName}")"
+                                              Url="@($"terminal-window/resource/{Uri.EscapeDataString(resourceName)}")"
+                                              FontSize="@_terminalFontSize" />
+                        @{ var expandTerminal = TerminalLoc[nameof(TerminalStrings.TerminalExpand)]; }
+                        <a class="aspire-icon-button overview-card-action"
+                           href="@GetTerminalPageUrl(resourceName)"
+                           data-tooltip="@expandTerminal"
+                           aria-label="@expandTerminal">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.ArrowExpand())" Color="Color.Primary" />
+                        </a>
                     </div>
                 </div>
                 <div class="overview-terminal">
-                    <TerminalView @ref="_terminalView"
-                                  ResourceName="@resource.Name"
+                    <TerminalView ResourceName="@resource.Name"
                                   Chromeless="true"
                                   Embedded="true"
-                                  ShowDimensionsPicker="@IsTerminalFocused"
-                                  AutoFit="@(!IsTerminalFocused || resource.ShouldAutoFitTerminal())"
+                                  ShowDimensionsPicker="false"
+                                  AutoFit="true"
+                                  OnToolbarStateChanged="@_terminalToolbarStateChanged"
                                   SizeMemoryKey="@($"overview:{resource.Name}")" />
                 </div>
             </section>
@@ -302,7 +311,7 @@
                             () => OnConsolePausedChanged(!PauseManager.ConsoleLogsPaused))
                         @CardActionButton(
                             Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewOpenConsole)],
-                            new Icons.Regular.Size16.Open(),
+                            new Icons.Regular.Size16.ArrowExpand(),
                             () => NavigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resourceName)))
                     </div>
                 </div>
