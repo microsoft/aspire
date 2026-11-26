@@ -670,6 +670,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             {
                 Success = false,
                 ResourceNotFound = targetResolution.ResourceNotFound,
+                ResourceAmbiguous = targetResolution.ResourceAmbiguous,
                 ErrorMessage = targetResolution.ErrorMessage
             };
         }
@@ -871,18 +872,20 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
     }
 
-    private sealed record WaitTargetResolutionResult(WaitResourceTarget? Target, bool ResourceNotFound, string ErrorMessage)
+    private sealed record WaitTargetResolutionResult(WaitResourceTarget? Target, bool ResourceNotFound, bool ResourceAmbiguous, string ErrorMessage)
     {
-        public static WaitTargetResolutionResult Success(WaitResourceTarget target) => new(target, ResourceNotFound: false, string.Empty);
+        public static WaitTargetResolutionResult Success(WaitResourceTarget target) => new(target, ResourceNotFound: false, ResourceAmbiguous: false, string.Empty);
 
         public static WaitTargetResolutionResult NotFound(string requestedResourceName) => new(
             null,
             ResourceNotFound: true,
+            ResourceAmbiguous: false,
             $"Resource '{requestedResourceName}' was not found.");
 
         public static WaitTargetResolutionResult Ambiguous(string requestedResourceName) => new(
             null,
             ResourceNotFound: false,
+            ResourceAmbiguous: true,
             $"Resource '{requestedResourceName}' is ambiguous because it has multiple replicas. Specify the exact instance name.");
     }
 

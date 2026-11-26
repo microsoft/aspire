@@ -1909,6 +1909,53 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ContainerChildResourcesReceiveParentExitCode()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var parentContainer = builder.AddContainer("parent-container", "parent-image");
+        var customChild = builder.AddResource(new CustomChildResource("custom-child", parentContainer.Resource));
+        var grandChild = builder.AddResource(new CustomChildResource("grand-child", customChild.Resource));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await PublishParentStateAsync(KnownResourceStates.Exited, exitCode: 0);
+
+        Assert.Equal((KnownResourceStates.Exited, 0), GetStateAndExitCode(customChild.Resource.Name));
+        Assert.Equal((KnownResourceStates.Exited, 0), GetStateAndExitCode(grandChild.Resource.Name));
+
+        await PublishParentStateAsync(KnownResourceStates.Running, exitCode: null);
+
+        Assert.Equal((KnownResourceStates.Running, null), GetStateAndExitCode(customChild.Resource.Name));
+        Assert.Equal((KnownResourceStates.Running, null), GetStateAndExitCode(grandChild.Resource.Name));
+
+        Task PublishParentStateAsync(string state, int? exitCode) => events.PublishAsync(new OnResourceChangedContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            parentContainer.Resource,
+            "parent-container-dcp",
+            new ResourceStatus(state, null, null),
+            PreviousState: null,
+            snapshot => snapshot with { State = state, ExitCode = exitCode }));
+
+        (string? State, int? ExitCode) GetStateAndExitCode(string resourceName)
+        {
+            Assert.True(resourceNotificationService.TryGetCurrentState(resourceName, out var resourceEvent));
+            return (resourceEvent.Snapshot.State?.Text, resourceEvent.Snapshot.ExitCode);
+        }
+    }
+
+    [Fact]
     public async Task ProjectChildResourcesWithOwnLifetimeDoNotReceiveParentStateChanges()
     {
         var builder = DistributedApplication.CreateBuilder();

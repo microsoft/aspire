@@ -1730,6 +1730,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.False(response.Success);
         Assert.False(response.ResourceNotFound);
+        Assert.True(response.ResourceAmbiguous);
         Assert.Equal("Resource 'myresource' is ambiguous because it has multiple replicas. Specify the exact instance name.", response.ErrorMessage);
 
         await app.StopAsync().DefaultTimeout();

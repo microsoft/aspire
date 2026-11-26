@@ -282,7 +282,7 @@ internal sealed class ApplicationOrchestrator
                     .ConfigureAwait(false);
 
                     Debug.Assert(context.DcpResourceName is not null, "Container that is starting should always include the DCP name.");
-                    await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
+                    await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null, exitCode: null).ConfigureAwait(false);
                     break;
                 }
             default:
@@ -644,11 +644,20 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceChanged(OnResourceChangedContext context)
     {
-        await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot).ConfigureAwait(false);
+        // Capture the exit code from the snapshot that was actually published, so children that follow this
+        // resource's lifetime report the same outcome. Without it, a child copies an Exited or Finished state
+        // with no exit code, and clients such as `aspire wait` cannot tell whether it completed or failed.
+        int? exitCode = null;
+        await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, snapshot =>
+        {
+            var updated = context.UpdateSnapshot(snapshot);
+            exitCode = updated.ExitCode;
+            return updated;
+        }).ConfigureAwait(false);
 
         if (context.ResourceType == KnownResourceTypes.Container)
         {
-            await SetChildResourceAsync(context.Resource, context.Status.State, context.Status.StartupTimestamp, context.Status.FinishedTimestamp).ConfigureAwait(false);
+            await SetChildResourceAsync(context.Resource, context.Status.State, context.Status.StartupTimestamp, context.Status.FinishedTimestamp, exitCode).ConfigureAwait(false);
         }
 
         // Use the previous DCP state from the context, not the published snapshot. A stopped handler
@@ -679,7 +688,7 @@ internal sealed class ApplicationOrchestrator
 
             if (context.ResourceType == KnownResourceTypes.Container)
             {
-                await SetChildResourceAsync(context.Resource, KnownResourceStates.FailedToStart, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
+                await SetChildResourceAsync(context.Resource, KnownResourceStates.FailedToStart, startTimeStamp: null, stopTimeStamp: null, exitCode: null).ConfigureAwait(false);
             }
         }
         else
@@ -743,7 +752,7 @@ internal sealed class ApplicationOrchestrator
         await _dcpExecutor.StopResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task SetChildResourceAsync(IResource resource, string? state, DateTime? startTimeStamp, DateTime? stopTimeStamp)
+    private async Task SetChildResourceAsync(IResource resource, string? state, DateTime? startTimeStamp, DateTime? stopTimeStamp, int? exitCode)
     {
         foreach (var child in _parentChildLookup[resource].Where(c => c is IResourceWithParent))
         {
@@ -757,11 +766,12 @@ internal sealed class ApplicationOrchestrator
             {
                 State = state,
                 StartTimeStamp = startTimeStamp,
-                StopTimeStamp = stopTimeStamp
+                StopTimeStamp = stopTimeStamp,
+                ExitCode = exitCode
             }).ConfigureAwait(false);
 
             // Recurse to set the child resources of the child.
-            await SetChildResourceAsync(child, state, startTimeStamp, stopTimeStamp)
+            await SetChildResourceAsync(child, state, startTimeStamp, stopTimeStamp, exitCode)
                 .ConfigureAwait(false);
         }
     }

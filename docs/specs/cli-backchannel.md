@@ -178,6 +178,8 @@ When a `healthy` or `up` wait stops because the resource reached a terminal stat
 
 Older AppHosts omit `ExitCode`, and their `healthy` wait returns only `ErrorMessage` when it stops. For those AppHosts the CLI reads the exit code from the resource snapshot watch and, if the watch has not caught up after a short grace period, from a `GetResourceSnapshotsAsync` read bounded by the wait timeout.
 
+When the requested name is a display name shared by several replicas, the AppHost does not wait and returns `Success = false` with `ResourceAmbiguous = true`. The CLI reports that as a failure that asks for an exact instance name and never resolves it as a completion. Older AppHosts omit `ResourceAmbiguous`; for them the CLI confirms a display-name match against a full `GetResourceSnapshotsAsync` read before treating it as a single resource.
+
 ### Compatibility Matrix
 
 | CLI | AppHost | Behavior |

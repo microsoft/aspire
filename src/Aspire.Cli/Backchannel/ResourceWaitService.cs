@@ -54,6 +54,11 @@ internal sealed record ResourceWaitResult(
     /// Gets the process exit code when the wait inspected an exited resource.
     /// </summary>
     public int? ExitCode { get; init; }
+
+    /// <summary>
+    /// Gets whether the AppHost rejected the requested name because several replicas share it.
+    /// </summary>
+    public bool ResourceAmbiguous { get; init; }
 }
 
 /// <summary>
@@ -84,6 +89,12 @@ internal sealed class ResourceWaitService(
     // long a failure waits for the watch before reading the snapshots directly, which a batch of completed
     // jobs shares, rather than giving up on the exit code.
     private static readonly TimeSpan s_completionGracePeriod = TimeSpan.FromSeconds(2);
+
+    // The AppHost enforces a wait's timeout itself and answers with a timed-out response that carries the
+    // resource's state. The CLI also bounds the call so a stalled AppHost or a lost reply cannot keep it waiting
+    // forever, but allows this much longer so that the AppHost's own answer normally arrives first. The same
+    // allowance bounds the snapshot read that reconciles a batch once its waits returned.
+    private static readonly TimeSpan s_appHostReplyGracePeriod = TimeSpan.FromSeconds(2);
 
     public async Task<ResourceWaitResult> WaitAsync(
         IAppHostAuxiliaryBackchannel connection,
@@ -147,6 +158,7 @@ internal sealed class ResourceWaitService(
     /// While the batch is in progress, resource snapshots are watched for exits. A resource without health checks
     /// is healthy as soon as it runs, so a one-shot resource can satisfy its own wait and exit later. A nonzero
     /// exit observed before the batch ends still fails the batch, and an exit with code 0 is reported as completed.
+    /// The watch can fall behind, so once every wait returned the snapshots are read once more for the same exits.
     /// </item>
     /// <item>
     /// A resource can stop before its exit code is reported. Such a stop neither completes nor fails the resource:
@@ -196,6 +208,18 @@ internal sealed class ResourceWaitService(
 
             outcomes = await Task.WhenAll(waitTasks).ConfigureAwait(false);
 
+            if (target is not ResourceWaitTarget.Down)
+            {
+                await ReconcileWithCurrentSnapshotsAsync(
+                    connection,
+                    outcomes,
+                    monitor,
+                    failFastCts,
+                    startTimestamp,
+                    timeout,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             unresolvedExits = target is ResourceWaitTarget.Down
                 ? new bool[outcomes.Length]
                 : await WaitForPendingExitCodesAsync(outcomes, monitor, resolutionCts.Token, cancellationToken).ConfigureAwait(false);
@@ -216,7 +240,7 @@ internal sealed class ResourceWaitService(
                 // A resolution interrupted by the deadline or by another resource's failure still deserves
                 // whatever the watcher learned before the batch ended, without waiting any longer.
                 if (outcome.ResolutionInterrupted &&
-                    FindResourceSnapshots(snapshots, result.ResourceName) is [var snapshot] &&
+                    FindExplainingSnapshot(result, FindResourceSnapshots(snapshots, result.ResourceName), monitor.HasReadSnapshots) is { } snapshot &&
                     IsExited(snapshot))
                 {
                     result = ApplyExit(result, snapshot.State, snapshot.HealthStatus, snapshot.ExitCode);
@@ -239,6 +263,56 @@ internal sealed class ResourceWaitService(
             .ToArray();
 
         return new ResourceWaitBatchResult(results, snapshots);
+    }
+
+    /// <summary>
+    /// Reads the current snapshots once every wait returned, and records the exits the watch has not delivered yet.
+    /// </summary>
+    /// <remarks>
+    /// A resource can satisfy its wait and then stop while the watch is held up (for example, while the AppHost
+    /// builds another resource's snapshot). The last wait can return before the watch delivers that stop, so the
+    /// watch alone cannot show that a successful batch is still running. The read is skipped when the batch already
+    /// failed, since that outcome cannot change, and it is bounded by the shared deadline.
+    /// </remarks>
+    private async Task ReconcileWithCurrentSnapshotsAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        BatchWaitOutcome[] outcomes,
+        BatchSnapshotMonitor monitor,
+        CancellationTokenSource failFastCts,
+        long startTimestamp,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        if (failFastCts.IsCancellationRequested ||
+            !outcomes.Any(static outcome => outcome.Result.Outcome == ResourceWaitOutcome.Success))
+        {
+            return;
+        }
+
+        // The waits themselves may use the AppHost reply allowance, so the read gets the same one.
+        var remaining = timeout + s_appHostReplyGracePeriod - timeProvider.GetElapsedTime(startTimestamp);
+        if (remaining <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        using var readDeadlineCts = new CancellationTokenSource(remaining, timeProvider);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, readDeadlineCts.Token);
+        try
+        {
+            var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, linkedCts.Token).ConfigureAwait(false);
+            if (monitor.ObserveCurrentSnapshots(snapshots))
+            {
+                await failFastCts.CancelAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Without the read, the batch still reports what the waits and the watch showed.
+            logger.LogDebug(
+                "Reading resource snapshots after the waits returned failed with {ExceptionType}",
+                ex.GetType().Name);
+        }
     }
 
     /// <summary>
@@ -339,9 +413,12 @@ internal sealed class ResourceWaitService(
 
     private static ResourceWaitResult ApplyObservedExit(ResourceWaitResult result, ResourceSnapshot? exit)
     {
-        // A failure without a state did not come from the resource stopping (for example, an ambiguous
-        // replica name or an AppHost without wait support). Its error message is more useful than an exit.
-        if (exit is null || result is { Outcome: ResourceWaitOutcome.Failure, State: null })
+        // A failure without a state did not come from the resource stopping (for example, a name the AppHost could
+        // not resolve, or an AppHost without wait support). Its error message is more useful than an exit.
+        if (exit is null ||
+            result.ResourceNotFound ||
+            result.ResourceAmbiguous ||
+            result is { Outcome: ResourceWaitOutcome.Failure, State: null })
         {
             return result;
         }
@@ -481,9 +558,11 @@ internal sealed class ResourceWaitService(
         var resolutionInterrupted = false;
 
         // A "down" wait already succeeds for any exit code, so only running targets need to
-        // distinguish a successful run-to-completion from a crash.
+        // distinguish a successful run-to-completion from a crash. A name the AppHost could not resolve
+        // to a single resource is not about any resource's state.
         if (result.Outcome == ResourceWaitOutcome.Failure &&
             !result.ResourceNotFound &&
+            !result.ResourceAmbiguous &&
             target is not ResourceWaitTarget.Down)
         {
             // Current AppHosts return the state and exit code that stopped the wait, which settles the outcome
@@ -543,6 +622,12 @@ internal sealed class ResourceWaitService(
 
             if (view.Matches is [var snapshot] && IsStoppedWaitState(snapshot))
             {
+                // The watch may not have replayed every replica that shares the name yet, so read the snapshots.
+                if (FindExplainingSnapshot(result, view.Matches, view.HasReadSnapshots) is null)
+                {
+                    break;
+                }
+
                 if (IsPendingExit(snapshot))
                 {
                     return await WaitForExitCodeAsync(result, monitor, resolutionToken).ConfigureAwait(false);
@@ -664,7 +749,8 @@ internal sealed class ResourceWaitService(
     /// </summary>
     private static ResourceWaitResult ApplyInterruptedResolution(ResourceWaitResult result, BatchSnapshotMonitor monitor, bool batchFailed)
     {
-        var latest = monitor.Find(result.ResourceName).Matches is [var snapshot] ? snapshot : null;
+        var view = monitor.Find(result.ResourceName);
+        var latest = FindExplainingSnapshot(result, view.Matches, view.HasReadSnapshots);
         if (latest is not null && IsExited(latest))
         {
             return ApplyExit(result, latest.State, latest.HealthStatus, latest.ExitCode);
@@ -678,6 +764,30 @@ internal sealed class ResourceWaitService(
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Returns the snapshot that can explain a failed wait, or <see langword="null"/> when the batch's view of the
+    /// application cannot.
+    /// </summary>
+    private static ResourceSnapshot? FindExplainingSnapshot(ResourceWaitResult result, IReadOnlyList<ResourceSnapshot> matches, bool hasReadSnapshots)
+    {
+        if (matches is not [var snapshot])
+        {
+            return null;
+        }
+
+        // Older AppHosts answer a display name shared by several replicas like a healthy wait that stopped on the
+        // resource: with an error and no state. The watch replays the application one snapshot at a time, so until
+        // the snapshots were read, a single replica found by display name does not show that the name is unique.
+        if (result.State is null &&
+            !hasReadSnapshots &&
+            !string.Equals(snapshot.Name, result.ResourceName, StringComparisons.ResourceName))
+        {
+            return null;
+        }
+
+        return snapshot;
     }
 
     private static ResourceWaitResult ApplyExit(ResourceWaitResult result, string? state, string? health, int? exitCode)
@@ -796,11 +906,41 @@ internal sealed class ResourceWaitService(
         long startTimestamp,
         CancellationToken cancellationToken)
     {
-        var response = await connection.WaitForResourceAsync(
-            resourceName,
-            GetProtocolValue(target),
-            timeoutSeconds,
-            cancellationToken).ConfigureAwait(false);
+        // The AppHost's timeout only starts once the request arrives and only it can end the call, so also bound
+        // the call locally (see s_appHostReplyGracePeriod).
+        using var replyDeadlineCts = new CancellationTokenSource(
+            TimeSpan.FromSeconds(timeoutSeconds) + s_appHostReplyGracePeriod,
+            timeProvider);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, replyDeadlineCts.Token);
+
+        WaitForResourceResponse response;
+        try
+        {
+            response = await connection.WaitForResourceAsync(
+                resourceName,
+                GetProtocolValue(target),
+                timeoutSeconds,
+                linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            // Surface the caller's token rather than the linked one, so callers can recognize their own cancellation.
+            throw new OperationCanceledException(ex.Message, ex, cancellationToken);
+        }
+        catch (OperationCanceledException) when (replyDeadlineCts.IsCancellationRequested)
+        {
+            logger.LogDebug(
+                "The AppHost did not answer the wait for resource '{ResourceName}' within its timeout",
+                resourceName);
+            return new ResourceWaitResult(
+                ResourceWaitOutcome.Timeout,
+                resourceName,
+                State: null,
+                Health: null,
+                ResourceNotFound: false,
+                ErrorMessage: null,
+                timeProvider.GetElapsedTime(startTimestamp));
+        }
 
         // The AppHost's "down" predicate treats FailedToStart as terminal. It still represents
         // a failed resource and must not become a successful wait result.
@@ -822,7 +962,8 @@ internal sealed class ResourceWaitService(
             response.ErrorMessage,
             timeProvider.GetElapsedTime(startTimestamp))
         {
-            ExitCode = response.ExitCode
+            ExitCode = response.ExitCode,
+            ResourceAmbiguous = response.ResourceAmbiguous
         };
     }
 
@@ -847,7 +988,11 @@ internal sealed class ResourceWaitService(
 
     private readonly record struct BatchWaitOutcome(ResourceWaitResult Result, bool ResolutionInterrupted);
 
-    private readonly record struct SnapshotView(IReadOnlyList<ResourceSnapshot> Matches, Task Changed, bool WatchEnded);
+    /// <param name="Matches">The latest snapshots that match the requested name.</param>
+    /// <param name="Changed">Completes on the next change.</param>
+    /// <param name="WatchEnded">Whether the watch ended, so no further change can arrive.</param>
+    /// <param name="HasReadSnapshots">Whether the snapshots were read, so every resource is known.</param>
+    private readonly record struct SnapshotView(IReadOnlyList<ResourceSnapshot> Matches, Task Changed, bool WatchEnded, bool HasReadSnapshots);
 
     /// <summary>
     /// The result of a shared snapshot read, with the failure sequence when the read started. A read can only
@@ -869,6 +1014,7 @@ internal sealed class ResourceWaitService(
         private readonly ResourceSnapshot?[] _observedExits = new ResourceSnapshot?[resourceNames.Count];
         private TaskCompletionSource _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private bool _watchEnded;
+        private bool _hasReadSnapshots;
         private long _failureSequence;
         private Task<SnapshotRead>? _read;
         private long _readSequence;
@@ -938,8 +1084,42 @@ internal sealed class ResourceWaitService(
         {
             lock (_lock)
             {
-                return new SnapshotView(FindResourceSnapshots(_latest.Values.ToArray(), resourceName), _changed.Task, _watchEnded);
+                return new SnapshotView(FindResourceSnapshots(_latest.Values.ToArray(), resourceName), _changed.Task, _watchEnded, _hasReadSnapshots);
             }
+        }
+
+        /// <summary>
+        /// Gets whether the snapshots were read, so the latest snapshots include every resource.
+        /// </summary>
+        public bool HasReadSnapshots
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _hasReadSnapshots;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Records snapshots read from the AppHost like snapshots from the watch, and returns whether any of them is a
+        /// failed exit of a waited resource.
+        /// </summary>
+        public bool ObserveCurrentSnapshots(IReadOnlyList<ResourceSnapshot> snapshots)
+        {
+            lock (_lock)
+            {
+                _hasReadSnapshots = true;
+            }
+
+            var failedExit = false;
+            foreach (var snapshot in snapshots)
+            {
+                failedExit |= Observe(snapshot);
+            }
+
+            return failedExit;
         }
 
         public IReadOnlyList<ResourceSnapshot> GetSnapshots()
@@ -1002,6 +1182,7 @@ internal sealed class ResourceWaitService(
             // Reads do not record exits: they only resolve failures the AppHost already reported.
             lock (_lock)
             {
+                _hasReadSnapshots = true;
                 foreach (var snapshot in snapshots)
                 {
                     StoreLatest(snapshot);

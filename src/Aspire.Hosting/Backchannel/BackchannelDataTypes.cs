@@ -710,6 +710,14 @@ internal sealed class WaitForResourceResponse
     public bool ResourceNotFound { get; init; }
 
     /// <summary>
+    /// Gets whether the requested name is shared by several replicas, so the AppHost did not wait.
+    /// </summary>
+    /// <remarks>
+    /// Older AppHosts omit this value and only describe the ambiguity in <see cref="ErrorMessage"/>.
+    /// </remarks>
+    public bool ResourceAmbiguous { get; init; }
+
+    /// <summary>
     /// Gets whether the wait timed out.
     /// </summary>
     public bool TimedOut { get; init; }

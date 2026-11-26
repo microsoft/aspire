@@ -202,7 +202,7 @@ public class ResourceWaitServiceTests
     }
 
     [Fact]
-    public async Task WaitUntilDoneAsync_ResolvesCompletionsFromWatchedSnapshotsWithoutReading()
+    public async Task WaitUntilDoneAsync_ResolvesCompletionsFromWatchedSnapshotsWithoutReadingPerResource()
     {
         var migrationWaitsFailed = 0;
         var bothMigrationWaitsFailed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -255,7 +255,9 @@ public class ResourceWaitServiceTests
                 ("migrations2", ResourceWaitOutcome.Completed, "Finished", 0)
             ],
             batch.Results.Select(static r => (r.ResourceName, r.Outcome, r.State, r.ExitCode)));
-        Assert.Equal(0, backchannel.GetResourceSnapshotsCallCount);
+
+        // Only the read that reconciles the batch once every wait returned.
+        Assert.Equal(1, backchannel.GetResourceSnapshotsCallCount);
         Assert.Equal(
             [("api", "Running"), ("migrations1", "Finished"), ("migrations2", "Finished")],
             batch.Snapshots.Select(static s => (s.Name, s.State)));
@@ -588,7 +590,9 @@ public class ResourceWaitServiceTests
                 ("api", ResourceWaitOutcome.Success, "Running", null)
             ],
             batch.Results.Select(static r => (r.ResourceName, r.Outcome, r.State, r.ExitCode)));
-        Assert.Equal(1, backchannel.GetResourceSnapshotsCallCount);
+
+        // The read that resolved migrations, then the one that reconciles the batch once every wait returned.
+        Assert.Equal(2, backchannel.GetResourceSnapshotsCallCount);
     }
 
     [Fact]
@@ -638,5 +642,155 @@ public class ResourceWaitServiceTests
                 ("migrations", ResourceWaitOutcome.Timeout, "Finished", null, null)
             ],
             batch.Results.Select(static r => (r.ResourceName, r.Outcome, r.State, r.ExitCode, r.ErrorMessage)));
+    }
+
+    [Fact]
+    public async Task WaitForResourcesAsync_ReportsTimeoutWhenAppHostNeverAnswers()
+    {
+        // The local deadline allows the AppHost 2 seconds past the 30 second budget to answer first.
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(32));
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WaitForResourceHandler = NeverAnswerAsync
+        };
+        var service = new ResourceWaitService(timeProvider, NullLogger<ResourceWaitService>.Instance);
+
+        var resultsTask = service.WaitForResourcesAsync(
+            backchannel, ["api"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken);
+
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(31));
+        Assert.False(resultsTask.IsCompleted);
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        var results = await resultsTask.DefaultTimeout();
+
+        var result = Assert.Single(results);
+        Assert.Equal((ResourceWaitOutcome.Timeout, (string?)null, (string?)null), (result.Outcome, result.State, result.ErrorMessage));
+    }
+
+    [Fact]
+    public async Task WaitUntilDoneAsync_ReportsTimeoutWhenAppHostNeverAnswers()
+    {
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(32));
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WatchResourceSnapshotsHandler = (_, _) => AsyncEnumerable.Empty<ResourceSnapshot>(),
+            WaitForResourceHandler = NeverAnswerAsync
+        };
+        var service = new ResourceWaitService(timeProvider, NullLogger<ResourceWaitService>.Instance);
+
+        var batchTask = service.WaitUntilDoneAsync(
+            backchannel, ["api"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken);
+
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(32));
+        var batch = await batchTask.DefaultTimeout();
+
+        var result = Assert.Single(batch.Results);
+        Assert.Equal((ResourceWaitOutcome.Timeout, (string?)null, (string?)null), (result.Outcome, result.State, result.ErrorMessage));
+    }
+
+    [Fact]
+    public async Task WaitUntilDoneAsync_FailsBatchForExitTheWatchHasNotDeliveredWhenWaitsReturn()
+    {
+        static async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new ResourceSnapshot { Name = "api", State = "Running", HealthStatus = "Healthy", Version = 1 };
+            yield return new ResourceSnapshot { Name = "worker", State = "Running", HealthStatus = "Healthy", Version = 1 };
+
+            // The AppHost already published the crash of api, but the watch is held up and never delivers it.
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot { Name = "api", State = "Exited", HealthStatus = "Unhealthy", ExitCode = 1, Version = 2 },
+                new ResourceSnapshot { Name = "worker", State = "Running", HealthStatus = "Healthy", Version = 1 }
+            ],
+            WaitForResourceHandler = (_, _, _, _) => Task.FromResult(new WaitForResourceResponse
+            {
+                Success = true,
+                State = "Running",
+                HealthStatus = "Healthy"
+            })
+        };
+        var service = new ResourceWaitService(new FakeTimeProvider(), NullLogger<ResourceWaitService>.Instance);
+
+        var batch = await service.WaitUntilDoneAsync(
+            backchannel, ["api", "worker"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(
+            [
+                ("api", ResourceWaitOutcome.Failure, "Exited", (int?)1),
+                ("worker", ResourceWaitOutcome.Success, "Running", null)
+            ],
+            batch.Results.Select(static r => (r.ResourceName, r.Outcome, r.State, r.ExitCode)));
+        Assert.Equal(1, backchannel.GetResourceSnapshotsCallCount);
+        Assert.Equal(
+            [("api", "Exited"), ("worker", "Running")],
+            batch.Snapshots.Select(static s => (s.Name, s.State)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WaitUntilDoneAsync_KeepsAmbiguousNameErrorWhenWatchReplayedOneReplica(bool appHostReportsAmbiguity)
+    {
+        const string ambiguousError = "Resource 'api' is ambiguous because it has multiple replicas. Specify the exact instance name.";
+        var replicaReplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            // The watch replayed the replica that ran to completion, but not yet its sibling.
+            yield return new ResourceSnapshot { Name = "api-abc123", DisplayName = "api", State = "Finished", ExitCode = 0 };
+
+            // The watcher only asks for the next snapshot once it has processed the previous one.
+            replicaReplayed.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot { Name = "api-abc123", DisplayName = "api", State = "Finished", ExitCode = 0 },
+                new ResourceSnapshot { Name = "api-def456", DisplayName = "api", State = "Running" }
+            ],
+            WaitForResourceHandler = async (_, _, _, cancellationToken) =>
+            {
+                await replicaReplayed.Task.WaitAsync(cancellationToken);
+
+                // Older AppHosts only describe the ambiguity in the error message.
+                return new WaitForResourceResponse
+                {
+                    Success = false,
+                    ResourceAmbiguous = appHostReportsAmbiguity,
+                    ErrorMessage = ambiguousError
+                };
+            }
+        };
+        var service = new ResourceWaitService(new FakeTimeProvider(), NullLogger<ResourceWaitService>.Instance);
+
+        var batch = await service.WaitUntilDoneAsync(
+            backchannel, ["api"], ResourceWaitTarget.Healthy, 30, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var result = Assert.Single(batch.Results);
+        Assert.Equal(
+            (ResourceWaitOutcome.Failure, (string?)null, (int?)null, ambiguousError),
+            (result.Outcome, result.State, result.ExitCode, result.ErrorMessage));
+
+        // Only an older AppHost needs the snapshots read to show that several replicas share the name.
+        Assert.Equal(appHostReportsAmbiguity ? 0 : 1, backchannel.GetResourceSnapshotsCallCount);
+    }
+
+    private static async Task<WaitForResourceResponse> NeverAnswerAsync(string resourceName, string status, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        // The AppHost stalled or its reply was lost, so only the caller's deadline ends the call.
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        return new WaitForResourceResponse { Success = true };
     }
 }

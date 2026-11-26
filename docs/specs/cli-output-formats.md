@@ -419,9 +419,11 @@ reported; such a stop is neither `completed` nor `failure`, so the wait continue
 and reports `timeout` if it is still unknown when `--timeout` expires. `--all` first waits until the AppHost reports
 every resource, so it does not miss resources that are still being registered while the AppHost starts.
 This wait counts toward `--timeout`. `--all` then excludes hidden resources and skips explicit-start
-resources, such as those using `WithExplicitStart`, that have not been started yet. This includes
+resources, such as those using `WithExplicitStart`, that are not starting or running: those that have not
+been started yet, and those whose last manual run has stopped, such as a closed tracked browser. This includes
 child resources that follow such a parent's lifetime, such as a database on an explicit-start server. An
-explicit-start resource that is already running is waited on. AppHosts that predate the `resource-inventory.v1`
+explicit-start resource that is already starting or running is waited on. Child resources that follow a
+parent's lifetime report the parent's exit code along with its state. AppHosts that predate the `resource-inventory.v1`
 backchannel capability do not report explicit-start resources, so `--all` skips resources whose state is
 `NotStarted` instead.
 

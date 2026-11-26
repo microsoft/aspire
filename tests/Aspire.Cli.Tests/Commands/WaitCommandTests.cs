@@ -670,6 +670,61 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WaitCommand_MultipleResources_WaitForDownReportsTerminalStateFromResponse()
+    {
+        static async IAsyncEnumerable<ResourceSnapshot> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            // The watch never catches up with the stops, so the snapshots stay at Running.
+            yield return new ResourceSnapshot { Name = "api", State = "Running", HealthStatus = "Healthy" };
+            yield return new ResourceSnapshot { Name = "worker", State = "Running", HealthStatus = "Healthy" };
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot { Name = "api", State = "Running", HealthStatus = "Healthy" },
+                new ResourceSnapshot { Name = "worker", State = "Running", HealthStatus = "Healthy" }
+            ],
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchAsync(cancellationToken),
+            WaitForResourceHandler = (resourceName, _, _, _) => Task.FromResult(resourceName == "api"
+                ? new WaitForResourceResponse { Success = true, State = "Exited", ExitCode = 0 }
+                : new WaitForResourceResponse { Success = true, State = "Finished", ExitCode = 0 })
+        };
+        var interactionService = new TestInteractionService();
+
+        var exitCode = await RunWaitAsync("wait api worker --status down --format json --timeout 5", backchannel, interactionService);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var (json, _) = Assert.Single(interactionService.DisplayedRawText);
+        Assert.Equal(
+            """
+            {
+              "outcome": "success",
+              "status": "down",
+              "resources": [
+                {
+                  "name": "api",
+                  "outcome": "success",
+                  "state": "Exited",
+                  "exitCode": 0,
+                  "urls": []
+                },
+                {
+                  "name": "worker",
+                  "outcome": "success",
+                  "state": "Finished",
+                  "exitCode": 0,
+                  "urls": []
+                }
+              ]
+            }
+            """.ReplaceLineEndings(),
+            json.ReplaceLineEndings());
+    }
+
+    [Fact]
     public async Task WaitCommand_All_SkipsHiddenAndExplicitStartResourcesAndWritesJson()
     {
         var requests = new ConcurrentQueue<string>();
@@ -770,7 +825,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WaitCommand_All_SkipsOnlyExplicitStartResourcesThatHaveNotStarted()
+    public async Task WaitCommand_All_SkipsOnlyExplicitStartResourcesThatAreNotRunning()
     {
         var requests = new ConcurrentQueue<string>();
         var backchannel = new TestAppHostAuxiliaryBackchannel
@@ -782,7 +837,11 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
                 new ResourceSnapshot { Name = "db-connection", State = "NotStarted" },
                 new ResourceSnapshot { Name = "admin", State = "NotStarted", IsExplicitStart = true },
                 new ResourceSnapshot { Name = "tool", IsExplicitStart = true },
-                new ResourceSnapshot { Name = "worker", State = "Running", IsExplicitStart = true }
+                new ResourceSnapshot { Name = "worker", State = "Running", IsExplicitStart = true },
+                // A closed tracked browser stops without an exit code, and an earlier manual run can have failed.
+                // Both stay idle until started again.
+                new ResourceSnapshot { Name = "browser-logs", State = "Finished", IsExplicitStart = true },
+                new ResourceSnapshot { Name = "job", State = "Exited", ExitCode = 1, IsExplicitStart = true }
             ],
             WaitForResourceHandler = (resourceName, _, _, _) =>
             {
@@ -799,7 +858,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            [("admin", "skipped"), ("db-connection", "success"), ("tool", "skipped"), ("worker", "success")],
+            [("admin", "skipped"), ("browser-logs", "skipped"), ("db-connection", "success"), ("job", "skipped"), ("tool", "skipped"), ("worker", "success")],
             document.RootElement.GetProperty("resources").EnumerateArray()
                 .Select(static r => (r.GetProperty("name").GetString(), r.GetProperty("outcome").GetString()))
                 .OrderBy(static r => r.Item1, StringComparer.Ordinal));

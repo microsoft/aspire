@@ -296,7 +296,7 @@ internal sealed class WaitCommand : BaseCommand
             results.Select(static r => r.ResourceName).Concat(skippedNames),
             cancellationToken).ConfigureAwait(false);
         var reports = results
-            .Select(r => CreateReport(r, finalSnapshots, waitForAll))
+            .Select(r => CreateReport(r, finalSnapshots, GetWaitTarget(status), waitForAll))
             .Concat(skippedNames.Select(name => CreateSkippedReport(name, finalSnapshots)))
             .ToArray();
 
@@ -395,7 +395,7 @@ internal sealed class WaitCommand : BaseCommand
         }
     }
 
-    private static WaitReport CreateReport(ResourceWaitResult result, IReadOnlyList<ResourceSnapshot> snapshots, bool waitForAll)
+    private static WaitReport CreateReport(ResourceWaitResult result, IReadOnlyList<ResourceSnapshot> snapshots, ResourceWaitTarget target, bool waitForAll)
     {
         var matches = ResourceWaitService.FindResourceSnapshots(snapshots, result.ResourceName);
         var snapshot = matches.Count == 1 ? matches[0] : null;
@@ -406,20 +406,40 @@ internal sealed class WaitCommand : BaseCommand
             ? ResourceSnapshotMapper.GetResourceName(snapshot, snapshots)
             : result.ResourceName;
 
-        // The wait result reflects the state that ended the wait. Use only it for failures and completions:
-        // a failure without a state (an ambiguous replica name, an AppHost without wait support) must show
-        // its error message rather than the resource's unrelated current state. Otherwise prefer the
-        // fresh snapshot.
-        var useResultState = result.Outcome is ResourceWaitOutcome.Failure or ResourceWaitOutcome.Completed;
+        // A successful down wait ends on the terminal state the AppHost observed. The snapshots can still
+        // hold an earlier Running update when that response arrives before the watch catches up, so the
+        // response is the more recent view of the resource.
+        var endedOnTerminalState = target is ResourceWaitTarget.Down &&
+            result.Outcome is ResourceWaitOutcome.Success &&
+            result.State is not null;
+
+        // The wait result reflects the state that ended the wait. Use only it for failures, completions and
+        // terminal states: a failure without a state (an ambiguous replica name, an AppHost without wait
+        // support) must show its error message rather than the resource's unrelated current state. Otherwise
+        // prefer the fresh snapshot, which can include later changes such as health updates.
+        var useResultState = result.Outcome is ResourceWaitOutcome.Failure or ResourceWaitOutcome.Completed ||
+            endedOnTerminalState ||
+            snapshot?.State is null;
+
+        // Report the state and exit code from the same source so they describe the same moment. Borrow the
+        // other source's exit code only when it saw the same state, for example an older AppHost that does
+        // not return the exit code with a down wait.
+        var sameState = snapshot is not null &&
+            result.State is not null &&
+            string.Equals(snapshot.State, result.State, StringComparisons.ResourceState);
+        var exitCode = useResultState
+            ? result.ExitCode ?? (sameState ? snapshot!.ExitCode : null)
+            : snapshot!.ExitCode ?? (sameState ? result.ExitCode : null);
+
         return new WaitReport(
             snapshot?.Name ?? result.ResourceName,
             displayName,
             snapshot?.DisplayName,
             result.Outcome,
             Skipped: false,
-            useResultState ? result.State : snapshot?.State ?? result.State,
-            snapshot?.HealthStatus ?? result.Health,
-            useResultState ? result.ExitCode : snapshot?.ExitCode,
+            useResultState ? result.State : snapshot!.State,
+            endedOnTerminalState ? result.Health : snapshot?.HealthStatus ?? result.Health,
+            exitCode,
             result.ResourceNotFound,
             matches.SelectMany(static s => s.Urls).ToArray(),
             result.Outcome == ResourceWaitOutcome.Failure ? result.ErrorMessage : null);
@@ -590,10 +610,14 @@ internal sealed class WaitCommand : BaseCommand
         if (reportsExplicitStart)
         {
             // An explicit-start resource stays idle until someone starts it, so waiting on it would only time
-            // out. Before DCP creates it, its state can still be empty. Once it has been started, it is waited
-            // on like any other resource.
+            // out. Before DCP creates it, its state can still be empty. A run that someone started and that has
+            // since stopped, such as a closed tracked browser, leaves it idle in the same way: it runs again only
+            // when started, and its terminal state may never carry an exit code. --all waits for what the AppHost
+            // keeps running, so only an explicit-start resource that is currently starting or running is waited on.
             return snapshot.IsExplicitStart
-                && (string.IsNullOrEmpty(snapshot.State) || string.Equals(snapshot.State, KnownResourceStates.NotStarted, StringComparisons.ResourceState));
+                && (string.IsNullOrEmpty(snapshot.State) ||
+                    string.Equals(snapshot.State, KnownResourceStates.NotStarted, StringComparisons.ResourceState) ||
+                    KnownResourceStates.TerminalStates.Contains(snapshot.State, StringComparers.ResourceState));
         }
 
         // Older AppHosts do not report explicit-start metadata. NotStarted is the closest signal they offer:
