@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Dependency version bump",
+  "mergedAt": "2026-11-17T01:17:56Z",
+  "number": 22353,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "excluded",
+  "title": "Update Azure.Provisioning.AppContainers to 1.3.0"
+}

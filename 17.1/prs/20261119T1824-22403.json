@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release branch merge-back; no new user-facing change",
+  "mergedAt": "2026-11-19T18:24:10Z",
+  "number": 22403,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "excluded",
+  "title": "Merge release/17.0 back into main"
+}

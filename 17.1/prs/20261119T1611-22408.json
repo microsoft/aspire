@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Dependency version bump",
+  "mergedAt": "2026-11-19T16:11:20Z",
+  "number": 22408,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "excluded",
+  "title": "Update OpenTelemetry packages to 1.21.0"
+}

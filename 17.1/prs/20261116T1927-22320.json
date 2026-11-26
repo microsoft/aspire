@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored; not a backport",
+  "mergedAt": "2026-11-16T19:27:39Z",
+  "number": 22320,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "excluded",
+  "title": "Fix aspire agent init --non-interactive with multiple AppHosts"
+}

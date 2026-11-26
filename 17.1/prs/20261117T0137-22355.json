@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Included: Restore diagnostics shown when aspire update fails",
+  "mergedAt": "2026-11-17T01:37:33Z",
+  "number": 22355,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "included",
+  "title": "Show restore diagnostics when aspire update fails"
+}

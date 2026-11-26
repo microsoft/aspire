@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included: MongoDB reports healthy only after writes are accepted",
+  "mergedAt": "2026-11-17T23:51:38Z",
+  "number": 21638,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "included",
+  "title": "Wait for MongoDB single-member primary to accept writes before reporting healthy"
+}

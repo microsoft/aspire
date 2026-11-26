@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only flaky test fix",
+  "mergedAt": "2026-11-18T23:54:01Z",
+  "number": 22345,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "excluded",
+  "title": "[automated] Fix flaky extension E2E tree context menu opening"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included: AppHost stop no longer fails on no-op terminal teardown",
+  "mergedAt": "2026-11-17T23:51:44Z",
+  "number": 21528,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "included",
+  "title": "Don't fail AppHost stop on a no-op terminal teardown after the shutdown budget is exhausted"
+}

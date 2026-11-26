@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Running aspire update --self with the staging channel from an unsupported CLI now explains why and how to recover instead of only reporting an unsupported channel.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-11-19T15:35:58Z",
+  "lastMergedAt": "2026-11-19T15:35:58Z",
+  "name": "Staging channel guidance during CLI self-update",
+  "owner": "JamesNK",
+  "prs": [
+    22351
+  ]
+}

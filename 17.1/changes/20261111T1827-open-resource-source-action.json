@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "A new Open resource source context-menu action opens the source file for source-backed AppHost resources in the VS Code editor.",
-  "docsPrs": [],
+  "docsPrs": [
+    2120
+  ],
   "docsRequired": true,
   "emoji": "📂",
   "firstMergedAt": "2026-11-11T18:27:24Z",

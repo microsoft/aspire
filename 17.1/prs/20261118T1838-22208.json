@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Included: Restore diagnostics shown when aspire update fails",
+  "mergedAt": "2026-11-18T18:38:59Z",
+  "number": 22208,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "included",
+  "title": "Redact restore diagnostics and clarify update validation failures"
+}

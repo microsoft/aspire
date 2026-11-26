@@ -1,0 +1,20 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When the post-update restore fails, aspire update now shows the captured NuGet/MSBuild output, with credential-bearing feed URLs redacted.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩹",
+  "firstMergedAt": "2026-11-17T01:37:33Z",
+  "lastMergedAt": "2026-11-18T18:38:59Z",
+  "name": "Restore diagnostics shown when aspire update fails",
+  "owner": "JamesNK",
+  "prs": [
+    22355,
+    22208
+  ]
+}

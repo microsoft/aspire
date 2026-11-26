@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Channel updates are now applied without requiring a validation restore, while the new --dry-run option validates and restores the original source files afterward.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧪",
+  "firstMergedAt": "2026-11-17T22:30:31Z",
+  "lastMergedAt": "2026-11-17T22:30:31Z",
+  "name": "aspire update --dry-run validates channel updates",
+  "owner": "danegsta",
+  "prs": [
+    22207
+  ]
+}

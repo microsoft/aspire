@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@gabisonia"
+  ],
+  "description": "The generated task hub URL for the Durable Task Scheduler emulator now opens the hub directly instead of redirecting to an Add Endpoint dialog.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-11-17T16:55:18Z",
+  "lastMergedAt": "2026-11-17T16:55:18Z",
+  "name": "Durable Task emulator task hub dashboard link fixed",
+  "owner": "eerhardt",
+  "prs": [
+    20180
+  ]
+}

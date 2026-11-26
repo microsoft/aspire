@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored release branch merge",
+  "mergedAt": "2026-11-19T18:24:13Z",
+  "number": 22375,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "excluded",
+  "title": "Merge release/17.0 to main after v17.0.0 release"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Included: Dashboard tooltips work over non-localhost HTTP",
+  "mergedAt": "2026-11-19T15:31:12Z",
+  "number": 22414,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "included",
+  "title": "Fix dashboard tooltips over non-localhost HTTP"
+}

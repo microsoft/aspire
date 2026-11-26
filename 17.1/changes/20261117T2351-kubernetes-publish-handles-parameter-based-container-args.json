@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Publishing to Kubernetes now works for containers whose arguments come from parameters.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "☸️",
+  "firstMergedAt": "2026-11-17T23:51:32Z",
+  "lastMergedAt": "2026-11-17T23:51:32Z",
+  "name": "Kubernetes publish handles parameter-based container args",
+  "owner": "davidfowl",
+  "prs": [
+    21648
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Debugging Azure Functions project resources from Visual Studio now launches correctly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-11-18T02:44:20Z",
+  "lastMergedAt": "2026-11-18T02:44:20Z",
+  "name": "Visual Studio debugging for Azure Functions projects fixed",
+  "owner": "karolz-ms",
+  "prs": [
+    22346
+  ]
+}

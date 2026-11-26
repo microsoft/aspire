@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included: Kubernetes publish handles parameter-based container args",
+  "mergedAt": "2026-11-17T23:51:32Z",
+  "number": 21648,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "included",
+  "title": "Fix Kubernetes publish for parameter-based container args (unquarantine DeployK8sWithNats)"
+}

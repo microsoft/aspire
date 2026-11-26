@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Included: aspire update --dry-run validates channel updates",
+  "mergedAt": "2026-11-17T22:30:31Z",
+  "number": 22207,
+  "runDate": "2026-11-26T18:10:00Z",
+  "status": "included",
+  "title": "Separate channel update validation with aspire update --dry-run"
+}

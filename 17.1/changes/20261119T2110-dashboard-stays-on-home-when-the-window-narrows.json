@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Narrowing the browser window on the home page no longer navigates away; it opens the mobile resource drawer instead.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📱",
+  "firstMergedAt": "2026-11-19T21:10:27Z",
+  "lastMergedAt": "2026-11-19T21:10:27Z",
+  "name": "Dashboard stays on home when the window narrows",
+  "owner": "IEvangelist",
+  "prs": [
+    22395
+  ]
+}

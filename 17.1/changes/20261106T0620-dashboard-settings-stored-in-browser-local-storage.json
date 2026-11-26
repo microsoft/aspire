@@ -1,14 +1,16 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "Resource tags, resource and group order, and pinned metrics are now kept in the browser\u2019s local storage instead of the dashboard settings database on disk, like other dashboard preferences.",
-  "docsPrs": [],
+  "description": "Resource tags, resource and group order, and pinned metrics are now kept in the browser’s local storage instead of the dashboard settings database on disk, like other dashboard preferences.",
+  "docsPrs": [
+    2074
+  ],
   "docsRequired": true,
-  "emoji": "\ud83d\udcbe",
+  "emoji": "💾",
   "firstMergedAt": "2026-11-06T06:20:33Z",
   "lastMergedAt": "2026-11-06T06:20:33Z",
   "name": "Dashboard settings stored in browser local storage",

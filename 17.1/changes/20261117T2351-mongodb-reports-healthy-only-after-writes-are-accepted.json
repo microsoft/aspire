@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The single-member MongoDB replica set now waits for the primary to accept writes before reporting healthy.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🍃",
+  "firstMergedAt": "2026-11-17T23:51:38Z",
+  "lastMergedAt": "2026-11-17T23:51:38Z",
+  "name": "MongoDB reports healthy only after writes are accepted",
+  "owner": "davidfowl",
+  "prs": [
+    21638
+  ]
+}
