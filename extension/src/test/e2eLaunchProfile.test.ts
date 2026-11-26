@@ -9,8 +9,9 @@ import * as vm from 'vm';
 import { error as webDriverError, WebDriver } from 'selenium-webdriver';
 import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs, getBlazorWasmDebugProofControlTimeoutMs } from '../testing/blazorWasmDebugProofTimeouts';
 
-const { createBrowserDebuggerAppHostProject } = require(path.resolve(__dirname, '..', '..', 'scripts', 'e2e-apphost-sdk-version.js')) as {
-    createBrowserDebuggerAppHostProject(appHostSdkVersion: string): string;
+const { createBrowserDebuggerAppHostProject, selectCompanionPackageVersion } = require(path.resolve(__dirname, '..', '..', 'scripts', 'e2e-apphost-sdk-version.js')) as {
+    createBrowserDebuggerAppHostProject(appHostSdkVersion: string, blazorPackageVersion: string): string;
+    selectCompanionPackageVersion(appHostSdkVersion: string, availablePackageVersions: string[]): string;
 };
 
 function removeDirectorySafely(directory: string): void {
@@ -789,7 +790,7 @@ suite('E2E launch profile', () => {
         const globalJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, '..', 'global.json'), 'utf8'));
         const repositoryTargetFramework = `net${globalJson.sdk.version.split('.')[0]}.0`;
         const appHostSdkVersion = '17.0.0-ci';
-        const appHostProject = createBrowserDebuggerAppHostProject(appHostSdkVersion);
+        const appHostProject = createBrowserDebuggerAppHostProject(appHostSdkVersion, appHostSdkVersion);
 
         assert.ok(runner.includes("const enableBrowserDebuggerE2E = shardName === 'browser-debugger';"));
         assert.ok(runner.includes(`const browserDebuggerTargetFramework = '${repositoryTargetFramework}';`));
@@ -1120,14 +1121,22 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
     }
 }`],
         ]);
+        const requestedPackageIds: string[] = [];
         vm.runInNewContext(`${declarations.join('\n')}
             configureStandaloneBasePath('/app');
             replaceCounterHandler('Counter.razor');
-            writeBrowserDebuggerAppHostProject('AppHost', '13.6.0-test');`, {
+            writeBrowserDebuggerAppHostProject('AppHost', '13.6.0');`, {
             path,
             workspaceRoot: '/app',
             csharpFileHeader: '',
             createBrowserDebuggerAppHostProject,
+            selectCompanionPackageVersion,
+            getAvailableCompanionPackageVersions: (appHostSdkVersion: string, packageId: string) => {
+                assert.strictEqual(appHostSdkVersion, '13.6.0');
+                requestedPackageIds.push(packageId);
+                return ['13.6.0-ci'];
+            },
+            console: { log: () => undefined },
             fs: {
                 mkdirSync: () => undefined,
                 readFileSync: (filePath: string) => files.get(filePath),
@@ -1135,6 +1144,9 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
             },
         });
         assert.strictEqual(files.get(indexPath), '<html><head><base href="/standalone/" /></head></html>');
+        // Release branding stabilizes the AppHost SDK while Aspire.Hosting.Blazor keeps its -ci suffix.
+        assert.deepStrictEqual(requestedPackageIds, ['Aspire.Hosting.Blazor']);
+        assert.strictEqual(files.get(path.join('/app', 'AppHost', 'AppHost.csproj')), createBrowserDebuggerAppHostProject('13.6.0', '13.6.0-ci'));
         assert.strictEqual(files.get('Counter.razor'), `<button class="btn btn-primary" @onclick="IncrementCount" data-aspire-e2e-interactive="@(isInteractive ? "true" : "false")">Click me</button>
 @code {
     private int currentCount = 0;

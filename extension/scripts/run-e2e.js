@@ -8,6 +8,7 @@ const { spawn, spawnSync } = require('child_process');
 const {
   createBrowserDebuggerAppHostProject,
   resolveAppHostSdkVersion: resolveAppHostSdkVersionFromResult,
+  selectCompanionPackageVersion,
 } = require('./e2e-apphost-sdk-version');
 const {
   ensureDownloadCache,
@@ -1737,7 +1738,11 @@ function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersi
   fs.mkdirSync(projectDirectory, { recursive: true });
   // The standalone client still consumes generated Projects metadata. Keep that SDK and
   // the browser fixtures' project-reference graph for restore/build prewarming.
-  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), createBrowserDebuggerAppHostProject(resolvedAppHostSdkVersion));
+  const blazorPackageVersion = selectCompanionPackageVersion(resolvedAppHostSdkVersion, getAvailableCompanionPackageVersions(resolvedAppHostSdkVersion, 'Aspire.Hosting.Blazor'));
+  if (blazorPackageVersion !== resolvedAppHostSdkVersion) {
+    console.log(`Using local Aspire.Hosting.Blazor ${blazorPackageVersion} with Aspire.AppHost.Sdk ${resolvedAppHostSdkVersion} because Aspire.Hosting.Blazor is not stabilized with the other packages.`);
+  }
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), createBrowserDebuggerAppHostProject(resolvedAppHostSdkVersion, blazorPackageVersion));
 
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREBLAZOR001
 using Aspire.Hosting.ApplicationModel;
@@ -2332,11 +2337,16 @@ function getApprovedFallbackPackageSources() {
   ];
 }
 
-function getAvailablePackageVersions(packageId) {
+// Discovery registers every directory containing packages as its own source, so read only the
+// files directly in each source. Recursing would attribute a nested source's packages to its
+// parent and let the companion fallback borrow from a different source than the SDK.
+function getAvailablePackageVersions(packageId, sourceDirectories = getLocalPackageSourceDirectories()) {
   const versions = [];
-  for (const sourceDirectory of getLocalPackageSourceDirectories()) {
-    for (const packagePath of getFilesRecursive(sourceDirectory)) {
-      const packageName = path.basename(packagePath);
+  for (const sourceDirectory of sourceDirectories) {
+    const packageNames = fs.readdirSync(sourceDirectory, { withFileTypes: true })
+      .filter(entry => entry.isFile())
+      .map(entry => entry.name);
+    for (const packageName of packageNames) {
       const escapedPackageId = packageId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const match = packageName.match(new RegExp(`^${escapedPackageId}\\.(.+)\\.nupkg$`));
       if (match) {
@@ -2346,6 +2356,22 @@ function getAvailablePackageVersions(packageId) {
   }
 
   return Array.from(new Set(versions)).sort(comparePackageVersionsDescending);
+}
+
+function getAvailableCompanionPackageVersions(appHostSdkVersion, packageId) {
+  const sourceDirectories = getLocalPackageSourceDirectories();
+  const versions = getAvailablePackageVersions(packageId, sourceDirectories);
+  if (versions.includes(appHostSdkVersion)) {
+    return [appHostSdkVersion];
+  }
+
+  // The E2E workflow and PR installer flatten a build's packages into a hive's packages
+  // directory; repo outputs are discovered before cached hives. Keep the source associated
+  // with the selected SDK instead of letting an unrelated hive's 17.0.1-pr.* outrank
+  // that source's 17.0.1-ci. If it has no companion, leave restore to report the missing pin.
+  const appHostSource = sourceDirectories.find(sourceDirectory =>
+    getAvailablePackageVersions('Aspire.AppHost.Sdk', [sourceDirectory]).includes(appHostSdkVersion));
+  return appHostSource ? getAvailablePackageVersions(packageId, [appHostSource]) : [];
 }
 
 function getAvailableAppHostSdkVersions() {
