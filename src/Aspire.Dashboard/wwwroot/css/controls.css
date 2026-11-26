@@ -994,8 +994,9 @@ fluent-text-input[type="search"] [slot="start"] svg {
 }
 
 .content-list-popover::part(dialog) {
+    --content-list-popover-max-height: 300px;
     max-width: 400px;
-    max-height: 300px;
+    max-height: var(--content-list-popover-max-height);
     padding: 14px;
     overflow-x: hidden;
     overflow-y: auto;

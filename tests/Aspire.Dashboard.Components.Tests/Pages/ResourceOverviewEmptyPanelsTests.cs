@@ -22,6 +22,7 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
@@ -276,6 +277,55 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         await changes.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("test"))]);
         cut.WaitForAssertion(() => Assert.Equal(
             ["overview-tags-title", "overview-status-title", "overview-console-title"], GetVisiblePanels(cut)));
+    }
+
+    [Fact]
+    public async Task HealthChecks_PreserveFullDetailsInTooltipAndVisualizer()
+    {
+        var lastRun = new DateTime(2025, 12, 20, 18, 15, 30, DateTimeKind.Utc);
+        var timeProvider = new TestTimeProvider { UtcNow = lastRun.AddHours(1) };
+        var resource = ModelTestHelpers.CreateResource("test", healthReports:
+        [
+            new("description-check", HealthStatus.Healthy, "Database responded", null) { LastRunAtTimeStamp = lastRun },
+            new("exception-check", HealthStatus.Unhealthy, null, "Connection failed\nStack trace") { LastRunAtTimeStamp = lastRun },
+            new("waiting-check", null, null, null)
+        ]);
+        var dialogService = new TestDialogService();
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport,
+            new TestDashboardClient(isEnabled: true, initialResources: [resource],
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services =>
+            {
+                services.AddSingleton<BrowserTimeProvider>(timeProvider);
+                services.AddSingleton<IDialogService>(dialogService);
+            });
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test");
+
+        var cut = RenderOverview(s_viewport);
+        var rows = cut.FindAll("[aria-labelledby='overview-health-title'] tr:has(.valueColumn)");
+        Assert.Equal(["description-check", "exception-check", "waiting-check"],
+            rows.Select(row => row.QuerySelector(".nameColumn .grid-value")!.TextContent.Trim()));
+
+        var localTime = FormatHelpers.FormatTimeWithOptionalDate(timeProvider, lastRun);
+        await AssertCheckAsync(0, @"^Healthy \(.+ ago\) \u00B7 Database responded$", $"Healthy (last run at {localTime}) \u00B7 Database responded");
+        await AssertCheckAsync(1, @"^Unhealthy \(.+ ago\) \u00B7 Connection failed$", $"Unhealthy (last run at {localTime}) \u00B7 Connection failed");
+        await AssertCheckAsync(2, @"^Waiting\.\.\.$", "Waiting...");
+
+        async Task AssertCheckAsync(int index, string expectedValuePattern, string expectedTooltip)
+        {
+            var valueCell = rows[index].QuerySelector(".valueColumn")!;
+            var value = valueCell.QuerySelector(".grid-value")!;
+            Assert.Matches(expectedValuePattern, value.TextContent.Trim());
+            Assert.Equal(expectedTooltip, value.GetAttribute("data-tooltip"));
+
+            var previousDialog = dialogService.LastInstance;
+            await valueCell.QuerySelector("fluent-button[aria-label='Open in text visualizer']")!.ClickAsync(new());
+            var instance = Assert.IsAssignableFrom<IDialogInstance>(dialogService.LastInstance);
+            Assert.NotSame(previousDialog, instance);
+            var dialog = Assert.IsType<TextVisualizerDialogViewModel>(instance.Options.Parameters["Content"]);
+            Assert.Equal(expectedTooltip, dialog.Text);
+            await instance.CloseAsync();
+        }
     }
 
     [Fact]
