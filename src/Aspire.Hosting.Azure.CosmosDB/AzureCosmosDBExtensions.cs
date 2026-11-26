@@ -222,13 +222,14 @@ public static class AzureCosmosExtensions
             // provides a certificate, so the command uses the endpoint URL, which reflects the current scheme. curl
             // verifies that certificate against the host's trust store, not the trust configured in the container. The
             // command keeps verification on rather than passing -k; the note tells users how to supply a certificate
-            // the host does not trust, such as a custom self-signed one from WithHttpsCertificate.
+            // the host does not trust, such as a custom self-signed one from WithHttpsCertificate. Keep the note within
+            // 256 characters: the MCP resource listing truncates longer descriptive text.
             builder.WithDefaultConnectCommand(
                 "curl",
                 ConnectCommandLocation.Host,
                 ReferenceExpression.Create($"curl -sS {builder.Resource.GetEndpoint("emulator")}/"),
                 append: "<curl options>, for example -i",
-                note: "Reaches the emulator gateway. If it uses HTTPS with a certificate the host does not trust, such as a custom self-signed certificate, append --cacert <certificate file>. Data requests need Azure Cosmos DB REST authorization headers built from the emulator's well-known key, so use an SDK or the Data Explorer to query data.");
+                note: "Reaches the emulator gateway. If the host does not trust its HTTPS certificate, such as a custom self-signed one, append --cacert <certificate file>. Data requests need signed authorization headers, so use an SDK or the Data Explorer to query data.");
         }
         else
         {

@@ -1781,9 +1781,9 @@ export interface WithCommandOptions {
 }
 
 export interface WithConnectCommandOptions {
-    /** A description of what to append to the command, such as `-c '<sql>'`. */
+    /** A description of what to append to the command, such as `-c '<sql>'`. It is displayed by tooling, so it must not contain secrets. */
     append?: string;
-    /** An optional note about using the command. */
+    /** An optional note about using the command. It is displayed by tooling, so it must not contain secrets. */
     note?: string;
 }
 
@@ -13119,6 +13119,8 @@ export interface ContainerRegistryResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -13507,6 +13509,8 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -13915,6 +13919,8 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -15413,6 +15419,8 @@ export interface ContainerResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -16300,6 +16308,8 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -17208,6 +17218,8 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -20262,6 +20274,8 @@ export interface CSharpAppResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -20989,6 +21003,8 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -21736,6 +21752,8 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -24374,6 +24392,8 @@ export interface DotnetToolResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -25137,6 +25157,8 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -25920,6 +25942,8 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -28672,6 +28696,8 @@ export interface ExecutableResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -29396,6 +29422,8 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -30147,6 +30175,8 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -32769,6 +32799,8 @@ export interface ExternalServiceResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -33162,6 +33194,8 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -33575,6 +33609,8 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -35098,6 +35134,8 @@ export interface ParameterResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -35534,6 +35572,8 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -35991,6 +36031,8 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -37615,6 +37657,8 @@ export interface ProjectResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -38342,6 +38386,8 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -39090,6 +39136,8 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -41728,6 +41776,8 @@ export interface TestDatabaseResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -42615,6 +42665,8 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -43522,6 +43574,8 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -46576,6 +46630,8 @@ export interface TestRedisResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -47547,6 +47603,8 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -48538,6 +48596,8 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -51921,6 +51981,8 @@ export interface TestVaultResource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -52810,6 +52872,8 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -53719,6 +53783,8 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -57073,6 +57139,8 @@ export interface Resource {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -57461,6 +57529,8 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
@@ -57870,6 +57940,8 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
      * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
      * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
      * @param tool The name of the client tool the command runs, such as `psql`.
      * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
      * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.

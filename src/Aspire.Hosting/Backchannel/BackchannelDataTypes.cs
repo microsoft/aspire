@@ -1256,7 +1256,8 @@ internal sealed class ResourceSnapshotConnect
     public const string RunsOnHost = "host";
 
     /// <summary>
-    /// Gets the command, ending where the client's own arguments go. Contains no secret values.
+    /// Gets the command, ending where the client's own arguments go. The whole entry is omitted when any field contains
+    /// a known resolved secret value.
     /// </summary>
     public required string Command { get; init; }
 

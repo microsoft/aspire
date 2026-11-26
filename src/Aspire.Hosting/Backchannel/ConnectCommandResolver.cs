@@ -62,8 +62,10 @@ internal static class ConnectCommandResolver
                 new ValueProviderContext { Network = KnownNetworkIdentifiers.LocalhostNetwork },
                 cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
+            // A cancellation that did not come from this request's token belongs to a value the command depends on,
+            // not to this caller, so it only makes the optional entry unavailable.
             logger.LogDebug(ex, "Connect command for resource '{ResourceName}' could not be resolved.", resource.Name);
             return null;
         }
@@ -76,16 +78,9 @@ internal static class ConnectCommandResolver
         string runs;
         if (annotation.Location == ConnectCommandLocation.Container)
         {
-            string runtime;
-            try
+            var runtime = await GetContainerRuntimeNameAsync(resource, getContainerRuntimeName, logger, cancellationToken).ConfigureAwait(false);
+            if (runtime is null)
             {
-                runtime = await getContainerRuntimeName(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // The resolver caches a faulted task for a misconfigured ASPIRE_CONTAINER_RUNTIME. Omit the optional
-                // entry rather than failing the snapshot, so the resource listing stays available for diagnosis.
-                logger.LogDebug(ex, "Connect command for resource '{ResourceName}' is not shown: the container runtime could not be resolved.", resource.Name);
                 return null;
             }
 
@@ -105,6 +100,43 @@ internal static class ConnectCommandResolver
             Append = annotation.Append,
             Note = annotation.Note
         };
+    }
+
+    private static async Task<string?> GetContainerRuntimeNameAsync(
+        IResource resource,
+        Func<CancellationToken, Task<string>> getContainerRuntimeName,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        // Runtime detection is shared: concurrent callers await the probe started with the first caller's token, so
+        // the probe can be cancelled while this request is still active. The resolver discards a cancelled probe, so
+        // one retry starts detection with this request's token. If that is also cancelled by another caller, omit the
+        // optional entry rather than failing the snapshot.
+        const int maxAttempts = 2;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await getContainerRuntimeName(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                if (attempt < maxAttempts)
+                {
+                    continue;
+                }
+
+                logger.LogDebug(ex, "Connect command for resource '{ResourceName}' is not shown: container runtime detection was cancelled.", resource.Name);
+                return null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The resolver caches a faulted task for a misconfigured ASPIRE_CONTAINER_RUNTIME. Omit the optional
+                // entry rather than failing the snapshot, so the resource listing stays available for diagnosis.
+                logger.LogDebug(ex, "Connect command for resource '{ResourceName}' is not shown: the container runtime could not be resolved.", resource.Name);
+                return null;
+            }
+        }
     }
 
     /// <summary>
@@ -210,9 +242,18 @@ internal static class ConnectCommandResolver
                 return false;
             }
 
-            // Check the network the command is resolved for. Resolving an endpoint that has no allocation on that
-            // network waits for one, and EndpointReference.IsAllocated caches a negative result.
-            if (!endpoint.EndpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(endpoint.ContextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork, out _))
+            // Commands are resolved for the localhost network, but a reference bound to another network resolves that
+            // network's allocation instead, e.g. a container-network address and port that the host cannot reach.
+            // Integrations reference the default endpoint, so a reference bound to any other network is rejected.
+            if (endpoint.ContextNetworkID is { } network && network != KnownNetworkIdentifiers.LocalhostNetwork)
+            {
+                reason = $"endpoint '{endpoint.EndpointName}' is referenced on network '{network.Value}'. Connect commands can reference only localhost endpoint values.";
+                return false;
+            }
+
+            // Resolving an endpoint that has no allocation on the localhost network waits for one, and
+            // EndpointReference.IsAllocated caches a negative result.
+            if (!endpoint.EndpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(KnownNetworkIdentifiers.LocalhostNetwork, out _))
             {
                 reason = $"endpoint '{endpoint.EndpointName}' is not allocated yet.";
                 return false;

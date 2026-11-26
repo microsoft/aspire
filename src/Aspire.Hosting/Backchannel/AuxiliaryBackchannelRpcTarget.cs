@@ -1275,7 +1275,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Properties = properties,
             McpServer = mcpServer,
             Commands = commands,
-            Connect = connect
+            Connect = OmitConnectContainingSecretValue(connect, resourceEvent.ResourceId, secretParameterValues)
         };
     }
 
@@ -1294,6 +1294,44 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </remarks>
     private static string? RedactIfSecretValue(string? value, HashSet<string> secretParameterValues)
         => value is not null && secretParameterValues.Contains(value) ? null : value;
+
+    /// <summary>
+    /// Omits a connect command when any of its displayed fields contains a known resolved secret value.
+    /// </summary>
+    /// <remarks>
+    /// Connect commands can reference only literal text and endpoint values, but an AppHost can still embed a secret in
+    /// that literal text. Unlike environment values, a secret here is typically embedded in a longer command line, so
+    /// this uses substring matching rather than <see cref="RedactIfSecretValue"/>'s exact match. The whole entry is
+    /// dropped rather than masked because a command with a masked argument would no longer run. A short secret value
+    /// that happens to occur in an unrelated command only hides that command, which fails safe.
+    /// </remarks>
+    private ResourceSnapshotConnect? OmitConnectContainingSecretValue(ResourceSnapshotConnect? connect, string resourceName, HashSet<string> secretParameterValues)
+    {
+        if (connect is null)
+        {
+            return null;
+        }
+
+        foreach (var secretValue in secretParameterValues)
+        {
+            // An empty value would match every string; it cannot leak anything.
+            if (secretValue.Length == 0)
+            {
+                continue;
+            }
+
+            if (connect.Command.Contains(secretValue, StringComparison.Ordinal) ||
+                connect.Tool.Contains(secretValue, StringComparison.Ordinal) ||
+                connect.Append?.Contains(secretValue, StringComparison.Ordinal) == true ||
+                connect.Note?.Contains(secretValue, StringComparison.Ordinal) == true)
+            {
+                logger.LogDebug("Omitting the connect command for resource '{ResourceName}' because it contains a secret parameter value.", resourceName);
+                return null;
+            }
+        }
+
+        return connect;
+    }
 
     /// <summary>
     /// Collects the resolved values of secret parameters reachable from the application model so they can be

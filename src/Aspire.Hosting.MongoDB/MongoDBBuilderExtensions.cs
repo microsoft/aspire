@@ -208,19 +208,29 @@ public static class MongoDBBuilderExtensions
 
     private static IResourceBuilder<MongoDBServerResource> WithMongoConnectCommand(this IResourceBuilder<MongoDBServerResource> builder, bool tls)
     {
-        // mongosh runs in the container and reads the root credentials from the container's own variables, so only
-        // the variable names are shown by tooling. It connects directly over loopback even for replica set members,
-        // whose advertised addresses can refer to host-side proxies; localhost also matches the developer
-        // certificate's subject alternative name. With TLS, mongosh needs an explicit CA bundle because Node.js does
-        // not use the OpenSSL certificate directories configured by Aspire; the bundle path is passed when the
-        // certificate trust configuration provides one. The inner quotes keep a destination with spaces as one
-        // argument, e.g. ${CA:+--tlsCAFile "$CA"} with CA='/custom certs/cert.pem' yields two arguments.
+        // mongosh runs in the container and reads the root credentials from the container's own variables inside
+        // its --eval script, like the REPL command does, so only the variable names are shown by tooling and the
+        // values never appear in the client's arguments. That also keeps a password starting with '-' from being
+        // parsed as another mongosh option. --nodb defers the connection until the script has built the URI; the
+        // values are percent-encoded because they are embedded in it. The script assigns `db`, so appended --eval
+        // scripts and script files run against the authenticated connection; `void` keeps its result unprinted.
+        // mongosh exits after --eval scripts and files unless --shell is given, so --shell is added only when no
+        // arguments are appended: the bare command then stays interactive and reads piped stdin, while appended
+        // commands exit when they finish. Tooling appends "$@" to this script, so `set -- --shell` supplies it.
+        // https://www.mongodb.com/docs/mongodb-shell/reference/options/
+        //
+        // It connects directly over loopback even for replica set members, whose advertised addresses can refer to
+        // host-side proxies; localhost also matches the developer certificate's subject alternative name. With TLS,
+        // mongosh needs an explicit CA bundle because Node.js does not use the OpenSSL certificate directories
+        // configured by Aspire; the bundle path is added when the certificate trust configuration provides one.
         var port = builder.Resource.PrimaryEndpoint.Property(EndpointProperty.TargetPort);
-        var tlsOptions = tls ? $" --tls ${{{ReplCaFileEnvVarName}:+--tlsCAFile \"${ReplCaFileEnvVarName}\"}}" : string.Empty;
+        var tlsOptions = tls
+            ? $""" + "&tls=true" + (process.env.{ReplCaFileEnvVarName} ? "&tlsCAFile=" + encodeURIComponent(process.env.{ReplCaFileEnvVarName}) : "")"""
+            : string.Empty;
         return builder.WithDefaultConnectCommand(
             "mongosh",
             ConnectCommandLocation.Container,
-            ReferenceExpression.Create($"""exec mongosh --quiet "mongodb://localhost:{port}/admin?directConnection=true" --username "${UserEnvVarName}" --password "${PasswordEnvVarName}" --authenticationDatabase admin{tlsOptions}"""),
+            ReferenceExpression.Create($$"""[ $# -gt 0 ] || set -- --shell; exec mongosh --quiet --nodb --eval 'void (db = new Mongo("mongodb://" + encodeURIComponent(process.env.{{UserEnvVarName}}) + ":" + encodeURIComponent(process.env.{{PasswordEnvVarName}}) + "@localhost:{{port}}/admin?directConnection=true&authSource=admin"{{tlsOptions}}).getDB("admin"))'"""),
             append: "<mongosh options>, for example --eval 'db.runCommand({ ping: 1 })'");
     }
 

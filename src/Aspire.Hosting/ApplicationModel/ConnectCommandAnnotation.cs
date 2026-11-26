@@ -43,10 +43,12 @@ public enum ConnectCommandLocation
 /// referencing the resource's published endpoint.
 /// </para>
 /// <para>
-/// The command is displayed in tooling output, so it must not contain secret values. It can reference only endpoint
-/// values, such as <see cref="EndpointReference"/> or <see cref="EndpointReferenceExpression"/>, and literal text; a
-/// command that references other values, such as parameters or connection strings, is not shown. Endpoints must belong
-/// to the resource itself, target ports must be fixed, and browser origins are not supported.
+/// Tooling displays <see cref="Command"/>, <see cref="Append"/>, and <see cref="Note"/> verbatim, so treat them as
+/// public and never put secret values in their literal text. The command can reference only endpoint values, such as
+/// <see cref="EndpointReference"/> or <see cref="EndpointReferenceExpression"/>, and literal text; a command that
+/// references other values, such as parameters or connection strings, is not shown. Endpoints must belong to the
+/// resource itself, target ports must be fixed, and browser origins are not supported. As a safeguard, the command is
+/// also not shown when any of these fields contains the value of a resolved secret parameter.
 /// </para>
 /// </remarks>
 [Experimental("ASPIRECONNECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -84,17 +86,20 @@ public sealed class ConnectCommandAnnotation : IResourceAnnotation
     public ConnectCommandLocation Location { get; }
 
     /// <summary>
-    /// Gets the command, ending where the client's own arguments go.
+    /// Gets the command, ending where the client's own arguments go. Tooling displays it, so it must not contain secret
+    /// values.
     /// </summary>
     public ReferenceExpression Command { get; }
 
     /// <summary>
-    /// Gets a description of what to append to the command, such as <c>-c '&lt;sql&gt;'</c>.
+    /// Gets a description of what to append to the command, such as <c>-c '&lt;sql&gt;'</c>. Tooling displays it, so it
+    /// must not contain secret values.
     /// </summary>
     public string? Append { get; init; }
 
     /// <summary>
-    /// Gets an optional note about using the command, such as a client requirement on the host.
+    /// Gets an optional note about using the command, such as a client requirement on the host. Tooling displays it, so
+    /// it must not contain secret values.
     /// </summary>
     public string? Note { get; init; }
 }

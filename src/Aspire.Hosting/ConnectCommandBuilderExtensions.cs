@@ -27,13 +27,18 @@ public static class ConnectCommandBuilderExtensions
     /// literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment
     /// variables instead.
     /// </param>
-    /// <param name="append">A description of what to append to the command, such as <c>-c '&lt;sql&gt;'</c>.</param>
-    /// <param name="note">An optional note about using the command.</param>
+    /// <param name="append">
+    /// A description of what to append to the command, such as <c>-c '&lt;sql&gt;'</c>. It is displayed by tooling, so it
+    /// must not contain secrets.
+    /// </param>
+    /// <param name="note">An optional note about using the command. It is displayed by tooling, so it must not contain secrets.</param>
     /// <returns>The resource builder.</returns>
     /// <remarks>
     /// The resolved command appears as the <c>connect</c> entry of the resource in <c>aspire describe --format json</c>
     /// and in the Aspire MCP server's resource listing. A container command runs with <c>sh -c</c> in the resource's
     /// container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+    /// The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+    /// when any of them contains the value of a resolved secret parameter.
     /// </remarks>
     /// <example>
     /// <code>

@@ -2785,7 +2785,9 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -7182,7 +7184,9 @@ type CSharpAppResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -12343,7 +12347,9 @@ type ContainerRegistryResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -14544,7 +14550,9 @@ type ContainerResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -21042,7 +21050,9 @@ type DotnetToolResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -26297,7 +26307,9 @@ type ExecutableResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -30138,7 +30150,9 @@ type ExternalServiceResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -34808,7 +34822,9 @@ type ParameterResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -38104,7 +38120,9 @@ type ProjectResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -44022,7 +44040,9 @@ type TestDatabaseResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -48543,7 +48563,9 @@ type TestRedisResource interface {
 	// describe --format json and in the Aspire MCP server's resource listing. A
 	// container command runs with sh -c in the resource's container through the
 	// configured container runtime, and arguments appended by the caller are
-	// forwarded to it.
+	// forwarded to it. The command, append, and note are shown verbatim, so treat
+	// them as public. As a safeguard, the command is not shown when any of them
+	// contains the value of a resolved secret parameter.
 	//
 	// Parameters:
 	//   - tool: The name of the client tool the command runs, such as psql.
@@ -53639,9 +53661,11 @@ func (s *userSecretsManager) TrySetSecret(name string, value string) (bool, erro
 
 // WithConnectCommandOptions carries optional parameters for WithConnectCommand.
 type WithConnectCommandOptions struct {
-	// Append is a description of what to append to the command, such as -c '<sql>'.
+	// Append - A description of what to append to the command, such as -c '<sql>'.
+	// It is displayed by tooling, so it must not contain secrets.
 	Append *string `json:"append,omitempty"`
-	// Note is an optional note about using the command.
+	// Note - An optional note about using the command. It is displayed by tooling,
+	// so it must not contain secrets.
 	Note *string `json:"note,omitempty"`
 }
 

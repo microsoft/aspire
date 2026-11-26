@@ -31,7 +31,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
         var connect = Assert.Single(mongo.Resource.Annotations.OfType<ConnectCommandAnnotation>());
         Assert.Equal("mongosh", connect.Tool);
         Assert.Equal(ConnectCommandLocation.Container, connect.Location);
-        Assert.Equal("""exec mongosh --quiet "mongodb://localhost:27017/admin?directConnection=true" --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin""",
+        Assert.Equal("""[ $# -gt 0 ] || set -- --shell; exec mongosh --quiet --nodb --eval 'void (db = new Mongo("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@localhost:27017/admin?directConnection=true&authSource=admin").getDB("admin"))'""",
             await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
         Assert.Equal("<mongosh options>, for example --eval 'db.runCommand({ ping: 1 })'", connect.Append);
     }
@@ -48,7 +48,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
 
         Assert.True(mongo.Resource.TlsEnabled);
         var connect = Assert.Single(mongo.Resource.Annotations.OfType<ConnectCommandAnnotation>());
-        Assert.Equal("""exec mongosh --quiet "mongodb://localhost:27017/admin?directConnection=true" --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --tls ${ASPIRE_MONGODB_REPL_CA_FILE:+--tlsCAFile "$ASPIRE_MONGODB_REPL_CA_FILE"}""",
+        Assert.Equal("""[ $# -gt 0 ] || set -- --shell; exec mongosh --quiet --nodb --eval 'void (db = new Mongo("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@localhost:27017/admin?directConnection=true&authSource=admin" + "&tls=true" + (process.env.ASPIRE_MONGODB_REPL_CA_FILE ? "&tlsCAFile=" + encodeURIComponent(process.env.ASPIRE_MONGODB_REPL_CA_FILE) : "")).getDB("admin"))'""",
             await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
     }
 

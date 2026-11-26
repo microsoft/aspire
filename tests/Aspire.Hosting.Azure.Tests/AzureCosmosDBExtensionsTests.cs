@@ -34,7 +34,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         Assert.Equal(ConnectCommandLocation.Host, connect.Location);
         Assert.Equal("curl -sS http://localhost:18081/", await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
         Assert.Equal("<curl options>, for example -i", connect.Append);
-        Assert.Equal("Reaches the emulator gateway. If it uses HTTPS with a certificate the host does not trust, such as a custom self-signed certificate, append --cacert <certificate file>. Data requests need Azure Cosmos DB REST authorization headers built from the emulator's well-known key, so use an SDK or the Data Explorer to query data.", connect.Note);
+        Assert.Equal("Reaches the emulator gateway. If the host does not trust its HTTPS certificate, such as a custom self-signed one, append --cacert <certificate file>. Data requests need signed authorization headers, so use an SDK or the Data Explorer to query data.", connect.Note);
     }
 
     [Fact]

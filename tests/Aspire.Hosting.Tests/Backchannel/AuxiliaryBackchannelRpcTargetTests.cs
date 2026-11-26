@@ -200,6 +200,39 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_OmitsConnectCommandContainingSecretParameterValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddParameter("toolpassword", "s3cr3t-value", secret: true);
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        builder.AddResource(new CustomResource("in-command"))
+            .WithConnectCommand("tool-cli", ConnectCommandLocation.Host, ReferenceExpression.Create($"tool-cli --password s3cr3t-value"));
+        builder.AddResource(new CustomResource("in-note"))
+            .WithConnectCommand("tool-cli", ConnectCommandLocation.Host, ReferenceExpression.Create($"tool-cli --local"), note: "Sign in with s3cr3t-value.");
+        builder.AddResource(new CustomResource("public"))
+            .WithConnectCommand("tool-cli", ConnectCommandLocation.Host, ReferenceExpression.Create($"tool-cli --local"));
+#pragma warning restore ASPIRECONNECT001
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        Assert.Null(Assert.Single(result, r => r.Name == "in-command").Connect);
+        Assert.Null(Assert.Single(result, r => r.Name == "in-note").Connect);
+        Assert.Equal("tool-cli --local", Assert.Single(result, r => r.Name == "public").Connect?.Command);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task WatchResourceSnapshotsAsync_RefreshesConnectCommandWhenOwnEndpointIsReallocated()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

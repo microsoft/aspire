@@ -597,6 +597,33 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ListResourcesTool_KeepsBuiltInConnectNoteComplete()
+    {
+        // The Azure Cosmos DB emulator's note is the longest built-in connect note. It must fit the MCP
+        // descriptive-text bound so that both its certificate and its data-access guidance reach the agent.
+        const string cosmosNote = "Reaches the emulator gateway. If the host does not trust its HTTPS certificate, such as a custom self-signed one, append --cacert <certificate file>. Data requests need signed authorization headers, so use an SDK or the Data Explorer to query data.";
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(new ResourceSnapshot
+        {
+            Name = "cosmos",
+            Connect = new ResourceSnapshotConnect
+            {
+                Command = "curl -sS https://localhost:8081/",
+                Runs = "host",
+                Tool = "curl",
+                Append = "<curl options>, for example -i",
+                Note = cosmosNote
+            }
+        }));
+        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
+
+        using var json = GetResourceData(result);
+        Assert.Equal(cosmosNote, json.RootElement[0].GetProperty("connect").GetProperty("note").GetString());
+    }
+
+    [Fact]
     public async Task ListResourcesTool_BoundsCommandDescriptionsWithoutTruncatingInvocationMetadata()
     {
         var description = new string('x', 255) + "\U0001F680\ntrailing text";

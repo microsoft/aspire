@@ -211,6 +211,97 @@ public class ConnectCommandResolverTests
         Assert.Null(await ResolveAsync(container.Resource, "web-abcdefgh", "docker").DefaultTimeout());
     }
 
+    [Theory]
+    [InlineData(ConnectCommandLocation.Host)]
+    [InlineData(ConnectCommandLocation.Container)]
+    public async Task OmitsCommandThatReferencesEndpointOnAnotherNetwork(ConnectCommandLocation location)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("nats", "nats")
+            .WithEndpoint(targetPort: 4222, name: "tcp")
+            .WithEndpoint("tcp", e =>
+            {
+                e.AllocatedEndpoint = new(e, "localhost", 14222);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+                    KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+                    new(e, "nats.dev.internal", 4222, EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            });
+        var endpoint = container.GetEndpoint("tcp", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        container.WithConnectCommand(
+            "nats",
+            location,
+            ReferenceExpression.Create($"nats --server nats://{endpoint.Property(EndpointProperty.Host)}:{endpoint.Property(EndpointProperty.Port)}"));
+
+        // The container-network address and port are not reachable from the host.
+        Assert.Null(await ResolveAsync(container.Resource, "nats-abcdefgh", "docker").DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task RetriesContainerRuntimeDetectionCancelledByAnotherCaller()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("db", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client"));
+        var attempts = 0;
+
+        var connect = await ConnectCommandResolver.ResolveAsync(
+            container.Resource,
+            "db-abcdefgh",
+            _ => ++attempts == 1 ? Task.FromCanceled<string>(new CancellationToken(canceled: true)) : Task.FromResult("docker"),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(2, attempts);
+        Assert.Equal("docker exec -i db-abcdefgh sh -c 'exec client \"$@\"' sh", connect?.Command);
+    }
+
+    [Fact]
+    public async Task OmitsContainerCommandWhenRuntimeDetectionIsRepeatedlyCancelledByAnotherCaller()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("db", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client"));
+        var attempts = 0;
+
+        var connect = await ConnectCommandResolver.ResolveAsync(
+            container.Resource,
+            "db-abcdefgh",
+            _ =>
+            {
+                attempts++;
+                return Task.FromCanceled<string>(new CancellationToken(canceled: true));
+            },
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Null(connect);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
+    public async Task PropagatesCallerCancellationDuringContainerRuntimeDetection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("db", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client"));
+        using var cts = new CancellationTokenSource();
+        var attempts = 0;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ConnectCommandResolver.ResolveAsync(
+            container.Resource,
+            "db-abcdefgh",
+            ct =>
+            {
+                attempts++;
+                cts.Cancel();
+                return Task.FromCanceled<string>(ct);
+            },
+            NullLogger.Instance,
+            cts.Token));
+
+        Assert.Equal(1, attempts);
+    }
+
     [Fact]
     public async Task ReturnsNullWithoutAnnotation()
     {
