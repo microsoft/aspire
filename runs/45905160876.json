@@ -1,0 +1,146 @@
+{
+  "run_id": 45905160876,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45905160876",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-26T23:07:29Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22722,
+    "title": "Fix CI enumeration for the MSTest playground",
+    "author": "radical",
+    "state": "closed",
+    "head_branch": "ankj/ci-22715-mstest-msb4057",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22722",
+    "merged_at": "2026-11-26T22:29:57Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "00417fcca4f5b78316ccc8881158ccf574858528",
+    "failed_sha": "9f8de1784ece33910d9abfc22c5ff0e73c6b5824",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "8f4c5556c2a5a98eadb503e24e2fd3a43e28d69d",
+        "message": "Open resource terminals on a dedicated dashboard page (#22675)",
+        "html_url": "https://github.com/microsoft/aspire/commit/8f4c5556c2a5a98eadb503e24e2fd3a43e28d69d",
+        "pull_request": {
+          "number": 22675,
+          "title": "Open resource terminals on a dedicated dashboard page",
+          "url": "https://github.com/microsoft/aspire/pull/22675",
+          "merged_at": "2026-11-26T04:27:43Z"
+        }
+      },
+      {
+        "sha": "26a7eca9823f84b6d29a0c3fc1d10728ad9e3f02",
+        "message": "Add experimental MSTest executable test resources and TRX collection (#21559) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `88c7bca539e15ae8d2fd9c2e2903b65919ab7603` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8/10 | ↑ Eight original MSTest patches preserved on main; follow-ups correct replica wording and accurately distinguish collection errors from failing cases.<br>↑ Parent8457d04 pas",
+        "html_url": "https://github.com/microsoft/aspire/commit/26a7eca9823f84b6d29a0c3fc1d10728ad9e3f02",
+        "pull_request": {
+          "number": 21559,
+          "title": "Add experimental MSTest executable test resources and TRX collection",
+          "url": "https://github.com/microsoft/aspire/pull/21559",
+          "merged_at": "2026-11-26T04:43:56Z"
+        }
+      },
+      {
+        "sha": "bdc4b95f0be2e5153525fae3ba97a9f6a35793b4",
+        "message": "Preserve the dashboard resource sidebar preference (#22655)",
+        "html_url": "https://github.com/microsoft/aspire/commit/bdc4b95f0be2e5153525fae3ba97a9f6a35793b4",
+        "pull_request": {
+          "number": 22655,
+          "title": "Preserve the dashboard resource sidebar preference",
+          "url": "https://github.com/microsoft/aspire/pull/22655",
+          "merged_at": "2026-11-26T04:56:40Z"
+        }
+      },
+      {
+        "sha": "256acd3e7ccd0e3478d4486dae0cacea53094b60",
+        "message": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3146450 (#22711) This is the pull request automatically created by the OneLocBuild task in the build process to check-in localized files generated based upon translation source files (.lcl files) handed-back from the downstream localization pipeline. If there are issues in translations, visit https://aka.ms/icxLocBug and log bugs for fixes. The OneLocBuild wiki is https://aka.ms/onelocbuild and the localization proce",
+        "html_url": "https://github.com/microsoft/aspire/commit/256acd3e7ccd0e3478d4486dae0cacea53094b60",
+        "pull_request": {
+          "number": 22711,
+          "title": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3146450",
+          "url": "https://github.com/microsoft/aspire/pull/22711",
+          "merged_at": "2026-11-26T04:58:58Z"
+        }
+      },
+      {
+        "sha": "d390bb0f5b6ef991e94f48222e9220b599324cb7",
+        "message": "fix(cli): avoid unnecessary DCP controllers in Doctor probe (#22709) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `42a22e1fb072b86773472344d13fdb432c9c4331` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 7.5/10 | ↑ Targeted DCP tests pass on macOS ARM64.<br>↑ Real-controller shutdown coverage remains in the suite.<br>↓ Hosted Windows validation and independent exact-head review are pending.",
+        "html_url": "https://github.com/microsoft/aspire/commit/d390bb0f5b6ef991e94f48222e9220b599324cb7",
+        "pull_request": {
+          "number": 22709,
+          "title": "fix(cli): avoid unnecessary DCP controllers in Doctor probe",
+          "url": "https://github.com/microsoft/aspire/pull/22709",
+          "merged_at": "2026-11-26T05:09:02Z"
+        }
+      },
+      {
+        "sha": "91f866a32580ad77b7b467581a5c2b561c402ebc",
+        "message": "Polish the dashboard resource picker and overview (#22653)",
+        "html_url": "https://github.com/microsoft/aspire/commit/91f866a32580ad77b7b467581a5c2b561c402ebc",
+        "pull_request": {
+          "number": 22653,
+          "title": "Polish the dashboard resource picker and overview",
+          "url": "https://github.com/microsoft/aspire/pull/22653",
+          "merged_at": "2026-11-26T07:28:52Z"
+        }
+      },
+      {
+        "sha": "8e11facf594fe71de7399e82986d46164e0648e4",
+        "message": "[automated] Stabilize the dashboard canvas visibility cadence test (#22728) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `00af891502880f7962c180ea589dbc32f543ad8c` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 9.5/10 | ↑ Test-only change preserves every cadence, query-count, and rendering assertion.<br>↑ The fixed test passed in regular CI on both Windows and Linux, in 20 local test-class ",
+        "html_url": "https://github.com/microsoft/aspire/commit/8e11facf594fe71de7399e82986d46164e0648e4",
+        "pull_request": {
+          "number": 22728,
+          "title": "[automated] Stabilize the dashboard canvas visibility cadence test",
+          "url": "https://github.com/microsoft/aspire/pull/22728",
+          "merged_at": "2026-11-26T18:19:27Z"
+        }
+      },
+      {
+        "sha": "9f8de1784ece33910d9abfc22c5ff0e73c6b5824",
+        "message": "Fix CI enumeration for the MSTest playground (#22722) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `7241a93fc1c949a9badabd14ce49fc6ee302aad8` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 9/10 | ↑ Clean and restored enumeration passed with the same 101 metadata and partition files; matrix expansion produced 256 entries.<br>↑ The real AppHost ran the MSTest fixture and collected its TRX; st",
+        "html_url": "https://github.com/microsoft/aspire/commit/9f8de1784ece33910d9abfc22c5ff0e73c6b5824",
+        "pull_request": {
+          "number": 22722,
+          "title": "Fix CI enumeration for the MSTest playground",
+          "url": "https://github.com/microsoft/aspire/pull/22722",
+          "merged_at": "2026-11-26T22:29:57Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "id": 140200721587,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45905160876/job/140200721587",
+      "classification": "flaky-test",
+      "reason": "bUnit WaitForAssertion timed out with a render-state mismatch (Loading vs Waiting); matches a previously recorded intermittent failure.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "error": "Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.\n\nIf this test does not fail consistently, the reason may be that\nthe wait timeout is too short, and the runtime did not have enough\ntime to complete the necessary number of renders of the component under test.\nThis can happen on highly utilized or slower hardware, for example.\n\nTo determine if this is the cause, compare the check and render count(s) below\nand see if they match what is expected. If they do not,\nconsider increasing the timeout, either at the individual\nmethod call level, e.g. WaitForElement(\"div\", TimeSpan.FromSeconds(15)),\nor via the static TestContext.DefaultWaitTimeout property.\n\nCheck count: 1.\nComponent render count: 2.\nTotal render count across all components: 0.\n---- Assert.Equal() Failure: Strings differ\n                                 ↓ (pos 22)\nExpected: \"Localized:HomeActivityWaiting\"\nActual:   \"Localized:HomeActivityLoading\"\n                        ",
+      "stack_trace": "   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertionAsync[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 125\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_ActivityAndInsights_UseLocalizedText() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 152\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.<>c__DisplayClass6_0.<Render_ActivityAndInsights_UseLocalizedText>b__0() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 152\n   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.<>c__DisplayClass6_0.<.ctor>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.<>c__DisplayClass32_0.<WrapSynchronousChecker>b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297\n   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226",
+      "standard_output": "Temporary workspace created at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/igds34bv.2v3\nDisposing temporary workspace at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/igds34bv.2v3\n",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "bUnit wait-timeout with Loading/Waiting text race, intermittent and previously seen on another run.",
+      "job_id": 140200721587,
+      "execution_id": "cf654113-6908-4d90-a8af-d443fe70f889",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dashboard-applicationsummary-activity-localized-waiting-loading"
+  ]
+}
