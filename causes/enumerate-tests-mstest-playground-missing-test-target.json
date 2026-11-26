@@ -1,0 +1,15 @@
+{
+  "id": "enumerate-tests-mstest-playground-missing-test-target",
+  "type": "main-repository-breakage",
+  "title": "Setup for tests fails enumerating tests: MSB4057 target Test missing in Playground.MSTest.csproj",
+  "error_pattern": "playground/AspireCliTesting/mstest-tests/Playground.MSTest.csproj : error MSB4057: The target \"Test\" does not exist in the project.\nBuild failed with exit code 1.",
+  "occurrences": [
+    {
+      "run_id": 45757064156,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45757064156",
+      "job": "Tests / Setup for tests",
+      "observed_at": "2026-11-26T05:16:24Z",
+      "pr_number": 0
+    }
+  ]
+}

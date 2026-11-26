@@ -1,0 +1,65 @@
+{
+  "run_id": 45757064156,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45757064156",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-26T05:16:24Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21559,
+    "title": "Add experimental MSTest executable test resources and TRX collection",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-mstest-testing-integration",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21559",
+    "merged_at": "2026-11-26T04:43:56Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "00417fcca4f5b78316ccc8881158ccf574858528",
+    "failed_sha": "26a7eca9823f84b6d29a0c3fc1d10728ad9e3f02",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "8f4c5556c2a5a98eadb503e24e2fd3a43e28d69d",
+        "message": "Open resource terminals on a dedicated dashboard page (#22675)",
+        "html_url": "https://github.com/microsoft/aspire/commit/8f4c5556c2a5a98eadb503e24e2fd3a43e28d69d",
+        "pull_request": {
+          "number": 22675,
+          "title": "Open resource terminals on a dedicated dashboard page",
+          "url": "https://github.com/microsoft/aspire/pull/22675",
+          "merged_at": "2026-11-26T04:27:43Z"
+        }
+      },
+      {
+        "sha": "26a7eca9823f84b6d29a0c3fc1d10728ad9e3f02",
+        "message": "Add experimental MSTest executable test resources and TRX collection (#21559) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `88c7bca539e15ae8d2fd9c2e2903b65919ab7603` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8/10 | ↑ Eight original MSTest patches preserved on main; follow-ups correct replica wording and accurately distinguish collection errors from failing cases.<br>↑ Parent8457d04 pas",
+        "html_url": "https://github.com/microsoft/aspire/commit/26a7eca9823f84b6d29a0c3fc1d10728ad9e3f02",
+        "pull_request": {
+          "number": 21559,
+          "title": "Add experimental MSTest executable test resources and TRX collection",
+          "url": "https://github.com/microsoft/aspire/pull/21559",
+          "merged_at": "2026-11-26T04:43:56Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Setup for tests",
+      "id": 139699621468,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45757064156/job/139699621468",
+      "classification": "main-repository-breakage",
+      "reason": "Test matrix enumeration failed deterministically: MSB4057 target Test does not exist in playground Playground.MSTest.csproj.",
+      "failed_steps": [
+        "Run ./.github/actions/enumerate-tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "enumerate-tests-mstest-playground-missing-test-target"
+  ]
+}
