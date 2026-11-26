@@ -1047,21 +1047,6 @@
         <target state="new">Resource attributes</target>
         <note>Title of the card listing the OpenTelemetry resource attributes a telemetry source reports.</note>
       </trans-unit>
-      <trans-unit id="TelemetrySourceOverviewInstanceId">
-        <source>Instance ID</source>
-        <target state="new">Instance ID</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TelemetrySourceOverviewNoAttributes">
-        <source>No resource attributes</source>
-        <target state="new">No resource attributes</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TelemetrySourceOverviewServiceName">
-        <source>Service name</source>
-        <target state="new">Service name</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TelemetrySourceOverviewType">
         <source>Telemetry source</source>
         <target state="new">Telemetry source</target>

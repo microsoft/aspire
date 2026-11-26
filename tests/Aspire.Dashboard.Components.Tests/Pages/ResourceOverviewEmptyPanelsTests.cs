@@ -657,7 +657,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         void AssertMaskedSource(string resourceName)
         {
             var status = cut.FindComponent<OverviewStatusCard>();
-            Assert.Equal(resourceName, status.Instance.Resource.Name);
+            Assert.Equal(resourceName, status.Instance.Resource?.Name);
             var value = status.Find(".grid-value.masked");
             Assert.Equal(mask, value.TextContent.Trim());
             Assert.Equal(mask, value.GetAttribute("data-tooltip"));

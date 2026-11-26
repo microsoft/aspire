@@ -46,11 +46,15 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
         {
             var overview = cut.FindComponent<TelemetrySourceOverview>();
             Assert.Equal("browser", overview.Instance.Name);
+            var status = overview.FindComponent<OverviewStatusCard>();
+            var statusCells = status.FindAll(".overview-status-grid td.nameColumn");
             Assert.Equal(
-                ["Telemetry source", "browser", "TestId"],
-                overview.FindAll(".overview-properties dd").Select(dd => dd.TextContent.Trim()));
+                [("Display name", "browser"), ("Type", "Telemetry source")],
+                statusCells.Select(cell => (cell.TextContent.Trim(), cell.NextElementSibling!.TextContent.Trim())));
+            Assert.Single(statusCells[0].NextElementSibling!.QuerySelectorAll("svg.resource-icon"));
+            Assert.Empty(status.FindAll(".overview-status-actions"));
             Assert.Equal(
-                [("deployment.environment", "dev"), ("deployment.environment", "prod"), ("telemetry.sdk.language", "js")],
+                [("deployment.environment", "dev"), ("deployment.environment", "prod"), ("service.instance.id", "TestId"), ("service.name", "browser"), ("telemetry.sdk.language", "js")],
                 overview.FindComponent<PropertyGrid<TelemetryPropertyViewModel>>().Instance.Items!.Select(item => (item.Name, item.Value)));
             Assert.Equal(
                 ["2", "0", "0"],

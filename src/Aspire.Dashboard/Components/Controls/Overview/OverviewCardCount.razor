@@ -1,8 +1,3 @@
-@if (Shown < Total)
-{
-    <span class="overview-card-count">@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewCountOfTotal)], Shown, Total)</span>
-}
-else
-{
-    <span class="overview-card-count">@Total</span>
-}
+<span class="aspire-count-badge overview-card-count">@(Shown < Total
+    ? string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewCountOfTotal)], Shown, Total)
+    : Total.ToString(CultureInfo.CurrentCulture))</span>

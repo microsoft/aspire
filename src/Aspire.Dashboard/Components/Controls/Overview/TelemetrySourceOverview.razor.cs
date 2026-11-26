@@ -69,12 +69,12 @@ public sealed partial class TelemetrySourceOverview : ComponentBase
             (OverviewCard.Metrics, 5, showMetrics),
             (OverviewCard.Logs, 6, showLogs),
             (OverviewCard.Traces, 6, showTraces),
-            (OverviewCard.Attributes, 6, attributes.Count > 0)
+            (OverviewCard.Attributes, 6, true)
         ];
         var hiddenCards = cardSpans.Where(c => HideEmptyPanels && !c.HasContent).Select(c => c.Card).ToHashSet();
         var layout = OverviewCardLayout.Create(cardSpans.Where(c => !hiddenCards.Contains(c.Card)).Select(c => (c.Card, c.Span)).ToList());
 
-        return new ViewState(attributes, showLogs, showTraces, showMetrics, hiddenCards, layout);
+        return new ViewState(attributes, showLogs, showTraces, showMetrics, layout);
     }
 
     // A source can report different attributes over time, for example after a configuration change. Each value is
@@ -94,6 +94,5 @@ public sealed partial class TelemetrySourceOverview : ComponentBase
         bool ShowLogs,
         bool ShowTraces,
         bool ShowMetrics,
-        HashSet<OverviewCard> HiddenCards,
         OverviewCardLayout Layout);
 }

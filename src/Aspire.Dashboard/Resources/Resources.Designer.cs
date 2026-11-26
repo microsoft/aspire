@@ -1942,33 +1942,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Instance ID.
-        /// </summary>
-        public static string TelemetrySourceOverviewInstanceId {
-            get {
-                return ResourceManager.GetString("TelemetrySourceOverviewInstanceId", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to No resource attributes.
-        /// </summary>
-        public static string TelemetrySourceOverviewNoAttributes {
-            get {
-                return ResourceManager.GetString("TelemetrySourceOverviewNoAttributes", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Service name.
-        /// </summary>
-        public static string TelemetrySourceOverviewServiceName {
-            get {
-                return ResourceManager.GetString("TelemetrySourceOverviewServiceName", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Telemetry source.
         /// </summary>
         public static string TelemetrySourceOverviewType {

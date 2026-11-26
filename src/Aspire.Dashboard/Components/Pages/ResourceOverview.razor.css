@@ -269,25 +269,6 @@
     font-size: var(--aspire-font-size-secondary);
 }
 
-::deep .overview-properties {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: var(--aspire-space-1) var(--aspire-space-3);
-}
-
-::deep .overview-properties dt {
-    color: var(--colorNeutralForeground3);
-    font-weight: var(--aspire-font-weight-regular);
-}
-
-::deep .overview-properties dd {
-    min-width: 0;
-    margin: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 ::deep .overview-state {
     display: inline-flex;
     align-items: center;

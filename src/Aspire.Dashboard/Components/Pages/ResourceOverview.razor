@@ -354,7 +354,7 @@
                         <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListSquare())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                     </span>
                     <h2 id="overview-properties-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewPropertiesTitle)]</h2>
-                    @CardCount(Math.Min(properties.Count, _propertiesExpanded ? properties.Count : DetailsPreviewCount), properties.Count)
+                    <OverviewCardCount Shown="@Math.Min(properties.Count, _propertiesExpanded ? properties.Count : DetailsPreviewCount)" Total="@properties.Count" />
                     <div class="overview-card-actions">
                         @if (HasNonCoreProperties)
                         {
@@ -396,7 +396,7 @@
                         <FluentIcon Value="@(new Icons.Regular.Size16.Braces())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                     </span>
                     <h2 id="overview-environment-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]</h2>
-                    @CardCount(Math.Min(environmentVariables.Count, _environmentExpanded ? environmentVariables.Count : DetailsPreviewCount), environmentVariables.Count)
+                    <OverviewCardCount Shown="@Math.Min(environmentVariables.Count, _environmentExpanded ? environmentVariables.Count : DetailsPreviewCount)" Total="@environmentVariables.Count" />
                     @if (resource.Environment.Length > 0)
                     {
                         <div class="overview-card-actions">
@@ -550,18 +550,6 @@
             </div>
             <div class="overview-empty">@message</div>
         </section>
-    };
-
-    private RenderFragment CardCount(int shown, int total) => __builder =>
-    {
-        if (shown < total)
-        {
-            <span class="aspire-count-badge overview-card-count">@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewCountOfTotal)], shown, total)</span>
-        }
-        else
-        {
-            <span class="aspire-count-badge overview-card-count">@total</span>
-        }
     };
 
     // Long lists are truncated to keep cards short. The button at the bottom shows how many rows are hidden and
