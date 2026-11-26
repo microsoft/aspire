@@ -337,16 +337,19 @@
                 <span class="resource-tag-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@groupName" /></span>
                 <span class="aspire-count-badge aspire-count-badge-compact resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
             </a>
-            <div class="resource-tag-actions">
-                <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
-                                  ButtonClass="resource-tag-header-button resource-tag-action"
-                                  Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                                  ItemsProvider="@(() => GetPaneGroupMenuItems(groupKey, groupName, isTag: actionTag is not null))"
-                                  RefreshItemsWhileOpen="false"
-                                  Title="@(actionTag is not null
-                                      ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]
-                                      : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions), groupName])" />
-            </div>
+            @if (groupKey != TelemetrySectionKey)
+            {
+                <div class="resource-tag-actions">
+                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
+                                      ButtonClass="resource-tag-header-button resource-tag-action"
+                                      Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                                      ItemsProvider="@(() => GetPaneGroupMenuItems(groupKey, groupName, isTag: actionTag is not null))"
+                                      RefreshItemsWhileOpen="false"
+                                      Title="@(actionTag is not null
+                                          ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]
+                                          : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions), groupName])" />
+                </div>
+            }
             <FluentButton Appearance="ButtonAppearance.Transparent"
                           Class="@($"resource-tag-header-button resource-row-toggle {(isCollapsed ? "collapsed" : null)}")"
                           IconOnly="true"

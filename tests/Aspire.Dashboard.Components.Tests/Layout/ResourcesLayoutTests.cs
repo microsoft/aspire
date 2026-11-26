@@ -3335,6 +3335,10 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal(["api", "worker"], cut.Instance.GetAllResourceNames());
             Assert.Equal(3, cut.FindAll(".resource-row").Count);
             Assert.Equal("2 telemetry sources", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
+            var header = cut.Find(".resource-pane-group[aria-label='Telemetry sources'] .resource-tag-header");
+            Assert.NotNull(header.QuerySelector(".resource-tag-link"));
+            Assert.NotNull(header.QuerySelector(".resource-row-toggle"));
+            Assert.Empty(header.QuerySelectorAll(".resource-tag-action"));
         });
         Assert.Equal(0, client.ResourceSubscriptionCount);
     }
@@ -3610,6 +3614,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
             Assert.Equal([DashboardUrls.StructuredLogsUrl("api"), DashboardUrls.StructuredLogsUrl("browser")],
                 cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("href")));
+            var header = cut.Find(".resource-pane-group[aria-label='Telemetry sources'] .resource-tag-header");
+            Assert.Empty(header.QuerySelectorAll(".resource-tag-action"));
         });
 
         navigation.NavigateTo(DashboardUrls.TelemetrySourcesUrl());

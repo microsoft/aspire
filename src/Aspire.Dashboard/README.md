@@ -27,8 +27,8 @@ Grouping adds no extra indentation; nested resources still indent under their pa
 Search matches group names as well as resources, and the grouping preference is remembered across navigation and reloads.
 Tag grouping replaces the separate Tags navigation entry; resources with multiple tags appear under each tag,
 with untagged resources initially listed last. Telemetry sources keep their ungrouped list.
-The **...** menu on each group header lists commands for that group's resources. Parameter commands are
-available on individual parameter rows, not as bulk actions.
+The **...** menu on a group header lists commands for that group's resources. Telemetry sources do not
+have an actions menu. Parameter commands are available on individual parameter rows, not as bulk actions.
 
 When search and filters are clear, drag a group's header handle to move the entire group, or focus its
 handle and press **Alt+Up** or **Alt+Down**. Group moves are saved per grouping mode in protected browser local storage.
