@@ -539,7 +539,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        var leftHome = _lastLocation is { } previousLocation && IsResourceListHome(previousLocation);
         _lastLocation = location;
         // Only a row selection owns this reveal. Tab changes and unrelated navigation
         // cancel it rather than replaying a stale full-canvas transition.
@@ -555,16 +554,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _homeNavigation = null;
         var tabAfterHome = _tabAfterHome;
         _tabAfterHome = null;
-        // The table is the home page. Every other URL shows its own page beside the docked list.
+        // Home shows the full list without changing the saved sidebar collapse preference.
         var showResourceList = IsResourceListHome(location);
-        // The table is the list itself, across the page, so the list shows even when it was hidden beside other pages.
-        // Leaving home by any way, such as a row, "All resources", a tab or the back button, docks the list it showed
-        // rather than hiding it again.
-        var dockHiddenList = leftHome && !showResourceList && _isPaneCollapsed && ViewportInformation.IsDesktop;
-        if (dockHiddenList)
-        {
-            _isPaneCollapsed = false;
-        }
         _isPaneFullCanvas = false;
         ClearPaneActivity();
         var previousTab = CurrentTab;
@@ -597,10 +588,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await ApplyPaneModeFromLocationAsync(location);
         await TryRedirectLandingAsync();
         await PersistSelectedResourcesAsync();
-        if (dockHiddenList)
-        {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneCollapsed, false);
-        }
 
         // Home has landed: open the tab chosen while it was in flight, for home's selection.
         if (tabAfterHome is { } chosenTab && GetTabs().FirstOrDefault(t => t.Tab == chosenTab && t.IsVisible)?.Href is { } chosenHref)
@@ -2918,22 +2905,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private static bool IsPlainClick(MouseEventArgs e) => e.Button == 0 && !e.CtrlKey && !e.ShiftKey && !e.AltKey && !e.MetaKey;
 
-    private async Task NavigateToTabAsync(string href)
+    private Task NavigateToTabAsync(string href)
     {
-        var persistExpandedPane = _isPaneFullCanvas && _isPaneCollapsed;
         if (_isPaneFullCanvas)
         {
             // Reveal the destination as soon as navigation starts, even if its page is
             // slow to render or the current tab's menu item doesn't change the URL.
-            _isPaneCollapsed = false;
             SetResourceListVisible(false);
         }
 
         NavigationManager.NavigateTo(href);
-        if (persistExpandedPane)
-        {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneCollapsed, false);
-        }
+
+        return Task.CompletedTask;
     }
 
     private IEnumerable<TabItem> GetTabs()
