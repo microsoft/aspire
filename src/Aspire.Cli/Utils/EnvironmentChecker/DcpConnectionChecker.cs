@@ -260,6 +260,8 @@ internal sealed class DcpConnectionChecker(
                 var arguments = new List<string>
                 {
                     "start-apiserver",
+                    // Doctor only probes /version, so controller startup and container-runtime discovery are unnecessary.
+                    "--server-only",
                     "--monitor",
                     Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
                     "--kubeconfig",

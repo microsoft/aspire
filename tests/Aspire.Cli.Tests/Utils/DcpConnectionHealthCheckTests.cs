@@ -200,6 +200,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         var expectedArguments = new List<string>
         {
             "start-apiserver",
+            "--server-only",
             "--monitor",
             Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
             "--kubeconfig",
