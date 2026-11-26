@@ -654,7 +654,7 @@
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Expand console logs</source>
-        <target state="needs-review-translation">Ouvrir la console</target>
+        <target state="new">Expand console logs</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">
