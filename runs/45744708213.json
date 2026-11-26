@@ -1,0 +1,102 @@
+{
+  "run_id": 45744708213,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45744708213",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-26T03:35:16Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22646,
+    "title": "Preserve resource and metric selections in the Metrics dashboard",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "dashboard/metrics-selection-and-polish",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22646",
+    "merged_at": "2026-11-26T02:47:04Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "7e8d54232984f5d51dc8f3fe7b61f41f469a52c6",
+    "failed_sha": "9248621e37bc8aa2ea2f2d3a9889562b5bd3a3b8",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "b2baebe8864c718587bd7d13cfe5460a80f83062",
+        "message": "Fix flaky dashboard terminal window test (#22649)",
+        "html_url": "https://github.com/microsoft/aspire/commit/b2baebe8864c718587bd7d13cfe5460a80f83062",
+        "pull_request": {
+          "number": 22649,
+          "title": "Fix flaky dashboard terminal window test",
+          "url": "https://github.com/microsoft/aspire/pull/22649",
+          "merged_at": "2026-11-26T00:29:09Z"
+        }
+      },
+      {
+        "sha": "328f77eacd32d1d5517ce29f86438c6f51e797b9",
+        "message": "Add a CLI feature flag to disable config sources (#22647) Add a default-on CLI flag to pause Git-backed configuration sources without changing saved bindings or previously applied settings. Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/328f77eacd32d1d5517ce29f86438c6f51e797b9",
+        "pull_request": {
+          "number": 22647,
+          "title": "Add a CLI feature flag to disable config sources",
+          "url": "https://github.com/microsoft/aspire/pull/22647",
+          "merged_at": "2026-11-26T01:08:23Z"
+        }
+      },
+      {
+        "sha": "16f52aeb827e6415fa1e1d318a98dcdad607bcc5",
+        "message": "Add resource-bound aspire test with experimental live collectors (#21527) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `a59c24f38ed49a18059c953b917e78e3883c0067` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8/10 | ↑ Current Release CLI build with banned-API analysis and 132 command/reporter tests passed after integrating pinned main and updating both system-temp guards.<br>↑ Historical ho",
+        "html_url": "https://github.com/microsoft/aspire/commit/16f52aeb827e6415fa1e1d318a98dcdad607bcc5",
+        "pull_request": {
+          "number": 21527,
+          "title": "Add resource-bound aspire test with experimental live collectors",
+          "url": "https://github.com/microsoft/aspire/pull/21527",
+          "merged_at": "2026-11-26T02:33:10Z"
+        }
+      },
+      {
+        "sha": "9248621e37bc8aa2ea2f2d3a9889562b5bd3a3b8",
+        "message": "Preserve resource and metric selections in the Metrics dashboard (#22646)",
+        "html_url": "https://github.com/microsoft/aspire/commit/9248621e37bc8aa2ea2f2d3a9889562b5bd3a3b8",
+        "pull_request": {
+          "number": 22646,
+          "title": "Preserve resource and metric selections in the Metrics dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22646",
+          "merged_at": "2026-11-26T02:47:04Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "id": 139662651295,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45744708213/job/139662651295",
+      "classification": "main-repository-breakage",
+      "reason": "Deterministic Assert.Equal count mismatch (Expected 5, Actual 6) in Dashboard.Components tests.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Layout.ResourcesLayoutActivityTests.Canvas_VisibleCadenceExpiresAndResumesWithoutPerMembershipPolling",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 5\nActual:   6",
+      "stack_trace": "   at Aspire.Dashboard.Components.Tests.Layout.ResourcesLayoutActivityTests.Canvas_VisibleCadenceExpiresAndResumesWithoutPerMembershipPolling() in /_/tests/Aspire.Dashboard.Components.Tests/Layout/ResourcesLayoutActivityTests.cs:line 363\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/qspj4kj0.unz\nDisposing temporary workspace at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/qspj4kj0.unz\n",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Same assertion failure recurs across runs and platforms on main; no transient evidence.",
+      "job_id": 139662651295,
+      "execution_id": "7681dacd-3d29-4b17-b82d-1815a3324c4b",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dashboard-components-resourceslayoutactivity-canvas-cadence-count-mismatch"
+  ]
+}

@@ -10,6 +10,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
       "observed_at": "2026-11-26T02:14:07Z",
       "pr_number": 0
+    },
+    {
+      "run_id": 45744708213,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45744708213",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "observed_at": "2026-11-26T03:35:16Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/22704"
