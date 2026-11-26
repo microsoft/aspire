@@ -10,18 +10,25 @@ public sealed class MacOSStaplerRetryTests(ITestOutputHelper output)
 {
     private const string ConnectionLost = "Error Domain=NSURLErrorDomain Code=-1005 \"The network connection was lost.\"";
     private const string NotNotarized = "The path has not been previously notarized.";
+    private const string LongerCode = "Error Domain=NSURLErrorDomain Code=-10050 \"Not the connection-loss code\"";
+    private const string WrongDomain = "Error Domain=OtherDomain Code=-1005 \"Not a URL error\"";
 
     [Theory]
     [InlineData("staple", 1, ConnectionLost, 0, new[] { 5 })]
     [InlineData("validate", 1, ConnectionLost, 0, new[] { 5 })]
     [InlineData("staple", 1, NotNotarized, 68, new int[0])]
     [InlineData("validate", 1, NotNotarized, 68, new int[0])]
+    [InlineData("staple", 1, LongerCode, 68, new int[0])]
+    [InlineData("validate", 1, LongerCode, 68, new int[0])]
+    [InlineData("staple", 1, WrongDomain, 68, new int[0])]
+    [InlineData("validate", 1, WrongDomain, 68, new int[0])]
     [InlineData("staple", 4, ConnectionLost, 68, new[] { 5, 15, 30 })]
     [InlineData("validate", 4, ConnectionLost, 68, new[] { 5, 15, 30 })]
     [RequiresTools(["bash"])]
     public async Task MacOSStaplerOperationsRetryOnlyConnectionLoss(
         string operation, int failures, string error, int expectedStatus, int[] expectedDelays)
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Production stapler wrapper uses Unix commands.");
         using var workspace = TemporaryWorkspace.Create(output);
         var bin = workspace.CreateDirectory("commands").FullName;
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "attempt"), "0\n");
@@ -36,6 +43,12 @@ public sealed class MacOSStaplerRetryTests(ITestOutputHelper output)
                     printf '%s\n' "$1" >> "$STAPLER_TEST_ROOT/delays"
                     exit 0
                 fi
+                if [[ $# -ne 3 || "$1" != stapler || "$2" != "$STAPLER_TEST_OPERATION" || "$3" != "$STAPLER_TEST_APP" ]]; then
+                    printf 'Unexpected xcrun arguments:'
+                    printf ' <%s>' "$@"
+                    printf '\n'
+                    exit 64
+                fi
                 read -r attempt < "$STAPLER_TEST_ROOT/attempt"
                 attempt=$((attempt + 1))
                 printf '%s\n' "$attempt" > "$STAPLER_TEST_ROOT/attempt"
@@ -47,7 +60,7 @@ public sealed class MacOSStaplerRetryTests(ITestOutputHelper output)
                 """);
         }
 
-        var app = Path.Combine(workspace.Path, "Aspire.app");
+        var app = Path.Combine(workspace.Path, "Aspire app.app");
         var result = await TestProcessRunner.RunAsync(
             output,
             "bash",
@@ -57,6 +70,8 @@ public sealed class MacOSStaplerRetryTests(ITestOutputHelper output)
             {
                 ["PATH"] = bin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
                 ["STAPLER_TEST_ROOT"] = workspace.Path,
+                ["STAPLER_TEST_OPERATION"] = operation,
+                ["STAPLER_TEST_APP"] = app,
                 ["STAPLER_TEST_FAILURES"] = failures.ToString(),
                 ["STAPLER_TEST_ERROR"] = error,
                 ["TMPDIR"] = workspace.Path
