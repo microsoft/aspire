@@ -515,6 +515,8 @@ the selection, so a saved terminal selection never overrides them. **All resourc
 clears the selection and opens `/terminals`, which prompts for a resource from
 the list using the same empty-state layout as Metrics. The console overview
 card's **Expand console logs** action opens the resource's **Console logs** tab.
+Direct links to a resource's terminal or console logs still work when the
+resource is hidden from the sidebar.
 The global terminal toggle opens the dock without navigating away from the resource.
 The overview terminal card includes a **More information** link that opens
 `https://aka.ms/aspire/dashboard-terminal` in a new tab.

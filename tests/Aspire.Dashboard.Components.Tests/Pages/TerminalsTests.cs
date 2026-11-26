@@ -95,6 +95,33 @@ public class TerminalsTests : DashboardTestContext
     }
 
     [Fact]
+    public void ModernLayout_HiddenResourceLink_OpensTerminalWithoutRevealingResource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var client = CreateClient(
+            TerminalSetupHelpers.CreateTerminalResource("hidden-instance", displayName: "hidden", hidden: true),
+            TerminalSetupHelpers.CreateTerminalResource("visible"));
+        TerminalsSetupHelpers.SetupResourcesPage(this, viewport, client);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var url = DashboardUrls.TerminalsUrl("hidden");
+        navigation.NavigateTo(url);
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Terminals>(0);
+            builder.AddAttribute(1, nameof(Terminals.ResourceName), "hidden");
+            builder.CloseComponent();
+        }));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("hidden-instance", cut.FindComponent<TerminalView>().Instance.ResourceName);
+            Assert.Equal(navigation.ToAbsoluteUri(url).AbsoluteUri, navigation.Uri);
+            Assert.Equal(["visible"], cut.Instance.GetPaneRows().Select(r => r.Resource.Name));
+        });
+    }
+
+    [Fact]
     public void ModernLayout_DoesNotRestoreSavedTerminalWhenNoResourceIsSelected()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

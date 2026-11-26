@@ -205,7 +205,8 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
     {
         var terminals = _resourceByName.Values.Where(ResourceSelectHelpers.HasUsableTerminal)
             .ToDictionary(r => r.Name, StringComparers.ResourceName);
-        _resources = ResourceSelectHelpers.CreateOptions(terminals, ConsoleLoc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsUnknownState)], _showHiddenResources)
+        _resources = ResourceSelectHelpers.CreateOptions(terminals, ConsoleLoc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsUnknownState)],
+            showHiddenResources: ResourcesLayout is not null || _showHiddenResources)
             .Insert(0, new() { Id = null, Name = ControlsLoc[nameof(ControlsStrings.LabelNone)] });
     }
 

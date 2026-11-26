@@ -895,8 +895,15 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     private void UpdateResourcesList()
     {
-        _resources = GetConsoleLogResourceSelectViewModels(_resourceByName, _allResource, Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsUnknownState)], _showHiddenResources, out var optionToSelect);
+        var unknownStateText = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsUnknownState)];
+        if (ResourcesLayout is not null)
+        {
+            // The layout owns selection, and a named route isn't limited by the resource list's visibility.
+            _resources = ResourceSelectHelpers.CreateOptions(_resourceByName, unknownStateText, showHiddenResources: true);
+            return;
+        }
 
+        _resources = GetConsoleLogResourceSelectViewModels(_resourceByName, _allResource, unknownStateText, _showHiddenResources, out var optionToSelect);
         if (optionToSelect is not null)
         {
             PageViewModel.SelectedResource = optionToSelect;
