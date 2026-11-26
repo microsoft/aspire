@@ -13,6 +13,10 @@ namespace Aspire.Shared.Telemetry;
 /// </summary>
 public abstract class AspireTelemetryBase : IDisposable
 {
+    internal const string ExceptionTypeTagName = "exception.type";
+    internal const string ExceptionMessageTagName = "exception.message";
+    internal const string ExceptionStackTraceTagName = "exception.stacktrace";
+
     private readonly ActivitySource _reportedActivitySource;
     private readonly ActivitySource _diagnosticsActivitySource;
     private readonly ILogger _logger;
@@ -229,17 +233,12 @@ public abstract class AspireTelemetryBase : IDisposable
         RecordEventCore(_errorEventName, CreateErrorTags(exception));
     }
 
-    /// <summary>
-    /// Creates product-specific exception fields that will be filtered by the product's privacy policy.
-    /// </summary>
-    /// <param name="exception">The exception to describe.</param>
-    /// <returns>The error event tags.</returns>
-    protected virtual ActivityTagsCollection CreateErrorTags(Exception exception) => new()
-    {
-        ["exception.type"] = exception.GetType().FullName,
-        ["exception.message"] = exception.Message,
-        ["exception.stacktrace"] = exception.StackTrace
-    };
+    private static KeyValuePair<string, object?>[] CreateErrorTags(Exception exception) =>
+    [
+        new(ExceptionTypeTagName, exception.GetType().FullName),
+        new(ExceptionMessageTagName, exception.Message),
+        new(ExceptionStackTraceTagName, exception.StackTrace)
+    ];
 
     /// <summary>
     /// Gets product-specific metadata to include on structured events.
