@@ -35,7 +35,6 @@ else
                     var items = overflow.Items;
                 }
                 <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-                    @* Each item is approximately 36px tall, plus 48px for the header and container padding. The popover body has a CSS max-height of 300px. *@
                     <FluentPopover AnchorId="@overflow.IdMoreButton"
                                    @bind-Opened="_popoverVisible"
                                    Class="content-list-popover url-overflow-popover"

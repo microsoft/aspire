@@ -13,6 +13,7 @@ internal sealed class ConfigSourceTestContext
 {
     private const string NewCommand = "aspire new aspire-empty --language csharp --name SourceApp --output SourceApp " +
         "--suppress-agent-init --localhost-tld false";
+    private const string RefreshCommand = "aspire update --config-source --yes --non-interactive";
     private const string SshRepository = "ssh://git@config-source.example/config";
 
     private readonly string _root;
@@ -207,6 +208,24 @@ internal sealed class ConfigSourceTestContext
         await AssertSourceNotAcquiredAsync();
     }
 
+    public Task SetConfigSourceEnabledAsync(bool enabled)
+        => _auto.RunCommandAsync($"aspire config set features.configSourceEnabled {(enabled ? "true" : "false")} --global", _counter);
+
+    public async Task CreateProjectAndAssertSourceDisabledAsync()
+    {
+        await AssertConfigSourceDisabledErrorAsync($"{NewCommand} --use-config-source --non-interactive");
+        Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp")));
+
+        await _auto.RunCommandAsync($"{NewCommand} --non-interactive", _counter, timeout: TimeSpan.FromMinutes(3));
+        await ConfigureProjectAsync();
+        var configuration = await ReadConfigurationAsync();
+        Assert.Equal("""{"custom":"keep"}""", configuration["docs"]!.ToJsonString());
+        Assert.Null(configuration["configSource"]);
+        Assert.Null(configuration["skillSources"]);
+        Assert.Null(configuration["integrationSources"]);
+        await AssertSourceNotAcquiredAsync();
+    }
+
     public async Task CreateProjectWithGitAuthenticationAsync()
     {
         await ConfigureGitAuthenticationAsync();
@@ -338,13 +357,27 @@ internal sealed class ConfigSourceTestContext
 
     public Task RefreshConfigurationAsync()
         => _auto.RunCommandAsync(
-            "set -o pipefail; aspire update --config-source --yes --non-interactive 2>&1 | tee \"$ASPIRE_E2E_WORKSPACE/update.log\"",
+            $"set -o pipefail; {RefreshCommand} 2>&1 | tee \"$ASPIRE_E2E_WORKSPACE/update.log\"",
             _counter, timeout: TimeSpan.FromMinutes(2));
+
+    public Task AssertRefreshDisabledAsync() => AssertConfigSourceDisabledErrorAsync(RefreshCommand);
+
+    private async Task AssertConfigSourceDisabledErrorAsync(string command)
+    {
+        await _auto.RunCommandAsync(
+            $"env -u ASPIRE_ANSI_PASS_THRU NO_COLOR=1 {command} > \"$ASPIRE_E2E_WORKSPACE/source-disabled.log\" 2>&1; " +
+            $"result=$?; cat \"$ASPIRE_E2E_WORKSPACE/source-disabled.log\"; test \"$result\" -eq {CliExitCodes.InvalidCommand}",
+            _counter, timeout: TimeSpan.FromMinutes(2));
+        var output = await File.ReadAllTextAsync(Path.Combine(_root, "source-disabled.log"), _cancellationToken);
+        // Narrow terminals may wrap the message, e.g. "Configuration sources are disabled.\nSet features.configSourceEnabled to true".
+        Assert.Contains("Configuration sources are disabled. Set features.configSourceEnabled to true",
+            Regex.Replace(output, @"\s+", " "));
+    }
 
     public async Task AssertRefreshWithoutBindingAsync()
     {
         await _auto.RunCommandAsync(
-            "aspire update --config-source --yes --non-interactive > \"$ASPIRE_E2E_WORKSPACE/missing-source.log\" 2>&1",
+            $"{RefreshCommand} > \"$ASPIRE_E2E_WORKSPACE/missing-source.log\" 2>&1",
             _counter, timeout: TimeSpan.FromMinutes(2));
         var output = await File.ReadAllTextAsync(Path.Combine(_root, "missing-source.log"), _cancellationToken);
         Assert.Contains("No configuration source to update.", Regex.Replace(output, @"\s+", " "));

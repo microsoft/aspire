@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests.Publishing;
 
-public class DockerContainerRuntimeTests
+public class DockerContainerRuntimeTests(ITestOutputHelper output)
 {
     [Theory]
     [InlineData(null)]
@@ -347,10 +347,16 @@ public class DockerContainerRuntimeTests
             context => Assert.Equal("context show", context.Arguments));
     }
 
-    [Fact]
-    public async Task BuildImageAsync_LocalImageOciArchiveFailsBeforeInvokingDocker()
+    [Theory]
+    [InlineData(ContainerTargetPlatform.LinuxAmd64, "linux/amd64")]
+    [InlineData(ContainerTargetPlatform.AllLinux, "linux/amd64,linux/arm64")]
+    public async Task BuildImageAsync_LocalImageOciArchiveSavesDockerOciLayout(
+        ContainerTargetPlatform targetPlatform, string expectedPlatforms)
     {
-        var processRunner = new TestProcessRunner();
+        using var workspace = TemporaryWorkspace.Create(output);
+        var outputPath = workspace.WorkspaceRoot.FullName;
+        var archivePath = ResourceExtensions.GetContainerImageArchivePath(outputPath, "myapp:latest");
+        var processRunner = CreateDockerSaveProcessRunner(archivePath, includeOciLayout: true);
         var runtime = new DockerContainerRuntime(
             NullLogger<DockerContainerRuntime>.Instance,
             processRunner);
@@ -358,7 +364,42 @@ public class DockerContainerRuntimeTests
         {
             ImageName = "myapp",
             Tag = "latest",
-            OutputPath = "out",
+            OutputPath = outputPath,
+            ImageFormat = ContainerImageFormat.Oci,
+            TargetPlatform = targetPlatform,
+            RequiresLocalImageStore = true
+        };
+
+        await BuildImageAsync(runtime, options);
+
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            check => Assert.Equal("buildx version", check.Arguments),
+            context => Assert.Equal("context show", context.Arguments),
+            build => Assert.Equal(
+                ["buildx", "build", "--file", "Dockerfile", "--tag", "myapp:latest", "--builder", "desktop-linux",
+                    "--platform", expectedPlatforms, GetNormalizedContextPath()],
+                build.ArgumentList),
+            save => Assert.Equal(
+                $"image save --output \"{archivePath}\" \"myapp:latest\"",
+                save.Arguments));
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_LocalImageOciArchiveFailsWhenDockerDoesNotWriteOciLayout()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var outputPath = workspace.WorkspaceRoot.FullName;
+        var archivePath = ResourceExtensions.GetContainerImageArchivePath(outputPath, "myapp:latest");
+        var processRunner = CreateDockerSaveProcessRunner(archivePath, includeOciLayout: false);
+        var runtime = new DockerContainerRuntime(
+            NullLogger<DockerContainerRuntime>.Instance,
+            processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = outputPath,
             ImageFormat = ContainerImageFormat.Oci,
             RequiresLocalImageStore = true
         };
@@ -367,10 +408,11 @@ public class DockerContainerRuntimeTests
             () => BuildImageAsync(runtime, options));
 
         Assert.Equal(
-            "Docker cannot export an OCI archive when container-file layering references locally built images. " +
-            "Use ContainerImageFormat.Docker for this archive or run the publish with Podman.",
+            "Docker did not write an OCI image layout when saving 'myapp:latest'. Exporting a ContainerImageFormat.Oci archive " +
+            "for container-file layering requires Docker Engine 25 or later. Upgrade Docker, use ContainerImageFormat.Docker " +
+            "for this archive, or run the publish with a container runtime that can save OCI archives, such as Podman.",
             exception.Message);
-        Assert.Empty(processRunner.ProcessSpecs);
+        Assert.Equal(4, processRunner.ProcessSpecs.Count);
     }
 
     [Fact]
@@ -461,5 +503,46 @@ public class DockerContainerRuntimeTests
     {
         return Path.GetFullPath("context")
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static TestProcessRunner CreateDockerSaveProcessRunner(string archivePath, bool includeOciLayout)
+    {
+        var processRunner = new TestProcessRunner
+        {
+            RunCallback = spec =>
+            {
+                if (spec.Arguments?.StartsWith("image save", StringComparison.Ordinal) == true)
+                {
+                    WriteDockerSaveArchive(archivePath, includeOciLayout);
+                }
+            }
+        };
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["desktop-linux"]);
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult();
+
+        return processRunner;
+    }
+
+    private static void WriteDockerSaveArchive(string archivePath, bool includeOciLayout)
+    {
+        // Docker Engine 25+ adds oci-layout and index.json beside the legacy Docker metadata;
+        // older engines write only manifest.json and repositories.
+        (string Name, string Contents)[] dockerEntries =
+        [
+            ("manifest.json", """[{"Config":"config.json","RepoTags":["myapp:latest"],"Layers":["layer.tar"]}]"""),
+            ("repositories", """{"myapp":{"latest":"layer"}}""")
+        ];
+        (string Name, string Contents)[] ociEntries =
+        [
+            ("oci-layout", """{"imageLayoutVersion":"1.0.0"}"""),
+            ("index.json", """{"schemaVersion":2,"manifests":[]}""")
+        ];
+
+        TestContainerImageArchive.WriteArchive(
+            archivePath,
+            "layer",
+            includeOciLayout ? [.. dockerEntries, .. ociEntries] : dockerEntries);
     }
 }

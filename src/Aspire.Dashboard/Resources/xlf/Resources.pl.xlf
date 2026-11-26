@@ -27,9 +27,14 @@
         <target state="translated">{0} · żądania: {1}, nie powiodły się: {2}</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceCaveat">
+        <source>Some traces may not include a request counted in this bar.</source>
+        <target state="new">Some traces may not include a request counted in this bar.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HomeActivityBucketTraceHint">
-        <source>View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</source>
-        <target state="new">View traces with spans that started in this interval. Some traces may not include a request counted in this bar.</target>
+        <source>View traces with spans that started in this interval.</source>
+        <target state="new">View traces with spans that started in this interval.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
@@ -653,8 +658,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
-        <source>Open console</source>
-        <target state="translated">Otwórz konsolę</target>
+        <source>Expand console logs</source>
+        <target state="needs-review-translation">Otwórz konsolę</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">

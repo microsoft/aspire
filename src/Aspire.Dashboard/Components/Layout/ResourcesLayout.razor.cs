@@ -20,7 +20,6 @@ using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
-using ResourcesPage = Aspire.Dashboard.Components.Pages.Resources;
 
 namespace Aspire.Dashboard.Components.Layout;
 
@@ -54,7 +53,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private ResourcePaneGrouping _grouping;
     private readonly CancellationTokenSource _cts = new();
     private readonly List<MenuButtonItem> _paneMenuItems = [];
-    private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
+    private readonly ResourceFilter _filter = new();
+    private (ResourceTab Tab, SelectionUrlProvider Provider)? _selectionUrlProvider;
     private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
     // Registered with the main layout, which lists these views in the narrow layout's navigation menu. It's created
     // once so the layout can tell whether the registered entries are still this layout's when it's disposed.
@@ -539,7 +539,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        var leftHome = _lastLocation is { } previousLocation && IsResourceListHome(previousLocation);
         _lastLocation = location;
         // Only a row selection owns this reveal. Tab changes and unrelated navigation
         // cancel it rather than replaying a stale full-canvas transition.
@@ -555,16 +554,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _homeNavigation = null;
         var tabAfterHome = _tabAfterHome;
         _tabAfterHome = null;
-        // The table is the home page. Every other URL shows its own page beside the docked list.
+        // Home shows the full list without changing the saved sidebar collapse preference.
         var showResourceList = IsResourceListHome(location);
-        // The table is the list itself, across the page, so the list shows even when it was hidden beside other pages.
-        // Leaving home by any way, such as a row, "All resources", a tab or the back button, docks the list it showed
-        // rather than hiding it again.
-        var dockHiddenList = leftHome && !showResourceList && _isPaneCollapsed && ViewportInformation.IsDesktop;
-        if (dockHiddenList)
-        {
-            _isPaneCollapsed = false;
-        }
         _isPaneFullCanvas = false;
         ClearPaneActivity();
         var previousTab = CurrentTab;
@@ -597,10 +588,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await ApplyPaneModeFromLocationAsync(location);
         await TryRedirectLandingAsync();
         await PersistSelectedResourcesAsync();
-        if (dockHiddenList)
-        {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneCollapsed, false);
-        }
 
         // Home has landed: open the tab chosen while it was in flight, for home's selection.
         if (tabAfterHome is { } chosenTab && GetTabs().FirstOrDefault(t => t.Tab == chosenTab && t.IsVisible)?.Href is { } chosenHref)
@@ -908,17 +895,36 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     internal string? RouteResourceName { get; private set; }
 
+    // The provider builds the page URL; the layout still adds the multi-selection and pane to it.
+    internal void SetSelectionUrlProvider(ResourceTab tab, SelectionUrlProvider provider)
+    {
+        _selectionUrlProvider = (tab, provider);
+        StateHasChanged();
+    }
+
+    internal void ClearSelectionUrlProvider(SelectionUrlProvider provider)
+    {
+        if (_selectionUrlProvider is { } registered && registered.Provider == provider)
+        {
+            _selectionUrlProvider = null;
+        }
+    }
+
     /// <summary>
     /// Gets the URL of the given tab for the resources currently selected in the resource list.
     /// </summary>
     internal string GetTabUrl(ResourceTab tab)
     {
-        if (!IsMultiSelection && tab is ResourceTab.Overview or ResourceTab.Terminal &&
-            CurrentTab is ResourceTab.Overview or ResourceTab.Terminal &&
-            NavigationManager.ToBaseRelativePath(NavigationManager.Uri).StartsWith(
-                $"{DashboardUrls.ResourceOverviewBasePath}/", StringComparison.OrdinalIgnoreCase))
+        if (tab == ResourceTab.Terminal && !IsTabAvailable(tab))
         {
-            return DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, focused: tab == ResourceTab.Terminal);
+            // The selection has no terminal, so open the Terminals page to choose one.
+            return DashboardUrls.TerminalsUrl();
+        }
+
+        if (_selectedResourceNames.Count == 1 && tab is ResourceTab.Overview or ResourceTab.Terminal &&
+            CurrentTab is ResourceTab.Overview or ResourceTab.Terminal)
+        {
+            return WithCurrentResourceViewState(GetTabUrl(tab, _selectedResourceNames, RouteResourceName));
         }
 
         if (tab == ResourceTab.Metrics && _selectedResourceNames.Count == 0 && !DashboardClient.IsEnabled &&
@@ -978,7 +984,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 parentUrl = GetTabUrl(CurrentTab == ResourceTab.Terminal ? ResourceTab.Overview : CurrentTab, []);
                 query.Remove(DashboardUrls.ResourceSelectionQueryName);
-                query.Remove(DashboardUrls.ResourceTerminalQueryName);
             }
             else
             {
@@ -1171,14 +1176,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             selectedResourceNames.Add(routeResourceName);
         }
 
-        if (tab == ResourceTab.Overview && routeResourceName is not null &&
-            selectedResourceNames.Count == 1 &&
-            queryParameters.TryGetValue(DashboardUrls.ResourceTerminalQueryName, out var terminalFocus) &&
-            string.Equals(terminalFocus, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            tab = ResourceTab.Terminal;
-        }
-
         return new ResourceLocation(tab, routeResourceName, selectedResourceNames, KeepSelection: false);
     }
 
@@ -1357,7 +1354,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
         var filteredResources = OrderStore.OrderResources(GetOrderableResources())
-            .Where(r => _filter.FilterAllResourceKinds(r, _filter.TextFilter))
+            .Where(_filter.Matches)
             .Select(r => new ResourceGridViewModel { Resource = r })
             .ToList();
 
@@ -1368,7 +1365,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private List<ResourceViewModel> GetParameterPaneRows() =>
         _resourceByName.Values
-            .Where(r => r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
+            .Where(r => r.IsParameter && _filter.Matches(r))
             .OrderBy(r => r.HasMissingParameterValueState() ? 0 : 1)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .ToList();
@@ -1458,7 +1455,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 var textFilter = group.Value is not null && GetGroupName(group.Value).Contains(_filter.TextFilter, StringComparisons.UserTextSearch)
                     ? string.Empty
                     : _filter.TextFilter;
-                return new ResourceGroup(group.Value, group.Resources.Where(r => _filter.FilterAllResourceKinds(r, textFilter)).ToList());
+                return new ResourceGroup(group.Value, group.Resources.Where(r => _filter.Matches(r, textFilter)).ToList());
             })
             .Where(group => group.Resources.Count > 0)
             .ToList();
@@ -1647,10 +1644,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private bool CanReorderGroups => CanReorderPane && _grouping != ResourcePaneGrouping.None;
 
+    private bool MatchesResourceFilter(ResourceViewModel resource) => !resource.IsParameter && _filter.Matches(resource);
+
     private string GetReorderParentName(ResourceViewModel resource)
     {
         var parentName = resource.GetResourcePropertyValue(KnownProperties.Resource.ParentName);
-        return parentName is not null && _resourceByName.TryGetValue(parentName, out var parent) && _filter.Filter(parent)
+        return parentName is not null && _resourceByName.TryGetValue(parentName, out var parent) && MatchesResourceFilter(parent)
             ? parentName : string.Empty;
     }
 
@@ -1661,7 +1660,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (CanReorderResources &&
             _resourceByName.TryGetValue(resourceName, out var resource) &&
             _resourceByName.TryGetValue(targetName, out var target) &&
-            _filter.Filter(resource) && _filter.Filter(target))
+            MatchesResourceFilter(resource) && MatchesResourceFilter(target))
         {
             switch (await OrderStore.MoveResourceAsync(resource, target, after, GetOrderableResources()))
             {
@@ -1848,10 +1847,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? (Loc[nameof(Resources.Layout.ResourceHeaderStarted)], startTimeStamp)
                 : null;
 
-    // The tooltip: only the exact time, for example "Nov 6, 2026, 2:30 PM", since the row already shows the age.
+    // The tooltip: only the exact time, for example "2:30:45 PM", since the row already shows the age.
     private string GetRowTimeTooltip((string Label, DateTime Time) rowTime) => FormatHelpers.FormatTooltipDateTime(TimeProvider, rowTime.Time);
 
-    // The accessible name, for example "Stopped 1m ago (Nov 6, 2026, 2:30 PM)". Unlike the tooltip, it contains the
+    // The accessible name, for example "Stopped 1m ago (2:30:45 PM)". Unlike the tooltip, it contains the
     // short age the row shows, so the accessible name includes the visible text (WCAG 2.5.3, label in name:
     // https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
     private string GetRowTimeDescription((string Label, DateTime Time) rowTime, string tooltip) => $"{GetRowTimeText(rowTime)} ({tooltip})";
@@ -2046,16 +2045,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool CanViewResourceTerminal(ResourceViewModel resource) =>
         DashboardClient.IsEnabled && !DashboardClient.IsReadOnly && ResourceSelectHelpers.HasUsableTerminal(resource);
 
-    private string GetResourceTerminalUrl(ResourceViewModel resource)
+    private bool HasViewableResourceTerminal => !IsTelemetryPane && _resourceByName.Values.Any(CanViewResourceTerminal);
+
+    private string GetResourceTerminalUrl(ResourceViewModel resource) =>
+        WithCurrentResourceViewState(DashboardUrls.TerminalsUrl(GetResourceName(resource)));
+
+    internal string WithCurrentResourceViewState(string url)
     {
         var location = new Uri(NavigationManager.Uri);
         var query = HttpUtility.ParseQueryString(location.Query);
-        // A row shortcut selects this resource alone, even from an aggregate page such as
-        // /resources?resource=api&resource=worker&pane=tags#output. Keep the remaining view state.
+        // The destination path already identifies a single resource. Keep the remaining view state.
         query.Remove(DashboardUrls.ResourceSelectionQueryName);
-        var url = DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)) +
-            (query.Count > 0 ? $"?{query}" : string.Empty) + location.Fragment;
-        return DashboardUrls.SetResourceTerminalFocus(url, focused: true);
+        return url + (query.Count > 0 ? $"?{query}" : string.Empty) + location.Fragment;
     }
 
     private void NavigateToResourceTerminal(ResourceViewModel resource)
@@ -2551,6 +2552,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return tab == CurrentTab;
     }
 
+    private static string? GetRouteResourceName(IReadOnlyList<string> resourceNames, string? activeResourceName) =>
+        resourceNames.Count switch
+        {
+            0 => null,
+            1 => resourceNames[0],
+            _ => activeResourceName is not null && resourceNames.Contains(activeResourceName, StringComparers.ResourceName) ? activeResourceName : null
+        };
+
     internal static string GetTabUrl(ResourceTab tab, IReadOnlyList<string> resourceNames, string? activeResourceName = null)
     {
         if (resourceNames.Count > 1)
@@ -2565,7 +2574,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ResourceTab.Terminal => DashboardUrls.TerminalsUrl(),
                 ResourceTab.StructuredLogs => DashboardUrls.StructuredLogsUrl(),
                 ResourceTab.Traces => DashboardUrls.TracesUrl(),
-                ResourceTab.Metrics => DashboardUrls.MetricsUrl(activeResourceName is not null && resourceNames.Contains(activeResourceName, StringComparers.ResourceName) ? activeResourceName : null),
+                ResourceTab.Metrics => DashboardUrls.MetricsUrl(GetRouteResourceName(resourceNames, activeResourceName)),
                 _ => throw new InvalidOperationException($"Unexpected tab: {tab}")
             };
 
@@ -2580,8 +2589,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? DashboardUrls.ParametersUrl()
                 : DashboardUrls.AddResourceSelection(DashboardUrls.ParametersUrl(), [resourceName]),
             ResourceTab.Console => DashboardUrls.ConsoleLogsUrl(resourceName),
-            ResourceTab.Terminal => resourceName is null ? DashboardUrls.TerminalsUrl() :
-                DashboardUrls.SetResourceTerminalFocus(DashboardUrls.ResourceOverviewUrl(resourceName), focused: true),
+            ResourceTab.Terminal => DashboardUrls.TerminalsUrl(resourceName),
             ResourceTab.StructuredLogs => DashboardUrls.StructuredLogsUrl(resourceName),
             ResourceTab.Traces => DashboardUrls.TracesUrl(resourceName),
             ResourceTab.Metrics => DashboardUrls.MetricsUrl(resourceName),
@@ -2591,7 +2599,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     /// <summary>
     /// Gets the URL that selects the given resources on the current tab, falling back to the overview when none of
-    /// the resources support the current tab. Telemetry pages are kept for any selection but a single parameter.
+    /// the resources support the current tab. Terminals stays open when clearing the selection.
+    /// Telemetry pages are kept for any selection but a single parameter, and the current page can supply URLs that preserve its view.
     /// </summary>
     private string GetSelectionUrl(IReadOnlyList<string> resourceNames)
     {
@@ -2606,7 +2615,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }).ToList();
 
         ResourceTab tab;
-        if (IsTabAvailable(CurrentTab, selection))
+        if (IsTabAvailable(CurrentTab, selection) || (CurrentTab == ResourceTab.Terminal && selection.Count == 0))
         {
             tab = CurrentTab;
         }
@@ -2628,6 +2637,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             // Resources that only send telemetry don't have an overview.
             tab = ResourceTab.StructuredLogs;
+        }
+
+        if (tab == CurrentTab && _selectionUrlProvider is { } registered && registered.Tab == tab)
+        {
+            var resourceName = GetRouteResourceName(resourceNames, RouteResourceName);
+            var sameScope = resourceNames.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName);
+            var url = registered.Provider(resourceName, resourceNames, sameScope);
+            return AddPaneToUrl(resourceNames.Count > 1 ? DashboardUrls.AddResourceSelection(url, resourceNames) : url);
         }
 
         return GetTabUrl(tab, resourceNames, RouteResourceName);
@@ -2888,22 +2905,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private static bool IsPlainClick(MouseEventArgs e) => e.Button == 0 && !e.CtrlKey && !e.ShiftKey && !e.AltKey && !e.MetaKey;
 
-    private async Task NavigateToTabAsync(string href)
+    private Task NavigateToTabAsync(string href)
     {
-        var persistExpandedPane = _isPaneFullCanvas && _isPaneCollapsed;
         if (_isPaneFullCanvas)
         {
             // Reveal the destination as soon as navigation starts, even if its page is
             // slow to render or the current tab's menu item doesn't change the URL.
-            _isPaneCollapsed = false;
             SetResourceListVisible(false);
         }
 
         NavigationManager.NavigateTo(href);
-        if (persistExpandedPane)
-        {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneCollapsed, false);
-        }
+
+        return Task.CompletedTask;
     }
 
     private IEnumerable<TabItem> GetTabs()
@@ -2924,8 +2937,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
-        yield return CreateTab(ResourceTab.Terminal, TerminalLoc[nameof(TerminalStrings.TerminalTitle)], new Icons.Regular.Size20.WindowConsole(),
-            isVisible: IsTabAvailable(ResourceTab.Terminal) || CurrentTab == ResourceTab.Terminal);
+        // Shown whenever any resource has a terminal, not only when the selection does, so the navigation doesn't
+        // shift as the selection changes. Without a terminal in the selection it opens the Terminals page instead.
+        yield return CreateTab(ResourceTab.Terminal, Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], new Icons.Regular.Size20.WindowConsole(),
+            isVisible: HasViewableResourceTerminal || CurrentTab == ResourceTab.Terminal);
         yield return CreateTab(ResourceTab.StructuredLogs, StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)], new Icons.Regular.Size24.SlideTextSparkle(),
             isVisible: true, errorCount);
         yield return CreateTab(ResourceTab.Traces, Loc[nameof(Resources.Layout.NavMenuTracesTab)], new Icons.Regular.Size24.GanttChart(),
@@ -3142,9 +3157,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 }
 
-// These enums are top-level rather than nested in ResourcesLayout because pages reference the layout through
-// [Layout(typeof(ResourcesLayout))], which preserves all of the layout's members for trimming. Native AOT reports
-// every preserved nested enum as a use of Enum.GetValues(Type) (IL3050) on each page that uses the layout.
+// Keep these types outside ResourcesLayout. [Layout(typeof(ResourcesLayout))] roots nested types for trimming,
+// which also roots reflection-based members inherited by enums and delegates.
+
+internal delegate string SelectionUrlProvider(string? routeResourceName, IReadOnlyList<string> resourceNames, bool sameScope);
 
 internal enum ResourceTab
 {

@@ -35,24 +35,6 @@ internal static partial class DateFormatStringsHelpers
     [GeneratedRegex(@"\s*tt")]
     private static partial Regex MatchAmPmDesignator();
 
-    // Matches the full month name specifier, MMMM, to abbreviate it to MMM.
-    [GeneratedRegex("M{4}")]
-    private static partial Regex MatchFullMonthName();
-
-    // Matches the day of the week, full or abbreviated, with the separator that follows or precedes it, so removing it
-    // doesn't leave a stray comma. Long date patterns observed in culture data:
-    //   "dddd, MMMM d, yyyy"   (en-US)  -> "dddd, "
-    //   "dddd d MMMM yyyy"     (fr-FR)  -> "dddd "
-    //   "yyyy年M月d日 dddd"     (ja-JP)  -> " dddd"
-    //   "yyyy. MMMM d., dddd"  (hu-HU)  -> ", dddd"
-    //   "dddd، d MMMM yyyy"    (ar)     -> "dddd، " (Arabic comma)
-    //   "ddd, MMMM d, yyyy"    (ak)     -> "ddd, "
-    [GeneratedRegex(@"d{3,4}\s*[,،]?\s*|\s*[,،]?\s*d{3,4}")]
-    private static partial Regex MatchDayOfWeek();
-
-    private readonly record struct MediumDateKey(string LongDatePattern, string ShortTimePattern, TimeFormat TimeFormat, bool SpaceSeparated);
-    private static readonly ConcurrentDictionary<MediumDateKey, string> s_mediumDateShortTimePatterns = new();
-
     private static MillisecondFormatStrings GetDateFormatStrings(CultureInfo cultureInfo, TimeFormat timeFormat)
     {
         var key = new CultureDetailsKey(cultureInfo.DateTimeFormat.LongTimePattern, cultureInfo.DateTimeFormat.ShortDatePattern, cultureInfo.NumberFormat.NumberDecimalSeparator, timeFormat);
@@ -93,30 +75,6 @@ internal static partial class DateFormatStringsHelpers
 
             return MatchSecondsInTimeFormatPattern().Replace(longTimePattern, $"$1'{key.NumberDecimalSeparator}'{millisecondFormat}");
         }
-    }
-
-    /// <summary>
-    /// Gets a pattern with an abbreviated month and no seconds, such as "MMM d, yyyy, h:mm tt" (en-US),
-    /// "d MMM yyyy, HH:mm" (fr-FR) or "yyyy年M月d日 H:mm" (ja-JP). It mirrors the browser's medium date and short time
-    /// styles (https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/DateTimeFormat#datestyle),
-    /// which .NET doesn't have as a standard format.
-    /// </summary>
-    internal static string GetMediumDateShortTimePattern(CultureInfo cultureInfo, TimeFormat timeFormat)
-    {
-        // Browsers separate the date and time with a comma, "Nov 11, 2026, 12:41 PM", except in Chinese, Japanese and
-        // Korean, whose dates end with a character rather than a number: "2026年11月11日 12:41".
-        var spaceSeparated = cultureInfo.TwoLetterISOLanguageName is "zh" or "ja" or "ko";
-        var key = new MediumDateKey(cultureInfo.DateTimeFormat.LongDatePattern, cultureInfo.DateTimeFormat.ShortTimePattern, timeFormat, spaceSeparated);
-
-        return s_mediumDateShortTimePatterns.GetOrAdd(key, static k =>
-        {
-            // The long date pattern without the day of the week and with an abbreviated month, for example
-            // "dddd, MMMM d, yyyy" -> "MMM d, yyyy" (en-US) or "dddd d MMMM yyyy" -> "d MMM yyyy" (fr-FR).
-            var datePattern = MatchFullMonthName().Replace(MatchDayOfWeek().Replace(k.LongDatePattern, ""), "MMM");
-            var timePattern = ApplyTimeFormat(k.ShortTimePattern, k.TimeFormat);
-
-            return datePattern + (k.SpaceSeparated ? " " : ", ") + timePattern;
-        });
     }
 
     // Applies the 12h/24h override, if any, to a culture's time pattern.

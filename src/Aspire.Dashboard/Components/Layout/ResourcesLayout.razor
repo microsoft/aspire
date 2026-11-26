@@ -79,7 +79,7 @@
                 <span class="visually-hidden" role="status" aria-live="polite">@_orderStatus</span>
                 @if (!_isLoaded)
                 {
-                    <div class="resource-pane-message">
+                    <div class="aspire-pane-message">
                         <FluentSpinner Size="SpinnerSize.Small" />
                     </div>
                 }
@@ -119,7 +119,7 @@
 
                 @if (_isLoaded && paneItemCount == 0 && !showNoTags)
                 {
-                    <div class="resource-pane-message">
+                    <div class="aspire-pane-message">
                         @(DashboardClient.IsEnabled
                             ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
                             : Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)])
@@ -161,7 +161,7 @@
             @if (isDesktop && !_isPaneFullCanvas && !showCollapsedPane)
             {
                 @* Pointer and keyboard handling is registered by ResourcesLayout.razor.js. *@
-                <div class="resource-pane-resizer"
+                <div class="resource-pane-resizer aspire-splitter-handle"
                      role="separator"
                      tabindex="-1"
                      aria-disabled="true"
@@ -335,11 +335,11 @@
                @onclick:preventDefault="true">
                 @icon
                 <span class="resource-tag-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@groupName" /></span>
-                <span class="resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
+                <span class="aspire-count-badge aspire-count-badge-compact resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
             </a>
             <div class="resource-tag-actions">
                 <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
-                                  ButtonClass="resource-tag-action"
+                                  ButtonClass="resource-tag-header-button resource-tag-action"
                                   Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
                                   ItemsProvider="@(() => GetPaneGroupMenuItems(groupKey, groupName, isTag: actionTag is not null))"
                                   RefreshItemsWhileOpen="false"
@@ -347,13 +347,15 @@
                                       ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]
                                       : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions), groupName])" />
             </div>
-            <button type="button"
-                    class="resource-row-toggle @(isCollapsed ? "collapsed" : null)"
-                    aria-expanded="@((!isCollapsed).ToString().ToLowerInvariant())"
-                    aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupToggle)], groupName)"
-                    @onclick="@(() => ToggleCollapsedGroup(groupKey))">
-                <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
-            </button>
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          Class="@($"resource-tag-header-button resource-row-toggle {(isCollapsed ? "collapsed" : null)}")"
+                          IconOnly="true"
+                          role="button"
+                          aria-expanded="@((!isCollapsed).ToString().ToLowerInvariant())"
+                          aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupToggle)], groupName)"
+                          OnClick="@(() => ToggleCollapsedGroup(groupKey))">
+                <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
+            </FluentButton>
         </div>
     };
 
@@ -577,7 +579,7 @@
                       aria-haspopup="dialog"
                       aria-expanded="@(_isResourcePickerOpen ? "true" : "false")"
                       aria-description="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneOpen)]">
-            <span slot="start">@((RenderFragment)RenderHeaderIcon)</span>
+            <span slot="start">@((RenderFragment)(builder => RenderHeaderIcon(builder, compact: true)))</span>
             <span class="resource-picker-text">@text</span>
         </FluentButton>
     </h1>
@@ -599,28 +601,38 @@
         }
     }
 
-    private void RenderHeaderIcon(RenderTreeBuilder __builder)
+    private void RenderHeaderIcon(RenderTreeBuilder __builder, bool compact)
     {
+        const string iconWidth = "20px";
+
         if (CurrentTab == ResourceTab.Parameters)
         {
             <span class="resource-header-icon neutral">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Default" />
             </span>
         }
         else if (SelectedResource is { } selected)
         {
-            <span class="resource-header-icon">
-                <FluentIcon Width="20px"
-                            Color="Color.Custom"
-                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(selected))"
-                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
-                <PersistentContainerBadge Resource="@selected" />
-            </span>
+            var iconColor = ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(selected));
+            if (compact)
+            {
+                RenderResourceIcon(__builder, selected, iconColor, iconWidth, IconSize.Size20);
+            }
+            else
+            {
+                <span class="resource-header-icon">
+                    <FluentIcon Width="@iconWidth"
+                                Color="Color.Custom"
+                                CustomColor="@iconColor"
+                                Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
+                    <PersistentContainerBadge Resource="@selected" />
+                </span>
+            }
         }
         else if (SelectedTelemetryOnlyResource is { } telemetryOnly)
         {
             <span class="resource-header-icon">
-                <FluentIcon Width="20px"
+                <FluentIcon Width="@iconWidth"
                             Color="Color.Custom"
                             CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.Name)"
                             Value="@(new Icons.Regular.Size20.DataUsage())" />
@@ -631,24 +643,24 @@
             <span class="resource-header-icon">
                 @if (_selectedItems.All(item => item.Resource is { IsParameter: true }))
                 {
-                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
+                    <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
                 }
                 else
                 {
-                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
+                    <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
                 }
             </span>
         }
         else if (SelectedResourceName is not null && _isLoaded)
         {
             <span class="resource-header-icon neutral">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.QuestionCircle())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.QuestionCircle())" Color="Color.Default" />
             </span>
         }
         else
         {
             <span class="resource-header-icon scope">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
             </span>
         }
     }
@@ -669,7 +681,7 @@
         }
         @if (!isDesktop || !_isPaneCollapsed)
         {
-            RenderHeaderIcon(__builder);
+            RenderHeaderIcon(__builder, compact: false);
         }
         @if (CurrentTab == ResourceTab.Parameters)
         {
@@ -758,7 +770,7 @@
         {
             <span class="resource-header-sep" aria-hidden="true">·</span>
             <span class="resource-header-urls">
-                <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@urls" />
+                <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@urls" UseNeutralOverflowButton="true" />
             </span>
         }
     }
@@ -980,59 +992,57 @@
                 }
             </a>
             @{ RenderRowErrorLink(__builder, item); }
-            @if (!resource.IsParameter)
-            {
-                @* Sibling links, not nested anchors: opening an endpoint must not change the row selection. *@
-                <div class="resource-row-wide-metadata">
-                    <span class="resource-row-health">
-                        <span class="resource-row-start-time">
-                            @if (GetRowTime(resource) is { } rowTime)
-                            {
-                                var rowTimeTooltip = GetRowTimeTooltip(rowTime);
-                                <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
-                                <time datetime="@rowTime.Time.ToString("O", CultureInfo.InvariantCulture)"
-                                      tabindex="0"
-                                      aria-label="@GetRowTimeDescription(rowTime, rowTimeTooltip)"
-                                      data-tooltip="@rowTimeTooltip"
-                                      data-tooltip-positioning="above">
-                                    @* The verb and a short age ("Started 7m ago"); the tooltip adds the exact time. *@
-                                    <span class="resource-row-started-age">@GetRowTimeText(rowTime)</span>
-                                </time>
-                            }
-                        </span>
-                    </span>
-                    <div class="resource-row-endpoints">
-                        @if (item.Urls.Count > 0)
+            @* Sibling links, not nested anchors: opening an endpoint must not change the row selection. *@
+            <div class="resource-row-wide-metadata" aria-hidden="@(resource.IsParameter ? "true" : null)">
+                <span class="resource-row-health">
+                    <span class="resource-row-start-time">
+                        @if (!resource.IsParameter && GetRowTime(resource) is { } rowTime)
                         {
-                            @* The resources grid's URLs column shows as many URLs as fit. Links and buttons don't select the row
-                               (see ResourcesLayout.razor.js). *@
-                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" UseNeutralOverflowButton="true" MaxRenderedItems="@item.Urls.Count" />
+                            var rowTimeTooltip = GetRowTimeTooltip(rowTime);
+                            <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
+                            <time datetime="@rowTime.Time.ToString("O", CultureInfo.InvariantCulture)"
+                                  tabindex="0"
+                                  aria-label="@GetRowTimeDescription(rowTime, rowTimeTooltip)"
+                                  data-tooltip="@rowTimeTooltip"
+                                  data-tooltip-positioning="above">
+                                @* The verb and a short age ("Started 7m ago"); the tooltip adds the exact time. *@
+                                <span class="resource-row-started-age">@GetRowTimeText(rowTime)</span>
+                            </time>
                         }
-                    </div>
-                    @* What ran the resource ("alpine:latest", "Api.csproj"). The type is in the name column, next to the
-                       state dot, so this column is the source alone. *@
-                    <span class="resource-row-source">
-                        @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
+                        else
                         {
-                            <span class="resource-row-source-value" tabindex="0"
-                                  data-tooltip="@source.Tooltip"
-                                  data-tooltip-positioning="above"
-                                  aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {source.Tooltip}")">@source.Value</span>
+                            <span class="empty-data"></span>
                         }
                     </span>
+                </span>
+                <div class="resource-row-endpoints">
+                    @if (!resource.IsParameter && item.Urls.Count > 0)
+                    {
+                        @* The resources grid's URLs column shows as many URLs as fit. Links and buttons don't select the row
+                           (see ResourcesLayout.razor.js). *@
+                        <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" UseNeutralOverflowButton="true" MaxRenderedItems="@item.Urls.Count" />
+                    }
+                    else
+                    {
+                        <span class="empty-data"></span>
+                    }
                 </div>
-            }
-            else
-            {
-                @* Parameters reserve the same quiet tracks without inventing health, endpoints, or start times. *@
-                <div class="resource-row-wide-metadata" aria-hidden="true">
-                    <span class="resource-row-health">
-                        <span class="resource-row-start-time"></span>
-                    </span>
-                    <div class="resource-row-endpoints"></div>
-                    <span class="resource-row-source"></span>
-                </div>
-            }
+                @* What ran the resource ("alpine:latest", "Api.csproj"). The type is in the name column, next to the
+                   state dot, so this column is the source alone. *@
+                <span class="resource-row-source">
+                    @if (!resource.IsParameter && ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
+                    {
+                        <span class="resource-row-source-value" tabindex="0"
+                              data-tooltip="@source.Tooltip"
+                              data-tooltip-positioning="above"
+                              aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {source.Tooltip}")">@source.Value</span>
+                    }
+                    else
+                    {
+                        <span class="empty-data"></span>
+                    }
+                </span>
+            </div>
             @if (!resource.IsParameter && GetTelemetryResource(resource) is { } activityResource)
             {
                 <ResourcePaneInsights Layout="@this" ResourceKey="@activityResource.ResourceKey" ResourceName="@item.Name" />
@@ -1122,14 +1132,19 @@
             ? "var(--colorNeutralForeground3)"
             : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(item.Name)})";
 
+        RenderResourceIcon(__builder, item.Resource, iconColor, "16px", IconSize.Size16);
+    }
+
+    private void RenderResourceIcon(RenderTreeBuilder __builder, ResourceViewModel resource, string iconColor, string width, IconSize iconSize)
+    {
         <span class="resource-row-icon">
             <span class="resource-row-glyph">
-                <FluentIcon Width="16px"
+                <FluentIcon Width="@width"
                             Color="Color.Custom"
                             CustomColor="@iconColor"
-                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, item.Resource, IconSize.Size16)" />
+                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, iconSize)" />
             </span>
-            <PersistentContainerBadge Resource="@item.Resource" />
+            <PersistentContainerBadge Resource="@resource" />
         </span>
     }
 

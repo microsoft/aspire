@@ -76,21 +76,10 @@ internal static class FormatHelpers
     }
 
     /// <summary>
-    /// Formats the exact time behind a relative time ("Started 7m ago") for its tooltip, with an abbreviated month and no
-    /// seconds, for example "Nov 11, 2026, 12:41 PM" (en-US) or "11 nov. 2026, 12:41" (fr-FR).
+    /// Formats a relative-time tooltip with seconds and a date when the time is not today.
     /// </summary>
-    /// <remarks>
-    /// The relative time is already on screen, so the tooltip only says when it was, without repeating it. Seconds are
-    /// noise next to an age rounded to minutes. Like the dashboard's other times, it is in the browser's time zone.
-    /// </remarks>
-    public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTime value, CultureInfo? cultureInfo = null)
-    {
-        cultureInfo ??= CultureInfo.CurrentCulture;
-        var local = timeProvider.ToLocal(value);
-        var pattern = DateFormatStringsHelpers.GetMediumDateShortTimePattern(cultureInfo, GetResolvedTimeFormat(timeProvider));
-
-        return local.ToString(pattern, cultureInfo);
-    }
+    public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTime value, CultureInfo? cultureInfo = null) =>
+        FormatTimeWithOptionalDate(timeProvider, value, cultureInfo: cultureInfo);
 
     public static string FormatTooltipDateTime(TimeProvider timeProvider, DateTimeOffset value, CultureInfo? cultureInfo = null) =>
         FormatTooltipDateTime(timeProvider, value.UtcDateTime, cultureInfo);
@@ -145,7 +134,13 @@ internal static class FormatHelpers
     /// Truncates text to at most <paramref name="maxLength"/> UTF-16 code units, including the ellipsis,
     /// without splitting surrogate pairs.
     /// </summary>
-    public static string TruncateText(string? text, int maxLength)
+    public static string TruncateText(string? text, int maxLength) => TruncateText(text, maxLength, Ellipsis);
+
+    /// <summary>
+    /// Truncates text to at most <paramref name="maxLength"/> UTF-16 code units, including
+    /// <paramref name="ellipsis"/>, without splitting surrogate pairs.
+    /// </summary>
+    public static string TruncateText(string? text, int maxLength, string ellipsis)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -157,13 +152,13 @@ internal static class FormatHelpers
             return text;
         }
 
-        var retainedLength = maxLength - Ellipsis.Length;
+        var retainedLength = maxLength - ellipsis.Length;
         if (retainedLength > 0 && char.IsHighSurrogate(text[retainedLength - 1]) && char.IsLowSurrogate(text[retainedLength]))
         {
             retainedLength--;
         }
 
-        return string.Concat(text.AsSpan(0, retainedLength), Ellipsis);
+        return string.Concat(text.AsSpan(0, retainedLength), ellipsis);
     }
 
     public static string CombineWithSeparator(string separator, params string?[] parts)

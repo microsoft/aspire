@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using Aspire.Dashboard.Telemetry;
-using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Xunit;
@@ -58,7 +57,7 @@ public class DashboardTelemetryServiceTests
         Assert.NotNull(activity);
         Dictionary<string, AspireTelemetryProperty> properties = new()
         {
-            [TelemetryPropertyKeys.CommandName] = new(new string('x', 1100)),
+            [TelemetryPropertyKeys.CommandName] = new(new string('x', 2100)),
             [TelemetryPropertyKeys.MetricsInstrumentsCount] = new("12", AspireTelemetryPropertyType.Metric),
             [TelemetryPropertyKeys.StructuredLogsFilterCount] = new("NaN", AspireTelemetryPropertyType.Metric),
             [TelemetryPropertyKeys.ResourceType] = new("secret", AspireTelemetryPropertyType.Pii),
@@ -78,7 +77,7 @@ public class DashboardTelemetryServiceTests
         }
 
         Assert.Collection(activity.TagObjects.OrderBy(t => t.Key, StringComparer.Ordinal),
-            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.CommandName, new string('x', 1024)), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.CommandName, new string('x', 2047) + "\u2026"), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.MetricsInstrumentsCount, 12d), tag));
         Assert.Empty(activity.Events);
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
@@ -202,7 +201,7 @@ public class DashboardTelemetryServiceTests
     }
 
     [Fact]
-    public void RecordEvent_WithReportedOperation_LogsUsageAndSanitizedErrorsImmediately()
+    public void RecordEvent_WithReportedOperation_LogsUsageAndErrorsImmediately()
     {
         using var fixture = new DashboardTelemetryFixture();
         var service = fixture.Telemetry;
@@ -211,7 +210,7 @@ public class DashboardTelemetryServiceTests
         using (var operation = service.StartOperation(TelemetryEventKeys.ExecuteCommand, []))
         {
             activity = Assert.IsType<Activity>(operation);
-            service.RecordError("Local error", new InvalidOperationException("secret error"), writeToLogging: true);
+            service.RecordError("Local error", new InvalidOperationException("Test error"), writeToLogging: true);
             Assert.True(fixture.LogChannel.Reader.TryRead(out var errorLog));
             Assert.Equal(TelemetryEventKeys.Error, errorLog.Message);
             Assert.Equal(activity.TraceId, errorLog.TraceId);
@@ -219,8 +218,9 @@ public class DashboardTelemetryServiceTests
             Assert.Empty(activity.Events);
             fixture.AssertAttributes(errorLog.Attributes,
                 new(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName),
+                new(TelemetryPropertyKeys.ExceptionMessage, "Test error"),
+                new(TelemetryPropertyKeys.ExceptionStackTrace, string.Empty),
                 new("microsoft.operation_name", TelemetryEventKeys.Error),
-                new(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
                 new("{OriginalFormat}", TelemetryEventKeys.Error));
 
             service.RecordEvent(TelemetryEventKeys.ComponentInitialize);
@@ -240,24 +240,26 @@ public class DashboardTelemetryServiceTests
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }
 
-    [Fact]
-    public void RecordEvent_BoundsStrings()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RecordEvent_BoundsStrings(bool exceedsLimit)
     {
         using var fixture = new DashboardTelemetryFixture();
         var service = fixture.Telemetry;
         using var activity = service.StartReportedActivity("dashboard-operation");
         Assert.NotNull(activity);
 
+        var commandName = new string('x', exceedsLimit ? 2049 : 2048);
         service.RecordEvent(TelemetryEventKeys.ParametersSet, new()
         {
-            [TelemetryPropertyKeys.CommandName] = new(new string('x', 1100))
+            [TelemetryPropertyKeys.CommandName] = new(commandName)
         });
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
-        Assert.Equal(new string('x', 1024), log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.CommandName).Value);
         Assert.Empty(activity.Events);
         fixture.AssertAttributes(log.Attributes,
-            new(TelemetryPropertyKeys.CommandName, new string('x', 1024)),
+            new(TelemetryPropertyKeys.CommandName, exceedsLimit ? new string('x', 2047) + "\u2026" : commandName),
             new("microsoft.operation_name", TelemetryEventKeys.ParametersSet),
             new("{OriginalFormat}", TelemetryEventKeys.ParametersSet));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
@@ -265,7 +267,7 @@ public class DashboardTelemetryServiceTests
     }
 
     [Fact]
-    public void RecordError_WithoutActivity_LogsSanitizedErrorWithoutCreatingActivity()
+    public void RecordError_WithoutActivity_LogsErrorWithoutCreatingActivity()
     {
         var sink = new TestSink();
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(sink)));
@@ -275,7 +277,7 @@ public class DashboardTelemetryServiceTests
         Activity.Current = null;
         try
         {
-            var exception = new InvalidOperationException("secret workspace path");
+            var exception = new InvalidOperationException("Test error");
             service.RecordError("Local message", exception);
 
             Assert.Null(Activity.Current);
@@ -291,8 +293,9 @@ public class DashboardTelemetryServiceTests
             Assert.Equal(default, errorLog.SpanId);
             fixture.AssertAttributes(errorLog.Attributes,
                 new(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName),
+                new(TelemetryPropertyKeys.ExceptionMessage, "Test error"),
+                new(TelemetryPropertyKeys.ExceptionStackTrace, string.Empty),
                 new("microsoft.operation_name", TelemetryEventKeys.Error),
-                new(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
                 new("{OriginalFormat}", TelemetryEventKeys.Error));
             Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         }
@@ -303,18 +306,19 @@ public class DashboardTelemetryServiceTests
     }
 
     [Fact]
-    public void RecordError_NotSampled_StillRecordsSanitizedLog()
+    public void RecordError_NotSampled_StillRecordsError()
     {
         using var fixture = new DashboardTelemetryFixture(sampleResult: ActivitySamplingResult.None);
 
-        fixture.Telemetry.RecordError("Secret local message", new InvalidOperationException("secret"), writeToLogging: false);
+        fixture.Telemetry.RecordError("Secret local message", new InvalidOperationException("Test error"), writeToLogging: false);
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(TelemetryEventKeys.Error, log.Message);
         fixture.AssertAttributes(log.Attributes,
             new(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName),
+            new(TelemetryPropertyKeys.ExceptionMessage, "Test error"),
+            new(TelemetryPropertyKeys.ExceptionStackTrace, string.Empty),
             new("microsoft.operation_name", TelemetryEventKeys.Error),
-            new(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
             new("{OriginalFormat}", TelemetryEventKeys.Error));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
@@ -358,7 +362,7 @@ public class DashboardTelemetryServiceTests
             [TelemetryPropertyKeys.DashboardVersion] = new("secret"),
             [TelemetryPropertyKeys.DashboardBuildId] = new("secret"),
             [TelemetryPropertyKeys.ExceptionType] = new("secret"),
-            [TelemetryPropertyKeys.ExceptionRuntimeVersion] = new("secret"),
+            [TelemetryPropertyKeys.RuntimeVersion] = new("secret"),
             ["aspire.dashboard.result"] = new("secret"),
             ["Unknown"] = new("secret")
         };

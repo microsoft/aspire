@@ -29,6 +29,22 @@
           "description": "Use AppHost Server v2 for this AppHost. Requires an explicit project configuration setting.",
           "default": false
         },
+        "configSourceEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable Git-backed configuration source discovery, template inheritance, update checks, and refresh",
+          "default": true
+        },
         "defaultWatchEnabled": {
           "anyOf": [
             {

@@ -1,0 +1,5 @@
+<Project>
+  <!-- Arcade invokes Test on playground projects even before restoring their packages.
+       This fixture runs through the AppHost, not as a standalone Arcade test. -->
+  <Target Name="Test" />
+</Project>

@@ -218,26 +218,6 @@ Per altre informazioni sull'uso degli agenti basati sull'IA con la dashboard, in
         <target state="translated">Feedback degli utenti</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptIgnore">
-        <source>Don't ask again</source>
-        <target state="translated">Non chiedere più</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptMessage">
-        <source>We'd love your feedback on the new experience.</source>
-        <target state="translated">Ci farebbe piacere ricevere il tuo feedback sulla nuova esperienza.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptShare">
-        <source>Share feedback</source>
-        <target state="translated">Condividi feedback</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptTitle">
-        <source>Welcome to the new Aspire dashboard!</source>
-        <target state="translated">Ti diamo il benvenuto nel nuovo dashboard di Aspire!</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
         <target state="translated">Non ho trovato gli URL dell'applicazione</target>
@@ -1287,7 +1267,7 @@ Configurare l'app per esportare log, tracce e metriche usando [OTLP]({0}).</targ
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrapOff">
         <source>Disable word wrap</source>
-        <target state="new">Disable word wrap</target>
+        <target state="translated">Disabilita ritorno a capo automatico</target>
         <note />
       </trans-unit>
     </body>

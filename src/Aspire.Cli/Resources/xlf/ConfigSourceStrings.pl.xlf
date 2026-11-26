@@ -67,6 +67,11 @@
         <target state="translated">Na maszynie wykryto źródła konfiguracji. Dzięki niej organizacja może udostępniać ustawienia Aspire w celu dostosowywania środowiska programistycznego.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FeatureDisabled">
+        <source>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</source>
+        <target state="new">Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</target>
+        <note>Do not translate "features.configSourceEnabled" or "true".</note>
+      </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
         <target state="translated">Nie można uruchomić Git. Aby użyć tego źródła konfiguracji, upewnij się, że Git jest zainstalowany i dostępny w zmiennej PATH.</target>

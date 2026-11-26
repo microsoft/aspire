@@ -27,6 +27,7 @@ public sealed partial class ResourceRelationshipGraph : ComponentBase
     private const int ThreeColumnGap = 28;
     private const int TwoColumnGap = 44;
     private const int Padding = 2;
+    private const int ArrowLeadInLength = 10;
 
     // At 11px, allow six pixels per character so the semibold center label also fits.
     private const int PixelsPerCharacter = 6;
@@ -104,11 +105,12 @@ public sealed partial class ResourceRelationshipGraph : ComponentBase
 
     private static EdgeLayout CreateEdge(int x1, int y1, int x2, int y2, NodeLayout node)
     {
-        // A horizontal S-curve between the facing sides of the two nodes. The end stops short of the target so the
-        // arrow head isn't drawn under the node's border.
+        // The marker extends back along the path. Finish the S-curve before the marker's base so the stroke
+        // meets the center of the base, and stop short of the target to keep the tip clear of the node border.
         var targetX = x2 - 3;
-        var controlOffset = (targetX - x1) / 2;
-        var path = string.Create(CultureInfo.InvariantCulture, $"M{x1},{y1} C{x1 + controlOffset},{y1} {targetX - controlOffset},{y2} {targetX},{y2}");
+        var curveEndX = targetX - ArrowLeadInLength;
+        var controlOffset = (curveEndX - x1) / 2;
+        var path = string.Create(CultureInfo.InvariantCulture, $"M{x1},{y1} C{x1 + controlOffset},{y1} {curveEndX - controlOffset},{y2} {curveEndX},{y2} H{targetX}");
         return new EdgeLayout(path, node.Node.Type);
     }
 

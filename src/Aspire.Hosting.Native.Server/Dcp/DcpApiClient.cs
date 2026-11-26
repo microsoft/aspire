@@ -235,37 +235,32 @@ internal sealed class DcpApiClient : IAsyncDisposable
         }
         finally
         {
+            var running = _process is { HasExited: false };
             try
             {
-                if (_process is { HasExited: false } process)
-                {
-                    try
-                    {
-                        process.Kill(entireProcessTree: true);
-                    }
-                    catch (InvalidOperationException) when (process.HasExited)
-                    {
-                        // A normal exit racing Kill must not skip the drain.
-                    }
-                    using var forcedExit = new CancellationTokenSource(_options.CleanupTimeout, _options.TimeProvider);
-                    await process.WaitForExitStatusAsync().WaitAsync(forcedExit.Token).ConfigureAwait(false);
-                }
-                if (_output is not null)
+                if (!running && _output is not null)
                 {
                     await _output.WaitAsync(_options.CleanupTimeout, _options.TimeProvider).ConfigureAwait(false);
                 }
             }
             finally
             {
-                _process?.Dispose();
                 _connection?.Dispose();
                 if (_connection is null)
                 {
                     _client?.Dispose();
                 }
-                if (Directory.Exists(_directory.FullName))
+                if (running)
                 {
-                    _directory.Delete(recursive: true);
+                    _logger.LogDebug("DCP did not exit during cleanup; leaving it to exit with its monitored parent.");
+                }
+                else
+                {
+                    _process?.Dispose();
+                    if (Directory.Exists(_directory.FullName))
+                    {
+                        _directory.Delete(recursive: true);
+                    }
                 }
             }
         }

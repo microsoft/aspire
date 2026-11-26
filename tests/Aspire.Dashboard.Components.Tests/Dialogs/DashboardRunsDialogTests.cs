@@ -4,7 +4,6 @@
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -26,9 +25,6 @@ public class DashboardRunsDialogTests : DashboardTestContext
             new DateTimeOffset(2025, 1, 2, 12, 30, 0, TimeSpan.Zero),
             endedAtUtc: new DateTimeOffset(2025, 1, 2, 13, 30, 0, TimeSpan.Zero));
         var cut = RenderDialog([s_currentRun, historicalRun]);
-        // The row shows how long ago the recording started, so the tooltip gives only the exact time.
-        var expectedTooltip = FormatHelpers.FormatTooltipDateTime(Services.GetRequiredService<BrowserTimeProvider>(), historicalRun.StartedAtUtc);
-
         Assert.Equal(
             "Switch between the live view and read-only recordings of previous runs. Protect a recording from deletion to keep it when older recordings are automatically removed.",
             cut.Find(".runs-description").TextContent);
@@ -53,7 +49,7 @@ public class DashboardRunsDialogTests : DashboardTestContext
                 Assert.Equal("historical", row.GetAttribute("data-run-id"));
                 var select = row.QuerySelector(".run-select")!;
                 Assert.Equal("false", select.GetAttribute("aria-checked"));
-                Assert.Equal(expectedTooltip, select.GetAttribute("data-tooltip"));
+                Assert.Equal("1/2/2025 1:30:00 PM", select.GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
                 Assert.Equal("352 days ago", row.QuerySelector(".run-label")!.TextContent);
                 Assert.Equal("(1h)", row.QuerySelector(".run-description")!.TextContent);
                 Assert.Null(row.QuerySelector(".dashboard-run-indicator"));

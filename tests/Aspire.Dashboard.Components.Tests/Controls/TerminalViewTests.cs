@@ -353,7 +353,7 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal(Resources.TerminalStrings.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").GetAttribute("data-tooltip"));
         var items = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Items;
         Assert.NotNull(items);
-        Assert.Equal([new("97x38", "97\u00d738", 97, 38), new TerminalSizePreset("80x24", "80\u00d724", 80, 24)], items);
+        Assert.Equal([new("80x24", "80\u00d724", 80, 24), new TerminalSizePreset("97x38", "97\u00d738", 97, 38)], items);
         cut.Find(".terminal-fit").Click();
         Assert.Equal(new object?[] { 1 }, Assert.Single(module.Invocations, i => i.Identifier == "fitToContainer").Arguments);
 
@@ -382,7 +382,7 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Null(picker.Placeholder);
         Assert.Equal("97x38", picker.Value);
         Assert.NotNull(picker.Items);
-        Assert.Equal([new("97x38", "97\u00d738", 97, 38), new TerminalSizePreset("80x24", "80\u00d724", 80, 24)], picker.Items);
+        Assert.Equal([new("80x24", "80\u00d724", 80, 24), new TerminalSizePreset("97x38", "97\u00d738", 97, 38)], picker.Items);
     }
 
     [Fact]

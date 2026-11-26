@@ -51,7 +51,7 @@
 }
 
 ::deep .url-button-neutral {
-    line-height: inherit;
+    line-height: var(--resource-metadata-line-height, 18px);
 }
 
 ::deep.url-list {
@@ -70,12 +70,24 @@
     text-overflow: ellipsis;
 }
 
-/* Fluent sets the dialog insets inline; override them using the generated anchor to keep any +N button aligned. */
+/* Clear Fluent's inline insets so fallback placement can move the dialog across the anchor. */
 ::deep .url-overflow-popover::part(dialog) {
     position-anchor: var(--url-overflow-anchor);
-    top: anchor(bottom) !important;
-    right: anchor(right) !important;
-    bottom: auto !important;
-    left: auto !important;
-    position-try-fallbacks: flip-block;
+    inset: auto !important;
+    position-area: bottom span-left;
+    justify-self: end;
+    box-sizing: border-box;
+    position-try-fallbacks: flip-block, --url-overflow-scroll-above, --url-overflow-scroll-below;
+}
+
+/* Try the natural height below and above first. If neither fits, take the side with more
+   room: above only fits this minimum when the anchor's midpoint is in the lower half. */
+@position-try --url-overflow-scroll-above {
+    position-area: top span-left;
+    min-height: min(var(--content-list-popover-max-height), calc(50dvh - anchor-size(height) / 2));
+    max-height: min(var(--content-list-popover-max-height), 100%);
+}
+
+@position-try --url-overflow-scroll-below {
+    max-height: min(var(--content-list-popover-max-height), 100%);
 }

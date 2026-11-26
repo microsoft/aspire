@@ -218,26 +218,6 @@ aspire otel logs --dashboard-url {0}
         <target state="translated">フィードバック</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptIgnore">
-        <source>Don't ask again</source>
-        <target state="translated">今後は確認しない</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptMessage">
-        <source>We'd love your feedback on the new experience.</source>
-        <target state="translated">新しいエクスペリエンスについて、ぜひフィードバックをお寄せください。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptShare">
-        <source>Share feedback</source>
-        <target state="translated">フィードバックを共有する</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptTitle">
-        <source>Welcome to the new Aspire dashboard!</source>
-        <target state="translated">新しい Aspire ダッシュボードへようこそ!</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
         <target state="translated">アプリケーションの URL が見つかりませんでした</target>
@@ -1287,7 +1267,7 @@ Configure your app to export logs, traces, and metrics using [OTLP]({0}).</sourc
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrapOff">
         <source>Disable word wrap</source>
-        <target state="new">Disable word wrap</target>
+        <target state="translated">行の折り返しを無効にする</target>
         <note />
       </trans-unit>
     </body>

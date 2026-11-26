@@ -4,7 +4,6 @@
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<ControlsStrings> Loc
 
-@* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
 <span class="chart-filter-popover-container">
     <FluentPopover AnchorId="@AnchorId"
                    Opened="@Opened"

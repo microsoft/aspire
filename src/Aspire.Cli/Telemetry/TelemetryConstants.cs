@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared.Telemetry;
+
 namespace Aspire.Cli.Telemetry;
 
 /// <summary>
@@ -26,17 +28,17 @@ internal static class TelemetryConstants
         /// <summary>
         /// Tag for the exception type.
         /// </summary>
-        public const string ExceptionType = "exception.type";
+        public const string ExceptionType = AspireTelemetryBase.ExceptionTypeTagName;
 
         /// <summary>
         /// Tag for the exception message.
         /// </summary>
-        public const string ExceptionMessage = "exception.message";
+        public const string ExceptionMessage = AspireTelemetryBase.ExceptionMessageTagName;
 
         /// <summary>
         /// Tag for the exception stack trace.
         /// </summary>
-        public const string ExceptionStackTrace = "exception.stacktrace";
+        public const string ExceptionStackTrace = AspireTelemetryBase.ExceptionStackTraceTagName;
 
         /// <summary>
         /// Tag for the process ID.

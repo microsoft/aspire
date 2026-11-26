@@ -13,8 +13,6 @@
     max-height: 100vh;
     background-color: var(--colorNeutralBackground1);
     transition: transform 120ms ease-out;
-    --fluent-multi-splitter-bar-size: 5px;
-    --fluent-multi-splitter-background-color: var(--colorNeutralStroke2);
 }
 
 .terminal-dock.visible {
@@ -39,7 +37,7 @@
     gap: 2px;
     padding: 2px 4px;
     background-color: var(--colorNeutralBackground2);
-    border-top: 1px solid var(--colorNeutralStroke1);
+    padding-top: 3px;
     border-bottom: 1px solid var(--colorNeutralStroke1);
     flex: 0 0 auto;
     height: 36px;
@@ -265,9 +263,9 @@
 .terminal-dock > .terminal-dock-resize-handle {
     position: absolute;
     inset-inline: 0;
-    top: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+    top: calc((1px - var(--aspire-splitter-hit-size)) / 2);
+    height: var(--aspire-splitter-hit-size);
     z-index: 1;
-    margin: 0;
     touch-action: none;
 }
 

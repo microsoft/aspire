@@ -7,11 +7,6 @@
         <target state="translated">所有儀器</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsBackTo">
-        <source>Back to {0}</source>
-        <target state="translated">返回 {0}</target>
-        <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
-      </trans-unit>
       <trans-unit id="MetricsFilterResultsTitle">
         <source>Metrics matching "{0}"</source>
         <target state="translated">符合「{0}」的指標</target>
@@ -123,8 +118,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
-        <source>No metrics match the filter</source>
-        <target state="translated">沒有任何計量符合篩選條件</target>
+        <source>No metrics found</source>
+        <target state="new">No metrics found</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">

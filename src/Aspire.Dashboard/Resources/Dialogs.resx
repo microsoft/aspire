@@ -455,18 +455,6 @@
   <data name="DashboardFeedbackSwitchToLegacy" xml:space="preserve">
     <value>Switch to previous dashboard</value>
   </data>
-  <data name="DashboardFeedbackPromptTitle" xml:space="preserve">
-    <value>Welcome to the new Aspire dashboard!</value>
-  </data>
-  <data name="DashboardFeedbackPromptMessage" xml:space="preserve">
-    <value>We'd love your feedback on the new experience.</value>
-  </data>
-  <data name="DashboardFeedbackPromptShare" xml:space="preserve">
-    <value>Share feedback</value>
-  </data>
-  <data name="DashboardFeedbackPromptIgnore" xml:space="preserve">
-    <value>Don't ask again</value>
-  </data>
   <data name="SettingsRemoveAllButtonText" xml:space="preserve">
     <value>Remove all</value>
   </data>

@@ -119,7 +119,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
         using var readiness = new ProcessTestReadiness();
         await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("wait", readiness.Name), new ChildProcessOptions());
         await process.StartAsync(TestContext.Current.CancellationToken);
-        var identity = await readiness.ReadRuntimeAsync();
+        var identity = await readiness.ReadTargetAsync();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
@@ -135,7 +135,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
         using var readiness = new ProcessTestReadiness();
         await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("wait", readiness.Name), new ChildProcessOptions());
         await process.StartAsync(TestContext.Current.CancellationToken);
-        var identity = await readiness.ReadRuntimeAsync();
+        var identity = await readiness.ReadTargetAsync();
         using var observedProcess = Process.GetProcessById(identity.ProcessId);
 
         await process.DisposeAsync();
@@ -303,7 +303,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             }));
         var process = lifetime.Instance;
         await process.StartAsync(TestContext.Current.CancellationToken);
-        ProcessTestIdentity[] identities = ownedTree ? await readiness.ReadTreeAsync() : [await readiness.ReadRuntimeAsync()];
+        ProcessTestIdentity[] identities = ownedTree ? await readiness.ReadTreeAsync() : [await readiness.ReadTargetAsync()];
         cancellation.Cancel();
         var shutdown = dispose
             ? process.DisposeAsync().AsTask()
@@ -367,7 +367,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
                 }
             });
         await process.StartAsync(TestContext.Current.CancellationToken);
-        var identity = await readiness.ReadRuntimeAsync();
+        var identity = await readiness.ReadTargetAsync();
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => process.WaitForExitAsync(cancellation.Token))
@@ -470,7 +470,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
                 RequestGracefulShutdownAsync = (_, _) => Task.CompletedTask
             });
         await process.StartAsync(TestContext.Current.CancellationToken);
-        var identity = await readiness.ReadRuntimeAsync();
+        var identity = await readiness.ReadTargetAsync();
         cancellation.Cancel();
 
         var exception = await Assert.ThrowsAsync<AggregateException>(() => process.WaitForExitAsync(cancellation.Token));

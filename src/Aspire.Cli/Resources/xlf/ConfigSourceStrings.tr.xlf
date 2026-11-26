@@ -67,6 +67,11 @@
         <target state="translated">Makinenizde bir yapılandırma kaynağı algılandı. Bu kaynak, geliştirme deneyiminizi özelleştirmek için kuruluşların Aspire ayarlarını paylaşmasına olanak tanır.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FeatureDisabled">
+        <source>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</source>
+        <target state="new">Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</target>
+        <note>Do not translate "features.configSourceEnabled" or "true".</note>
+      </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
         <target state="translated">Git başlatılamadı. Bu yapılandırma kaynağını kullanmak için Git'in yüklü olduğundan ve PATH üzerinde kullanılabildiğinden emin olun.</target>

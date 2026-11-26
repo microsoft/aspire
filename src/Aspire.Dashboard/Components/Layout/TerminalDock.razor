@@ -6,16 +6,13 @@
    rather than unmounting it so the terminal keeps its renderer, measured cell metrics, and WebSocket. *@
 @if (_hasBeenOpened)
 {
-    <div class="terminal-dock fluent-multi-splitter @(_isVisible ? "visible" : "collapsed")"
+    <div class="terminal-dock @(_isVisible ? "visible" : "collapsed")"
          id="@_elementIdPrefix"
-         orientation="vertical"
          style="height: @(_heightPx)px;"
          inert="@(!_isVisible)"
          aria-hidden="@(_isVisible ? "false" : "true")"
          @ref="_dockElement">
-        @* Reuse Fluent's splitter visuals while retaining the dock's viewport-anchored resizing. *@
-        <div class="terminal-dock-resize-handle fluent-multi-splitter-bar"
-             status="resizable"
+        <div class="terminal-dock-resize-handle aspire-splitter-handle"
              role="separator"
              tabindex="0"
              aria-orientation="horizontal"

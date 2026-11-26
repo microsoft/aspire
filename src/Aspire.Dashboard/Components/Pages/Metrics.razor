@@ -15,15 +15,13 @@
 <PageTitle>
     @{
         string? additionalText;
-        if (PageViewModel.SelectedResource.Id is { ReplicaSetName: { } replicaSetName })
+        if (PageViewModel.SelectedInstrument is { } selectedInstrument)
         {
-            additionalText = PageViewModel.SelectedInstrument is { } selectedInstrument
-                ? $"{replicaSetName} - {selectedInstrument.Name}"
-                : replicaSetName;
+            additionalText = $"{selectedInstrument.ResourceView.Resource.ResourceKey.Name} - {selectedInstrument.Name}";
         }
         else
         {
-            additionalText = null;
+            additionalText = PageViewModel.SelectedResource.Id?.ReplicaSetName;
         }
     }
 
@@ -73,13 +71,13 @@
                 @if (PageViewModel.Instruments?.Count > 0)
                 {
                     // Collapsed property only allows us to show Panel1 (which is the metric selector)
-                    // but we want to only show Panel2 on mobile. So, hide the bar handle and reduce width to 0
-                    // on mobile.
+                    // but we want to only show Panel2 on mobile. Collapse the first pane; the shared styles hide its bar.
                     <div class="metrics-splitter" @ref="_metricsSplitterElement">
                     <FluentMultiSplitter Style="height:100%"
-                                         BarSize="@(ViewportInformation.IsDesktop ? "calc(var(--spacingHorizontalS) + var(--strokeWidthThin))" : "0")"
                                          OnResize="HandleMetricsSplitterResize">
                         <FluentMultiSplitterPane Size="@(ViewportInformation.IsDesktop ? _metricGroupsPaneSize : "0")"
+                                                 Max="@($"{InstrumentPaneMaxWidth}px")"
+                                                 Style="@($"max-width: {InstrumentPaneMaxWidth}px")"
                                                  Collapsed="@(!ViewportInformation.IsDesktop)">
                             @if (ViewportInformation.IsDesktop)
                             {
@@ -104,24 +102,22 @@
                                         <h3 class="meter-name-title">@resultsTitle</h3>
                                         @if (resultGroups.Count == 0)
                                         {
-                                            <p class="metrics-pinned-empty">@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMatchingInstruments)]</p>
+                                            <div class="aspire-pane-message">@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMatchingInstruments)]</div>
                                         }
                                         @RenderSections(resultGroups, EffectiveGroupBy != MetricGroupBy.Meter)
                                     }
-                                    else if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
+                                    else if (PageViewModel is { SelectedMeter: { } selectedMeter, SelectedInstrument: { } chartInstrument })
                                     {
                                         <ChartContainer
-                                            ResourceKey="@(PageViewModel.SelectedResource.Id.GetResourceKey())"
-                                            MeterName="@(PageViewModel.SelectedMeter)"
-                                            InstrumentName="@(PageViewModel.SelectedInstrument.Name)"
+                                            ResourceKey="@(OverviewResourceKey ?? chartInstrument.ResourceView.Resource.ResourceKey)"
+                                            MeterName="@selectedMeter"
+                                            InstrumentName="@chartInstrument.Name"
                                             Duration="PageViewModel.SelectedDuration.Id"
                                             ActiveView="@(PageViewModel.SelectedViewKind ?? Metrics.MetricViewKind.Graph)"
                                             OnViewChangedAsync="@OnViewChangedAsync"
                                             ShowRunningTotal="@PageViewModel.ShowRunningTotal"
                                             OnShowRunningTotalChangedAsync="@OnShowRunningTotalChangedAsync"
                                             ShowChangePerIntervalOption="true"
-                                            BackLabel="@GetBackLabel()"
-                                            OnBackAsync="@NavigateBackAsync"
                                             Resources="@_resources"
                                             PinResourceNames="@GetPinResourceNames()" />
                                     }
@@ -165,7 +161,7 @@
                 }
                 else if (PageViewModel.Instruments == null)
                 {
-                    <div class="aspire-empty-content metrics-empty-content">
+                    <div class="aspire-empty-content aspire-page-empty-content">
                         <TelemetryEmptyContent>
                             <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />
                             @if (ViewportInformation.IsDesktop)
@@ -181,7 +177,7 @@
                 }
                 else
                 {
-                    <div class="aspire-empty-content metrics-empty-content">
+                    <div class="aspire-empty-content aspire-page-empty-content">
                         <TelemetryEmptyContent>
                             <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />
                             @Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)]
@@ -252,9 +248,9 @@
                             aria-expanded="@(isCollapsed ? "false" : "true")"
                             @onclick="@(() => ToggleSection(sectionKey))">
                         <span class="metrics-section-title">@sectionKey</span>
-                        <span class="metrics-section-count">@instruments.Count</span>
+                        <span class="aspire-count-badge aspire-count-badge-compact">@instruments.Count</span>
                         <span class="metrics-section-rule" aria-hidden="true"></span>
-                        <FluentIcon Class="metrics-section-chevron" Value="@(isCollapsed ? (Icon)new Icons.Regular.Size16.ChevronDown() : new Icons.Regular.Size16.ChevronUp())" Color="Color.Custom" CustomColor="currentColor" />
+                        <FluentIcon Class="metrics-section-chevron" Value="@(isCollapsed ? (Icon)new Icons.Regular.Size16.ChevronRight() : new Icons.Regular.Size16.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
                     </button>
                 </h4>
             }
@@ -266,6 +262,7 @@
                                Instruments="@instruments"
                                Duration="@PageViewModel.SelectedDuration.Id"
                                ShowMeterName="@showMeterName"
+                               HighlightText="@PageViewModel.TextFilter.Trim()"
                                MaxCount="@maxCount"
                                GetInstrumentUrl="@GetInstrumentUrl"
                                PinResourceNames="@GetPinResourceNames()" />
@@ -277,7 +274,7 @@
     {
         @if (ResourcesLayout is null)
         {
-            <ResourceSelect Resources="@(_selectionResourceViewModels ?? _resourceViewModels)"
+            <ResourceSelect Resources="@_resourceViewModels"
                             AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
                             @bind-SelectedResource="PageViewModel.SelectedResource"
                             @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
@@ -309,7 +306,7 @@
         <SignalsActionsDisplay IsPaused="@PauseManager.AreMetricsPaused(out _)"
                               OnPausedChanged="@PauseManager.SetMetricsPaused"
                               HandleClearSignal="ClearMetrics"
-                              SelectedResource="@PageViewModel.SelectedResource"/>
+                              SelectedResource="@GetSignalsResource()"/>
 
         <div class="toolbar-end">
             <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>

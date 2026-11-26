@@ -28,6 +28,7 @@ public sealed class ProcessInvocationOptionsTests
             IsolatedRestorePackagesDirectory = new DirectoryInfo(Path.Combine(Path.GetFullPath("."), "packages")),
             LaunchProfile = "E2E",
             StartDebugSession = true,
+            DisableExtensionLaunch = true,
             Debug = true,
             SuppressLogging = true,
             // Non-default: this property initializes to true, so false is the "changed" value.

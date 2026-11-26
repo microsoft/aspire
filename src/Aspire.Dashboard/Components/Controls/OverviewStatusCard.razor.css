@@ -45,13 +45,8 @@
     color: var(--colorNeutralForeground3);
 }
 
-.overview-status-grid ::deep td .button-container fluent-button,
-.overview-status-grid ::deep td .button-container fluent-button::part(control) {
-    width: var(--status-row-height);
-    min-width: var(--status-row-height);
-    height: var(--status-row-height);
-    min-height: var(--status-row-height);
-    max-height: var(--status-row-height);
+.overview-status-grid ::deep td .button-container {
+    --aspire-grid-icon-button-size: var(--status-row-height);
 }
 
 .overview-status-grid ::deep td:first-child {
