@@ -1,3 +1,12 @@
+.genai-visualizer-container ::deep .fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar {
+    /* Keep the full hit target between the panes: 4px on each side of the 1px line. */
+    margin-inline: 0;
+}
+
+.genai-visualizer-container ::deep .fluent-multi-splitter > .fluent-multi-splitter-bar:not(:focus-visible)::before {
+    opacity: 0;
+}
+
 ::deep .span-messages-container {
     background: var(--main-container-background-color);
     color: var(--colorNeutralForeground1);
