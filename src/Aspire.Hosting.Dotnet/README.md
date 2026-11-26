@@ -287,8 +287,10 @@ Its [state converter](https://github.com/microsoft/testfx/blob/v4.4.0/src/Platfo
 also collapses error/cancellation into `Failed`. Those reports retain
 Failed: this integration cannot recover per-test identities or categories lost upstream.
 Summary counters are reconciled without inferring which failed row timed out.
-Run-level errors fail collection without manufacturing individual error results, and
-unknown/progress-only test states fail explicitly.
+A failed TRX run summary causes a collection error only when no individual failing
+outcome explains it, without manufacturing individual error results. With failing cases,
+collection can complete successfully while the overall test outcome fails.
+Unknown/progress-only test states fail explicitly.
 
 Raw reports and attachments within that fresh report tree remain in the resource directory.
 Paths referenced by the TRX are not followed; symbolic links/reparse points in either tree
