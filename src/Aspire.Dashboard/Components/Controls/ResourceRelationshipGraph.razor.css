@@ -45,8 +45,7 @@ a.relationship-graph-node {
 }
 
 a.relationship-graph-node:hover rect {
-    fill: var(--colorNeutralBackground1Hover);
-    stroke: var(--colorBrandStroke1);
+    fill: var(--property-grid-row-hover-color);
 }
 
 a.relationship-graph-node:focus-visible {

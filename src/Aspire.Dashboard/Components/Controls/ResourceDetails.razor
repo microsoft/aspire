@@ -196,19 +196,8 @@
                                    HighlightText="@_filter"
                                    TextVisualizerTitle="@context.Name">
                             <ContentBeforeValue>
-                                @if (context.HealthStatus is null)
-                                {
-                                    <AspireProgressRing Width="16px"
-                                                        Style="display: inline-block;"
-                                                        Class="severity-icon"
-                                                        AriaLabel="@Loc[nameof(Aspire.Dashboard.Resources.Resources.WaitingForHealthDataMessage)]" />
-                                }
-                                else
-                                {
-                                    (Icon? icon, Color color) = ResourceIconHelpers.GetHealthStatusIcon(context.HealthStatus);
-
-                                    <FluentIcon Value="@icon" Color="@color" Class="severity-icon"/>
-                                }
+                                @{ var (icon, color) = ResourceIconHelpers.GetHealthStatusIcon(context.HealthStatus); }
+                                <FluentIcon Value="@icon" Color="@color" Class="severity-icon" />
                             </ContentBeforeValue>
                         </GridValue>
                     </AspireTemplateColumn>

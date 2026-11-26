@@ -339,7 +339,7 @@
             </a>
             <div class="resource-tag-actions">
                 <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
-                                  ButtonClass="resource-tag-action"
+                                  ButtonClass="resource-tag-header-button resource-tag-action"
                                   Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
                                   ItemsProvider="@(() => GetPaneGroupMenuItems(groupKey, groupName, isTag: actionTag is not null))"
                                   RefreshItemsWhileOpen="false"
@@ -347,13 +347,15 @@
                                       ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]
                                       : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions), groupName])" />
             </div>
-            <button type="button"
-                    class="resource-row-toggle @(isCollapsed ? "collapsed" : null)"
-                    aria-expanded="@((!isCollapsed).ToString().ToLowerInvariant())"
-                    aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupToggle)], groupName)"
-                    @onclick="@(() => ToggleCollapsedGroup(groupKey))">
-                <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
-            </button>
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          Class="@($"resource-tag-header-button resource-row-toggle {(isCollapsed ? "collapsed" : null)}")"
+                          IconOnly="true"
+                          role="button"
+                          aria-expanded="@((!isCollapsed).ToString().ToLowerInvariant())"
+                          aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupToggle)], groupName)"
+                          OnClick="@(() => ToggleCollapsedGroup(groupKey))">
+                <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
+            </FluentButton>
         </div>
     };
 
@@ -768,7 +770,7 @@
         {
             <span class="resource-header-sep" aria-hidden="true">·</span>
             <span class="resource-header-urls">
-                <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@urls" />
+                <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@urls" UseNeutralOverflowButton="true" />
             </span>
         }
     }
@@ -990,59 +992,57 @@
                 }
             </a>
             @{ RenderRowErrorLink(__builder, item); }
-            @if (!resource.IsParameter)
-            {
-                @* Sibling links, not nested anchors: opening an endpoint must not change the row selection. *@
-                <div class="resource-row-wide-metadata">
-                    <span class="resource-row-health">
-                        <span class="resource-row-start-time">
-                            @if (GetRowTime(resource) is { } rowTime)
-                            {
-                                var rowTimeTooltip = GetRowTimeTooltip(rowTime);
-                                <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
-                                <time datetime="@rowTime.Time.ToString("O", CultureInfo.InvariantCulture)"
-                                      tabindex="0"
-                                      aria-label="@GetRowTimeDescription(rowTime, rowTimeTooltip)"
-                                      data-tooltip="@rowTimeTooltip"
-                                      data-tooltip-positioning="above">
-                                    @* The verb and a short age ("Started 7m ago"); the tooltip adds the exact time. *@
-                                    <span class="resource-row-started-age">@GetRowTimeText(rowTime)</span>
-                                </time>
-                            }
-                        </span>
-                    </span>
-                    <div class="resource-row-endpoints">
-                        @if (item.Urls.Count > 0)
+            @* Sibling links, not nested anchors: opening an endpoint must not change the row selection. *@
+            <div class="resource-row-wide-metadata" aria-hidden="@(resource.IsParameter ? "true" : null)">
+                <span class="resource-row-health">
+                    <span class="resource-row-start-time">
+                        @if (!resource.IsParameter && GetRowTime(resource) is { } rowTime)
                         {
-                            @* The resources grid's URLs column shows as many URLs as fit. Links and buttons don't select the row
-                               (see ResourcesLayout.razor.js). *@
-                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" UseNeutralOverflowButton="true" MaxRenderedItems="@item.Urls.Count" />
+                            var rowTimeTooltip = GetRowTimeTooltip(rowTime);
+                            <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
+                            <time datetime="@rowTime.Time.ToString("O", CultureInfo.InvariantCulture)"
+                                  tabindex="0"
+                                  aria-label="@GetRowTimeDescription(rowTime, rowTimeTooltip)"
+                                  data-tooltip="@rowTimeTooltip"
+                                  data-tooltip-positioning="above">
+                                @* The verb and a short age ("Started 7m ago"); the tooltip adds the exact time. *@
+                                <span class="resource-row-started-age">@GetRowTimeText(rowTime)</span>
+                            </time>
                         }
-                    </div>
-                    @* What ran the resource ("alpine:latest", "Api.csproj"). The type is in the name column, next to the
-                       state dot, so this column is the source alone. *@
-                    <span class="resource-row-source">
-                        @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
+                        else
                         {
-                            <span class="resource-row-source-value" tabindex="0"
-                                  data-tooltip="@source.Tooltip"
-                                  data-tooltip-positioning="above"
-                                  aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {source.Tooltip}")">@source.Value</span>
+                            <span class="empty-data"></span>
                         }
                     </span>
+                </span>
+                <div class="resource-row-endpoints">
+                    @if (!resource.IsParameter && item.Urls.Count > 0)
+                    {
+                        @* The resources grid's URLs column shows as many URLs as fit. Links and buttons don't select the row
+                           (see ResourcesLayout.razor.js). *@
+                        <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" UseNeutralOverflowButton="true" MaxRenderedItems="@item.Urls.Count" />
+                    }
+                    else
+                    {
+                        <span class="empty-data"></span>
+                    }
                 </div>
-            }
-            else
-            {
-                @* Parameters reserve the same quiet tracks without inventing health, endpoints, or start times. *@
-                <div class="resource-row-wide-metadata" aria-hidden="true">
-                    <span class="resource-row-health">
-                        <span class="resource-row-start-time"></span>
-                    </span>
-                    <div class="resource-row-endpoints"></div>
-                    <span class="resource-row-source"></span>
-                </div>
-            }
+                @* What ran the resource ("alpine:latest", "Api.csproj"). The type is in the name column, next to the
+                   state dot, so this column is the source alone. *@
+                <span class="resource-row-source">
+                    @if (!resource.IsParameter && ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
+                    {
+                        <span class="resource-row-source-value" tabindex="0"
+                              data-tooltip="@source.Tooltip"
+                              data-tooltip-positioning="above"
+                              aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {source.Tooltip}")">@source.Value</span>
+                    }
+                    else
+                    {
+                        <span class="empty-data"></span>
+                    }
+                </span>
+            </div>
             @if (!resource.IsParameter && GetTelemetryResource(resource) is { } activityResource)
             {
                 <ResourcePaneInsights Layout="@this" ResourceKey="@activityResource.ResourceKey" ResourceName="@item.Name" />
