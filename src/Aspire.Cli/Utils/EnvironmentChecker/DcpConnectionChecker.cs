@@ -245,7 +245,7 @@ internal sealed class DcpConnectionChecker(
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var sessionDirectory = temporaryStorage.CreateTempSubdirectory("dcpdoc-").FullName;
+            var sessionDirectory = temporaryStorage.CreateTempSubdirectory("dcp-").FullName;
             var kubeconfigPath = Path.Combine(sessionDirectory, "kubeconfig");
             var dcpExecutablePath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
             var output = new OutputCollector();

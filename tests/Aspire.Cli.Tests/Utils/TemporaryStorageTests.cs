@@ -19,7 +19,7 @@ public class TemporaryStorageTests(ITestOutputHelper output)
         var session = Path.TrimEndingDirectorySeparator(storage.GetTempPath());
 
         Assert.Equal(Path.Combine(home, "tmp"), Path.GetDirectoryName(session));
-        Assert.Matches("^s-[a-z0-9]{8}\\.[a-z0-9]{3}$", Path.GetFileName(session));
+        Assert.Matches("^[a-z0-9]{8}\\.[a-z0-9]{3}$", Path.GetFileName(session));
         Assert.Equal(session, directory.Parent!.FullName);
         Assert.StartsWith("fixture-", directory.Name);
         Assert.Equal(session, Path.GetDirectoryName(file));

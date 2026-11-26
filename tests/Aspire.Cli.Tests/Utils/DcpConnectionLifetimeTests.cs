@@ -94,7 +94,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             Assert.False(ProcessStartTimeHelper.IsProcessRunning(identity.Value.ProcessId, identity.Value.StartTime));
             Assert.NotNull(sessionDirectory);
             Assert.Equal(Path.TrimEndingDirectorySeparator(storage.GetTempPath()), Path.GetDirectoryName(sessionDirectory));
-            Assert.StartsWith("dcpdoc-", Path.GetFileName(sessionDirectory), StringComparison.Ordinal);
+            Assert.StartsWith("dcp-", Path.GetFileName(sessionDirectory), StringComparison.Ordinal);
             Assert.False(Directory.Exists(sessionDirectory));
         }
         finally
@@ -105,7 +105,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             }
             if (sessionDirectory is not null && Directory.Exists(sessionDirectory))
             {
-                Assert.StartsWith("dcpdoc-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
+                Assert.StartsWith("dcp-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
                 Directory.Delete(sessionDirectory, recursive: true);
             }
         }
@@ -171,7 +171,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             identities.Add(tree[1]);
             processes.Add(Process.GetProcessById(tree[1].ProcessId));
             sessionDirectory = await File.ReadAllTextAsync(sessionDirectoryFile, TestContext.Current.CancellationToken);
-            Assert.StartsWith("dcpdoc-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
+            Assert.StartsWith("dcp-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
             if (delayHandoff)
             {
                 // Exceed the checker's 20-second probe deadline without advancing the lifetime test
@@ -247,7 +247,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
 
             if (sessionDirectory is not null)
             {
-                Assert.StartsWith("dcpdoc-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
+                Assert.StartsWith("dcp-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
                 if (Directory.Exists(sessionDirectory))
                 {
                     Directory.Delete(sessionDirectory, recursive: true);
