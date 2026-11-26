@@ -601,10 +601,12 @@
 
     private void RenderHeaderIcon(RenderTreeBuilder __builder, bool compact)
     {
+        const string iconWidth = "20px";
+
         if (CurrentTab == ResourceTab.Parameters)
         {
             <span class="resource-header-icon neutral">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Default" />
             </span>
         }
         else if (SelectedResource is { } selected)
@@ -612,12 +614,12 @@
             var iconColor = ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(selected));
             if (compact)
             {
-                RenderResourceIcon(__builder, selected, iconColor);
+                RenderResourceIcon(__builder, selected, iconColor, iconWidth, IconSize.Size20);
             }
             else
             {
                 <span class="resource-header-icon">
-                    <FluentIcon Width="20px"
+                    <FluentIcon Width="@iconWidth"
                                 Color="Color.Custom"
                                 CustomColor="@iconColor"
                                 Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
@@ -628,7 +630,7 @@
         else if (SelectedTelemetryOnlyResource is { } telemetryOnly)
         {
             <span class="resource-header-icon">
-                <FluentIcon Width="20px"
+                <FluentIcon Width="@iconWidth"
                             Color="Color.Custom"
                             CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.Name)"
                             Value="@(new Icons.Regular.Size20.DataUsage())" />
@@ -639,24 +641,24 @@
             <span class="resource-header-icon">
                 @if (_selectedItems.All(item => item.Resource is { IsParameter: true }))
                 {
-                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
+                    <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
                 }
                 else
                 {
-                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
+                    <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
                 }
             </span>
         }
         else if (SelectedResourceName is not null && _isLoaded)
         {
             <span class="resource-header-icon neutral">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.QuestionCircle())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.QuestionCircle())" Color="Color.Default" />
             </span>
         }
         else
         {
             <span class="resource-header-icon scope">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
+                <FluentIcon Width="@iconWidth" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
             </span>
         }
     }
@@ -1130,17 +1132,17 @@
             ? "var(--colorNeutralForeground3)"
             : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(item.Name)})";
 
-        RenderResourceIcon(__builder, item.Resource, iconColor);
+        RenderResourceIcon(__builder, item.Resource, iconColor, "16px", IconSize.Size16);
     }
 
-    private void RenderResourceIcon(RenderTreeBuilder __builder, ResourceViewModel resource, string iconColor)
+    private void RenderResourceIcon(RenderTreeBuilder __builder, ResourceViewModel resource, string iconColor, string width, IconSize iconSize)
     {
         <span class="resource-row-icon">
             <span class="resource-row-glyph">
-                <FluentIcon Width="16px"
+                <FluentIcon Width="@width"
                             Color="Color.Custom"
                             CustomColor="@iconColor"
-                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
+                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, iconSize)" />
             </span>
             <PersistentContainerBadge Resource="@resource" />
         </span>

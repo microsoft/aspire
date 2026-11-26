@@ -889,9 +889,12 @@
     justify-content: center;
 }
 
-.resource-row.selected:not(.resource-row-unavailable) .resource-row-icon,
-.resource-picker-button .resource-row-icon {
+.resource-row.selected:not(.resource-row-unavailable) .resource-row-icon {
     background: var(--resource-brand-soft);
+}
+
+.resource-picker-button .resource-row-icon {
+    background: transparent;
 }
 
 /* The "All resources" row clears the selection, so it's separated from the resources it stands for. */
@@ -1847,7 +1850,7 @@
     gap: var(--aspire-space-2);
 }
 
-:is(.density-compact, .resource-picker-button) .resource-row-icon {
+.density-compact .resource-row-icon {
     border-radius: 6px;
 }
 
