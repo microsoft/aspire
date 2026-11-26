@@ -116,7 +116,7 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public async Task FollowSpansAsync_WithInvalidResourceName_ReturnsNoSpans()
+    public async Task FollowSpansAsync_WithUnknownResourceName_WaitsUntilCanceled()
     {
         using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var repository = repositoryContext.Repository;
@@ -124,23 +124,16 @@ public class TelemetryApiServiceTests
 
         var service = CreateService(repository);
 
-        var receivedItems = new List<string>();
-        try
-        {
-            await foreach (var item in service.FollowSpansAsync(["nonexistent-service"], null, null, null).DefaultTimeout())
-            {
-                receivedItems.Add(item);
-            }
-        }
-        catch (TimeoutException)
-        {
-        }
-
-        Assert.Empty(receivedItems);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        await using var enumerator = service.FollowSpansAsync(["nonexistent-service"], null, null, null, cancellation.Token).GetAsyncEnumerator();
+        var next = enumerator.MoveNextAsync().AsTask();
+        Assert.False(next.IsCompleted);
+        await cancellation.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
     }
 
     [Fact]
-    public async Task FollowLogsAsync_WithInvalidResourceName_ReturnsNoLogs()
+    public async Task FollowLogsAsync_WithUnknownResourceName_WaitsUntilCanceled()
     {
         using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var repository = repositoryContext.Repository;
@@ -148,19 +141,12 @@ public class TelemetryApiServiceTests
 
         var service = CreateService(repository);
 
-        var receivedItems = new List<string>();
-        try
-        {
-            await foreach (var item in service.FollowLogsAsync(["nonexistent-service"], null, null, null, default).DefaultTimeout())
-            {
-                receivedItems.Add(item);
-            }
-        }
-        catch (TimeoutException)
-        {
-        }
-
-        Assert.Empty(receivedItems);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        await using var enumerator = service.FollowLogsAsync(["nonexistent-service"], null, null, null, cancellation.Token).GetAsyncEnumerator();
+        var next = enumerator.MoveNextAsync().AsTask();
+        Assert.False(next.IsCompleted);
+        await cancellation.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
     }
 
     [Theory]

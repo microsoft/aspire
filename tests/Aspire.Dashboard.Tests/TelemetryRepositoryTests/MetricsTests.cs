@@ -2052,25 +2052,33 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         const int previousKnownAttributeValuesPerKeyLimit = 10_000;
         var dimensionCountPerView = (previousKnownAttributeValuesPerKeyLimit / 2) + 1;
         using var repositoryContext = await CreateRepositoryAsync();
+        var timestamp = DateTimeToUnixNanoseconds(s_testTime);
         var resourceMetrics = Enumerable.Range(0, 2)
-            .Select(viewIndex => new ResourceMetrics
+            .Select(viewIndex =>
             {
-                Resource = CreateResource(instanceId: $"instance-{viewIndex}"),
-                ScopeMetrics =
+                // A single metric per view still crosses the old merged limit, without validating
+                // the same instrument thousands of times for separately wrapped points.
+                var metric = CreateSumMetric("test", s_testTime);
+                metric.Sum.DataPoints.Clear();
+                for (var dimensionIndex = 0; dimensionIndex < dimensionCountPerView; dimensionIndex++)
                 {
-                    new ScopeMetrics
+                    metric.Sum.DataPoints.Add(new NumberDataPoint
                     {
-                        Scope = CreateScope(name: "test-meter"),
-                        Metrics =
+                        AsInt = 1,
+                        StartTimeUnixNano = timestamp,
+                        TimeUnixNano = timestamp,
+                        Attributes =
                         {
-                            Enumerable.Range(0, dimensionCountPerView)
-                                .Select(dimensionIndex => CreateSumMetric(
-                                    metricName: "test",
-                                    startTime: s_testTime,
-                                    attributes: [KeyValuePair.Create("key", $"value-{viewIndex}-{dimensionIndex:D5}")]))
+                            new KeyValue { Key = "key", Value = new AnyValue { StringValue = $"value-{viewIndex}-{dimensionIndex:D5}" } }
                         }
-                    }
+                    });
                 }
+
+                return new ResourceMetrics
+                {
+                    Resource = CreateResource(instanceId: $"instance-{viewIndex}"),
+                    ScopeMetrics = { new ScopeMetrics { Scope = CreateScope(name: "test-meter"), Metrics = { metric } } }
+                };
             });
         var addContext = new AddContext();
         await repositoryContext.Repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics> { resourceMetrics });

@@ -42,7 +42,6 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
     public async Task ExpiredEntryReturnsNull()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        // Force very small expiry window (1 second)
         var cache = CreateCache(workspace, cfg =>
         {
             cfg["PackageSearchCacheExpirySeconds"] = "1"; // expiry window
@@ -51,8 +50,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         var key = "query=bar|prerelease=False|take=10|skip=0|nugetConfigHash=def|cliVersion=1.0";
 
         await cache.SetAsync(key, "RESULT-B", CancellationToken.None).DefaultTimeout();
-        // Wait slightly over 1 second so entry expires
-        await Task.Delay(TimeSpan.FromSeconds(2)).DefaultTimeout();
+        BackdateEntry(workspace);
 
         var after = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.Null(after);
@@ -67,22 +65,17 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
             cfg["PackageSearchCacheExpirySeconds"] = "60";
             cfg["PackageSearchMaxCacheAgeSeconds"] = "3600";
         });
-        var diskPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "nuget-search");
         var key = "query=baz|prerelease=False|take=10|skip=0|nugetConfigHash=ghi|cliVersion=1.0";
 
         await cache.SetAsync(key, "OLD", CancellationToken.None).DefaultTimeout();
-        // Slight delay to ensure different timestamp
-        await Task.Delay(50);
+        BackdateEntry(workspace);
         await cache.SetAsync(key, "NEW", CancellationToken.None).DefaultTimeout();
+        Assert.Equal(2, GetEntries(workspace).Length);
 
         var val = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
         Assert.Equal("NEW", val);
 
-        // Ensure only one valid (newest) file remains for the key
-        var hash = GetHashForKey(key);
-        var files = new DirectoryInfo(diskPath).Exists ? Directory.GetFiles(diskPath, $"{hash}.*.json") : Array.Empty<string>();
-        // we allow old file possibly deleted; accept >=1; ensure newest content returned earlier
-        Assert.True(files.Length >= 1);
+        Assert.Single(GetEntries(workspace));
     }
 
     [Fact]
@@ -112,18 +105,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         var key = "query=cleanup|prerelease=False|take=10|skip=0|nugetConfigHash=mno|cliVersion=1.0";
         await cache.SetAsync(key, "VALUE-X", CancellationToken.None).DefaultTimeout();
 
-        // Manually adjust timestamp older than max age by renaming file
-        var diskPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "nuget-search");
-        var hash = GetHashForKey(key);
-        var files = Directory.GetFiles(diskPath, $"{hash}.*.json");
-        Assert.Single(files);
-        var current = files[0];
-        var nameNoExt = Path.GetFileNameWithoutExtension(current);
-        var parts = nameNoExt.Split('.');
-        Assert.Equal(2, parts.Length);
-        var oldUnix = DateTimeOffset.UtcNow.AddSeconds(-5).ToUnixTimeSeconds();
-        var oldName = Path.Combine(diskPath, $"{hash}.{oldUnix}.json");
-        File.Move(current, oldName, overwrite: true);
+        var oldName = BackdateEntry(workspace);
 
         // Trigger Get which should treat it as too old and delete
         var val = await cache.GetAsync(key, CancellationToken.None).DefaultTimeout();
@@ -131,10 +113,21 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(oldName));
     }
 
-    private static string GetHashForKey(string key)
+    private static string[] GetEntries(TemporaryWorkspace workspace)
     {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        var bytes = System.Text.Encoding.UTF8.GetBytes(key);
-        return Convert.ToHexString(sha.ComputeHash(bytes));
+        var diskPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "nuget-search");
+        return Directory.GetFiles(diskPath, "*.json");
+    }
+
+    private static string BackdateEntry(TemporaryWorkspace workspace)
+    {
+        // Cache age comes from the filename (<hash>.<Unix seconds>.json), not filesystem metadata.
+        var entry = Assert.Single(GetEntries(workspace));
+        var name = Path.GetFileNameWithoutExtension(entry);
+        var hash = name[..name.LastIndexOf('.')];
+        var oldUnix = DateTimeOffset.UtcNow.AddSeconds(-5).ToUnixTimeSeconds();
+        var oldName = Path.Combine(Path.GetDirectoryName(entry)!, $"{hash}.{oldUnix}.json");
+        File.Move(entry, oldName);
+        return oldName;
     }
 }
