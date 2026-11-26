@@ -318,7 +318,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         doubleFirst = true;
         // Tick the polling timer without changing the displayed clock to isolate
         // a changed resource from the separate renewal of all active URL windows.
-        timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
+        await AdvanceTimersAsync(ResourcesLayout.s_paneActivityRefreshInterval);
         foreach (var component in changed)
         {
             component.WaitForAssertion(() => Assert.Equal("40", component.Find(".resource-row-insight-requests span").TextContent));
@@ -334,11 +334,10 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         });
         var href = changed[0].Find(".resource-row-insight-requests").GetAttribute("href");
         clock.UtcNow += TimeSpan.FromSeconds(14);
-        timers.Advance(TimeSpan.FromSeconds(14));
-        await cut.InvokeAsync(() => { });
+        await AdvanceTimersAsync(TimeSpan.FromSeconds(14));
         Assert.Equal(2, Volatile.Read(ref calls));
         clock.UtcNow += TimeSpan.FromSeconds(1);
-        timers.Advance(TimeSpan.FromSeconds(1));
+        await AdvanceTimersAsync(TimeSpan.FromSeconds(1));
         changed[0].WaitForAssertion(() =>
         {
             Assert.Equal(3, Volatile.Read(ref calls));
@@ -346,7 +345,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         });
         await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         clock.UtcNow += TimeSpan.FromMinutes(6);
-        timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
+        await AdvanceTimersAsync(ResourcesLayout.s_paneActivityRefreshInterval);
         WaitForInsightCount(0);
         await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         var beforeHidden = Volatile.Read(ref calls);
@@ -354,8 +353,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         doubleFirst = false;
         await SeedAsync("fresh", names);
         clock.UtcNow += TimeSpan.FromSeconds(30);
-        timers.Advance(TimeSpan.FromSeconds(30));
-        await cut.InvokeAsync(() => { });
+        await AdvanceTimersAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(beforeHidden, Volatile.Read(ref calls));
         await cut.InvokeAsync(() => cut.Instance.SetPaneActivityVisible(true));
         WaitForInsightCount(2);
@@ -368,6 +366,10 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         timers.Advance(TimeSpan.FromMinutes(1));
         Assert.Equal(beforeHidden + 1, Volatile.Read(ref calls));
         Assert.Equal(1, maximumActive);
+
+        // A renderer barrier can't drain a tick that the polling loop hasn't dispatched yet.
+        // Advance on the renderer so the polling loop handles each hidden tick before we resume.
+        Task AdvanceTimersAsync(TimeSpan elapsed) => cut.InvokeAsync(() => timers.Advance(elapsed));
 
         void WaitForInsightCount(int count)
         {
