@@ -1426,18 +1426,28 @@ public static class ResourceExtensions
     /// container runtimes that write the archive and by <see cref="ContainerImageReference"/>, which hands
     /// the path to consumers.
     /// </summary>
-    /// <param name="outputPath">The output directory path.</param>
+    /// <param name="outputPath">The output directory path, or the archive file path.</param>
     /// <param name="imageName">The image name. May be registry-qualified and may include the tag.</param>
     /// <param name="imageTag">The image tag, when it is not already part of <paramref name="imageName"/>.</param>
-    /// <returns>The full path to the archive file with .tar extension.</returns>
+    /// <returns>The full path to the archive file.</returns>
     /// <remarks>
     /// Producers and consumers must agree on this path, otherwise the archive is written to one location
     /// and looked up at another. Callers supply the image name in one of two shapes — combined
     /// (<c>myapp:latest</c>) or split (<c>myapp</c> + <c>latest</c>) — and both must resolve identically,
     /// which they do because <c>:</c> flattens to the same separator the split form joins with.
+    /// <para>
+    /// An <paramref name="outputPath"/> that names a file (see <see cref="DotnetProgramPublishing.IsExplicitArchiveOutputPath"/>)
+    /// is the archive itself, so .NET program and Dockerfile publishing interpret <c>OutputPath</c> the same way.
+    /// A directory receives <c>&lt;image-name&gt;[-&lt;tag&gt;].tar</c>.
+    /// </para>
     /// </remarks>
     internal static string GetContainerImageArchivePath(string outputPath, string imageName, string? imageTag = null)
     {
+        if (DotnetProgramPublishing.IsExplicitArchiveOutputPath(outputPath))
+        {
+            return outputPath;
+        }
+
         var fileName = string.IsNullOrEmpty(imageTag)
             ? $"{FlattenContainerImageName(imageName)}.tar"
             : $"{FlattenContainerImageName(imageName)}-{FlattenContainerImageName(imageTag)}.tar";
@@ -1449,6 +1459,42 @@ public static class ResourceExtensions
     /// file-name-safe segment, so that neither a repository segment nor the tag turns into a directory.
     /// </summary>
     internal static string FlattenContainerImageName(string imageName) => imageName.Replace('/', '-').Replace(':', '-');
+
+    /// <summary>
+    /// Splits an image reference such as <c>myapp:1.0</c> or <c>localhost:5000/team/myapp:1.0</c> into its
+    /// name and tag.
+    /// </summary>
+    /// <remarks>
+    /// Only a <c>:</c> after the last <c>/</c> separates the tag, so a registry port such as
+    /// <c>localhost:5000/myapp</c> stays part of the name. A digest reference (<c>myapp@sha256:...</c>)
+    /// has no tag and is returned unchanged.
+    /// </remarks>
+    internal static (string ImageName, string? ImageTag) SplitContainerImageNameAndTag(string imageReference)
+    {
+        if (imageReference.Contains('@'))
+        {
+            return (imageReference, null);
+        }
+
+        var tagSeparator = imageReference.LastIndexOf(':');
+        return tagSeparator > imageReference.LastIndexOf('/')
+            ? (imageReference[..tagSeparator], imageReference[(tagSeparator + 1)..])
+            : (imageReference, null);
+    }
+
+    /// <summary>
+    /// Gets the local image name and tag that container image builds use, applying the defaults when the
+    /// container build options callbacks do not set them.
+    /// </summary>
+    /// <remarks>
+    /// The image builder and <see cref="ContainerImageReference"/> both use this, so the archive a build
+    /// writes and the path handed to consumers come from the same name and tag.
+    /// </remarks>
+    [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    internal static (string ImageName, string ImageTag) GetLocalImageNameAndTag(this ContainerBuildOptionsCallbackContext context)
+    {
+        return (context.LocalImageName ?? context.Resource.Name.ToLowerInvariant(), context.LocalImageTag ?? "latest");
+    }
 
     /// <summary>
     /// Gets a logger for the specified resource using the provided service provider.

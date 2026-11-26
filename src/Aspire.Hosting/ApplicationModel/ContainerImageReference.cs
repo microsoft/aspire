@@ -60,7 +60,7 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
             {
                 if (!string.IsNullOrEmpty(buildOptionsContext.OutputPath))
                 {
-                    var imageName = buildOptionsContext.LocalImageName ?? Resource.Name.ToLowerInvariant();
+                    var (imageName, imageTag) = buildOptionsContext.GetLocalImageNameAndTag();
                     if (Resource.SupportsDotnetProgramPublishing())
                     {
                         // .NET SDK publishing follows the SDK's archive naming whether or not container
@@ -68,7 +68,8 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
                         return DotnetProgramPublishing.GetArchiveOutputPath(buildOptionsContext.OutputPath, imageName);
                     }
 
-                    var imageTag = buildOptionsContext.LocalImageTag;
+                    // Dockerfile archive builds tag the image with the same local name and tag, and the
+                    // container runtimes derive the archive file from that reference with this same helper.
                     return ResourceExtensions.GetContainerImageArchivePath(buildOptionsContext.OutputPath, imageName, imageTag);
                 }
             }

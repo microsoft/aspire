@@ -273,26 +273,22 @@ internal sealed class ResourceContainerImageManager(
         IResource resource,
         CancellationToken cancellationToken)
     {
-        var options = new ResolvedContainerBuildOptions
-        {
-            LocalImageName = resource.Name,
-            LocalImageTag = "latest"
-        };
-
         var context = await resource.ProcessContainerBuildOptionsCallbackAsync(
             serviceProvider,
             logger,
             executionContext,
             cancellationToken).ConfigureAwait(false);
 
-        options.OutputPath = context.OutputPath;
-        options.ImageFormat = context.ImageFormat;
-        options.TargetPlatform = context.TargetPlatform;
-        options.Destination = context.Destination;
-        options.LocalImageName = context.LocalImageName ?? options.LocalImageName;
-        options.LocalImageTag = context.LocalImageTag ?? options.LocalImageTag;
-
-        return options;
+        var (localImageName, localImageTag) = context.GetLocalImageNameAndTag();
+        return new ResolvedContainerBuildOptions
+        {
+            OutputPath = context.OutputPath,
+            ImageFormat = context.ImageFormat,
+            TargetPlatform = context.TargetPlatform,
+            Destination = context.Destination,
+            LocalImageName = localImageName,
+            LocalImageTag = localImageTag
+        };
     }
 
     public async Task BuildImagesAsync(IEnumerable<IResource> resources, CancellationToken cancellationToken = default)
@@ -401,9 +397,20 @@ internal sealed class ResourceContainerImageManager(
 
         if (resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
-            if (!resource.TryGetContainerImageName(out var imageName))
+            if (!resource.TryGetContainerImageName(out var imageReference))
             {
                 throw new InvalidOperationException($"The container image name for resource '{resource.Name}' could not be determined.");
+            }
+
+            var (imageName, imageTag) = ResourceExtensions.SplitContainerImageNameAndTag(imageReference);
+            if (!string.IsNullOrEmpty(options.OutputPath))
+            {
+                // An archive build exports the image to a file instead of loading it for push or deployment,
+                // so the caller's local name and tag can drive --tag, the archive file name and the archive's
+                // image reference. Builds that load the image keep the resource's container image name because
+                // push, local registry tagging and deployment targets look the image up by that name.
+                imageName = options.LocalImageName;
+                imageTag = options.LocalImageTag;
             }
 
             // This is a container resource so we'll use the container runtime to build the image
@@ -411,6 +418,7 @@ internal sealed class ResourceContainerImageManager(
                 resource,
                 dockerfileBuildAnnotation,
                 imageName,
+                imageTag,
                 options,
                 cancellationToken).ConfigureAwait(false);
             return;
@@ -1003,7 +1011,7 @@ internal sealed class ResourceContainerImageManager(
         return null;
     }
 
-    private async Task BuildContainerImageFromDockerfileAsync(IResource resource, DockerfileBuildAnnotation dockerfileBuildAnnotation, string imageName, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
+    private async Task BuildContainerImageFromDockerfileAsync(IResource resource, DockerfileBuildAnnotation dockerfileBuildAnnotation, string imageName, string? imageTag, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
     {
         var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         logger.LogInformation("Building image: {ResourceName}", resource.Name);
@@ -1030,21 +1038,18 @@ internal sealed class ResourceContainerImageManager(
             resolvedBuildSecrets[buildSecret.Key] = new BuildImageSecretValue(resolvedValue, secretType);
         }
 
-        // ensure outputPath is created if specified since docker/podman won't create it for us
+        // Docker and Podman won't create the archive's directory. OutputPath can name the archive file
+        // itself, so create the directory that contains the resolved archive rather than OutputPath.
         if (options.OutputPath is { } outputPath)
         {
-            Directory.CreateDirectory(outputPath);
+            var archivePath = Path.GetFullPath(ResourceExtensions.GetContainerImageArchivePath(outputPath, imageName, imageTag));
+            Directory.CreateDirectory(Path.GetDirectoryName(archivePath)!);
         }
-
-        // Parse image name and tag
-        var imageNameParts = imageName.Split(':', 2);
-        var imageNameOnly = imageNameParts[0];
-        var imageTag = imageNameParts.Length > 1 ? imageNameParts[1] : null;
 
         // Create a ContainerImageBuildOptions for the container runtime
         var containerBuildOptions = new ContainerImageBuildOptions
         {
-            ImageName = imageNameOnly,
+            ImageName = imageName,
             Tag = imageTag,
             Destination = options.Destination,
             OutputPath = options.OutputPath,
