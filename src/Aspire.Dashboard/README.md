@@ -76,6 +76,8 @@ On desktop, closing a detail page shows the resource list across the full canvas
 opens its details and restores the normal sidebar width. There is no separate full-canvas toggle;
 the normal sidebar can still be collapsed, reopened and resized.
 Sidebar transitions use brief, eased motion and honor the system's reduced-motion preference.
+Opening the collapsed sidebar picker scrolls the list just enough to show the first selected row
+in list order, if it is present. Focus stays in the picker search box.
 All main-tab content panels have a close button, including the all-resources overview and unscoped
 console logs, terminals, structured logs, traces and metrics. **Select all** reopens the current tab's
 content from the full-canvas list; on Overview, this shows the all-resources summary.

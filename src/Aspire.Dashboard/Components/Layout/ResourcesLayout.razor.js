@@ -135,6 +135,27 @@ export function setResourcePickerOpen(layoutElement, dotNetRef, open) {
 
     if (picker.matches(":popover-open") !== open) {
         picker.togglePopover(open);
+        if (open) {
+            scrollPickerToSelection(picker);
+        }
+    }
+}
+
+function scrollPickerToSelection(picker) {
+    const list = picker.querySelector(".resource-pane-list");
+    const selected = list?.querySelector(".resource-row.selected");
+    if (!selected) {
+        return;
+    }
+
+    // Scroll only the list, not its ancestors. The search box stays in view and keeps its focus behavior.
+    const top = list.getBoundingClientRect().top + list.clientTop;
+    const bottom = top + list.clientHeight;
+    const row = selected.getBoundingClientRect();
+    if (row.top < top) {
+        list.scrollBy({ top: row.top - top, behavior: "instant" });
+    } else if (row.bottom > bottom) {
+        list.scrollBy({ top: row.bottom - bottom, behavior: "instant" });
     }
 }
 
