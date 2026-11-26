@@ -23894,6 +23894,13 @@ public class ResourceTestingContext extends HandleWrapperBase {
         return (Boolean) result;
     }
 
+    /** Captures the completed executable's raw standard output and standard error into this resource's output directory. */
+    public void captureOutputAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/captureOutputAsync", reqArgs);
+    }
+
     /** Publishes an observed test result for this resource. */
     public void publishResult(TestResult result) {
         Map<String, Object> reqArgs = new HashMap<>();

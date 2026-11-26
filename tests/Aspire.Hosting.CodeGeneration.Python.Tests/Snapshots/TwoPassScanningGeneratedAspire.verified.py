@@ -7100,6 +7100,14 @@ class ResourceTestingContext:
         )
         return result
 
+    def capture_output(self) -> None:
+        """Captures the completed executable's raw standard output and standard error into this resource's output directory."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/captureOutputAsync',
+            rpc_args
+        )
+
     def publish_result(self, result: TestResult) -> None:
         """Publishes an observed test result for this resource."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
