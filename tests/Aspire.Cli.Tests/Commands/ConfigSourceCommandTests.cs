@@ -15,7 +15,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.InternalTesting;
@@ -663,7 +662,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(InteractionServiceStrings.ProjectOptionDoesntExist, Assert.Single(interaction.DisplayedErrors));
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
-        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IConfigSourceDetector>()).Calls);
         Assert.Equal(originalLocalConfiguration, await File.ReadAllTextAsync(localPath));
         Assert.Equal(originalGlobalConfiguration, await File.ReadAllTextAsync(globalFile.FullName));
     }
@@ -687,7 +686,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(1, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
-        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IConfigSourceDetector>()).Calls);
         Assert.Equal(parentConfiguration, await File.ReadAllTextAsync(parentPath));
         Assert.Equal("version-1", AspireConfigFile.Load(project.FullName)!.ConfigSource!.AppliedVersion);
     }
@@ -716,7 +715,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ConfigSourceStrings.NoBinding, notice.Message);
         Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride);
         Assert.Equal(0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
-        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IConfigSourceDetector>()).Calls);
     }
 
     [Theory]
@@ -751,7 +750,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
-        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IConfigSourceDetector>()).Calls);
         Assert.Equal(ConfigSourceStrings.NoBinding, Assert.Single(interaction.DisplayedMessages).Message);
         Assert.Equal("{}", await File.ReadAllTextAsync(localPath));
         Assert.Equal(originalGlobalConfiguration, await File.ReadAllTextAsync(globalFile.FullName));
@@ -808,7 +807,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
                     [CliConfigNames.InitSourceUrl] = s_source.Repository
                 }));
             }
-            services.AddSingleton<IInternalMicrosoftDetector>(new TestConfigSourceDetector { IsInternal = employeeSource });
+            services.AddSingleton<IConfigSourceDetector>(new TestConfigSourceDetector { HasMicrosoftHost = employeeSource });
             var git = new TestConfigSourceRepository
             {
                 ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
@@ -882,8 +881,8 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             };
             options.PackagingServiceFactory = _ => new TestPackagingService();
         });
-        var detector = new TestConfigSourceDetector { IsInternal = true };
-        services.AddSingleton<IInternalMicrosoftDetector>(detector);
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
+        services.AddSingleton<IConfigSourceDetector>(detector);
         using var provider = services.BuildServiceProvider();
         var consent = explicitConsent ? " --use-config-source" : "";
         var result = provider.GetRequiredService<RootCommand>().Parse($"update --apphost \"{projectFile.FullName}\" --yes{consent}");
@@ -914,8 +913,8 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             };
             options.PackagingServiceFactory = _ => new TestPackagingService();
         });
-        var detector = new TestConfigSourceDetector { IsInternal = true };
-        services.AddSingleton<IInternalMicrosoftDetector>(detector);
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
+        services.AddSingleton<IConfigSourceDetector>(detector);
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse("update --yes --non-interactive");
@@ -1100,7 +1099,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Equal(bound ? 1 : 0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
-        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IConfigSourceDetector>()).Calls);
         Assert.Equal(parentConfiguration, await File.ReadAllTextAsync(parentPath));
         if (bound)
         {
@@ -1458,7 +1457,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             [CliConfigNames.InitSourceUrl] = microsoftDefault ? null : s_source.Repository,
             [CliConfigNames.InitSourceReadmeUrl] = microsoftDefault ? null : customReadmeUrl
         }));
-        services.AddSingleton<IInternalMicrosoftDetector>(new TestConfigSourceDetector { IsInternal = microsoftDefault });
+        services.AddSingleton<IConfigSourceDetector>(new TestConfigSourceDetector { HasMicrosoftHost = microsoftDefault });
         if (commandLine.StartsWith("update", StringComparison.Ordinal))
         {
             await TestConfigSourceServices.SaveBindingAsync(microsoftDefault

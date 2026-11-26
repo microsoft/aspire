@@ -166,6 +166,7 @@
     <PackageReference Include="Microsoft.Bcl.Cryptography" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
+    <PackageReference Include="YamlDotNet" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="NuGet.Commands" VersionOverride="$(NuGetPackageVersionForCli)" />
     <PackageReference Include="NuGet.ProjectModel" VersionOverride="$(NuGetPackageVersionForCli)" />

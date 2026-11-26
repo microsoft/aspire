@@ -16,7 +16,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
-using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -26,7 +25,7 @@ internal sealed class ConfigSourceService(
     CliExecutionContext executionContext,
     IEnvironment environment,
     ITemporaryStorage temporaryStorage,
-    IInternalMicrosoftDetector detector,
+    IConfigSourceDetector detector,
     IGitClient git,
     TimeProvider timeProvider,
     IInteractionService interaction,
@@ -149,7 +148,7 @@ internal sealed class ConfigSourceService(
     }
 
     /// <summary>
-    /// Resolves an optional configuration source from the environment or employee detection,
+    /// Resolves an optional configuration source from the environment or GitHub host configuration,
     /// obtains consent, and acquires the accepted source.
     /// </summary>
     /// <param name="parseResult">The command parse result containing the optional consent option.</param>
@@ -165,11 +164,10 @@ internal sealed class ConfigSourceService(
         var explicitSource = repository is not null;
         if (!explicitSource)
         {
-            logger.LogDebug("No explicit configuration source URL is set; checking Microsoft machine detection.");
-            var detection = await detector.IsInternalMicrosoftMachineAsync(cancellationToken);
-            if (!detection.IsInternalMicrosoft || detection.Outcome != InternalMicrosoftDetectorOutcome.Detected)
+            logger.LogDebug("No explicit configuration source URL is set; checking Microsoft GitHub host configuration.");
+            if (!await detector.IsMicrosoftGitHubHostConfiguredAsync(cancellationToken))
             {
-                logger.LogDebug("No configuration source candidate was selected. Microsoft machine detection outcome: {Outcome}.", detection.Outcome);
+                logger.LogDebug("No configuration source candidate was selected; the Microsoft GitHub host is not configured.");
                 if (parseResult.GetValue(s_useSourceOption) is true)
                 {
                     throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
@@ -181,7 +179,7 @@ internal sealed class ConfigSourceService(
         }
 
         logger.LogDebug("Selecting configuration source from {Origin}.",
-            explicitSource ? CliConfigNames.InitSourceUrl : "Microsoft machine detection");
+            explicitSource ? CliConfigNames.InitSourceUrl : "Microsoft GitHub host configuration");
         var source = new ConfigSource
         {
             Repository = repository!,
@@ -328,7 +326,7 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
     {
-        // Creation consent controls discovery for both explicit and employee-detected sources.
+        // Creation consent controls discovery for both explicit and Microsoft-default sources.
         // Reuse the selected identity and snapshot, and do not re-enable a declined source.
         if (_creationSource is not null)
         {
@@ -337,7 +335,7 @@ internal sealed class ConfigSourceService(
         }
 
         // Outside creation, an explicit URL opts into runtime discovery without materializing
-        // project settings. Employee detection without consent does not opt in.
+        // project settings. GitHub host detection without consent does not opt in.
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         if (repository is null)
         {

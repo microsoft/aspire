@@ -333,6 +333,7 @@ public class Program
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !deferSettingsWrites);
         builder.Services.AddSingleton<ConfigSourceService>();
+        builder.Services.AddSingleton<IConfigSourceDetector, ConfigSourceDetector>();
 
         if (configurationValues is not null)
         {

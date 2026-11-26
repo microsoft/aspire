@@ -10,7 +10,7 @@ Maya is a Microsoft developer creating an Inventory application on her developme
 
 ### Prepare Git authentication
 
-Maya needs permission to read the configuration repository and working Git authentication for `msft.ghe.com`. Being recognized as a Microsoft employee does not grant repository access, authenticate Git, or authorize use of the source.
+Maya needs permission to read the configuration repository and working Git authentication for `msft.ghe.com`. Having that host configured in GitHub CLI does not grant repository access, authenticate Git, or authorize use of the source.
 
 Aspire uses normal Git authentication, not an Aspire-specific repository login. Maya can prepare authentication upfront or complete it interactively when Git acquires the configuration.
 
@@ -44,7 +44,7 @@ Maya runs:
 aspire new aspire-starter --name Inventory --output .\Inventory
 ```
 
-Assume employee detection succeeds and none of the initialization-source environment variables are set. Before generating the app, Aspire proposes:
+Assume GitHub CLI's `hosts.yml` includes `msft.ghe.com` (or `GH_HOST` names that host), and none of the initialization-source environment variables are set. Aspire reads this local configuration without invoking `gh` or checking credentials over the network. Before generating the app, Aspire proposes:
 
 ```text
    Configuration source:  https://msft.ghe.com/coreai/aspire-1p-init
@@ -211,7 +211,7 @@ aspire agent init --skills aspire
 
 The command reads Inventory's saved skill sources and registers them with the selected agents. It does not fetch configuration to fill in runtime values or copy Maya's tracking directory.
 
-When Noah later runs a command that resolves the project or selects a running AppHost, such as `aspire start` or `aspire logs`, the saved binding identifies the source for a background advisory version check. Noah does not need `ASPIRE_INIT_SOURCE_URL`, and Aspire does not repeat employee detection or the creation-time consent prompt. With no prior check metadata on his machine, the CLI checks the source's version and compares it with Inventory's saved `appliedVersion`, without writing a fetched JSON snapshot or changing the app file.
+When Noah later runs a command that resolves the project or selects a running AppHost, such as `aspire start` or `aspire logs`, the saved binding identifies the source for a background advisory version check. Noah does not need `ASPIRE_INIT_SOURCE_URL`, and Aspire does not repeat GitHub host detection or the creation-time consent prompt. With no prior check metadata on his machine, the CLI checks the source's version and compares it with Inventory's saved `appliedVersion`, without writing a fetched JSON snapshot or changing the app file.
 
 Noah can prepare Git authentication as Maya did. If a check completes with an access or other failure, the CLI reports that failure at command exit; the requested operation continues using the saved app configuration. Unfinished checks are cancelled at command exit, so a fast command may produce no check result. Machine-readable invocations suppress advisory notices. Skill repositories still need to be independently accessible to the agent clients.
 
@@ -276,11 +276,11 @@ If authentication expires, Maya repairs Git access, verifies it with `git ls-rem
 
 `aspire update --config-source` is not a way to enable a source on an unbound project. If the nearest local settings file has no saved binding, it reports that there is no configuration source to update and exits successfully without changing configuration or acquiring a source. Global configuration does not support `configSource`; adding one there has no effect. The option cannot be combined with CLI self-update, migration, or channel/package-source overrides. A binding without an applied version gets instructions to run this explicit update rather than having source values silently loaded. Configuration sources are not supported in legacy `.aspire/settings.json` files.
 
-For an AppHost created before configuration sources were available, Maya can instead run plain `aspire update`. If its nearest local configuration has no source choice and a source is available from the environment or employee detection, Aspire displays the source and asks whether to use it. Accepting applies the allowed settings and saves the binding. Declining saves `"configSource": { "optOut": true }`, preserving existing settings and preventing repeated prompts. Removing that entry allows a later adoption prompt. Non-interactive updates skip adoption unless `--use-config-source` or `--use-config-source false` explicitly supplies the choice; `--yes` alone is not source consent.
+For an AppHost created before configuration sources were available, Maya can instead run plain `aspire update`. If its nearest local configuration has no source choice and a source is available from the environment or GitHub host detection, Aspire displays the source and asks whether to use it. Accepting applies the allowed settings and saves the binding. Declining saves `"configSource": { "optOut": true }`, preserving existing settings and preventing repeated prompts. Removing that entry allows a later adoption prompt. Non-interactive updates skip adoption unless `--use-config-source` or `--use-config-source false` explicitly supplies the choice; `--yes` alone is not source consent.
 
 ## Scenario 6: Priya explicitly selects a team configuration during initialization
 
-Priya adds Aspire to an existing application that has no saved source binding. Her development environment does not produce a positive employee-detection result, or her team wants a different configuration file in the Microsoft repository.
+Priya adds Aspire to an existing application that has no saved source binding. Her GitHub CLI configuration does not include `msft.ghe.com`, or her team wants a different configuration file in the Microsoft repository.
 
 She first prepares Git access. Then, from the application directory, she explicitly identifies the source:
 
@@ -293,7 +293,7 @@ aspire init
 
 The team must actually publish `teams/inventory.json` on the `config-preview` branch; both are illustrative. The path is repository-relative and uses `/` separators, including on Windows.
 
-The explicit repository bypasses employee detection, but not authentication, validation, or consent. The prompt identifies `config-preview` as the selected ref. Priya accepts the proposed source. Initial materialization writes only allowed values into her app's configuration, together with this binding:
+The explicit repository bypasses GitHub host detection, but not authentication, validation, or consent. The prompt identifies `config-preview` as the selected ref. Priya accepts the proposed source. Initial materialization writes only allowed values into her app's configuration, together with this binding:
 
 ```json
 {
@@ -317,7 +317,7 @@ aspire init
 
 This SHA is illustrative and must be replaced with an actual commit available from the repository. The new app saves that SHA in `configSource.ref`. Later checks do not announce updates just because a branch moved, and explicit updates reapply the pinned commit rather than advancing it. A commit unavailable from the server is an explicit acquisition failure, not a reason to fall back to the default branch.
 
-Leaving `ASPIRE_INIT_SOURCE_REF` unset follows the repository's current default branch instead. If `ASPIRE_INIT_SOURCE_URL` is unset, both `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` are ignored, including when employee detection selects the Microsoft repository. Priya must keep the URL explicitly set to customize that repository's path or ref.
+Leaving `ASPIRE_INIT_SOURCE_REF` unset follows the repository's current default branch instead. If `ASPIRE_INIT_SOURCE_URL` is unset, both `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` are ignored, including when GitHub host detection selects the Microsoft repository. Priya must keep the URL explicitly set to customize that repository's path or ref.
 
 For scripted creation or initialization, `--use-config-source` explicitly accepts the candidate and `--use-config-source false` explicitly declines it. The bare flag means `true`; the explicit `--use-config-source true` form is also accepted for compatibility. `--non-interactive` alone is not consent; when a candidate exists, omitting the option fails with instructions. Other creation or initialization choices must also be supplied as needed for non-interactive execution.
 

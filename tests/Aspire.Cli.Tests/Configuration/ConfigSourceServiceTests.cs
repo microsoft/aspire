@@ -38,7 +38,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             [CliConfigNames.InitSourceRef] = "config-preview",
             [CliConfigNames.InitSourceReadmeUrl] = "../invalid"
         });
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         var interaction = new TestInteractionService();
         var git = new TestConfigSourceRepository
         {
@@ -98,7 +98,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             [CliConfigNames.InitSourcePath] = "../invalid",
             [CliConfigNames.InitSourceRef] = ""
         });
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         var git = new TestConfigSourceRepository();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
             git: git, environment: environment, detector: detector);
@@ -125,7 +125,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             [CliConfigNames.InitSourceUrl] = microsoftDefault ? null : "https://git.example/configuration"
         });
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         var interaction = new TestInteractionService
         {
             ConfirmCallback = (_, _) => accept
@@ -822,7 +822,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task SelectForCreation_ExplicitSourceBypassesDetection(bool detected, string? path)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var detector = new TestConfigSourceDetector { IsInternal = detected };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = detected };
         var git = new TestConfigSourceRepository();
         var expected = new ConfigSource { Repository = s_source.Repository, Path = path ?? AspireConfigFile.FileName, Ref = "preview" };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, detector: detector,
@@ -847,7 +847,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var git = new TestConfigSourceRepository();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
-            detector: new TestConfigSourceDetector { IsInternal = detected },
+            detector: new TestConfigSourceDetector { HasMicrosoftHost = detected },
             environment: new TestEnvironment(new Dictionary<string, string?>
             {
                 [CliConfigNames.InitSourcePath] = "../invalid.json",
@@ -864,17 +864,53 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(InternalMicrosoftDetectorOutcome.Failed)]
-    [InlineData(InternalMicrosoftDetectorOutcome.TimedOut)]
-    public async Task SelectForCreation_InconclusiveDetectionDoesNotProposeSource(string outcome)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SelectForCreation_OnlyGitHubHostConfigurationControlsMicrosoftDefault(bool configured)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var git = new TestConfigSourceRepository();
-        var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
-            detector: new TestConfigSourceDetector { IsInternal = true, Outcome = outcome });
+        var interaction = new TestInteractionService
+        {
+            ConfirmCallback = (prompt, defaultValue) =>
+            {
+                Assert.True(configured);
+                Assert.Equal(ConfigSourceStrings.NewUseSourcePrompt, prompt);
+                Assert.True(defaultValue);
+                return true;
+            }
+        };
+        var heuristics = new Aspire.Cli.Tests.Telemetry.TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.AddSingleton<IGitClient>(git);
+        services.AddSingleton<IInteractionService>(interaction);
+        services.AddSingleton<IInternalMicrosoftDetector>(heuristics);
+        services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["GH_CONFIG_DIR"] = Path.Combine(workspace.Path, "gh"),
+            ["USERDNSDOMAIN"] = "REDMOND.corp.microsoft.com"
+        }));
+        if (configured)
+        {
+            var ghDirectory = workspace.CreateDirectory("gh");
+            await File.WriteAllTextAsync(Path.Combine(ghDirectory.FullName, "hosts.yml"), "msft.ghe.com: {}");
+        }
+        services.AddSingleton<IConfigSourceDetector, ConfigSourceDetector>();
+        services.AddSingleton<ICliHostEnvironment>(TestHelpers.CreateInteractiveHostEnvironment());
+        using var provider = services.BuildServiceProvider();
+        var service = provider.GetRequiredService<ConfigSourceService>();
 
-        Assert.Null(await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
-        Assert.Equal(0, git.Calls);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
+
+        Assert.Equivalent(configured
+            ? new ConfigSource { Repository = ConfigSourceService.MicrosoftRepository, Path = AspireConfigFile.FileName }
+            : null, source, strict: true);
+        Assert.Equal(0, heuristics.InvocationCount);
+        Assert.Equal(configured ? 1 : 0, git.Calls);
+        Assert.Equal(configured ? 1 : 0, interaction.BooleanPromptCalls.Count);
     }
 
     [Fact]
@@ -917,7 +953,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             [CliConfigNames.InitSourceReadmeUrl] = "https://docs.example/config-source?team=[platform]"
         });
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
-            git: git, environment: environment, detector: new TestConfigSourceDetector { IsInternal = true },
+            git: git, environment: environment, detector: new TestConfigSourceDetector { HasMicrosoftHost = true },
             interaction: interaction, interactive: true);
 
         var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
@@ -936,7 +972,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService { SupportsLinks = true };
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
             detector: detector, interaction: interaction,
             environment: new TestEnvironment(new Dictionary<string, string?>
@@ -1067,7 +1103,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
-            detector: new TestConfigSourceDetector { IsInternal = true });
+            detector: new TestConfigSourceDetector { HasMicrosoftHost = true });
 
         Assert.Equal(ConfigSourceStrings.ConsentRequired, (await Assert.ThrowsAsync<ConfigSourceException>(() =>
             service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None))).Message);
@@ -1090,7 +1126,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             }
         };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
-            detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
+            detector: new TestConfigSourceDetector { HasMicrosoftHost = true }, interaction: interaction, interactive: true);
 
         Assert.Equivalent(accepted ? new ConfigSource { Repository = ConfigSourceService.MicrosoftRepository, Path = AspireConfigFile.FileName } : new ConfigSource { OptOut = true },
             await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None), strict: true);
@@ -1105,7 +1141,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
-            detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
+            detector: new TestConfigSourceDetector { HasMicrosoftHost = true }, interaction: interaction, interactive: true);
 
         var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
@@ -1122,7 +1158,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var interaction = new TestInteractionService();
         interaction.SetupCancellationResponse();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
-            detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
+            detector: new TestConfigSourceDetector { HasMicrosoftHost = true }, interaction: interaction, interactive: true);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
         Assert.Equal(0, git.Calls);
@@ -1183,7 +1219,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(path, configuration);
         var git = new TestConfigSourceRepository();
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         var interaction = new TestInteractionService
         {
             ConfirmCallback = (_, _) => throw new InvalidOperationException("Unexpected source prompt.")
@@ -1267,7 +1303,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             ReadConfiguration = (_, _) => throw new ConfigSourceException(ConfigSourceStrings.AuthenticationFailed)
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
-            detector: new TestConfigSourceDetector { IsInternal = true });
+            detector: new TestConfigSourceDetector { HasMicrosoftHost = true });
 
         var exception = await Assert.ThrowsAsync<ConfigSourceException>(() =>
             service.SelectForUpdateAsync(workspace.WorkspaceRoot, ParseConsent(true), CancellationToken.None));
@@ -1997,7 +2033,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
         var original = await File.ReadAllTextAsync(path);
         var git = new TestConfigSourceRepository();
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
             [CliConfigNames.InitSourceUrl] = "https://other.example/configuration"
@@ -2055,7 +2091,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(invalid, workspace.WorkspaceRoot, CancellationToken.None);
         var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService();
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: detector, interaction: interaction);
 
@@ -2193,7 +2229,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var git = new TestConfigSourceRepository();
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         var interaction = new TestInteractionService();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, detector: detector, interaction: interaction);
 
