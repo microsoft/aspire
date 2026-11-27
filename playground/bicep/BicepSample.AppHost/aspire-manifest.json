@@ -129,8 +129,11 @@
     },
     "redis": {
       "type": "azure.bicep.v0",
-      "connectionString": "{redis.outputs.connectionString}",
-      "path": "redis.module.bicep"
+      "connectionString": "{kv3.secrets.connectionstrings--redis}",
+      "path": "redis.module.bicep",
+      "params": {
+        "kv3_outputs_name": "{kv3.outputs.name}"
+      }
     },
     "sb": {
       "type": "azure.bicep.v0",
@@ -207,7 +210,8 @@
         "ConnectionStrings__redis": "{redis.connectionString}",
         "REDIS_HOST": "{redis.outputs.hostName}",
         "REDIS_PORT": "10000",
-        "REDIS_URI": "rediss://{redis.outputs.hostName}:10000",
+        "REDIS_URI": "rediss://:{kv3.secrets.primaryaccesskey--redis}@{redis.outputs.hostName}:10000",
+        "REDIS_PASSWORD": "{kv3.secrets.primaryaccesskey--redis}",
         "ConnectionStrings__sb": "{sb.connectionString}",
         "SB_HOST": "{sb.outputs.serviceBusHostName}",
         "SB_URI": "{sb.outputs.serviceBusEndpoint}",
@@ -286,14 +290,6 @@
       "path": "cosmos-roles.module.bicep",
       "params": {
         "cosmos_outputs_name": "{cosmos.outputs.name}",
-        "principalId": ""
-      }
-    },
-    "redis-roles": {
-      "type": "azure.bicep.v0",
-      "path": "redis-roles.module.bicep",
-      "params": {
-        "redis_outputs_name": "{redis.outputs.name}",
         "principalId": ""
       }
     },

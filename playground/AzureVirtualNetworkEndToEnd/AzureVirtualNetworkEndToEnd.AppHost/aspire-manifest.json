@@ -43,19 +43,11 @@
       "type": "value.v0",
       "connectionString": "{storage.outputs.blobEndpoint}"
     },
-    "storage-blobs": {
-      "type": "value.v0",
-      "connectionString": "{storage.outputs.blobEndpoint}"
-    },
     "mycontainer": {
       "type": "value.v0",
       "connectionString": "Endpoint={storage.outputs.blobEndpoint};ContainerName=mycontainer"
     },
     "queues": {
-      "type": "value.v0",
-      "connectionString": "{storage.outputs.queueEndpoint}"
-    },
-    "storage-queues": {
       "type": "value.v0",
       "connectionString": "{storage.outputs.queueEndpoint}"
     },

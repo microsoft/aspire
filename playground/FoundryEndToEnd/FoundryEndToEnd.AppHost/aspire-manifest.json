@@ -18,6 +18,7 @@
         "HTTP_PORTS": "{webstory.bindings.http.targetPort}",
         "ConnectionStrings__chat": "{chat.connectionString}",
         "CHAT_URI": "{foundry.outputs.aiFoundryApiEndpoint}",
+        "CHAT_AIINFERENCEURI": "{foundry.outputs.aiFoundryApiEndpoint}models",
         "CHAT_MODELNAME": "chat",
         "CHAT_FORMAT": "OpenAI",
         "CHAT_VERSION": "2025-08-07"
