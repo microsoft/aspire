@@ -6,9 +6,10 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { SystemLaunchedChildProcessQuery } from '../debugger/launchedChildProcessDiscovery';
+import { findDescendantProcessIds, SystemLaunchedChildProcessQuery } from '../debugger/launchedChildProcessDiscovery';
 import { denoAppHostInspectorAttachTimeoutMs, nodeDebuggerExtension } from '../debugger/languages/node';
 import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } from '../dcp/types';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 // Stands in for a Deno AppHost started with --inspect-wait: it opens its inspector only when the test
 // tells it to, then blocks until a debugger attaches. It reports progress over a control socket so the
@@ -120,7 +121,54 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         fs.rmSync(tempDir, { recursive: true, force: true });
     });
 
-    teardown(async () => {
+    // What the cleanup under test logged, reported with the process tree when a test fails, since a runtime
+    // that is never stopped otherwise only surfaces as a test timeout.
+    const cleanupLog: string[] = [];
+    setup(() => {
+        cleanupLog.length = 0;
+        for (const level of ['trace', 'debug', 'info', 'warn', 'error'] as const) {
+            const log = extensionLogOutputChannel[level].bind(extensionLogOutputChannel);
+            sinon.stub(extensionLogOutputChannel, level).callsFake((message: string | Error, ...args: unknown[]) => {
+                cleanupLog.push(`${new Date().toISOString()} [${level}] ${message instanceof Error ? message.message : message}`);
+                log(message as string, ...args);
+            });
+        }
+    });
+
+    async function describeUnstoppedFixtures(): Promise<string> {
+        const lines = [`extension host pid ${process.pid}`, ...cleanupLog];
+        const running = fixtures.filter(fixture => !fixture.isClosed());
+        if (running.length === 0) {
+            return lines.join('\n');
+        }
+
+        try {
+            const listing = await new SystemLaunchedChildProcessQuery().listProcesses(undefined, 30_000);
+            const descendants = findDescendantProcessIds(process.pid, false, listing);
+            lines.push(`listed ${listing.length} processes; extension host descendants: ${descendants === undefined ? 'unresolvable' : descendants.join(', ')}`);
+            for (const fixture of running) {
+                lines.push(`fixture ${fixture.pid} still connected; output: ${JSON.stringify(fixture.lines)}`);
+                for (let pid: number | undefined = fixture.pid, depth = 0; pid !== undefined && depth < 8; depth++) {
+                    const entries = listing.filter(candidate => candidate.pid === pid);
+                    lines.push(entries.length === 0
+                        ? `  pid ${pid} is not listed`
+                        : entries.map(entry => `  pid ${entry.pid} parent ${entry.parentPid} ${entry.executable}: ${entry.command}`).join('\n'));
+                    pid = pid === process.pid ? undefined : entries[0]?.parentPid;
+                }
+            }
+        }
+        catch (error) {
+            lines.push(`process listing failed: ${error}`);
+        }
+
+        return lines.join('\n');
+    }
+
+    teardown(async function () {
+        if (this.currentTest?.state !== 'passed') {
+            console.log(`Deno AppHost inspector cleanup diagnostics for '${this.currentTest?.title}':\n${await describeUnstoppedFixtures()}`);
+        }
+
         nextFixture = undefined;
         try {
             disposables.splice(0).forEach(d => d.dispose());
@@ -283,9 +331,12 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         const [session, fixture] = await Promise.all([rootSession, fixtureStarted]);
 
         // js-debug is still polling the inspector port, well inside the 120s attach timeout.
+        cleanupLog.push(`${new Date().toISOString()} [test] stopping the debug session; fixture ${fixture.pid}`);
         await vscode.debug.stopDebugging(session);
 
+        cleanupLog.push(`${new Date().toISOString()} [test] debug session stopped`);
         await fixture.closed;
+        cleanupLog.push(`${new Date().toISOString()} [test] fixture exited`);
         assert.ok(!fixture.lines.includes('attached'));
         assert.strictEqual(await started, false);
     });
