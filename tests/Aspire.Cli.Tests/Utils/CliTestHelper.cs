@@ -245,6 +245,7 @@ internal static class CliTestHelper
         // pattern as production wiring in Program.cs.
         services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         services.AddSingleton<IEnvironment, TestEnvironment>();
+        services.AddSingleton<Aspire.Shared.ITemporaryStorage, Aspire.Shared.TemporaryStorage>();
         services.AddSingleton<ProfileCaptureState>();
         services.AddSingleton<ProfileCaptureService>();
 
@@ -294,6 +295,7 @@ internal static class CliTestHelper
         services.AddTransient<AppHostLauncher>();
         services.AddTransient<DcpWorkloadCleanupService>();
         services.AddTransient<RunCommand>();
+        services.AddTransient<TestCommand>();
         services.AddTransient<StopCommand>();
         services.AddTransient<StartCommand>();
         services.AddTransient<ResourceCommand>();

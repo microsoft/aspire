@@ -47,6 +47,47 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         """;
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourceNavigation_KeepsFocusWhenTerminalAvailabilityChanges(bool desktop)
+    {
+        await RunTestAsync(async page =>
+        {
+            fixture.StartDynamicSession();
+            await page.SetViewportSizeAsync(desktop ? 2000 : 390, 900);
+            await page.GotoAsync("/resources/api");
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
+            var menu = desktop ? null : await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            var structuredLogs = desktop
+                ? page.Locator("#tab-StructuredLogs")
+                : ResourcePaneNavigation.NavMenuItem(menu!, Resources.StructuredLogs.StructuredLogsHeader);
+            var terminal = desktop
+                ? page.Locator("#tab-Terminal")
+                : ResourcePaneNavigation.NavMenuItem(menu!, Resources.TerminalStrings.TerminalTitle);
+            await Assertions.Expect(structuredLogs).ToBeVisibleAsync();
+            await Assertions.Expect(terminal).ToHaveCountAsync(0);
+            await structuredLogs.FocusAsync();
+            await Assertions.Expect(structuredLogs).ToBeFocusedAsync();
+
+            await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api",
+                state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project, properties: new()
+                {
+                    [KnownProperties.Terminal.Enabled] = new(KnownProperties.Terminal.Enabled, Value.ForString("true"), false, null, 0, null, false)
+                }))]);
+            await Assertions.Expect(terminal).ToBeVisibleAsync();
+            await Assertions.Expect(structuredLogs).ToBeFocusedAsync();
+
+            await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api",
+                state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project))]);
+            await Assertions.Expect(terminal).ToHaveCountAsync(0);
+            await Assertions.Expect(structuredLogs).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/structuredlogs/resource/api$"));
+        });
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
@@ -546,7 +587,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 }
                 else if (stage is "traces" or "overview")
                 {
-                    await page.GetByRole(AriaRole.Tab, new() { Name = stage == "traces" ? "Traces" : "Overview", Exact = true }).ClickAsync();
+                    await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = stage == "traces" ? "Traces" : "Overview", Exact = true }).ClickAsync();
                     if (stage == "traces")
                     {
                         await Assertions.Expect(page.Locator("#tracesScrollContainer")).ToBeFocusedAsync();
@@ -600,19 +641,17 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.SetViewportSizeAsync(1440, 900);
             await page.EmulateMediaAsync(new() { ReducedMotion = reducedMotion ? ReducedMotion.Reduce : ReducedMotion.NoPreference });
             await page.GotoAsync("/resources/cache?pane=tags");
-            var tracesTab = page.GetByRole(AriaRole.Tab, new() { Name = "Traces", Exact = true });
-            await ClickResourceTabAndWaitForRenderAsync(page, async () =>
+            var tracesTab = page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = "Traces", Exact = true });
+            if (reducedMotion)
             {
-                if (reducedMotion)
-                {
-                    await tracesTab.FocusAsync();
-                    await tracesTab.PressAsync("Enter");
-                }
-                else
-                {
-                    await tracesTab.ClickAsync();
-                }
-            });
+                await tracesTab.FocusAsync();
+                await tracesTab.PressAsync("Enter");
+            }
+            else
+            {
+                await tracesTab.ClickAsync();
+            }
+            await Assertions.Expect(tracesTab).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(page.Locator("#tracesScrollContainer")).ToBeFocusedAsync();
             // The data tabs select resources from the sidebar; the full-page list lives on the Overview tab.
             foreach (var name in new[] { "api", "frontend", "cache" })
@@ -628,8 +667,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", "420");
                 await Assertions.Expect(separator).ToBeFocusedAsync();
                 Assert.EndsWith($"/traces/resource/{name}", page.Url, StringComparison.Ordinal);
-                await Assertions.Expect(page.GetByRole(AriaRole.Tab, new() { Name = "Traces", Exact = true }))
-                    .ToHaveAttributeAsync("aria-selected", "true");
+                await Assertions.Expect(page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = "Traces", Exact = true }))
+                    .ToHaveAttributeAsync("aria-current", "page");
             }
         });
     }
@@ -651,10 +690,6 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             // The expanded list is the dashboard's home, so it's opened directly rather than by closing a resource's
             // overview. The data tabs have no close button for it.
             await page.GotoAsync(fullCanvas ? "/" : "/resources/cache?pane=tags");
-            // The feedback prompt is shown above the header once the page has read browser storage, after the first
-            // render, and pushes the page down. Hovering before it arrives can leave the pointer over the brand,
-            // whose tooltip then shows instead of the button's.
-            await Assertions.Expect(page.GetByText(Resources.Dialogs.DashboardFeedbackPromptTitle, new() { Exact = true })).ToBeVisibleAsync();
             if (width <= 768)
             {
                 await page.Locator(".resource-picker").ClickAsync();
@@ -2485,7 +2520,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             const header = document.querySelector('.layout > header');
                             const nav = header.querySelector('.resource-tabs-nav');
                             // Whichever navigation shows: the strip, its overflow button, or the compact picker.
-                            const shown = [...nav.querySelectorAll('fluent-tab:not([hidden]), .resource-tabs-overflow-button, .resource-tabs-compact-button')]
+                            const shown = [...nav.querySelectorAll('a.resource-tab:not([hidden]), .resource-tabs-overflow-button, .resource-tabs-compact-button')]
                                 .map(box).filter(r => r.width > 0 && r.height > 0);
                             const tabsRight = Math.max(...shown.map(r => r.right));
                             const actions = [...header.children].filter(el => el.matches('.header-context ~ *')).map(box).filter(r => r.width > 0);

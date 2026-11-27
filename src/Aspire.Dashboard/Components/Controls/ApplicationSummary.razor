@@ -258,6 +258,8 @@
     private RenderFragment ActivitySection() => __builder =>
     {
         var activity = _telemetry?.Activity;
+        var errorRate = activity?.ErrorRate;
+        var p95 = activity?.P95;
         // A recording's window ends at its last request rather than now, and nothing in it is live.
         var isRecording = TelemetryRepository.IsReadOnly;
         var max = activity is null ? 0 : Enumerable.Range(0, ActivityBucketCount).Max(i => activity.OkBuckets[i] + activity.ErrorBuckets[i]);
@@ -287,18 +289,18 @@
                         <span class="home-stat-value">@(activity is null ? "–" : FormatRate(activity.RequestsPerMinute))</span>
                         <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeRequestsPerMinute)]</span>
                     </div>
-                    <div class="home-stat @(activity?.ErrorRate > 0 ? "error" : null)">
-                        <span class="home-stat-value">@(activity?.ErrorRate is { } rate ? rate.ToString("P1", CultureInfo.CurrentCulture) : "–")</span>
+                    <div class="home-stat @(errorRate > 0 ? "error" : null)">
+                        <span class="home-stat-value @(errorRate is null ? "empty-data" : null)">@(errorRate?.ToString("P1", CultureInfo.CurrentCulture))</span>
                         <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeErrorRate)]</span>
                     </div>
                     <div class="home-stat">
-                        <span class="home-stat-value">@(activity?.P95 is { } p95 ? DurationFormatter.FormatDuration(p95, CultureInfo.CurrentCulture) : "–")</span>
+                        <span class="home-stat-value @(p95 is null ? "empty-data" : null)">@(p95 is { } duration ? DurationFormatter.FormatDuration(duration, CultureInfo.CurrentCulture) : null)</span>
                         <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeP95Latency)]</span>
                     </div>
                 </div>
 
                 <div class="home-chart">
-                    <svg class="home-chart-svg" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" role="img" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityChartLabel)]">
+                    <svg class="home-chart-svg" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityChartLabel)]">
                         <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="8" y2="8" />
                         <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="54" y2="54" />
                         <line class="home-chart-baseline" x1="0" x2="@Svg(ChartWidth)" y1="@Svg(ChartHeight)" y2="@Svg(ChartHeight)" />
@@ -317,19 +319,23 @@
                                 var okHeight = ok * 92.0 / max;
                                 var errorHeight = errors * 92.0 / max;
                                 var bucketStart = activity.WindowStart + (s_activityBucketSize * i);
-                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), FormatCount(ok + errors), FormatCount(errors)]">
+                                var bucketSummary = Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), FormatCount(ok + errors), FormatCount(errors)];
+                                var traceHint = Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTraceHint)];
+                                var traceCaveat = Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTraceCaveat)];
+                                var tooltip = $"{bucketSummary}\n\n{traceHint}\n{traceCaveat}";
+                                <a class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" href="@GetActivityBucketTracesUrl(bucketStart)" aria-label="@tooltip" data-tooltip="@tooltip">
                                     <rect class="ok" x="@Svg(x)" y="@Svg(ChartHeight - okHeight)" width="@Svg(barWidth)" height="@Svg(okHeight)" />
                                     @if (errors > 0)
                                     {
                                         <rect class="error" x="@Svg(x)" y="@Svg(ChartHeight - okHeight - errorHeight)" width="@Svg(barWidth)" height="@Svg(errorHeight)" />
                                     }
-                                </g>
+                                </a>
                             }
                         }
                     </svg>
                     @if (activity is not null && max > 0)
                     {
-                        <span class="home-chart-max">@FormatCount(max)</span>
+                        <span class="home-chart-max">@Loc[max == 1 ? nameof(Dashboard.Resources.Resources.HomeSingleRequestCount) : nameof(Dashboard.Resources.Resources.HomeRequestCount), FormatCount(max)]</span>
                     }
                     else
                     {

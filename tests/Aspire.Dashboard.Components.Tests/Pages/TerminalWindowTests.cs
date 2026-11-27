@@ -314,12 +314,18 @@ public class TerminalWindowTests : DashboardTestContext
     [Theory]
     [InlineData(FrontendAuthMode.BrowserToken)]
     [InlineData(FrontendAuthMode.OpenIdConnect)]
-    public void Initialize_SecuredModeAuthenticatedUser_ShowsTerminal(FrontendAuthMode authMode)
+    public async Task Initialize_SecuredModeAuthenticatedUser_ShowsTerminal(FrontendAuthMode authMode)
     {
         var authorizationContext = this.AddAuthorization();
         authorizationContext.SetAuthorized("test-user");
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var subscriptionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new TestDashboardClient(isEnabled: true,
-            terminalChannelProvider: () => Channel.CreateUnbounded<WatchTerminalsUpdate>());
+            terminalChannelProvider: () =>
+            {
+                subscriptionStarted.TrySetResult();
+                return updates;
+            });
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         Services.GetRequiredService<IOptions<DashboardOptions>>().Value.Frontend.AuthMode = authMode;
 
@@ -330,7 +336,9 @@ public class TerminalWindowTests : DashboardTestContext
             })));
 
         Assert.Equal("api/apphost-terminal?terminalId=shell", cut.FindComponent<TerminalView>().Instance.EndpointPathAndQuery);
-        cut.WaitForAssertion(() => Assert.Equal(1, client.TerminalSubscriptionCount));
+        // Subscription starts on a background task without triggering a render.
+        await subscriptionStarted.Task.DefaultTimeout();
+        Assert.Equal(1, client.TerminalSubscriptionCount);
         TerminalSetupHelpers.AssertSingleTerminalConnection(this, "ws://localhost/api/apphost-terminal?terminalId=shell");
     }
 

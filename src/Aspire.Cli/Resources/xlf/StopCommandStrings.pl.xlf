@@ -127,6 +127,31 @@
         <target state="translated">Eksperymentalny protokół zasobnika systemowego wymaga opcji --protocol-version 1, --format json i --apphost z bezwzględną ścieżką do pliku, dodatniej wartości --pid oraz dodatniej wartości --started-at wyrażonej w milisekundach systemu Unix. Nie można używać opcji --all ani --force.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceTeardownMayContinue">
+        <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
+        <target state="translated">Zasoby mogą być nadal zatrzymywane w tle. Użyj {0}, aby poczekać na ich zniszczenie.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownNotConfirmed">
+        <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
+        <target state="translated">Nie można potwierdzić, że zasoby {0} zostały zniszczone. Mogą nadal być zatrzymywane w tle.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownTimedOut">
+        <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
+        <target state="translated">Zasoby {0} nie zostały zniszczone w ciągu {1} sekund. Mogą nadal zatrzymywać się w tle.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownUnsupported">
+        <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
+        <target state="translated">{0} nie obsługuje oczekiwania na zniszczenie zasobów, więc mogą one nadal być zatrzymywane w tle. Zaktualizuj element AppHost do nowszej wersji Aspire, aby używać {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesTornDown">
+        <source>The resources of {0} were torn down.</source>
+        <target state="translated">Zasoby {0} zostały zniszczone.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stop</source>
         <target state="translated">zatrzymaj</target>
@@ -147,6 +172,21 @@
         <target state="translated">Opcji {0} i {1} opcji nie można używać razem.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TimeoutInvalid">
+        <source>Timeout must be between 1 and {0} seconds.</source>
+        <target state="translated">Limit czasu musi należeć do zakresu od 1 do {0} sekund.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutOptionDescription">
+        <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
+        <target state="translated">Maksymalny czas oczekiwania (w sekundach) na zniszczenie zasobów (wymaga parametru --wait)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutRequiresWait">
+        <source>The {0} option requires the {1} option.</source>
+        <target state="translated">Opcja {0} wymaga opcji {1}.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
         <source>an unknown version</source>
         <target state="translated">nieznana wersja</target>
@@ -160,6 +200,16 @@
       <trans-unit id="VolumesRequiresForce">
         <source>The {0} option requires the {1} option.</source>
         <target state="translated">Opcja {0} wymaga opcji {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitOptionDescription">
+        <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
+        <target state="translated">Przed zwróceniem zaczekaj, aż zasoby AppHost, takie jak kontenery, zostaną zniszczone</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitingForResourceTeardown">
+        <source>Waiting for the resources of {0} to be torn down...</source>
+        <target state="translated">Trwa oczekiwanie na zniszczenie zasobów {0}...</target>
         <note />
       </trans-unit>
     </body>

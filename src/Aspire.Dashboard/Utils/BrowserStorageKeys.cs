@@ -9,8 +9,6 @@ internal static class BrowserStorageKeys
 {
     public const string UnsecuredTelemetryMessageDismissedKey = "Aspire_Telemetry_UnsecuredMessageDismissed";
     public const string UnsecuredEndpointMessageDismissedKey = "Aspire_Security_UnsecuredEndpointMessageDismissed";
-    public const string DashboardFeedbackPromptDismissed = "Aspire_DashboardFeedback_PromptDismissed";
-    public const string DashboardFeedbackPromptDismissedForSession = "Aspire_DashboardFeedback_PromptDismissedForSession";
     public const string TimeFormat = "Aspire_TimeFormat";
     public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";
 
@@ -43,7 +41,8 @@ internal static class BrowserStorageKeys
 
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
     public const string ResourceTagsKeyPrefix = "Aspire_Resources_Tags_";
-    public const string ResourceOrderKeyPrefix = "Aspire_Resources_Order_";
+    public const string ResourceOrderKeyPrefix = "Aspire_Resources_OrderMoves_";
+    public const string GroupOrderKeyPrefix = "Aspire_Resources_GroupOrderMoves_";
     public const string MetricPinsKeyPrefix = "Aspire_Metrics_Pins_";
     public const string SplitterOrientationKeyPrefix = "Aspire_SplitterOrientation_";
     public const string SplitterSizeKeyPrefix = "Aspire_SplitterSize_";
@@ -63,6 +62,11 @@ internal static class BrowserStorageKeys
     public static string ResourceOrderKey(string applicationName)
     {
         return $"{ResourceOrderKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
+
+    public static string GroupOrderKey(string applicationName)
+    {
+        return $"{GroupOrderKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
     }
 
     public static string MetricPinsKey(string applicationName)

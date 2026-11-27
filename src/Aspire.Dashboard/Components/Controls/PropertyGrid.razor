@@ -3,7 +3,7 @@
 @typeparam TItem where TItem : IPropertyGridItem
 @inject IStringLocalizer<ControlsStrings> Loc
 
-<div class="property-grid @(FitNameColumn ? "fit-name-column" : null)">
+<div class="property-grid @(RowSize == DataGridRowSize.Small ? "property-grid-compact" : null) @(FitNameColumn ? "fit-name-column" : null)">
     <FluentDataGrid HeaderCellAsButtonWithMenu="true"
                     ResizeType="DataGridResizeType.Discrete"
                     ItemsProvider="@EnumerableGridItemsProvider.Create(() => Items)"
@@ -19,6 +19,7 @@
         <AspireTemplateColumn Title="@(NameColumnTitle ?? Loc[nameof(ControlsStrings.NameColumnHeader)])" Class="nameColumn" SortBy="@NameSort" Sortable="@IsNameSortable">
             <GridValue ValueDescription="@(NameColumnTitle ?? Loc[nameof(ControlsStrings.NameColumnHeader)])"
                        Value="@context.Name"
+                       ContentBeforeValue="@ContentBeforeName?.Invoke(context)"
                        EnableHighlighting="@(!string.IsNullOrEmpty(HighlightText))"
                        HighlightText="@HighlightText" />
         </AspireTemplateColumn>
@@ -27,6 +28,7 @@
                        Value="@context.Value"
                        ToolTip="@context.ValueTooltip"
                        ContentAfterValue="@GetContentAfterValue(context)"
+                       ContentInButtonArea="@ContentInButtonArea?.Invoke(context)"
                        EnableHighlighting="@(!string.IsNullOrEmpty(HighlightText))"
                        HighlightText="@HighlightText"
                        EnableMasking="@context.IsValueSensitive"

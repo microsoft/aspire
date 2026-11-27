@@ -226,6 +226,116 @@ evaluate the same values. Runtime `WithEnvironment` is not an equivalent workaro
 [EF Core integration guidance](../Aspire.Hosting.EntityFrameworkCore/README.md#coordinated-builds-and-custom-build-inputs)
 for the remaining compatibility risk.
 
+## MSTest test resources (experimental)
+
+`AddMsTest` / `addMsTest` adds an executable MSTest `.csproj` as a run-only test resource.
+All MSTest hosting APIs are experimental under `ASPIRETESTING001`.
+The test project must enable the Microsoft.Testing.Platform (MTP) runner and register
+`Microsoft.Testing.Extensions.TrxReport`. `MSTest.Sdk` with its Default extensions profile
+provides both. Legacy VSTest library projects are not supported; Aspire does not modify
+project dependencies, SDK selection, or runner configuration.
+
+**C#**
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
+
+builder.AddMsTest("api-tests", "../Api.Tests/Api.Tests.csproj")
+    .WithReference(api)
+    .WaitFor(api);
+```
+
+**TypeScript**
+
+```typescript
+const api = await builder.addDotnetProject("api", "../Api/Api.csproj");
+
+await builder.addMsTest("api-tests", "../Api.Tests/Api.Tests.csproj")
+    .withReference(api)
+    .waitFor(api);
+```
+
+The preview CLI command is disabled by default. Run the application with
+`features__testCommandEnabled=true aspire test` to opt in for that invocation.
+This flag gates CLI registration only; it does not change the hosting APIs or ordinary runs.
+The CLI reports the run's output location under its
+`testruns` directory. Each logical resource has a private directory named after it directly
+under the run directory (`<run>/api-tests`).
+Before launch, the integration allocates a fresh temporary report directory independently
+of the runtime collector and configures the runner to write `results.trx` there.
+The asynchronous `WithTesting(context => ...)` collector starts only during testing,
+waits for process completion, stages the report tree into `context.OutputPath`, and
+publishes individual test results to the common run. Failed processes still have their reports collected.
+The callback receives a `ResourceTestingContext`: `context.OutputPath` is the resource
+directory, while `context.TestingContext.OutputPath` is the containing run root.
+Generated TypeScript exposes the same root through `await context.testingContext().outputPath()`.
+Missing reports, malformed XML, unsupported outcomes, and inconsistent counters fail
+collection explicitly. Passing tests cannot override a failed process or failed collection.
+Explicit TRX outcomes preserve their meaning: `Passed` maps to Passed, `Failed` to Failed,
+`Error` to Error, `Timeout` to TimedOut, `Inconclusive` to Inconclusive, and `Aborted` to
+Cancelled. MTP's `NotExecuted` represents a skipped test and maps to Skipped; a run-level
+abort does not rewrite it or invent results for tests with no reported row.
+Only Passed and Skipped are non-failing, including when a process exits zero.
+Published TimedOut or Cancelled results are ordinary test failures, not command timeout
+or interruption.
+
+The [MTP TRX serializer](https://github.com/microsoft/testfx/blob/v4.4.0/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.Results.cs)
+currently writes timeout rows as `Failed` and distinguishes them only in aggregate counters.
+Its [state converter](https://github.com/microsoft/testfx/blob/v4.4.0/src/Platform/Microsoft.Testing.Extensions.TrxReport/Streaming/TrxTestResultExtractor.cs)
+also collapses error/cancellation into `Failed`. Those reports retain
+Failed: this integration cannot recover per-test identities or categories lost upstream.
+Summary counters are reconciled without inferring which failed row timed out.
+A failed TRX run summary causes a collection error only when no individual failing
+outcome explains it, without manufacturing individual error results. With failing cases,
+collection can complete successfully while the overall test outcome fails.
+Unknown/progress-only test states fail explicitly.
+
+Raw reports and attachments within that fresh report tree remain in the resource directory.
+Paths referenced by the TRX are not followed; symbolic links/reparse points in either tree
+are rejected. Runner temporary files are cleaned up by the AppHost's file-system service
+on disposal (unless its debugging preservation option is enabled). Runner files and staged
+copies use their respective writer's permissions; no per-file `0600` guarantee is made.
+Calling `WithTesting` again replaces the built-in collector while retaining the runtime
+output context; a marker-only call clears collection, without removing runner setup.
+
+Execution uses `dotnet run --project <absolute.csproj> --no-launch-profile -- <runner args>`,
+with the project directory as its working directory. Builds and restores are independent
+of `AddDotnetProject`'s coordinated builds, so avoid concurrent builds of shared outputs.
+Environment variables, service references, endpoints, and dependency waits compose as on
+other executable resources. The test application must consume the injected configuration;
+`WithReference` does not itself configure a test's HTTP client.
+
+Use `MsTestOptions` to select a configuration, one target framework, or runner arguments:
+
+```csharp
+builder.AddMsTest("api-tests", "../Api.Tests/Api.Tests.csproj",
+    new Aspire.Hosting.Dotnet.MsTestOptions
+    {
+        Configuration = "Release",
+        TargetFramework = "net10.0",
+        Args = ["--filter", "FullyQualifiedName~Smoke"]
+    });
+```
+
+The TypeScript options object uses `configuration`, `targetFramework`, and `args`.
+Multi-targeted projects require an explicit framework. Arguments are separate tokens, not
+shell-quoted strings; `WithArgs` also appends runner arguments after the `--` separator.
+Report destination flags, report filenames, response files, and MTP server mode are reserved.
+Only one invocation per resource is supported during testing: replicas, restarts, retries,
+merged reports, and nested legacy TRX results are not supported. Data-driven MTP results are
+kept separately by execution identity even when display names repeat.
+
+During ordinary `aspire run`, the project still executes, but Aspire does not add reporting
+arguments or collect results. MSTest resources are excluded from publish/deploy output.
+Cancellation follows the common testing lifecycle and prevents further result publication;
+whether shutdown leaves a finalized TRX depends on the runner's shutdown behavior.
+
+See [MSTest runner configuration](https://learn.microsoft.com/dotnet/core/testing/unit-testing-mstest-running-tests)
+and [MTP test reports](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-test-reports)
+for prerequisites and reporting options.
+
 ## Publishing
 
 Resources created with `AddDotnetProject` participate in the same .NET SDK container publishing pipeline as
@@ -252,22 +362,27 @@ guidance when it detects this cross-operating-system failure.
 
 Set `Destination` to `ContainerImageDestination.Archive` in `WithContainerBuildOptions` to save an SDK-built
 image as an archive. An archive-only SDK build does not require Docker or Podman to be running; layering files
-from another container still requires a container runtime. Docker supports layered archives in Docker format
-because the layering build must use Docker's local image store before `docker image save` exports the result.
-Use Podman when container-file layering must produce an OCI-format archive.
+from another container still requires a container runtime. With Docker, the layering build uses Docker's local
+image store and `docker image save` exports the result. Docker Engine 25 or later is required for
+`ContainerImageFormat.Oci`, because older engines do not write an OCI image layout; Podman supports both formats.
 
 Layered archive publishing uses private temporary image tags and does not overwrite or delete an existing
 local image with the configured destination name and tag. The archive still contains that configured image
 identity. Temporary images are cleaned up after publishing, including when a build fails or is canceled.
 
 For .NET SDK publishing, a non-existent `OutputPath` with any filename extension is an explicit archive
-filename. This includes custom extensions such as `image.custom`, not only `.tar` or `.tar.gz`. A path without
-an extension is interpreted as a directory. End a dotted directory path with the platform's directory separator
-to make its intent explicit, for example `artifacts.v1\` on Windows. Prefer an explicit archive filename when
-configuring output consumed by other tools.
+filename. This includes custom extensions such as `image.custom`, not only `.tar`. A path without an extension,
+a path ending in the platform's directory separator, or an existing directory is a directory, and the archive is
+written to `<LocalImageName>.tar` in that directory. A registry-qualified name is flattened into one file name;
+for example, `team/program` is written to `team-program.tar`. Prefer an explicit archive filename when configuring
+output consumed by other tools.
 
-These are the .NET SDK's path conventions; Dockerfile/container-runtime publishing has its own output
-conventions. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
+Archives are always written as uncompressed tar files, matching the .NET SDK. A `.tar.gz` or `.tgz` filename
+does not compress the archive, and Aspire logs a warning when one is configured. The filename, location, and
+format are the same whether or not `PublishWithContainerFiles` layers files into the image.
+
+These conventions are based on the .NET SDK's, but Aspire chooses the directory filename itself.
+Dockerfile/container-runtime publishing has its own output conventions. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
 
 ### Other publishing options
 

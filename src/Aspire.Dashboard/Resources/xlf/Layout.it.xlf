@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="it" original="../Layout.resx">
     <body>
+      <trans-unit id="BrowserStorageSaveFailed">
+        <source>Couldn't save the change. Check that browser storage is available and try again.</source>
+        <target state="translated">Non è stato possibile salvare la modifica. Verificare che lo spazio di archiviazione del browser sia disponibile e riprovare.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardRunMenuAccessibleLabel">
         <source>Select run: {0}</source>
         <target state="translated">Seleziona esecuzione: {0}</target>
@@ -334,32 +339,32 @@
       </trans-unit>
       <trans-unit id="ResourcePaneActivityFailedSingleTooltip">
         <source>{0} failed trace in the last {1} minutes</source>
-        <target state="new">{0} failed trace in the last {1} minutes</target>
+        <target state="translated">{0} traccia con errore negli ultimi {1} minuti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityFailedTooltip">
         <source>{0} failed traces in the last {1} minutes</source>
-        <target state="new">{0} failed traces in the last {1} minutes</target>
+        <target state="translated">{0} tracce non riuscite negli ultimi {1} minuti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityIncomingSingleTooltip">
         <source>{0} incoming trace in the last {1} minutes</source>
-        <target state="new">{0} incoming trace in the last {1} minutes</target>
+        <target state="translated">{0} traccia in ingresso negli ultimi {1} minuti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityIncomingTooltip">
         <source>{0} incoming traces in the last {1} minutes</source>
-        <target state="new">{0} incoming traces in the last {1} minutes</target>
+        <target state="translated">{0} tracce in ingresso negli ultimi {1} minuti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityP95Tooltip">
         <source>P95 latency: {0} in the last {1} minutes</source>
-        <target state="new">P95 latency: {0} in the last {1} minutes</target>
+        <target state="translated">Latenza P95: {0} negli ultimi {1} minuti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivitySampledP95Tooltip">
         <source>Sample p95 latency: {0} in the last {1} minutes</source>
-        <target state="new">Sample p95 latency: {0} in the last {1} minutes</target>
+        <target state="translated">Latenza P95 campione: {0} negli ultimi {1} minuti</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneChildOf">

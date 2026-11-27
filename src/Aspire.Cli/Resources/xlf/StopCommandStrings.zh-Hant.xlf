@@ -127,6 +127,31 @@
         <target state="translated">實驗性系統匣通訊協定需要 --protocol-version 1 --format json --apphost，其具有絕對檔案路徑、正 --pid 和正 --started-at (以 Unix 毫秒為單位)。不允許 --all 和 --force。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceTeardownMayContinue">
+        <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
+        <target state="translated">資源可能仍在背景中停止。使用 {0} 等候資源停止。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownNotConfirmed">
+        <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
+        <target state="translated">無法確認 {0} 的資源是否已停止。資源可能仍在背景中停止。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownTimedOut">
+        <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
+        <target state="translated">{0} 的資源未在 {1} 秒內停止。資源可能仍在背景中停止。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownUnsupported">
+        <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
+        <target state="translated">{0} 不支援等候其資源停止，因此資源可能仍在背景中停止。請將 AppHost 更新至較新的 Aspire 版本，以使用 {1}。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesTornDown">
+        <source>The resources of {0} were torn down.</source>
+        <target state="translated">{0} 的資源已拆除。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stop</source>
         <target state="translated">停止</target>
@@ -147,6 +172,21 @@
         <target state="translated">無法同時使用 {0} 與 {1} 選項。</target>
         <note />
       </trans-unit>
+      <trans-unit id="TimeoutInvalid">
+        <source>Timeout must be between 1 and {0} seconds.</source>
+        <target state="translated">逾時必須介於 1 到 {0} 秒之間。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutOptionDescription">
+        <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
+        <target state="translated">等候資源停止的時間上限 (以秒為單位)(需要 --wait)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutRequiresWait">
+        <source>The {0} option requires the {1} option.</source>
+        <target state="translated">{0} 選項需要 {1} 選項。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
         <source>an unknown version</source>
         <target state="translated">未知的版本</target>
@@ -160,6 +200,16 @@
       <trans-unit id="VolumesRequiresForce">
         <source>The {0} option requires the {1} option.</source>
         <target state="translated">{0} 選項需要 {1} 選項。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitOptionDescription">
+        <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
+        <target state="translated">等候 AppHost 的資源 (例如容器) 停止之後再返回</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitingForResourceTeardown">
+        <source>Waiting for the resources of {0} to be torn down...</source>
+        <target state="translated">正在等待 {0} 的資源拆除完成...</target>
         <note />
       </trans-unit>
     </body>

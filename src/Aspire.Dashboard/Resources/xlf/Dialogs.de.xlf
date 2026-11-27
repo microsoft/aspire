@@ -218,26 +218,6 @@ Weitere Informationen zur Verwendung von KI-Agents mit dem Dashboard, einschlie�
         <target state="translated">Ihr Feedback</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptIgnore">
-        <source>Don't ask again</source>
-        <target state="translated">Nicht erneut nachfragen</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptMessage">
-        <source>We'd love your feedback on the new experience.</source>
-        <target state="translated">Wir würden uns über Ihr Feedback zur neuen Oberfläche freuen.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptShare">
-        <source>Share feedback</source>
-        <target state="translated">Feedback teilen</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptTitle">
-        <source>Welcome to the new Aspire dashboard!</source>
-        <target state="translated">Willkommen beim neuen Aspire-Dashboard!</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
         <target state="translated">Ich konnte die URLs meiner Anwendung nicht finden.</target>
@@ -1287,7 +1267,7 @@ Konfigurieren Sie Ihre App so, dass sie Protokolle, Traces und Metriken über [O
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrapOff">
         <source>Disable word wrap</source>
-        <target state="new">Disable word wrap</target>
+        <target state="translated">Zeilenumbruch deaktivieren</target>
         <note />
       </trans-unit>
     </body>

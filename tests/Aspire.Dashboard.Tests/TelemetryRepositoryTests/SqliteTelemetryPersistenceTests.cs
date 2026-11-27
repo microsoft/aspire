@@ -1,12 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Tests;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
@@ -23,6 +27,85 @@ namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
 public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task TraceSummaries_TimestampRangeSeeksUsingResourceScope(int selectedResourceCount)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repositoryContext = await CreateRepositoryAsync(workspace.Path);
+        var start = DateTime.UnixEpoch.AddMilliseconds(1);
+        var end = DateTime.UnixEpoch.AddMilliseconds(3);
+        await repositoryContext.Repository.AddTracesAsync(new AddContext(),
+        [
+            Spans("api",
+                CreateSpan("1", "1-1", start.AddTicks(-1), end),
+                CreateSpan("2", "2-1", start.AddTicks(-1), end.AddSeconds(1))),
+            Spans("worker",
+                CreateSpan("1", "1-2", start, end, parentSpanId: "1-1"),
+                CreateSpan("2", "2-2", end, end.AddSeconds(1), parentSpanId: "2-1"),
+                CreateSpan("3", "3-1", end.AddTicks(-1), end))
+        ]);
+
+        ResourceKey[] keys = [new("API", "instance"), new("worker", null)];
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repositoryContext.Database.ActivitySource, onActivityStopped: activities.Enqueue);
+        var result = await repositoryContext.Repository.GetTraceSummariesAsync(new GetTracesRequest
+        {
+            ResourceKeys = keys[..selectedResourceCount],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.GreaterThanOrEqual, Value = "1970-01-01T00:00:00.0015Z" },
+                new FieldTelemetryFilter { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.LessThan, Value = "1970-01-01T00:00:00.0035Z" }
+            ]
+        }, TestContext.Current.CancellationToken);
+
+        // Trace 1 matches through its worker span even with only api selected. Trace 2 has no single span inside the range.
+        Assert.Equal(selectedResourceCount == 1 ? ["1"] : ["1", "3"],
+            result.PagedResult.Items.Select(trace => GetStringId(trace.TraceId)));
+
+        var sql = Assert.Single(activities.Select(a => a.GetTagItem("db.query.text")).OfType<string>(),
+            query => query.Contains("paged_traces AS", StringComparison.Ordinal));
+        using var connection = repositoryContext.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "EXPLAIN QUERY PLAN " + sql;
+        command.Parameters.AddWithValue("@StartIndex", 0);
+        command.Parameters.AddWithValue("@Count", 10);
+        command.Parameters.AddWithValue("@LatestItemCount", int.MaxValue);
+        command.Parameters.AddWithValue("@MaxTraceCount", 100_000);
+        command.Parameters.AddWithValue("@TraceFilter0", start.Ticks);
+        command.Parameters.AddWithValue("@TraceFilter1", end.Ticks);
+        if (selectedResourceCount >= 1)
+        {
+            command.Parameters.AddWithValue("@ResourceName0", keys[0].Name);
+            command.Parameters.AddWithValue("@InstanceId0", keys[0].InstanceId!);
+        }
+        if (selectedResourceCount == 2)
+        {
+            command.Parameters.AddWithValue("@ResourceName1", keys[1].Name);
+        }
+
+        using var reader = command.ExecuteReader();
+        var plan = new List<string>();
+        while (reader.Read())
+        {
+            plan.Add(reader.GetString(3));
+        }
+
+        var seekKey = selectedResourceCount == 1 ? "trace_id" : "resource_id";
+        Assert.Contains(plan, detail => detail.StartsWith("SEARCH s ", StringComparison.Ordinal) &&
+            detail.Contains($"{seekKey}=? AND start_time_ticks>? AND start_time_ticks<?", StringComparison.Ordinal));
+
+        static ResourceSpans Spans(string resource, params Span[] spans) => new()
+        {
+            Resource = CreateResource(resource, "instance"),
+            ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { spans } } }
+        };
+    }
+
     [Fact]
     public async Task ResourceSignalAvailability_UsesIndexedExistenceProbes()
     {
@@ -50,6 +133,80 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
             Assert.StartsWith("SEARCH ", probe);
             Assert.Contains("USING COVERING INDEX", probe);
         });
+    }
+
+    [Theory]
+    [InlineData(FilterCondition.GreaterThanOrEqual, "1970-01-01T00:00:00.0015Z", FilterCondition.LessThan, "1970-01-01T00:00:00.0035Z")]
+    [InlineData(FilterCondition.GreaterThan, "1970-01-01T00:00:00.0005Z", FilterCondition.LessThanOrEqual, "1970-01-01T00:00:00.0025Z")]
+    public async Task LogSummaries_TimestampRangeSeeksLogsAndPageAttributes(
+        FilterCondition lowerCondition, string lowerBound, FilterCondition upperCondition, string upperBound)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repositoryContext = await CreateRepositoryAsync(workspace.Path);
+        await repositoryContext.Repository.AddLogsAsync(new AddContext(),
+        [
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: DateTime.UnixEpoch.AddTicks(9_999), message: "before"),
+                            CreateLogRecord(time: DateTime.UnixEpoch.AddTicks(10_000), message: "first",
+                                attributes: [KeyValuePair.Create("exception.message", "first exception")]),
+                            CreateLogRecord(time: DateTime.UnixEpoch.AddTicks(29_999), message: "last"),
+                            CreateLogRecord(time: DateTime.UnixEpoch.AddTicks(30_000), message: "after")
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repositoryContext.Database.ActivitySource, onActivityStopped: activities.Enqueue);
+        var result = await repositoryContext.Repository.GetLogSummariesAsync(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 1,
+            Filters =
+            [
+                new FieldTelemetryFilter { Field = KnownStructuredLogFields.TimestampField, Condition = lowerCondition, Value = lowerBound },
+                new FieldTelemetryFilter { Field = KnownStructuredLogFields.TimestampField, Condition = upperCondition, Value = upperBound }
+            ]
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, result.TotalItemCount);
+        var summary = Assert.Single(result.Items);
+        Assert.Equal("first", summary.Message);
+        Assert.Equal("first exception", summary.ExceptionText);
+
+        var sql = Assert.Single(activities.Select(a => a.GetTagItem("db.query.text")).OfType<string>(),
+            query => query.Contains("log_attribute_summaries AS", StringComparison.Ordinal));
+        using var connection = repositoryContext.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "EXPLAIN QUERY PLAN " + sql;
+        command.Parameters.AddWithValue("@StartIndex", 0);
+        command.Parameters.AddWithValue("@Count", 1);
+        command.Parameters.AddWithValue("@LatestItemCount", int.MaxValue);
+        command.Parameters.AddWithValue("@MaxLogCount", 100_000);
+        command.Parameters.AddWithValue("@FilterValue0", DateTime.UnixEpoch.AddMilliseconds(1).Ticks);
+        command.Parameters.AddWithValue("@FilterValue1", DateTime.UnixEpoch.AddMilliseconds(3).Ticks);
+        using var reader = command.ExecuteReader();
+        var plan = new List<string>();
+        while (reader.Read())
+        {
+            plan.Add(reader.GetString(3));
+        }
+
+        Assert.Contains(plan, detail => detail.StartsWith("SEARCH l ", StringComparison.Ordinal) &&
+            detail.Contains("timestamp_ticks>? AND timestamp_ticks<?", StringComparison.Ordinal));
+        Assert.Contains(plan, detail => detail.StartsWith("SEARCH a ", StringComparison.Ordinal) &&
+            detail.Contains("log_id=?", StringComparison.Ordinal));
     }
 
     [Fact]

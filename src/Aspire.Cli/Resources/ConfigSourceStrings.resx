@@ -102,6 +102,10 @@
     <value>No configuration source is available. Set {0} to a Git repository address.</value>
     <comment>{0} is the environment variable name.</comment>
   </data>
+  <data name="FeatureDisabled" xml:space="preserve">
+    <value>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</value>
+    <comment>Do not translate "features.configSourceEnabled" or "true".</comment>
+  </data>
   <data name="ConfigurationFile" xml:space="preserve">
     <value>Configuration file</value>
   </data>

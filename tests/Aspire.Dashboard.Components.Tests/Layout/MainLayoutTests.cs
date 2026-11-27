@@ -42,29 +42,63 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal("Dashboard authentication is required, but the current user is not authenticated.", exception.Message);
     }
 
-    [Fact]
-    public async Task HeaderHelp_IsSingleActionThatOpensHelpDialog()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HeaderHelp_IsSingleActionThatOpensDocumentationTab(bool isDesktop)
     {
         DialogParameters? capturedParameters = null;
-        var dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        object? capturedContent = null;
+        var dialogService = new TestDialogService(onShowDialog: (content, parameters) =>
         {
+            capturedContent = content;
             capturedParameters = parameters;
             return Task.CompletedTask;
         });
         SetupMainLayoutServices(dialogService: dialogService);
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
-            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+            new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
-        var helpButton = cut.Find($"#{MainLayout.HelpButtonId}");
-        Assert.Equal(Resources.Layout.MainLayoutHelp, helpButton.GetAttribute("aria-label"));
-        Assert.Equal("?", helpButton.GetAttribute("aria-keyshortcuts"));
-        Assert.Empty(cut.FindAll($"header a[aria-label='{Resources.Layout.MainLayoutAspireDashboardHelpLink}']"));
+        if (isDesktop)
+        {
+            var helpButton = cut.Find($"#{MainLayout.HelpButtonId}");
+            Assert.Equal(Resources.Layout.MainLayoutHelp, helpButton.GetAttribute("aria-label"));
+            Assert.Equal("?", helpButton.GetAttribute("aria-keyshortcuts"));
+            Assert.Empty(cut.FindAll($"header a[aria-label='{Resources.Layout.MainLayoutAspireDashboardHelpLink}']"));
 
-        await cut.InvokeAsync(() => helpButton.Click());
+            await cut.InvokeAsync(() => helpButton.Click());
+        }
+        else
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+            var menuItem = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Trim() == Resources.Layout.MainLayoutHelp);
+            await cut.InvokeAsync(() => menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent }));
+
+            Assert.Empty(cut.FindAll($"#{MobileNavMenu.MobileNavMenuId}"));
+        }
 
         Assert.NotNull(capturedParameters);
         Assert.Equal("HelpDialog", capturedParameters.Id);
         Assert.Equal(Resources.Layout.MainLayoutHelp, capturedParameters.Title);
+        Assert.Equal(HelpDialogTab.Documentation, capturedContent);
+    }
+
+    [Fact]
+    public async Task MobileMenu_RefreshesWhenPageEntriesAreRegisteredAndCleared()
+    {
+        SetupMainLayoutServices();
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        Func<IEnumerable<MobileNavMenuEntry>> entries = () => [new("page", "Page view", () => Task.CompletedTask)];
+        Func<IEnumerable<MobileNavMenuEntry>> previousEntries = () => [];
+
+        await cut.InvokeAsync(() => cut.Instance.SetPageNavMenuEntries(entries));
+        cut.WaitForAssertion(() => Assert.Equal("Page view", cut.Find("fluent-menu-item").GetAttribute("data-tooltip")));
+        await cut.InvokeAsync(() => cut.Instance.ClearPageNavMenuEntries(previousEntries));
+        Assert.Equal("Page view", cut.Find("fluent-menu-item").GetAttribute("data-tooltip"));
+        await cut.InvokeAsync(() => cut.Instance.ClearPageNavMenuEntries(entries));
+        cut.WaitForAssertion(() => Assert.Equal(Resources.Layout.MainLayoutHelp, cut.Find("fluent-menu-item").GetAttribute("data-tooltip")));
     }
 
     [Fact]
@@ -203,8 +237,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (false, false);
-                case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
-                    return (true, true);
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
@@ -258,8 +290,6 @@ public partial class MainLayoutTests : DashboardTestContext
                     return (unsecuredTelemetryMessageDismissedKey, unsecuredTelemetryMessageDismissedKey);
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (unsecuredEndpointMessageDismissedKey, unsecuredEndpointMessageDismissedKey);
-                case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
-                    return (true, true);
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
@@ -298,8 +328,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (false, false); // Message not dismissed, but should be suppressed by config if suppressUnsecuredMessage is true
-                case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
-                    return (true, true);
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
@@ -342,11 +370,6 @@ public partial class MainLayoutTests : DashboardTestContext
             OnGetUnprotectedAsync = key =>
             {
                 // The view preferences are read with the layout too, and aren't what this test is about.
-                if (key == BrowserStorageKeys.DashboardFeedbackPromptDismissed)
-                {
-                    return (true, true);
-                }
-
                 if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview)
                 {
                     return (false, null);
@@ -370,42 +393,97 @@ public partial class MainLayoutTests : DashboardTestContext
         messageBarProvider.WaitForAssertion(() => Assert.Single(messageBarProvider.FindComponents<DashboardMessageBar>()));
     }
 
-    [Theory]
-    [InlineData("a.dashboard-message-bar-link-action", BrowserStorageKeys.DashboardFeedbackPromptDismissed)]
-    [InlineData("fluent-button.dashboard-message-bar-action", BrowserStorageKeys.DashboardFeedbackPromptDismissed)]
-    [InlineData("fluent-button.dashboard-message-bar-dismiss", BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession)]
-    public async Task DashboardFeedbackPrompt_Close_StoresDismissal(string selector, string expectedKey)
+    [Fact]
+    public async Task OnInitialize_StartsBrowserStorageAndBrowserInfoReadsConcurrently()
     {
-        var dismissedKeySetTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var expectedKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+            BrowserStorageKeys.ResourceListDensity,
+            BrowserStorageKeys.GroupOverview,
+            BrowserStorageKeys.TimeFormat,
+            BrowserStorageKeys.SelectedDashboardRunId,
+            BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey,
+            BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey
+        };
+        var requestedKeys = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
+        var allReadsStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void RecordKey(string key)
+        {
+            requestedKeys.TryAdd(key, 0);
+            if (expectedKeys.All(requestedKeys.ContainsKey))
+            {
+                allReadsStarted.TrySetResult();
+            }
+        }
+
         var localStorage = new TestLocalStorage
         {
+            OnBeforeGetAsync = key =>
+            {
+                RecordKey(key);
+                return allReadsStarted.Task;
+            },
+            OnBeforeGetUnprotectedAsync = key =>
+            {
+                RecordKey(key);
+                return allReadsStarted.Task;
+            },
+            OnGetAsync = key => key == BrowserStorageKeys.TimeFormat ? (true, TimeFormat.TwentyFourHour) : (false, null),
             OnGetUnprotectedAsync = key => key switch
             {
-                BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey or BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey => (true, true),
+                BrowserStorageKeys.ResourceListDensity => (true, nameof(ResourceListDensity.Comfortable)),
+                BrowserStorageKeys.GroupOverview => (true, nameof(GroupOverview.Graph)),
+                BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey => (true, true),
+                BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey => (true, true),
                 _ => (false, null)
-            },
-            OnSetUnprotectedAsync = (key, _) => dismissedKeySetTcs.TrySetResult(key)
+            }
         };
         var sessionStorage = new TestSessionStorage
         {
-            OnGetAsync = _ => (false, null),
-            OnSetAsync = (key, _) => dismissedKeySetTcs.TrySetResult(key)
+            OnGetTaskAsync = async key =>
+            {
+                RecordKey(key);
+                await allReadsStarted.Task;
+                return (false, null);
+            }
         };
-        SetupMainLayoutServices(localStorage: localStorage, sessionStorage: sessionStorage);
 
-        var cut = Render<MainLayout>(builder =>
+        SetupMainLayoutServices(localStorage: localStorage, sessionStorage: sessionStorage);
+        var browserInfoPlanned = JSInterop.Setup<BrowserInfo>("window.getBrowserInfo");
+
+        var cut = Render<MainLayout>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        // Every storage key and getBrowserInfo must already be in flight before getBrowserInfo resolves.
+        await allReadsStarted.Task.DefaultTimeout();
+        Assert.Single(JSInterop.Invocations["window.getBrowserInfo"]);
+
+        browserInfoPlanned.SetResult(new BrowserInfo { TimeZone = "UTC", Is24HourTime = false, UserAgent = "test-agent" });
+
+        var timeProvider = Services.GetRequiredService<BrowserTimeProvider>();
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(TimeFormat.TwentyFourHour, timeProvider.ConfiguredTimeFormat);
+            Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
+            Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
+            // One snapshot for DashboardViewPreferences and one for MainLayout's dismissed message keys.
+            Assert.Equal(2, localStorage.SnapshotReadCount);
+        });
+    }
+
+    [Fact]
+    public void OnInitialize_FreshBrowser_DoesNotShowWelcomeMessage()
+    {
+        SetupMainLayoutServices(configureOptions: options => options.Otlp.SuppressUnsecuredMessage = true);
+
+        Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        var messageBarProvider = _messageBarProvider!;
-        var link = messageBarProvider.WaitForElement("a.dashboard-message-bar-link-action");
-        Assert.Equal(DashboardFeedbackDialog.DiscussionUrl, link.GetAttribute("href"));
-        Assert.Equal("_blank", link.GetAttribute("target"));
-
-        messageBarProvider.Find(selector).Click();
-
-        Assert.Equal(expectedKey, await dismissedKeySetTcs.Task.DefaultTimeout());
+        Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
     }
 
     [Theory]
@@ -438,7 +516,7 @@ public partial class MainLayoutTests : DashboardTestContext
         else
         {
             var menuItemName = expectedDialogId == "HelpDialog"
-                ? Resources.Layout.MainLayoutKeyboardShortcuts
+                ? Resources.Layout.MainLayoutHelp
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
@@ -724,9 +802,7 @@ public partial class MainLayoutTests : DashboardTestContext
         supportsRunSelection: false);
         var sessionStorage = new TestSessionStorage
         {
-            OnGetAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
-                ? (false, false)
-                : throw new InvalidOperationException("Run selection should not be read.")
+            OnGetAsync = _ => throw new InvalidOperationException("Run selection should not be read.")
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
@@ -805,9 +881,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelectionSource = new TaskCompletionSource<(bool Success, object? Value)>(TaskCreationOptions.RunContinuationsAsynchronously);
         var sessionStorage = new TestSessionStorage
         {
-            OnGetTaskAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
-                ? Task.FromResult<(bool Success, object? Value)>((false, false))
-                : runSelectionSource.Task
+            OnGetTaskAsync = _ => runSelectionSource.Task
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
@@ -857,9 +931,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelectionSource = new TaskCompletionSource<(bool Success, object? Value)>(TaskCreationOptions.RunContinuationsAsynchronously);
         var sessionStorage = new TestSessionStorage
         {
-            OnGetTaskAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
-                ? Task.FromResult<(bool Success, object? Value)>((false, false))
-                : runSelectionSource.Task
+            OnGetTaskAsync = _ => runSelectionSource.Task
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         await Services.GetRequiredService<DashboardViewPreferences>().EnsureLoadedAsync();
@@ -910,9 +982,7 @@ public partial class MainLayoutTests : DashboardTestContext
         string? storedRunId = null;
         var sessionStorage = new TestSessionStorage
         {
-            OnGetAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
-                ? (false, false)
-                : (true, "historical"),
+            OnGetAsync = _ => (true, "historical"),
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
         var testSink = new TestSink();
@@ -975,9 +1045,7 @@ public partial class MainLayoutTests : DashboardTestContext
         string? storedRunId = null;
         var sessionStorage = new TestSessionStorage
         {
-            OnGetTaskAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
-                ? Task.FromResult<(bool Success, object? Value)>((false, false))
-                : runSelectionSource.Task,
+            OnGetTaskAsync = _ => runSelectionSource.Task,
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
@@ -1033,7 +1101,7 @@ public partial class MainLayoutTests : DashboardTestContext
         else
         {
             var menuItemName = expectedDialogId == "HelpDialog"
-                ? Resources.Layout.MainLayoutKeyboardShortcuts
+                ? Resources.Layout.MainLayoutHelp
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());

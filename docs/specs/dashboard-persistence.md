@@ -77,19 +77,28 @@ avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags
 It uses the reserved trait `Aspire_Tag`, which is not dashboard-specific: it also
 appears as the `resource.trait.Aspire_Tag` property in `aspire describe --format json`.
 These tags participate in dashboard tag grouping but cannot be removed in the
-dashboard. User-added tags are stored separately in browser local storage, so
-restarting an AppHost does not lose customizations or copy declared tags from a
-different run.
+dashboard. User-added tags, metric pins, and drag-and-drop moves are saved per
+application in protected browser local storage, not in the run database. Old
+plaintext preferences aren't migrated, and saved preferences are unavailable if
+the Dashboard loses access to the keys used to protect them. Each application can
+save up to 50 tag assignments (one per resource and tag) and 50 metric pins (one
+per resource and instrument). Pins without matching telemetry and assignments for
+removed resources or tags now declared by the AppHost still count toward these
+limits. The dashboard has no way to clear those entries.
 
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous
-value. It isn't specific to the dashboard, so other UIs can use it too. Like
-`ResourceUrlAnnotation.DisplayOrder`, it's a relative sort key: higher values appear first,
-and resources without one are treated as 0, so a negative value moves a resource after them.
-Resources with the same nonzero order are displayed by name; resources with an order of 0,
-whether declared or not, keep their existing order. Orders can change between runs until
-the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
-per application, independently of the run database.
+value. The new dashboard resource pane uses it only when **Group resources** is
+set to **None**. Higher values appear first; unspecified values count as 0. Ties
+at 0 sort by type and name; other ties sort by name. Late arrivals follow the same
+rules.
+
+The Dashboard saves only explicit moves and replays them over the default order.
+A move uses its drop target when possible and falls back to the other neighbor.
+The Dashboard rejects a resource move if the moved resource or its drop target
+shares a saved key with another resource, even under a different parent. It
+keeps the latest move per item and any earlier moves needed as anchors for other
+moves. It saves up to 50 resource moves and 50 group moves across grouping modes.
 
 Traits are transported as list-valued resource properties named `resource.trait.<name>`,
 including in recorded snapshots. Trait names are case-sensitive; dashboard tags are

@@ -26,7 +26,7 @@
     </StableSectionContent>
 }
 
-<div class="resource-overview @(IsTerminalFocused ? "terminal-focused" : null)" tabindex="-1"
+<div class="resource-overview" tabindex="-1"
      data-resource-name="@Resource?.Name" data-resource-subscription="@_subscribedResourceName">
     @if (ResourcesLayout is null || !ResourcesLayout.IsLoaded)
     {
@@ -47,8 +47,9 @@
     }
     else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
     {
-        @* All resources, or several selected resources: show their scoped Summary or Graph. *@
-        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : null)" />
+        var resourceNames = ResourcesLayout.SelectedResourceNames;
+        <ApplicationSummary ResourceNames="@(resourceNames.Count > 0 ? resourceNames : null)"
+                            TelemetryResourceKeys="@ResourcesLayout.GetSelectionTelemetryKeys(resourceNames)" />
     }
     else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {
@@ -92,7 +93,7 @@
         var showEndpoints = urls.Count > 0;
         var showTerminal = CanShowTerminal(resource);
         var showConsole = !showTerminal;
-        var showOverviewTerminal = showTerminal && (IsTerminalFocused || !TerminalDockState.IsResourceOpen(resource.Name));
+        var showOverviewTerminal = showTerminal && !TerminalDockState.IsResourceOpen(resource.Name);
         var properties = GetVisibleProperties();
         var environmentVariables = GetVisibleEnvironmentVariables(resource);
         var healthReports = GetHealthReports(resource);
@@ -137,7 +138,7 @@
                     <h2 id="overview-endpoints-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointsTitle)]</h2>
                     @if (endpointGroups.Count > 0)
                     {
-                        <span class="overview-card-count">@endpointGroups.Count</span>
+                        <span class="aspire-count-badge overview-card-count">@endpointGroups.Count</span>
                     }
                 </div>
                 <ul class="overview-list overview-endpoints">
@@ -215,11 +216,11 @@
                 {
                 var telemetry = metricsTelemetry;
                     <div class="overview-stats">
-                        <a class="overview-stat" href="@DashboardUrls.MetricsUrl(resourceName, all: true)">
+                        <a class="overview-stat" href="@DashboardUrls.MetricsUrl(resourceName)">
                             <span class="overview-stat-value">@telemetry.Instruments.Count.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInstruments)]</span>
                         </a>
-                        <a class="overview-stat" href="@DashboardUrls.MetricsUrl(resourceName, all: true)">
+                        <a class="overview-stat" href="@DashboardUrls.MetricsUrl(resourceName)">
                             <span class="overview-stat-value">@telemetry.Instruments.Select(i => i.Parent.Name).Distinct(StringComparer.Ordinal).Count().ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMeters)]</span>
                         </a>
@@ -264,19 +265,28 @@
                            aria-label="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]">
                             <FluentIcon Value="@(new Icons.Regular.Size16.Book())" Color="Color.Primary" />
                         </a>
-                        @CardActionButton(
-                            IsTerminalFocused ? TerminalLoc[nameof(TerminalStrings.TerminalMinimize)] : TerminalLoc[nameof(TerminalStrings.TerminalExpand)],
-                            IsTerminalFocused ? new Icons.Regular.Size16.ArrowMinimize() : new Icons.Regular.Size16.ArrowExpand(),
-                            ToggleTerminalFocus)
+                        <TerminalWindowButton Class="overview-card-action"
+                                              IconColor="Color.Primary"
+                                              Label="@TerminalLoc[nameof(TerminalStrings.TerminalToolbarOpenInWindow)]"
+                                              TerminalKey="@($"resource:{resourceName}")"
+                                              Url="@($"terminal-window/resource/{Uri.EscapeDataString(resourceName)}")"
+                                              FontSize="@_terminalFontSize" />
+                        @{ var expandTerminal = TerminalLoc[nameof(TerminalStrings.TerminalExpand)]; }
+                        <a class="aspire-icon-button overview-card-action"
+                           href="@GetTerminalPageUrl(resourceName)"
+                           data-tooltip="@expandTerminal"
+                           aria-label="@expandTerminal">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.ArrowExpand())" Color="Color.Primary" />
+                        </a>
                     </div>
                 </div>
                 <div class="overview-terminal">
-                    <TerminalView @ref="_terminalView"
-                                  ResourceName="@resource.Name"
+                    <TerminalView ResourceName="@resource.Name"
                                   Chromeless="true"
                                   Embedded="true"
-                                  ShowDimensionsPicker="@IsTerminalFocused"
-                                  AutoFit="@(!IsTerminalFocused || resource.ShouldAutoFitTerminal())"
+                                  ShowDimensionsPicker="false"
+                                  AutoFit="true"
+                                  OnToolbarStateChanged="@_terminalToolbarStateChanged"
                                   SizeMemoryKey="@($"overview:{resource.Name}")" />
                 </div>
             </section>
@@ -301,7 +311,7 @@
                             () => OnConsolePausedChanged(!PauseManager.ConsoleLogsPaused))
                         @CardActionButton(
                             Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewOpenConsole)],
-                            new Icons.Regular.Size16.Open(),
+                            new Icons.Regular.Size16.ArrowExpand(),
                             () => NavigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resourceName)))
                     </div>
                 </div>
@@ -488,7 +498,7 @@
                     <h2 id="overview-relationships-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipsTitle)]</h2>
                     @if (relatedResources.Count > 0)
                     {
-                        <span class="overview-card-count">@relatedResources.Count</span>
+                        <span class="aspire-count-badge overview-card-count">@relatedResources.Count</span>
                     }
                 </div>
                 @if (relatedResources.Count == 0)
@@ -612,7 +622,7 @@
                             <FluentIcon Value="@(new Icons.Regular.Size16.Storage())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                         </span>
                         <h2 id="overview-volumes-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]</h2>
-                        <span class="overview-card-count">@volumes.Count</span>
+                        <span class="aspire-count-badge overview-card-count">@volumes.Count</span>
                     </div>
                     <ul class="overview-list">
                         @foreach (var volume in volumes)
@@ -666,30 +676,22 @@
                             <FluentIcon Value="@(new Icons.Regular.Size16.Heart())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                         </span>
                         <h2 id="overview-health-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]</h2>
-                        <span class="overview-card-count">@healthReports.Count</span>
+                        <span class="aspire-count-badge overview-card-count">@healthReports.Count</span>
                     </div>
-                    <ul class="overview-list">
-                        @foreach (var report in healthReports)
-                        {
-                            <li @key="report.Name">
-                                @if (report.HealthStatus is null)
-                                {
-                                    <AspireProgressRing Width="16px"
-                                                        Style="display: inline-block;"
-                                                        AriaLabel="@Loc[nameof(Dashboard.Resources.Resources.WaitingForHealthDataMessage)]" />
-                                }
-                                else
-                                {
-                                    (Icon? healthIcon, Color healthColor) = ResourceIconHelpers.GetHealthStatusIcon(report.HealthStatus);
-                                    <FluentIcon Value="@healthIcon" Color="@healthColor" Width="16px" />
-                                }
-                                <span class="overview-list-label" data-tooltip="@report.Name">@report.Name</span>
-                                <span class="overview-list-value overview-muted" data-tooltip="@report.DisplayedDescription">@report.DisplayedDescription</span>
-                                <ExceptionDetails ExceptionText="@report.ExceptionText" />
-                                <span class="overview-list-time" data-tooltip="@HealthReportFormatter.GetLastRunTooltip(report, TimeProvider)">@HealthReportFormatter.GetStatusWithTime(report, Loc)</span>
-                            </li>
-                        }
-                    </ul>
+                    <PropertyGrid TItem="HealthCheckProperty"
+                                  Items="@healthReports"
+                                  GridTemplateColumns="minmax(0, 1fr) minmax(0, 2fr)"
+                                  GenerateHeader="DataGridGeneratedHeaderType.None"
+                                  RowSize="DataGridRowSize.Small"
+                                  Class="overview-property-grid">
+                        <ContentBeforeName Context="check">
+                            @{ var (healthIcon, healthColor) = ResourceIconHelpers.GetHealthStatusIcon(check.Report.HealthStatus); }
+                            <FluentIcon Value="@healthIcon" Color="@healthColor" Width="16px" Class="severity-icon" />
+                        </ContentBeforeName>
+                        <ContentInButtonArea Context="check">
+                            <ExceptionDetails ExceptionText="@check.Report.ExceptionText" />
+                        </ContentInButtonArea>
+                    </PropertyGrid>
                 </section>
             }
             else
@@ -719,11 +721,11 @@
     {
         if (shown < total)
         {
-            <span class="overview-card-count">@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewCountOfTotal)], shown, total)</span>
+            <span class="aspire-count-badge overview-card-count">@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewCountOfTotal)], shown, total)</span>
         }
         else
         {
-            <span class="overview-card-count">@total</span>
+            <span class="aspire-count-badge overview-card-count">@total</span>
         }
     };
 
@@ -820,7 +822,7 @@
             {
                 <li>
                     <div class="overview-metric-tile">
-                        <span class="overview-metric-name"><FluentSkeleton Width="70%" Height="12px" Shimmer="true" /></span>
+                        <span class="metric-instrument-title"><FluentSkeleton Width="70%" Height="12px" Shimmer="true" /></span>
                         <span><FluentSkeleton Width="40%" Height="16px" Shimmer="true" /></span>
                     </div>
                 </li>
@@ -838,7 +840,7 @@
                 <section class="overview-selection-group" aria-label="@group.Title" @key="group.Title">
                     <h2 class="overview-selection-group-title">
                         @group.Title
-                        <span class="overview-card-count">@group.Names.Count</span>
+                        <span class="aspire-count-badge overview-card-count">@group.Names.Count</span>
                     </h2>
                     <div class="overview-selection-grid" role="list">
                         @foreach (var name in group.Names)

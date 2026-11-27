@@ -137,7 +137,6 @@
 .terminal-font-size {
     min-width: 32px;
     text-align: center;
-    font-weight: var(--aspire-font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 

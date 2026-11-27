@@ -161,7 +161,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
 
     protected string FormatUnit(OtlpInstrumentSummary instrument, double value)
     {
-        return InstrumentUnitResolver.ResolveDisplayedUnit(instrument, titleCase: false, pluralize: value != 1);
+        return InstrumentUnitResolver.ResolveDisplayedUnit(instrument, capitalize: false, pluralize: value != 1);
     }
 
     private async Task RefreshPeriodicallyAsync(CancellationToken cancellationToken)
@@ -324,7 +324,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
 
         var calculator = new ChartDataCalculator(SparklinePointCount, duration);
         var endTimeOffset = new DateTimeOffset(endTime, TimeSpan.Zero);
-        var unit = InstrumentUnitResolver.ResolveDisplayedUnit(instrument, titleCase: true, pluralize: true);
+        var unit = InstrumentUnitResolver.ResolveDisplayedUnit(instrument, capitalize: true, pluralize: true);
 
         // Histograms show their median. It's the most representative single value for a
         // distribution, and the full chart is one click away for P90/P99.

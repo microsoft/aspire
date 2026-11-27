@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -331,19 +331,19 @@ public partial class ResourcesTests : DashboardTestContext
         });
 
         // Assert 1
-        Assert.Collection(cut.Instance.PageViewModel.ResourceTypesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceTypesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal("Type1", kvp.Key);
                 Assert.True(kvp.Value);
             });
-        Assert.Collection(cut.Instance.PageViewModel.ResourceStatesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceStatesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal("Running", kvp.Key);
                 Assert.True(kvp.Value);
             });
-        Assert.Collection(cut.Instance.PageViewModel.ResourceHealthStatusesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceHealthStatusesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal("Unhealthy", kvp.Key);
@@ -364,7 +364,7 @@ public partial class ResourcesTests : DashboardTestContext
         cut.WaitForState(() => cut.Instance.GetFilteredResources().Count() == 2);
 
         // Assert 2
-        Assert.Collection(cut.Instance.PageViewModel.ResourceTypesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceTypesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal("Type1", kvp.Key);
@@ -375,13 +375,13 @@ public partial class ResourcesTests : DashboardTestContext
                 Assert.Equal("Type2", kvp.Key);
                 Assert.True(kvp.Value);
             });
-        Assert.Collection(cut.Instance.PageViewModel.ResourceStatesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceStatesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal("Running", kvp.Key);
                 Assert.True(kvp.Value);
             });
-        Assert.Collection(cut.Instance.PageViewModel.ResourceHealthStatusesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceHealthStatusesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal("Healthy", kvp.Key);
@@ -528,8 +528,8 @@ public partial class ResourcesTests : DashboardTestContext
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, client);
         var store = Services.GetRequiredService<ResourceTagStore>();
         await store.EnsureLoadedAsync();
-        store.AddTag("api", "backend");
-        store.AddTag("api", "Personal");
+        await store.AddTagAsync("api", "backend");
+        await store.AddTagAsync("api", "Personal");
 
         var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
         module.SetupVoid("initializeResourcesGraph", _ => true).SetVoidResult();
@@ -549,9 +549,9 @@ public partial class ResourcesTests : DashboardTestContext
         }
 
         cut.WaitForAssertion(() => AssertTags("Backend", "API", "Personal"));
-        await cut.InvokeAsync(() => store.AddTag("api", "Shared"));
+        await cut.InvokeAsync(() => store.AddTagAsync("api", "Shared"));
         cut.WaitForAssertion(() => AssertTags("Backend", "API", "Personal", "Shared"));
-        await cut.InvokeAsync(() => store.RemoveTag("api", "Personal"));
+        await cut.InvokeAsync(() => store.RemoveTagAsync("api", "Personal"));
         cut.WaitForAssertion(() => AssertTags("Backend", "API", "Shared"));
     }
 
@@ -730,7 +730,7 @@ public partial class ResourcesTests : DashboardTestContext
         }
         else
         {
-            await cut.InvokeAsync(() => cut.Instance.PageViewModel.TextFilter = "api");
+            await cut.InvokeAsync(() => cut.Instance.PageViewModel.Filters.TextFilter = "api");
         }
 
         await channel.Writer.WriteAsync([new ResourceViewModelChange(
@@ -920,7 +920,7 @@ public partial class ResourcesTests : DashboardTestContext
         // Act and assert
         var cut = Render<Components.Pages.Resources>(builder => { builder.AddCascadingValue(viewport); });
 
-        Assert.Collection(cut.Instance.PageViewModel.ResourceTypesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceTypesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal("Type1", kvp.Key);
@@ -931,7 +931,7 @@ public partial class ResourcesTests : DashboardTestContext
                 Assert.Equal("Type2", kvp.Key);
                 Assert.False(kvp.Value);
             });
-        Assert.Collection(cut.Instance.PageViewModel.ResourceStatesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceStatesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal("Finished", kvp.Key);
@@ -944,7 +944,7 @@ public partial class ResourcesTests : DashboardTestContext
             });
 
         // Unhealthy not included because it's not present in any resource
-        Assert.Collection(cut.Instance.PageViewModel.ResourceHealthStatusesToVisibility.OrderBy(kvp => kvp.Key),
+        Assert.Collection(cut.Instance.PageViewModel.Filters.ResourceHealthStatusesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
             {
                 Assert.Equal(string.Empty, kvp.Key);
@@ -1220,7 +1220,7 @@ public partial class ResourcesTests : DashboardTestContext
         cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Parameters;
         
         // Set the parameter type filter to false (which would normally hide parameters)
-        cut.Instance.PageViewModel.ResourceTypesToVisibility[KnownResourceTypes.Parameter] = false;
+        cut.Instance.PageViewModel.Filters.ResourceTypesToVisibility[KnownResourceTypes.Parameter] = false;
         cut.Render();
 
         // Assert - Parameters view should still show all parameters, ignoring the resource type filter

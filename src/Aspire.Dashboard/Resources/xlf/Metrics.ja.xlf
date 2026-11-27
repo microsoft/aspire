@@ -7,11 +7,6 @@
         <target state="translated">すべてのインストルメント</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsBackTo">
-        <source>Back to {0}</source>
-        <target state="translated">{0} に戻る</target>
-        <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
-      </trans-unit>
       <trans-unit id="MetricsFilterResultsTitle">
         <source>Metrics matching "{0}"</source>
         <target state="translated">"{0}" に一致するメトリック</target>
@@ -123,8 +118,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
-        <source>No metrics match the filter</source>
-        <target state="translated">フィルターに一致するメトリックがありません</target>
+        <source>No metrics found</source>
+        <target state="new">No metrics found</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">
@@ -166,6 +161,11 @@
         <source>Pin metric</source>
         <target state="translated">メトリックをピン留め</target>
         <note />
+      </trans-unit>
+      <trans-unit id="MetricsPinLimitReached">
+        <source>Can't pin this metric. The limit is {0} pins per application. Select fewer resources or unpin existing metrics.</source>
+        <target state="translated">このメトリックはピン留めできません。アプリケーションごとのピン留め上限は {0} 個です。選択するリソースを減らすか、既存のメトリックのピン留めを解除してください。</target>
+        <note>{0} is the maximum number of saved metric pins.</note>
       </trans-unit>
       <trans-unit id="MetricsPinnedEmpty">
         <source>No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</source>

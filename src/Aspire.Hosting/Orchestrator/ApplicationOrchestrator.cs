@@ -708,6 +708,20 @@ internal sealed class ApplicationOrchestrator
         await _dcpExecutor.StopAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Stops the application resources and waits until the orchestrator confirms they were cleaned up.
+    /// </summary>
+    /// <remarks>
+    /// Used when a caller such as <c>aspire stop --wait</c> needs the resources to be gone before the AppHost exits.
+    /// The regular shutdown path leaves the cleanup to DCP, which finishes it after the AppHost process has exited.
+    /// </remarks>
+    public async Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken)
+    {
+        _shutdownCancellation.Cancel();
+
+        return await _dcpExecutor.StopAndWaitForResourceCleanupAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task StartResourceAsync(string resourceName, CancellationToken cancellationToken)
     {
         var resourceReference = _dcpExecutor.GetResource(resourceName);

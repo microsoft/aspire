@@ -50,6 +50,16 @@ internal sealed class FileLock : IDisposable
     }
 
     /// <summary>
+    /// Acquires an exclusive lease with owner-only Unix permissions at creation.
+    /// </summary>
+    public static FileLock AcquirePrivate(string lockPath)
+    {
+        CreateLockDirectory(lockPath);
+
+        return new FileLock(CreateLockStream(lockPath, privateFile: true));
+    }
+
+    /// <summary>
     /// Acquires an exclusive file lock synchronously, retrying on contention.
     /// </summary>
     /// <param name="lockPath">The full path of the lock file.</param>
@@ -163,13 +173,23 @@ internal sealed class FileLock : IDisposable
     /// file is cleaned up automatically when the handle is released.
     /// </summary>
     private static FileStream CreateLockStream(string lockPath)
+        => CreateLockStream(lockPath, privateFile: false);
+
+    private static FileStream CreateLockStream(string lockPath, bool privateFile)
     {
-        return new FileStream(
-            lockPath,
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.None,
-            bufferSize: 1,
-            FileOptions.DeleteOnClose);
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.OpenOrCreate,
+            Access = FileAccess.ReadWrite,
+            Share = FileShare.None,
+            BufferSize = 1,
+            Options = FileOptions.DeleteOnClose
+        };
+        if (privateFile && !OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        return new FileStream(lockPath, options);
     }
 }

@@ -2,7 +2,8 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: var(--layout-top-padding) var(--layout-right-padding) 24px var(--layout-left-padding);
+    margin-top: var(--layout-top-padding);
+    padding: 0 var(--layout-right-padding) 24px var(--layout-left-padding);
     container-type: inline-size;
     outline: none;
 }
@@ -10,6 +11,7 @@
 .resource-overview:has(> .home.graph-view) {
     /* The graph's menu otherwise adds a line box below the full-height canvas. */
     overflow: hidden;
+    margin-top: 0;
     padding: 0;
 }
 
@@ -20,31 +22,6 @@
     gap: var(--aspire-space-2);
     padding: 48px 16px;
     color: var(--colorNeutralForeground2);
-}
-
-.resource-overview.terminal-focused {
-    display: flex;
-    overflow: hidden;
-    padding-bottom: var(--layout-top-padding);
-}
-
-.terminal-focused > .overview-grid {
-    flex: 1;
-    display: flex;
-    min-width: 0;
-    min-height: 0;
-}
-
-/* Keep the cards and terminal mounted so minimizing restores their state without reconnecting. */
-.terminal-focused > .overview-grid > :not(.overview-terminal-card),
-.terminal-focused > .overview-grid ::deep > .overview-status-card {
-    display: none;
-}
-
-.resource-overview.terminal-focused > .overview-grid > .overview-terminal-card {
-    flex: 1;
-    height: auto;
-    min-height: 0;
 }
 
 .overview-grid {
@@ -152,11 +129,6 @@
 }
 
 .overview-card-count {
-    padding: 0 6px;
-    border-radius: var(--aspire-radius-medium);
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-caption);
     font-weight: var(--aspire-font-weight-semibold);
 }
 
@@ -586,12 +558,7 @@ a.overview-stat:focus-visible {
 }
 
 .overview-terminal ::deep .terminal-footer {
-    min-height: 36px;
-    padding: 3px 8px;
-}
-
-.overview-terminal ::deep .terminal-focus-hint {
-    font-size: var(--aspire-font-size-secondary);
+    display: none;
 }
 
 .overview-console-line {
@@ -630,31 +597,21 @@ a.overview-stat:focus-visible {
 }
 
 ::deep .overview-metric-tile {
+    --overview-metric-tile-padding-inline: 10px;
+
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
-    padding: 8px 10px;
-    border: 1px solid var(--colorNeutralStroke3);
+    padding: 8px var(--overview-metric-tile-padding-inline);
+    border: 1px solid var(--property-grid-row-divider-color, var(--datagrid-border-color));
     border-radius: var(--aspire-radius-medium);
-    color: inherit;
+    color: var(--colorNeutralForeground1);
     text-decoration: none;
 }
 
 ::deep .overview-metric-tile:hover {
-    border-color: var(--colorBrandStroke1);
-    background: var(--colorNeutralBackground1Hover);
-}
-
-::deep .overview-metric-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-::deep .overview-metric-name {
-    color: var(--colorBrandForegroundLink);
-    font-size: var(--aspire-font-size-body);
+    background-color: var(--property-grid-row-hover-color);
 }
 
 .overview-selection-groups {
@@ -809,6 +766,6 @@ a.overview-selection-card-title:hover {
 
 @media (max-width: 767px) {
     .resource-overview {
-        padding: 12px;
+        padding: 0 12px 12px;
     }
 }

@@ -79,8 +79,37 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
         // Span output format: "timestamp STATUS shortSpanId resourceName     duration spanName"
         var spanLines = outputWriter.Logs.Where(l => l.Contains("frontend") || l.Contains("backend")).ToList();
         Assert.Equal(2, spanLines.Count);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      50ms frontend: GET /index span001 (http://localhost:18888/traces/detail/trace001?spanId=span001)", spanLines[0]);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10))} ERR     20ms backend: SELECT * FROM users span002 (http://localhost:18888/traces/detail/trace001?spanId=span002)", spanLines[1]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      50ms frontend: GET /index span001", spanLines[0]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10))} ERR     20ms backend: SELECT * FROM users span002", spanLines[1]);
+    }
+
+    [Fact]
+    public async Task TelemetrySpansCommand_InteractiveOutput_IncludesDashboardLinks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+            resources:
+            [
+                new ResourceInfoJson { Name = "frontend", InstanceId = null },
+            ],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/spans"] = BuildSpansJson(
+                ("frontend", null, "span001", "GET /index", s_testTime, s_testTime.AddMilliseconds(50), false))
+            },
+            hostEnvironment: TestHelpers.CreateInteractiveHostEnvironment());
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel spans");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The test console doesn't support hyperlinks, so the dashboard link is written as "text (url)".
+        var spanLine = Assert.Single(outputWriter.Logs, l => l.Contains("frontend"));
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      50ms frontend: GET /index span001 (http://localhost:18888/traces/detail/trace001?spanId=span001)", spanLine);
     }
 
     [Fact]
@@ -114,8 +143,8 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
         // Replicas get shortened GUID appended
         var spanLines = outputWriter.Logs.Where(l => l.Contains("apiservice")).ToList();
         Assert.Equal(2, spanLines.Count);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      75ms apiservice-55555555: GET /api/products span001 (http://localhost:18888/traces/detail/trace001?spanId=span001)", spanLines[0]);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10))} ERR     50ms apiservice-eeeeeeee: POST /api/orders span002 (http://localhost:18888/traces/detail/trace001?spanId=span002)", spanLines[1]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      75ms apiservice-55555555: GET /api/products span001", spanLines[0]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10))} ERR     50ms apiservice-eeeeeeee: POST /api/orders span002", spanLines[1]);
     }
 
     private static string BuildSpansJson(params (string serviceName, string? instanceId, string spanId, string name, DateTime startTime, DateTime endTime, bool hasError)[] entries)

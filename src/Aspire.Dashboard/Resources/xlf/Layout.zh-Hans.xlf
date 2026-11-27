@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../Layout.resx">
     <body>
+      <trans-unit id="BrowserStorageSaveFailed">
+        <source>Couldn't save the change. Check that browser storage is available and try again.</source>
+        <target state="translated">无法保存更改。请检查浏览器存储是否可用，然后重试。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardRunMenuAccessibleLabel">
         <source>Select run: {0}</source>
         <target state="translated">选择运行: {0}</target>
@@ -334,32 +339,32 @@
       </trans-unit>
       <trans-unit id="ResourcePaneActivityFailedSingleTooltip">
         <source>{0} failed trace in the last {1} minutes</source>
-        <target state="new">{0} failed trace in the last {1} minutes</target>
+        <target state="translated">过去 {1} 分钟内有 {0} 个失败跟踪</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityFailedTooltip">
         <source>{0} failed traces in the last {1} minutes</source>
-        <target state="new">{0} failed traces in the last {1} minutes</target>
+        <target state="translated">过去 {1} 分钟内有 {0} 个失败跟踪</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityIncomingSingleTooltip">
         <source>{0} incoming trace in the last {1} minutes</source>
-        <target state="new">{0} incoming trace in the last {1} minutes</target>
+        <target state="translated">过去 {1} 分钟内有 {0} 个传入跟踪</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityIncomingTooltip">
         <source>{0} incoming traces in the last {1} minutes</source>
-        <target state="new">{0} incoming traces in the last {1} minutes</target>
+        <target state="translated">过去 {1} 分钟内有 {0} 个传入跟踪</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivityP95Tooltip">
         <source>P95 latency: {0} in the last {1} minutes</source>
-        <target state="new">P95 latency: {0} in the last {1} minutes</target>
+        <target state="translated">P95 延迟: 过去 {1} 分钟内为 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneActivitySampledP95Tooltip">
         <source>Sample p95 latency: {0} in the last {1} minutes</source>
-        <target state="new">Sample p95 latency: {0} in the last {1} minutes</target>
+        <target state="translated">采样 p95 延迟: 过去 {1} 分钟内为 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneChildOf">

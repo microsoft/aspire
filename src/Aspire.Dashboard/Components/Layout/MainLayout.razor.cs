@@ -36,6 +36,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private DashboardDialogReference? _openPageDialog;
     private TerminalDock? _terminalDock;
+    private MobileNavMenu? _mobileNavMenu;
     private string? _pendingReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
@@ -126,31 +127,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         await DashboardAuthenticationState.EnsureAuthenticatedAsync(Options.CurrentValue, AuthenticationState);
 
         ViewPreferences.Changed += OnViewPreferencesChanged;
-        await ViewPreferences.EnsureLoadedAsync();
-
-        if (RunStore.SupportsRunSelection)
-        {
-            var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
-            var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
-            if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
-            {
-                try
-                {
-                    RunSelection.SelectRun(selectedRunId);
-                }
-                catch (Exception exception)
-                {
-                    Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
-                    RunSelection.SelectRun(runId: null);
-                }
-
-                if (RunSelection.SelectedRun.IsCurrent)
-                {
-                    await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
-                }
-            }
-        }
-
         NotificationService.OnChange += HandleNotificationsChanged;
 
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
@@ -181,19 +157,13 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         try
         {
-            var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
-            TimeProvider.SetBrowserTimeZone(result.TimeZone);
-            TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
-            TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
-
-            var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
-            if (timeFormatResult.Success)
-            {
-                TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
-            }
-
-            await DisplayUnsecuredEndpointsMessageAsync();
-            await DisplayDashboardFeedbackMessageAsync();
+            // Run independent browser storage and JS interop reads concurrently so Blazor Server
+            // pipelines them in a single round-trip wave instead of awaiting each sequentially.
+            await Task.WhenAll(
+                ViewPreferences.EnsureLoadedAsync(),
+                RestoreSelectedRunAsync(),
+                InitializeBrowserInfoAsync(),
+                DisplayStartupMessagesAsync());
         }
         catch (JSDisconnectedException ex)
         {
@@ -205,47 +175,78 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private async Task DisplayDashboardFeedbackMessageAsync()
+    private async Task DisplayStartupMessagesAsync()
     {
-        var dismissed = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.DashboardFeedbackPromptDismissed);
-        var dismissedForSession = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession);
-        if ((dismissed.Success && dismissed.Value) || (dismissedForSession.Success && dismissedForSession.Value))
+        var unsecuredEndpointsMessage = GetUnsecuredEndpointsMessage();
+        if (unsecuredEndpointsMessage is null)
         {
             return;
         }
 
-        await MessageService.ShowAsync(
-            new DashboardMessageBarContent
+        // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
+        var dismissedSnapshot = await LocalStorage.ReadUnprotectedSnapshotAsync([
+            BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey,
+            BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey
+        ]);
+        if (!IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey) &&
+            !IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey))
+        {
+            await ShowUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
+        }
+
+        static bool IsDismissed(IUnprotectedLocalStorageSnapshot snapshot, string key)
+        {
+            var result = snapshot.Get<bool>(key);
+            return result.Success && result.Value;
+        }
+    }
+
+    private async Task RestoreSelectedRunAsync()
+    {
+        if (!RunStore.SupportsRunSelection)
+        {
+            return;
+        }
+
+        var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+        var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+        if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
+        {
+            try
             {
-                Title = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptTitle)],
-                Message = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptMessage)],
-                // A native link, not a server-side window.open, so the browser doesn't popup-block it after the
-                // Blazor Server round trip.
-                LinkText = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptShare)],
-                LinkUrl = DashboardFeedbackDialog.DiscussionUrl,
-                LinkAsAction = true,
-                CloseOnLinkClick = true,
-                SecondaryAction = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptIgnore)]
-            },
-            MessageBarIntent.Info,
-            DashboardUIHelpers.MessageBarSection,
-            OnDashboardFeedbackMessageClosedAsync);
-    }
+                RunSelection.SelectRun(selectedRunId);
+            }
+            catch (Exception exception)
+            {
+                Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
+                RunSelection.SelectRun(runId: null);
+            }
 
-    private async Task OnDashboardFeedbackMessageClosedAsync(MessageBarResult result)
-    {
-        // Sharing feedback (true) or ignoring (false) stops the prompt permanently. Dismissing with the close button
-        // (null) only hides it for the current browser session.
-        if (result.Data is bool)
-        {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissed, true);
-            return;
+            if (RunSelection.SelectedRun.IsCurrent)
+            {
+                await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
+            }
         }
-
-        await SessionStorage.SetAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession, true);
     }
 
-    private async Task DisplayUnsecuredEndpointsMessageAsync()
+    private async Task InitializeBrowserInfoAsync()
+    {
+        var browserInfoTask = JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo").AsTask();
+        var timeFormatTask = LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
+
+        var result = await browserInfoTask;
+        TimeProvider.SetBrowserTimeZone(result.TimeZone);
+        TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
+        TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
+
+        var timeFormatResult = await timeFormatTask;
+        if (timeFormatResult.Success)
+        {
+            TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+        }
+    }
+
+    private string? GetUnsecuredEndpointsMessage()
     {
         var unsecuredEndpointsMessage = new StringBuilder();
         if (ShouldShowUnsecuredTelemetryMessage())
@@ -257,33 +258,22 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointApiBody)]);
         }
 
-        if (unsecuredEndpointsMessage.Length > 0)
-        {
-            // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
-            var skipMessage = (await ShouldSkipMessageAsync(LocalStorage, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey) ||
-                await ShouldSkipMessageAsync(LocalStorage, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey));
+        return unsecuredEndpointsMessage.Length > 0 ? unsecuredEndpointsMessage.ToString() : null;
+    }
 
-            if (!skipMessage)
+    private Task ShowUnsecuredEndpointsMessageAsync(string unsecuredEndpointsMessage)
+    {
+        return MessageService.ShowAsync(
+            new DashboardMessageBarContent
             {
-                await MessageService.ShowAsync(
-                    new DashboardMessageBarContent
-                    {
-                        Title = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTitle)],
-                        Message = unsecuredEndpointsMessage.ToString(),
-                        LinkText = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
-                        LinkUrl = "https://aka.ms/aspire/api-endpoint-unsecured"
-                    },
-                    MessageBarIntent.Warning,
-                    DashboardUIHelpers.MessageBarSection,
-                    _ => LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, true));
-            }
-        }
-
-        static async Task<bool> ShouldSkipMessageAsync(ILocalStorage localStorage, string storageKey)
-        {
-            var dismissedResult = await localStorage.GetUnprotectedAsync<bool>(storageKey);
-            return dismissedResult.Success && dismissedResult.Value;
-        }
+                Title = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTitle)],
+                Message = unsecuredEndpointsMessage,
+                LinkText = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
+                LinkUrl = "https://aka.ms/aspire/api-endpoint-unsecured"
+            },
+            MessageBarIntent.Warning,
+            DashboardUIHelpers.MessageBarSection,
+            _ => LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, true));
     }
 
     private bool ShouldShowUnsecuredTelemetryMessage()
@@ -406,8 +396,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private Task LaunchHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.KeyboardShortcuts);
 
-    // The help dialog has a tab for AI agents, so launching the agents help opens it on that tab.
-    public Task LaunchAIAgentsAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.AIAgents);
+    private Task LaunchDocumentationHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.Documentation);
 
     private async Task LaunchHelpAsync(string? returnFocusElementId, HelpDialogTab tab)
     {
@@ -542,6 +531,43 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     /// Raised when the brand starts a navigation to the dashboard's home, before the location changes.
     /// </summary>
     internal event Action? HomeNavigationStarting;
+
+    // The entries the current page lists at the top of the narrow layout's navigation menu, such as the resource views
+    // that the desktop header shows as tabs.
+    private Func<IEnumerable<MobileNavMenuEntry>>? _pageNavMenuEntries;
+
+    internal void SetPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>> entries)
+    {
+        _pageNavMenuEntries = entries;
+        RefreshPageNavMenu();
+    }
+
+    internal void RefreshPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
+        {
+            RefreshPageNavMenu();
+        }
+    }
+
+    // Only clears the entries if they're still the caller's, so a page being disposed doesn't remove the entries of the
+    // page that replaced it.
+    internal void ClearPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
+        {
+            _pageNavMenuEntries = null;
+            RefreshPageNavMenu();
+        }
+    }
+
+    private void RefreshPageNavMenu()
+    {
+        if (!_isDisposing && !ViewportInformation.IsDesktop && _isNavMenuOpen)
+        {
+            _mobileNavMenu?.RefreshPageEntries(_pageNavMenuEntries);
+        }
+    }
 
     // Whether the dashboard's home, "/", is showing: the table of every resource.
     private bool IsHome =>

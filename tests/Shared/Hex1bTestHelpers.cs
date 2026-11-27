@@ -565,7 +565,7 @@ internal static class Hex1bTestHelpers
         {
             // PowerShell environment setup for bundle
             return builder
-                .Type("$env:PATH=\"$HOME\\.aspire\\bin;$HOME\\.aspire;$env:PATH\"; $env:ASPIRE_PLAYGROUND='true'; $env:DOTNET_CLI_TELEMETRY_OPTOUT='true'; $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='true'; $env:DOTNET_GENERATE_ASPNET_CERTIFICATE='false'")
+                .Type("$env:PATH=\"$HOME\\.aspire\\bin;$HOME\\.aspire;$env:PATH\"; $env:ASPIRE_PLAYGROUND='true'; $env:ASPIRE_CLI_TELEMETRY_OPTOUT='true'; $env:ASPIRE_DASHBOARD_TELEMETRY_OPTOUT='true'; $env:DOTNET_CLI_TELEMETRY_OPTOUT='true'; $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='true'; $env:DOTNET_GENERATE_ASPNET_CERTIFICATE='false'")
                 .Enter()
                 .WaitForSuccessPrompt(counter);
         }
@@ -575,7 +575,7 @@ internal static class Hex1bTestHelpers
         // The install script is downloaded from raw.githubusercontent.com which has CDN caching,
         // so the old version may still be served for a while after push.
         return builder
-            .Type("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false")
+            .Type("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm ASPIRE_CLI_TELEMETRY_OPTOUT=true ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false")
             .Enter()
             .WaitForSuccessPrompt(counter);
     }

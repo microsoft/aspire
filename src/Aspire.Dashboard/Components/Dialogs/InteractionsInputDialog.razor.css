@@ -49,6 +49,10 @@
     margin-bottom: 0.2em;
 }
 
+.interaction-input-dialog .interaction-input ::deep .secret-text-toggle-button {
+    --aspire-control-height: 26px;
+}
+
 .interaction-input-dialog .interaction-input ::deep .secret-text-toggle-button::part(control) {
     background-color: transparent;
 }

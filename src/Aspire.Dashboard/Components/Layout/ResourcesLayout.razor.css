@@ -37,12 +37,16 @@
 /* Compact rows are a single line, so they're sized for the 28px row actions rather than for two text bands. */
 .resource-pane-list.density-compact {
     --resource-row-height: var(--aspire-density-resource-row-height, 32px);
-    --resource-row-icon-size: 22px;
     --resource-row-meta-type-width: 64px;
     /* On the full canvas the identity track also budgets for the type, state dot and their gaps. */
     --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
     --resource-row-line-height: var(--lineHeightBase200);
     --resource-metadata-line-height: 16px;
+}
+
+.resource-pane-list.density-compact,
+.resource-picker-button > [slot="start"] {
+    --resource-row-icon-size: 22px;
 }
 
 /* Persistent types, such as "RabbitMQ (persistent)", are wider than the others, so every row's type column widens
@@ -144,6 +148,7 @@
 .resource-picker-button > [slot="start"] {
     display: flex;
     align-items: center;
+    padding-inline-end: 2px;
 }
 
 .resource-picker-button .resource-header-icon {
@@ -271,46 +276,22 @@
     overflow: hidden;
 }
 
-/* The resizer straddles the pane's right border so it's easy to grab. */
+/* Center the hit target over the last pixel of the pane's grid track. */
 .resource-pane-resizer {
     position: absolute;
-    top: 0;
-    right: -4px;
-    bottom: 0;
+    inset-block: 0;
+    right: calc((1px - var(--aspire-splitter-hit-size)) / 2);
     z-index: 5;
-    width: 8px;
-    cursor: col-resize;
+    width: var(--aspire-splitter-hit-size);
     touch-action: none;
-}
-
-.resource-pane-resizer::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 3px;
-    width: 2px;
-    background: transparent;
-    transition: background-color .15s;
-}
-
-.resource-pane-resizer:hover::after,
-.resource-pane-resizer.resizing::after,
-.resource-pane-resizer:focus-visible::after {
-    background: var(--colorBrandStroke1);
-}
-
-.resource-pane-resizer:focus-visible {
-    outline: none;
 }
 
 .resource-pane-head {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-1);
-    padding: 12px 12px 8px;
+    padding: 12px 12px var(--layout-top-padding);
     box-sizing: border-box;
-    height: 52px;
     flex-shrink: 0;
 }
 
@@ -353,11 +334,13 @@
 ::deep .resource-pane-search {
     flex: 1 1 auto;
     min-width: 0;
+    row-gap: 0;
 }
 
 ::deep .resource-pane-search > fluent-text-input,
 ::deep fluent-text-input.resource-pane-search {
     width: 100%;
+    height: 32px;
 }
 
 .state-dot {
@@ -422,14 +405,6 @@
     text-transform: uppercase;
 }
 
-.resource-pane-message {
-    display: flex;
-    justify-content: center;
-    padding: 16px 8px;
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-body);
-}
-
 .resource-pane-group {
     /* Contain the last row's margin instead of collapsing it between groups. */
     display: flow-root;
@@ -450,6 +425,7 @@
     align-items: center;
     position: relative;
     margin-bottom: var(--resource-group-header-gap);
+    padding-inline-end: 2px;
     border-radius: var(--aspire-radius-medium);
 }
 
@@ -497,25 +473,13 @@
     font-weight: var(--aspire-font-weight-regular);
 }
 
-.resource-tag-count {
-    flex: 0 0 auto;
-    min-width: 20px;
-    padding: 0 6px;
-    border-radius: var(--aspire-radius-medium);
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-caption);
-    line-height: 18px;
-    text-align: center;
-}
-
 .resource-tag-actions {
     flex: 0 0 auto;
     margin-inline-end: 4px;
 }
 
-.resource-tag-actions ::deep .resource-tag-action,
-.resource-tag-actions ::deep .resource-tag-action::part(control) {
+.resource-tag-header ::deep .resource-tag-header-button,
+.resource-tag-header ::deep .resource-tag-header-button::part(control) {
     width: 28px;
     height: 28px;
     min-width: 28px;
@@ -782,6 +746,7 @@
     }
 }
 
+.resource-tag-header ::deep .resource-row-toggle.collapsed svg,
 .resource-row ::deep .resource-row-toggle-leading.collapsed svg {
     transform: rotate(-90deg);
 }
@@ -799,31 +764,6 @@
     line-height: 16px;
     text-align: center;
     font-variant-numeric: tabular-nums;
-}
-
-/* The expand toggle's own look; where it sits is above (.resource-row-toggle-leading). */
-.resource-row-toggle {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    margin-right: 6px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--aspire-radius-small);
-    background: transparent;
-    color: var(--colorNeutralForeground2);
-    cursor: pointer;
-}
-
-.resource-row-toggle:hover {
-    background: var(--colorNeutralBackground3);
-}
-
-.resource-row-toggle.collapsed ::deep svg {
-    transform: rotate(-90deg);
 }
 
 .resource-row-link {
@@ -886,6 +826,10 @@
 
 .resource-row.selected:not(.resource-row-unavailable) .resource-row-icon {
     background: var(--resource-brand-soft);
+}
+
+.resource-picker-button .resource-row-icon {
+    background: transparent;
 }
 
 /* The "All resources" row clears the selection, so it's separated from the resources it stands for. */
@@ -1043,6 +987,7 @@
 }
 
 .resource-selection-hint {
+    --resource-selection-hint-cycle: 20s;
     display: inline-grid;
     grid-column: 2;
     justify-self: end;
@@ -1058,16 +1003,15 @@
     grid-area: 1 / 1;
     align-items: center;
     gap: var(--aspire-space-1);
-    animation: resource-selection-hint 10s linear infinite;
+    animation: resource-selection-hint var(--resource-selection-hint-cycle) linear infinite;
 }
 
 .resource-selection-instruction + .resource-selection-instruction {
-    animation-delay: -5s;
+    animation-delay: calc(var(--resource-selection-hint-cycle) / -2);
 }
 
 /* Compositor-only rotation reserves both instructions' footprint without a timer,
-   DOM updates, or screen-reader announcements. Each instruction fades in, dwells for about 4.4s and fades out before the
-   other fades in (the second runs 5s behind), so the two never show on top of each other. */
+   DOM updates, or screen-reader announcements. The half-cycle offset lets each instruction fade out before the other fades in. */
 @keyframes resource-selection-hint {
     0%, 50%, 100% { opacity: 0; }
     3%, 47% { opacity: 1; }
@@ -1203,7 +1147,7 @@
         border-right: 0;
     }
 
-    .resource-pane::after {
+    .resource-pane:not(:has(> .resource-pane-resizer))::after {
         content: "";
         position: absolute;
         inset: 0 0 0 auto;
@@ -1447,28 +1391,6 @@
     gap: var(--aspire-space-1);
 }
 
-.resource-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--aspire-space-2) var(--aspire-space-3);
-    margin-top: 10px;
-    min-width: 0;
-}
-
-.resource-tabs > .resource-tab-toolbar {
-    display: flex;
-    flex: 0 1 auto;
-    align-items: center;
-    min-width: 0;
-    max-width: 100%;
-    margin-left: auto;
-}
-
-.resource-header-controls > .resource-tab-toolbar {
-    margin-left: 0;
-}
-
 .resource-tab-toolbar:empty {
     display: none;
 }
@@ -1486,12 +1408,6 @@
     padding: 0;
 }
 
-.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-search {
-    flex-basis: 9rem;
-    width: 9rem;
-    min-width: 7rem;
-}
-
 /* The span type options are short ("Messaging" is the longest), so this dropdown is narrower than Fluent's 160px default. */
 .resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact,
 .resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact > fluent-dropdown {
@@ -1500,8 +1416,8 @@
     min-width: 0;
 }
 
-/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
-   focus can scroll the selected tab into view when space is limited. */
+/* The tab list keeps its tabs at max-content width. Constrain it so tabs that don't fit can be measured and moved
+   to the "..." menu. */
 .resource-tabs-nav ::deep .resources-tab-header {
     width: max-content;
     max-width: 100%;
@@ -1510,14 +1426,41 @@
     overflow: hidden;
 }
 
-/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
-.resource-tabs-nav ::deep fluent-tab[data-tab-overflow] {
-    display: none;
+/* The tabs are links, styled like the shared tab appearance (.aspire-tab). */
+.resource-tabs-nav ::deep a.resource-tab {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--spacingHorizontalXXS);
+    box-sizing: border-box;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
 }
 
-/* The tab that's active while no tab is shown selected, when the resource content is closed (see
-   RenderTabNavigation). Not displayed, it can't be seen, focused or announced. */
-.resource-tabs-nav ::deep fluent-tab.resource-tab-none {
+.resource-tabs-nav ::deep a.resource-tab:focus-visible {
+    outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-tabs-nav ::deep a.resource-tab svg {
+    min-width: 18px;
+    height: 18px;
+    margin-right: var(--spacingHorizontalXS);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-tabs-nav ::deep a.resource-tab fluent-badge {
+    min-width: 20px;
+    margin-inline-start: var(--spacingHorizontalXS);
+    padding: 1px 3px;
+    border: 1px solid transparent;
+    border-radius: var(--aspire-radius-round);
+    font-weight: var(--aspire-font-weight-regular);
+}
+
+/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
+.resource-tabs-nav ::deep a.resource-tab[data-tab-overflow] {
     display: none;
 }
 
@@ -1546,7 +1489,7 @@
 
 /* Wraps the tab row in its own layout container so a container query can react to the row's
    actual available width - which depends on sibling pane/toolbar state, not just viewport width -
-   rather than letting FluentTabs grow a horizontal scrollbar once labels no longer fit. */
+   rather than letting the tab list grow a horizontal scrollbar once labels no longer fit. */
 .resource-tabs-nav {
     container-type: inline-size;
     display: flex;
@@ -1682,7 +1625,7 @@
     .resources-layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto minmax(0, 1fr) auto;
+        grid-template-rows: auto minmax(0, 1fr);
     }
 
     .resource-context-header {
@@ -1710,8 +1653,8 @@
     }
 
     .resource-pane-head {
-        height: 44px;
-        padding: 6px 8px;
+        padding-block-start: 6px;
+        padding-inline: 8px;
     }
 
     .resource-pane-list {
@@ -1817,98 +1760,10 @@
         white-space: nowrap;
     }
 
-    .resource-tabs {
-        grid-column: 1;
-        grid-row: 2;
-        margin-top: 0;
-        column-gap: var(--aspire-space-2);
-    }
-
-    .resources-layout.drawer-open .resource-tabs {
-        grid-row: 1;
-    }
-
-    /* The footer is outside the scrolling tab body, so status stays visible without covering the last card. */
-    .resource-workspace-foot {
-        grid-area: 3 / 1;
-        flex: 0 0 auto;
-        min-width: 0;
-        min-height: 32px;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-        border-top: 1px solid var(--colorNeutralStroke3);
-        background: var(--aspire-page-background);
-    }
-
-    .resources-layout.drawer-open .resource-workspace-foot {
+    .resources-layout.drawer-open .resource-context-header {
+        /* The drawer's list replaces the header's controls, leaving the header empty. */
         display: none;
     }
-
-    .resource-content-foot {
-        min-height: 32px;
-        padding-inline: 12px;
-    }
-
-    .resource-tabs-nav ::deep .aspire-menu-button {
-        flex: 1 1 auto;
-    }
-
-    .resource-tabs-nav ::deep .resource-tabs-compact-button {
-        flex: 1 1 auto;
-        width: 100%;
-        min-width: 0;
-        min-height: 34px;
-        padding: 0 10px;
-        border-color: var(--colorNeutralStroke2);
-        background: var(--aspire-page-background);
-        color: var(--colorNeutralForeground1);
-        font-size: var(--aspire-font-size-body);
-        font-weight: var(--aspire-font-weight-semibold);
-    }
-
-    .resource-tabs-nav ::deep .resource-tabs-compact-button::part(control) {
-        min-height: 34px;
-        padding: 0;
-        border: 0;
-        background: transparent;
-    }
-
-    .resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="end"] {
-        width: 16px !important;
-        min-width: 16px;
-        max-width: 16px;
-        height: 16px !important;
-        margin-inline-start: auto;
-        color: var(--colorNeutralForeground2) !important;
-        transition: transform .15s ease;
-    }
-
-    .resource-tabs-nav ::deep .resource-tabs-compact-button[aria-expanded="true"] > svg[slot="end"] {
-        transform: rotate(180deg);
-    }
-
-    /* The tab picker's menu is a sheet as wide as the page content, directly under its trigger, so the options are
-       large targets that line up with everything else. The popover's backdrop dims the page behind it, and a tap
-       there closes the menu. */
-    .resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list {
-        left: var(--layout-left-padding);
-        right: var(--layout-right-padding);
-        width: auto;
-        min-width: 0;
-        max-width: none;
-        margin-top: 4px;
-    }
-
-    .resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list::backdrop {
-        background: rgba(0, 0, 0, .35);
-    }
-
-    .resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item {
-        height: 44px;
-        min-height: 44px;
-        padding: 0 16px;
-        font-size: var(--aspire-font-size-heading);
-    }
-
 }
 
 /* Fluent UI has no 16px GroupList icon. Draw the 20px one at 16px so the grouping button matches the
@@ -1925,9 +1780,6 @@
 }
 
 .density-compact .resource-row-icon {
-    flex-basis: var(--resource-row-icon-size);
-    width: var(--resource-row-icon-size);
-    height: var(--resource-row-icon-size);
     border-radius: 6px;
 }
 
@@ -2179,10 +2031,6 @@
     .resource-row-endpoints ::deep .url-container {
         grid-column: endpoint;
     }
-}
-
-.density-compact .resource-row-toggle {
-    margin-right: 2px;
 }
 
 /* A resource's actions: labeled buttons in the overview, icons on the rows of the resource list. */
@@ -2646,10 +2494,10 @@
     /* At rest the rows' actions are hidden and their state dots form a column at the end of the list, so the group
        header's chevron is centered over that column instead of floating just past it. The compact row link ends 6px
        before the row and has 8px of end padding, so the 10px dot's center is 19px from the end; the header ends at the
-       same line, and the 20px chevron needs 9px after it to center there. The count badge before it moves with it.
+       same line, and the 28px button needs 5px after it to center there. The count badge before it moves with it.
        Touch screens keep the actions showing, so they have no dot column there and the chevron keeps its place. */
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-tag-header > .resource-row-toggle {
-        margin-inline-end: 9px;
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-tag-header {
+        padding-inline-end: 5px;
     }
 }
 

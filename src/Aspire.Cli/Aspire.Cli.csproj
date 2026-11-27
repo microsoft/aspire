@@ -207,6 +207,8 @@
     <Compile Include="$(SharedDir)FileUploadHelpers.cs" Link="Utils\FileUploadHelpers.cs" />
     <Compile Include="$(SharedDir)AspireHomeDirectory.cs" Link="Utils\AspireHomeDirectory.cs" />
     <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Utils\DirectoryHelper.cs" />
+    <Compile Include="$(SharedDir)TemporaryStorage.cs" Link="Shared/TemporaryStorage.cs" />
+    <Compile Include="$(SharedDir)PrivateTemporaryStorage.cs" Link="Shared/PrivateTemporaryStorage.cs" />
     <Compile Include="$(SharedDir)SocketPermissionHelper.cs" Link="Utils\SocketPermissionHelper.cs" />
     <Compile Include="$(SharedDir)SocketExceptionHelpers.cs" Link="Utils\SocketExceptionHelpers.cs" />
     <Compile Include="$(SharedDir)SocketDirectoryNames.cs" Link="Utils\SocketDirectoryNames.cs" />

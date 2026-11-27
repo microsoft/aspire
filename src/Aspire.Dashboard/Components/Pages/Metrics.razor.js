@@ -1,6 +1,12 @@
 const registrations = new WeakMap();
 
-export function registerMetricsSplitter(element, dotNetRef) {
+export function registerMetricsSplitter(element, dotNetRef, maxPaneWidth) {
+    // Registration runs after an awaited module import. If the user navigates away in the meantime, the
+    // splitter is removed from the DOM and Blazor passes null for the stale ElementReference.
+    if (!element) {
+        return false;
+    }
+
     unregisterMetricsSplitter(element);
 
     const splitter = element.querySelector(':scope > .fluent-multi-splitter');
@@ -23,7 +29,7 @@ export function registerMetricsSplitter(element, dotNetRef) {
             return;
         }
 
-        const targetWidth = Math.min(currentWidth + hiddenLabelWidth, splitterWidth / 2);
+        const targetWidth = Math.min(currentWidth + hiddenLabelWidth, splitterWidth / 2, maxPaneWidth);
         const targetPercent = targetWidth / splitterWidth * 100;
         dotNetRef.invokeMethodAsync('SetMetricGroupsPaneSizeAsync', targetPercent).catch(error => {
             if (!disposed) {

@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
@@ -19,6 +20,7 @@ internal interface ICliDownloader
 
 internal class CliDownloader(
     IEnvironment environment,
+    ITemporaryStorage temporaryStorage,
     ILogger<CliDownloader> logger,
     IInteractionService interactionService,
     IPackagingService packagingService) : ICliDownloader
@@ -60,7 +62,7 @@ internal class CliDownloader(
         var checksumUrl = $"{baseUrl}/{checksumFilename}";
 
         // Create temp directory for download
-        var tempDir = Directory.CreateTempSubdirectory("aspire-cli-download").FullName;
+        var tempDir = temporaryStorage.CreateTempSubdirectory("download-").FullName;
 
         try
         {

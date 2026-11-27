@@ -60,6 +60,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)CliInstallStrategy.cs" Link="shared\CliInstallStrategy.cs" />
+    <Compile Include="$(TestsSharedDir)E2ETelemetryEnvironment.cs" Link="shared\E2ETelemetryEnvironment.cs" />
     <Compile Include="$(TestsSharedDir)CliPackageDiscovery.cs" Link="shared\CliPackageDiscovery.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
     <Compile Include="$(TestsSharedDir)PebbleAcmeFixture.cs" Link="shared\PebbleAcmeFixture.cs" />

@@ -116,7 +116,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Assert.Throws<ArgumentException>(() => new NativeAppHostServerProject(workspace.Path,
-            Path.Combine(workspace.Path, "missing"), new TestProcessExecutionFactory(), NullLogger.Instance));
+            Path.Combine(workspace.Path, "missing"), new TestProcessExecutionFactory(), new Aspire.Shared.TemporaryStorage(), NullLogger.Instance));
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executable = Path.Combine(workspace.Path, "server");
         await File.WriteAllTextAsync(executable, "");
-        using var project = new NativeAppHostServerProject(workspace.Path, executable, new TestProcessExecutionFactory(), NullLogger.Instance);
+        using var project = new NativeAppHostServerProject(workspace.Path, executable, new TestProcessExecutionFactory(), new Aspire.Shared.TemporaryStorage(), NullLogger.Instance);
         Assert.True((await project.PrepareAsync("13.6", [
             IntegrationReference.FromPackage("Aspire.Hosting", "13.6"),
             IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.6")
@@ -148,7 +148,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executable = Path.Combine(workspace.Path, "server");
         await File.WriteAllTextAsync(executable, "");
-        using var project = new NativeAppHostServerProject(workspace.Path, executable, new TestProcessExecutionFactory(), NullLogger.Instance);
+        using var project = new NativeAppHostServerProject(workspace.Path, executable, new TestProcessExecutionFactory(), new Aspire.Shared.TemporaryStorage(), NullLogger.Instance);
         var reference = projectReference
             ? IntegrationReference.FromProject(name, Path.Combine(workspace.Path, "tooling.csproj"))
             : IntegrationReference.FromPackage(name, "13.6");
@@ -187,7 +187,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
             return new TestProcessExecution(start.FileName, [], null, options,
                 (_, _, _) => Task.FromResult((0, (string?)null)), () => 1);
         };
-        using (var project = new NativeAppHostServerProject(workspace.Path, executable, factory, NullLogger.Instance))
+        using (var project = new NativeAppHostServerProject(workspace.Path, executable, factory, new Aspire.Shared.TemporaryStorage(), NullLogger.Instance))
         {
             var result = await project.RunAsync(42, new Dictionary<string, string> { ["ASPIRE_REMOTE_APPHOST_TOKEN"] = "test-token" },
                 [], false, new AppHostServerRunControl(IsolateConsole: true));
@@ -236,7 +236,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
             return new TestProcessExecution(start.FileName, [], null, options,
                 (_, _, _) => Task.FromResult((0, (string?)null)), () => 1);
         };
-        using var project = new NativeAppHostServerProject(workspace.Path, executable, processes, NullLogger.Instance);
+        using var project = new NativeAppHostServerProject(workspace.Path, executable, processes, new Aspire.Shared.TemporaryStorage(), NullLogger.Instance);
         var result = await project.RunAsync(pid, new Dictionary<string, string>
         {
             [KnownConfigNames.CliProcessId] = "123",
@@ -269,7 +269,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
             return new TestProcessExecution(start.FileName, [], null, options,
                 (_, _, _) => Task.FromResult((0, (string?)null)), () => 1);
         };
-        using var project = new NativeAppHostServerProject(workspace.Path, executable, factory, NullLogger.Instance)
+        using var project = new NativeAppHostServerProject(workspace.Path, executable, factory, new Aspire.Shared.TemporaryStorage(), NullLogger.Instance)
         {
             LayoutLease = new BundleLayoutLease(new LayoutConfiguration { LayoutPath = workspace.Path }, null)
         };
@@ -338,7 +338,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
             return new TestProcessExecution(start.FileName, [], null, options,
                 (_, _, _) => Task.FromResult((0, (string?)null)), () => 1);
         };
-        using var project = new NativeAppHostServerProject(workspace.Path, executable, factory, NullLogger.Instance)
+        using var project = new NativeAppHostServerProject(workspace.Path, executable, factory, new Aspire.Shared.TemporaryStorage(), NullLogger.Instance)
         {
             LayoutLease = useLayout ? new BundleLayoutLease(layout, null) : null
         };
@@ -380,7 +380,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
             CreateExecutionFromStartInfoCallback = (start, options) => new TestProcessExecution(start.FileName, [], null, options,
                 (_, _, _) => Task.FromResult((7, (string?)null)), () => 1)
         };
-        using var project = new NativeAppHostServerProject(workspace.Path, executable, processes, logger);
+        using var project = new NativeAppHostServerProject(workspace.Path, executable, processes, new Aspire.Shared.TemporaryStorage(), logger);
         var result = await project.RunAsync(42, null, [], false, null);
         Directory.CreateDirectory(result.SocketPath);
         try
@@ -446,7 +446,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
         }.ToJsonString());
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "outside.json"), "{}");
         using var project = new NativeAppHostServerProject(workspace.Path, executable,
-            new TestProcessExecutionFactory(), NullLogger.Instance);
+            new TestProcessExecutionFactory(), new Aspire.Shared.TemporaryStorage(), NullLogger.Instance);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => project.PrepareAsync("17.0",
             [IntegrationReference.FromNpm("example.provider", entryPoint)]));
@@ -490,7 +490,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
                 (_, _, _) => Task.FromResult((start.FileName == executable ? 0 : exitCode, (string?)null)), () => 1);
         };
         var logger = new CapturingLogger<NativeAppHostServerProject>();
-        using var project = new NativeAppHostServerProject(workspace.Path, executable, processes, logger)
+        using var project = new NativeAppHostServerProject(workspace.Path, executable, processes, new Aspire.Shared.TemporaryStorage(), logger)
         {
             LayoutLease = new BundleLayoutLease(new LayoutConfiguration { LayoutPath = workspace.Path }, null)
         };
@@ -533,7 +533,7 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
         TestProcessExecutionFactory processes)
         => new(new TestDotNetCliRunner(), MockPackagingServiceFactory.Create(), bundle,
             new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, new FakeNuGetClient(),
-                new TestConfigurationService()),
+                new TestConfigurationService(), new Aspire.Shared.TemporaryStorage()),
             new TestDotNetSdkInstaller(), TestExecutionContextFactory.CreateTestContext(), environment,
-            processes, NullLoggerFactory.Instance);
+            processes, new Aspire.Shared.TemporaryStorage(), NullLoggerFactory.Instance);
 }

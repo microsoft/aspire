@@ -218,26 +218,6 @@ Pour découvrir plus d’informations sur l’utilisation des assistants IA avec
         <target state="translated">Vos commentaires</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptIgnore">
-        <source>Don't ask again</source>
-        <target state="translated">Ne plus demander</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptMessage">
-        <source>We'd love your feedback on the new experience.</source>
-        <target state="translated">Nous serions ravis de connaître votre avis sur cette nouvelle expérience.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptShare">
-        <source>Share feedback</source>
-        <target state="translated">Partager des commentaires</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptTitle">
-        <source>Welcome to the new Aspire dashboard!</source>
-        <target state="translated">Bienvenue dans le nouveau tableau de bord Aspire !</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
         <target state="translated">Je n’ai pas pu trouver les URL de mes applications</target>
@@ -1287,7 +1267,7 @@ Configurez votre application pour exporter des journaux, des traces et des métr
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrapOff">
         <source>Disable word wrap</source>
-        <target state="new">Disable word wrap</target>
+        <target state="translated">Désactiver le retour automatique à la ligne</target>
         <note />
       </trans-unit>
     </body>

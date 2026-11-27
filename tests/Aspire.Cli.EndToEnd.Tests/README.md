@@ -6,6 +6,8 @@ This test project contains end-to-end tests for the Aspire CLI using the [Hex1b]
 
 These tests simulate real user interactions with the Aspire CLI by automating terminal input/output. Each test class runs as a **separate CI job** to enable parallel execution across GitHub Actions runners.
 
+The test host and its containers opt out of CLI and dashboard product telemetry. This does not disable local OTLP data used by dashboard and profiling tests. A test that specifically needs product telemetry can override the opt-out on its own child process.
+
 ### Custom template coverage
 
 `CustomTemplateTests` uses the test-only template in `Fixtures/CustomTemplate`, independently

@@ -13,6 +13,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -40,6 +41,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly IEnvironment _environment;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IConfigurationService _configurationService;
+    private readonly ITemporaryStorage _temporaryStorage;
     private readonly IConfiguration _configuration;
     private readonly IEnumerable<IMigration> _migrations;
     private readonly IProcessPathProvider _processPathProvider;
@@ -86,6 +88,7 @@ internal sealed class UpdateCommand : BaseCommand
         IEnumerable<IMigration> migrations,
         IProcessPathProvider processPathProvider,
         RepositoryToolUpdater repositoryToolUpdater,
+        ITemporaryStorage temporaryStorage,
         CommonCommandServices services)
         : base("update", UpdateCommandStrings.Description, services)
     {
@@ -103,6 +106,7 @@ internal sealed class UpdateCommand : BaseCommand
         _migrations = migrations;
         _processPathProvider = processPathProvider;
         _repositoryToolUpdater = repositoryToolUpdater;
+        _temporaryStorage = temporaryStorage;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
@@ -224,6 +228,8 @@ internal sealed class UpdateCommand : BaseCommand
     {
         if (parseResult.GetValue(s_configSourceOption))
         {
+            ConfigSources.EnsureEnabled();
+
             var requestedFile = parseResult.GetValue(s_appHostOption);
             if (requestedFile is not null && !requestedFile.Exists && !Directory.Exists(requestedFile.FullName))
             {
@@ -956,7 +962,7 @@ internal sealed class UpdateCommand : BaseCommand
 
         var exeName = _environment.IsWindows() ? "aspire.exe" : "aspire";
         var targetExePath = Path.Combine(installDir, exeName);
-        var tempExtractDir = Directory.CreateTempSubdirectory("aspire-cli-extract").FullName;
+        var tempExtractDir = _temporaryStorage.CreateTempSubdirectory("extract-").FullName;
 
         try
         {

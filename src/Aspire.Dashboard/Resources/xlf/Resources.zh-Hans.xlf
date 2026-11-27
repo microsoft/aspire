@@ -27,6 +27,16 @@
         <target state="translated">{0} · {1} 个请求，{2} 个失败</target>
         <note>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</note>
       </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceCaveat">
+        <source>Some traces may not include a request counted in this bar.</source>
+        <target state="new">Some traces may not include a request counted in this bar.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeActivityBucketTraceHint">
+        <source>View traces with spans that started in this interval.</source>
+        <target state="new">View traces with spans that started in this interval.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
         <source>Requests per 30 seconds over the last 15 minutes</source>
         <target state="translated">过去 15 分钟内每 30 秒请求数</target>
@@ -251,6 +261,11 @@
         <source>Running</source>
         <target state="translated">正在运行</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HomeSingleRequestCount">
+        <source>{0} request</source>
+        <target state="translated">{0} 个请求</target>
+        <note>{0} is the request count, which is one.</note>
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
         <source>Slowest endpoints</source>
@@ -643,8 +658,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
-        <source>Open console</source>
-        <target state="translated">打开控制台</target>
+        <source>Expand console logs</source>
+        <target state="new">Expand console logs</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">
@@ -771,6 +786,11 @@
         <source>Tags</source>
         <target state="translated">标记</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsLimitReached">
+        <source>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</source>
+        <target state="translated">无法添加此标记。限制为每个应用程序 {0} 个标记分配。首先删除现有标记分配。</target>
+        <note>{0} is the maximum number of user-added resource tag assignments.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsRemove">
         <source>Remove tag {0}</source>

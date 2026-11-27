@@ -13,6 +13,10 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 public sealed class AuthenticationTests(ITestOutputHelper output)
 {
     [Fact]
+    public Task ProductTelemetryOptOutIsInheritedByChildProcesses() =>
+        E2ETelemetryEnvironment.VerifyChildProcessesInheritOptOutAndCanOverrideItAsync();
+
+    [Fact]
     public void SubscriptionIdIsConfigured()
     {
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();

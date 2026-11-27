@@ -87,6 +87,7 @@ internal sealed class BundleNuGetService : INuGetService
     private readonly ILogger<BundleNuGetService> _logger;
     private readonly INuGetClient _nuGetClient;
     private readonly IConfigurationService _configurationService;
+    private readonly ITemporaryStorage _temporaryStorage;
 
     internal Func<byte[]> SourceIdentityKeyFactory { get; init; }
         = static () => RandomNumberGenerator.GetBytes(NuGetSourceIdentity.KeySizeInBytes);
@@ -94,12 +95,16 @@ internal sealed class BundleNuGetService : INuGetService
     public BundleNuGetService(
         ILogger<BundleNuGetService> logger,
         INuGetClient nuGetClient,
-        IConfigurationService configurationService)
+        IConfigurationService configurationService,
+        ITemporaryStorage temporaryStorage)
     {
         _logger = logger;
         _nuGetClient = nuGetClient;
         _configurationService = configurationService;
+        _temporaryStorage = temporaryStorage;
     }
+
+    internal ITemporaryStorage TemporaryStorage => _temporaryStorage;
 
     public async Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
@@ -379,7 +384,7 @@ internal sealed class BundleNuGetService : INuGetService
         var directory = bypassCaches
             ? DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.Combine(
                 globalPackagesFolder, $".sdk-acquisition-{Guid.NewGuid():N}"))
-            : Directory.CreateTempSubdirectory("aspire-package-acquisition-");
+            : _temporaryStorage.CreateTempSubdirectory("pkg-");
         try
         {
             var settings = GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, protectIntegrationSources: false, cancellationToken);
@@ -519,6 +524,7 @@ internal sealed class BundleNuGetService : INuGetService
         overlay = overlay with { GlobalPackagesFolder = globalPackagesFolder };
         return parentDirectory is null
             ? await TemporaryNuGetConfigFile.CreateAsync(
+                _temporaryStorage,
                 path => WriteNuGetConfig(overlay, path, cancellationToken)).ConfigureAwait(false)
             : await TemporaryNuGetConfigFile.CreateAsync(
                 parentDirectory,

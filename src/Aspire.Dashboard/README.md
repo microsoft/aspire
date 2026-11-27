@@ -31,13 +31,20 @@ The **...** menu on each group header lists commands for that group's resources.
 available on individual parameter rows, not as bulk actions.
 
 When search and filters are clear, drag a group's header handle to move the entire group, or focus its
-handle and press **Alt+Up** or **Alt+Down**. Each grouping mode has its own saved order in the AppHost
-settings database. New groups are appended, and temporarily absent groups retain their position when they return.
+handle and press **Alt+Up** or **Alt+Down**. Group moves are saved per grouping mode in protected browser local storage.
+New groups follow the default sort. A saved move places the group on the chosen side of the original drop
+target, using the other neighbor from the drop position if the target is missing.
 
 With grouping set to **None** and no search or filters active, drag a resource's reorder handle to move it
 before or after a sibling. Alternatively, focus the handle and press **Alt+Up** or **Alt+Down**.
-Children stay under their parent. Order is stored alongside tags in the AppHost's application settings database
-and survives dashboard and AppHost restarts; new resources are appended to their sibling list.
+Children stay under their parent. The ungrouped pane uses AppHost display priority for its default sort,
+including for resources discovered after the dashboard opens. Resources with a priority of zero or no
+priority are sorted by type and name. Grouped views do not use display priority.
+Only custom moves are saved in protected browser local storage. The dashboard applies them to the current default order,
+so new resources are still sorted normally. A move places the resource on the chosen side of the original
+drop target. If the target is missing or no longer a sibling, the move falls back to the other neighbor
+from the drop position. If the dashboard can no longer decrypt saved moves, it uses the default order.
+Routine key rotation does not reset saved moves as long as the keys that protected them remain available.
 Persistent containers show a pin after their state and resource type.
 
 Resource rows are muted when they do not apply to the current tab or have not sent that type of
@@ -54,6 +61,11 @@ When all resources are selected, **Select all** has a filled accent background i
 highlighting every row. Selecting individual resources restores their row highlights and clears
 the button highlight; the all-resources scope and filters are unchanged.
 
+In the modern dashboard's **All resources** view, Console Logs, Metrics, Structured Logs, and Traces exclude hidden resources unless
+**View options > Show hidden resources** is enabled. The **Overview > Graph** view also follows this setting.
+Direct Console Logs links to individual resources work regardless of this setting.
+A trace that includes a visible resource still shows all its spans, including spans from hidden resources.
+
 ## Closing detail pages
 
 Use the **Close view** (X) button at the top right of a detail page to return to its parent,
@@ -69,6 +81,8 @@ On desktop, closing a detail page shows the resource list across the full canvas
 opens its details and restores the normal sidebar width. There is no separate full-canvas toggle;
 the normal sidebar can still be collapsed, reopened and resized.
 Sidebar transitions use brief, eased motion and honor the system's reduced-motion preference.
+Opening the collapsed sidebar picker scrolls the list just enough to show the first selected row
+in list order, if it is present. Focus stays in the picker search box.
 All main-tab content panels have a close button, including the all-resources overview and unscoped
 console logs, terminals, structured logs, traces and metrics. **Select all** reopens the current tab's
 content from the full-canvas list; on Overview, this shows the all-resources summary.

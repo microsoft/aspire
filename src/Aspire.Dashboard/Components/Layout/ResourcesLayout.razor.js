@@ -135,6 +135,27 @@ export function setResourcePickerOpen(layoutElement, dotNetRef, open) {
 
     if (picker.matches(":popover-open") !== open) {
         picker.togglePopover(open);
+        if (open) {
+            scrollPickerToSelection(picker);
+        }
+    }
+}
+
+function scrollPickerToSelection(picker) {
+    const list = picker.querySelector(".resource-pane-list");
+    const selected = list?.querySelector(".resource-row.selected");
+    if (!selected) {
+        return;
+    }
+
+    // Scroll only the list, not its ancestors. The search box stays in view and keeps its focus behavior.
+    const top = list.getBoundingClientRect().top + list.clientTop;
+    const bottom = top + list.clientHeight;
+    const row = selected.getBoundingClientRect();
+    if (row.top < top) {
+        list.scrollBy({ top: row.top - top, behavior: "instant" });
+    } else if (row.bottom > bottom) {
+        list.scrollBy({ top: row.bottom - bottom, behavior: "instant" });
     }
 }
 
@@ -175,7 +196,7 @@ export function registerTabOverflow(registrationId, dotNetRef) {
                 state.resizeObserver.observe(nav);
             }
         }
-        // Navigation replaces the keyed FluentTabs without necessarily replacing its surrounding strip.
+        // The tab list can be replaced without replacing its surrounding strip.
         const tablist = nav?.querySelector(".resources-tab-header") ?? null;
         if (tablist !== state.tablist) {
             state.tabsObserver.disconnect();
@@ -195,7 +216,7 @@ export function registerTabOverflow(registrationId, dotNetRef) {
             return;
         }
 
-        const tabs = Array.from(tablist.querySelectorAll("fluent-tab"));
+        const tabs = Array.from(tablist.querySelectorAll("a.resource-tab"));
         tabs.forEach(tab => tab.removeAttribute("data-tab-overflow"));
 
         const visibleTabs = tabs.filter(tab => tab.offsetWidth > 0);
@@ -252,18 +273,36 @@ export function registerTabOverflow(registrationId, dotNetRef) {
             state.bodyObserver.observe(layoutRoot, { childList: true });
         }
     };
-    // The strip is re-created whenever the location changes. A tab that had keyboard focus is removed with it, and
-    // focus falls to the page, so a key pressed next, such as Enter on the tab the user just moved to, is lost. That
-    // happens when a navigation lands just after focus moved, for example the brand's navigation home. Focus moves
-    // to the same tab in the new strip instead.
+    // The strip can be re-created by a navigation, for example when the layout changes. A tab that had keyboard focus
+    // is removed with it, and focus falls to the page, so a key pressed next, such as Enter on the tab the user just
+    // moved to, is lost. Focus moves to the same tab in the new strip instead.
     const onTabFocus = event => {
         const tab = event.target instanceof Element
-            ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"], .resources-tab-header fluent-tab#resource-tab-home')
+            ? event.target.closest('.resources-tab-header a.resource-tab')
             : null;
         state.focusedTab = tab;
     };
     document.addEventListener("focusin", onTabFocus);
     state.onTabFocus = onTabFocus;
+    // The tabs are links, so they can be opened in a new browser tab or window with a middle click (which raises
+    // auxclick rather than click) or with Ctrl, Shift or Cmd. A plain click is left to the layout's click handler
+    // instead, which waits for a home navigation in flight and docks home's resource list (see OnTabClickAsync).
+    // Cancelling the click in the capture phase stops the browser, and Blazor's link interception, from following
+    // the link: Blazor skips a click whose default was prevented.
+    // See https://github.com/dotnet/aspnetcore/blob/main/src/Components/Web.JS/src/Services/NavigationUtils.ts
+    const onTabClick = event => {
+        if (event.button !== 0 || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
+            return;
+        }
+        const tab = event.target instanceof Element
+            ? event.target.closest('.resources-tab-header a.resource-tab[href]')
+            : null;
+        if (tab) {
+            event.preventDefault();
+        }
+    };
+    document.addEventListener("click", onTabClick, true);
+    state.onTabClick = onTabClick;
     const restoreTabFocus = () => {
         const previous = state.focusedTab;
         if (!previous || previous.isConnected || (document.activeElement && document.activeElement !== document.body)) {
@@ -272,14 +311,6 @@ export function registerTabOverflow(registrationId, dotNetRef) {
         const replacement = document.getElementById(previous.id);
         if (replacement && replacement !== previous) {
             replacement.focus();
-            // A tab that's just been created can't take focus until the tab list has set it up.
-            if (document.activeElement !== replacement) {
-                requestAnimationFrame(() => {
-                    if (!document.activeElement || document.activeElement === document.body) {
-                        replacement.focus();
-                    }
-                });
-            }
         }
     };
     state.bodyObserver = new MutationObserver(() => {
@@ -319,6 +350,7 @@ export function unregisterTabOverflow(registrationId) {
     state.bodyObserver.disconnect();
     window.removeEventListener("resize", state.schedule);
     document.removeEventListener("focusin", state.onTabFocus);
+    document.removeEventListener("click", state.onTabClick, true);
 }
 
 export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth, defaultWidth) {
@@ -409,7 +441,6 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         width = startWidth;
         handle.setPointerCapture(e.pointerId);
         handle.classList.add('resizing');
-        document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
         e.preventDefault();
     };
@@ -430,7 +461,6 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
             handle.releasePointerCapture(e.pointerId);
         }
         handle.classList.remove('resizing');
-        document.body.style.cursor = '';
         document.body.style.userSelect = '';
         if (width !== startWidth) {
             commit();
@@ -506,7 +536,7 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
             handle.removeEventListener('keydown', onKeyDown);
             handle.removeEventListener('dblclick', onDoubleClick);
             if (pointerId !== null) {
-                document.body.style.cursor = '';
+                handle.classList.remove('resizing');
                 document.body.style.userSelect = '';
             }
         }
@@ -517,30 +547,6 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
 // rebuilt. Keep their interop call compatible without automatically changing width.
 export function fitPaneToActions(_layoutElement) {
     return true;
-}
-
-export function setTabListAriaLabel(tabId, label) {
-    document.getElementById(tabId)?.closest("fluent-tablist")?.setAttribute("aria-label", label);
-}
-
-export function isResourceTabFocused(tabId) {
-    return document.activeElement?.closest("fluent-tab")?.id === tabId;
-}
-
-// The last tab the user pressed, clicked or chose with Enter or Space (see registerPaneInteractions). The tab strip is
-// re-created whenever the location changes, so a click that lands just as a navigation finishes reaches the layout
-// from the outgoing strip, along with the change events that strip raises as it's torn down. Only a real activation
-// tells the click apart from that noise.
-let recentTabActivation = null;
-
-// Returns whether the user activated the tab in the last second, and forgets the activation so it's used once.
-export function consumeRecentTabActivation(tabId) {
-    const activation = recentTabActivation;
-    if (activation && activation.id === tabId && performance.now() - activation.time < 1000) {
-        recentTabActivation = null;
-        return true;
-    }
-    return false;
 }
 
 export function unregisterPaneResizer(layoutElement) {
@@ -893,10 +899,7 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     const onEscape = event => {
         const isFree = escapeIsFree;
         escapeIsFree = false;
-        // Fluent's tab list cancels the keys it receives, Escape included, without doing anything with Escape. So a
-        // focused tab, for example the one just clicked to open the page, doesn't keep Escape from going home.
-        const isFromTabList = event.composedPath().some(target => target instanceof Element && target.matches('[role="tablist"]'));
-        if (!isFree || (event.defaultPrevented && !isFromTabList) || layoutElement.dataset.escapeHome !== 'true') {
+        if (!isFree || event.defaultPrevented || layoutElement.dataset.escapeHome !== 'true') {
             return;
         }
         // Clicking the brand's link, rather than navigating here, keeps one way home: the brand clears the stored
@@ -909,7 +912,7 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             // at home (see registerTabOverflow), and since a key was pressed last, it would show its keyboard focus
             // ring there. That restore is for a tab about to be chosen while home lands; Escape leaves the tab instead.
             const focusedTab = document.activeElement instanceof Element
-                ? document.activeElement.closest('.resources-tab-header fluent-tab')
+                ? document.activeElement.closest('.resources-tab-header a.resource-tab')
                 : null;
             if (focusedTab) {
                 forgetTabFocus();
@@ -919,43 +922,12 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         }
     };
 
-    // While home shows the resource list (data-list-home), no resource tab is selected, and choosing the current tab
-    // opens its content. The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or
-    // Space on a tab is passed on. On a wide layout the tabs are in the page header, outside the layout, so this listens
-    // on the document.
-    // Also while home is loading (data-home-pending), when choosing the current tab is lost the same way: the layout
-    // holds it until home has loaded.
-    const onTabActivate = event => {
-        if (!(layoutElement.dataset.listHome === 'true' || layoutElement.dataset.homePending === 'true') ||
-            (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' ')))) {
-            return;
-        }
-        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
-        if (tab) {
-            dotNetRef.invokeMethodAsync('OpenTabFromFullCanvasAsync', tab.id).catch(() => { });
-        }
-    };
-
-    const onTabUserActivation = event => {
-        if (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' '))) {
-            return;
-        }
-        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
-        if (tab) {
-            recentTabActivation = { id: tab.id, time: performance.now() };
-        }
-    };
-
     layoutElement.addEventListener('contextmenu', onContextMenu);
     layoutElement.addEventListener('pointerdown', onShiftPointerDown, true);
-    document.addEventListener('pointerdown', onTabUserActivation, true);
-    document.addEventListener('keydown', onTabUserActivation, true);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
     window.addEventListener('keydown', onEscapeCapture, true);
     document.addEventListener('keydown', onEscape);
-    document.addEventListener('click', onTabActivate);
-    document.addEventListener('keydown', onTabActivate);
     layoutElement.addEventListener('click', onClick);
     layoutElement.addEventListener('keydown', onKeyDown);
     layoutElement.addEventListener('mouseover', onIdentityInteraction);
@@ -964,14 +936,10 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         state.disposed = true;
         layoutElement.removeEventListener('contextmenu', onContextMenu);
         layoutElement.removeEventListener('pointerdown', onShiftPointerDown, true);
-        document.removeEventListener('pointerdown', onTabUserActivation, true);
-        document.removeEventListener('keydown', onTabUserActivation, true);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
         window.removeEventListener('keydown', onEscapeCapture, true);
         document.removeEventListener('keydown', onEscape);
-        document.removeEventListener('click', onTabActivate);
-        document.removeEventListener('keydown', onTabActivate);
         layoutElement.removeEventListener('click', onClick);
         layoutElement.removeEventListener('keydown', onKeyDown);
         layoutElement.removeEventListener('mouseover', onIdentityInteraction);

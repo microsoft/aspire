@@ -1,0 +1,12 @@
+﻿services:
+  service:
+    image: "nginx:latest"
+    networks:
+      - "aspire"
+      - "custom-network"
+networks:
+  aspire:
+    driver: "bridge"
+  custom-network:
+    external: true
+    name: "shared-network"

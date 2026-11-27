@@ -8,15 +8,17 @@ namespace Infrastructure.Tests;
 
 public class DashboardResourceNavigationScriptTests(ITestOutputHelper output)
 {
-    [Fact]
+    [Theory]
+    [InlineData("ResourceTabOverflow.test.mjs")]
+    [InlineData("ResourcePicker.test.mjs")]
     [RequiresTools(["node"])]
-    public async Task TabOverflowSurvivesLayoutAndNavigationChanges()
+    public async Task ResourceNavigationScriptPasses(string script)
     {
         using var command = new NodeCommand(output)
             .WithWorkingDirectory(RepoRoot.Path)
             .WithTimeout(TimeSpan.FromSeconds(60));
         var result = await command.ExecuteScriptAsync(Path.Combine(RepoRoot.Path,
-            "tests", "Aspire.Dashboard.Components.Tests", "JavaScript", "ResourceTabOverflow.test.mjs"));
+            "tests", "Aspire.Dashboard.Components.Tests", "JavaScript", script));
 
         Assert.Equal(0, result.ExitCode);
     }

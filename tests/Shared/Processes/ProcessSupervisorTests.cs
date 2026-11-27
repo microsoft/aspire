@@ -52,6 +52,7 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
         await using var process = ProcessTestFixture.CreateProcess(startInfo, new ChildProcessOptions
         {
             Lifetime = ChildProcessLifetime.OwnedTree,
+            TemporaryStorage = TestTemporaryStorage.Create(),
             CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
             StandardOutputCallback = stdout.Enqueue
         });
@@ -72,13 +73,13 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
         var completionPath = Path.Combine(directory.FullName, "exit-code");
         var sink = new TestSink();
         var stderr = new ConcurrentQueue<string>();
-        await using var guardian = ProcessTestFixture.CreateProcess(fixture.CreateSupervisorStartInfo(
+        await using var supervisor = ProcessTestFixture.CreateProcess(fixture.CreateSupervisorStartInfo(
             fixture.CreateStartInfo("tree-exit", readiness.Name, exitCode.ToString(CultureInfo.InvariantCulture)),
-            completionPath), new TestLogger("guardian owner", sink, enabled: true),
+            completionPath), new TestLogger("supervisor owner", sink, enabled: true),
             new ChildProcessOptions { StandardErrorCallback = stderr.Enqueue });
-        await guardian.StartAsync(TestContext.Current.CancellationToken);
-        var guardianPid = guardian.ProcessId;
-        await using var scope = new ProcessScope(guardian, NullLogger.Instance, "test completion");
+        await supervisor.StartAsync(TestContext.Current.CancellationToken);
+        var supervisorPid = supervisor.ProcessId;
+        await using var scope = new ProcessScope(supervisor, NullLogger.Instance, "test completion");
         var identities = await readiness.ReadTreeAsync();
 
         // Worker cleanup can consume the supervisor's five-second termination timeout.
@@ -88,20 +89,20 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
         Assert.Equal(exitCode.ToString(CultureInfo.InvariantCulture), await File.ReadAllTextAsync(completionPath));
         var exit = Assert.Single(sink.Writes, entry => entry.Message?.Contains("Supervised command", StringComparison.Ordinal) == true);
         Assert.Equal(exitCode == 0 ? LogLevel.Information : LogLevel.Warning, exit.LogLevel);
-        Assert.Equal($"Process supervisor {guardianPid}: Supervised command 'dotnet' exited with code {exitCode}.", exit.Message);
+        Assert.Equal($"Process supervisor {supervisorPid}: Supervised command 'dotnet' exited with code {exitCode}.", exit.Message);
         Assert.Empty(stderr);
         await Task.WhenAll(identities.Select(ProcessTestFixture.AssertExitedAsync));
     }
 
     [Fact]
-    public async Task Cancellation_ReapsGuardianRuntimeAndWorker()
+    public async Task Cancellation_ReapsSupervisorTargetAndWorker()
     {
         using var readiness = new ProcessTestReadiness();
-        await using var guardian = ProcessTestFixture.CreateProcess(fixture.CreateSupervisorStartInfo(
+        await using var supervisor = ProcessTestFixture.CreateProcess(fixture.CreateSupervisorStartInfo(
             fixture.CreateStartInfo("tree", readiness.Name)), new ChildProcessOptions());
-        await guardian.StartAsync(TestContext.Current.CancellationToken);
-        await using var scope = new ProcessScope(guardian, NullLogger.Instance, "test cancellation");
-        var guardianIdentity = ProcessTestIdentity.Capture(scope.ProcessId);
+        await supervisor.StartAsync(TestContext.Current.CancellationToken);
+        await using var scope = new ProcessScope(supervisor, NullLogger.Instance, "test cancellation");
+        var supervisorIdentity = ProcessTestIdentity.Capture(scope.ProcessId);
         var identities = await readiness.ReadTreeAsync();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
@@ -109,21 +110,21 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scope.WaitForExitAsync(cancellation.Token));
         await scope.DisposeAsync();
 
-        await Task.WhenAll(identities.Append(guardianIdentity).Select(ProcessTestFixture.AssertExitedAsync));
+        await Task.WhenAll(identities.Append(supervisorIdentity).Select(ProcessTestFixture.AssertExitedAsync));
     }
 
     [Fact]
-    public async Task GuardianCrash_ReapsRuntimeAndWorker()
+    public async Task SupervisorCrash_ReapsTargetAndWorker()
     {
         using var readiness = new ProcessTestReadiness();
-        await using var guardian = ProcessTestFixture.CreateProcess(fixture.CreateSupervisorStartInfo(
+        await using var supervisor = ProcessTestFixture.CreateProcess(fixture.CreateSupervisorStartInfo(
             fixture.CreateStartInfo("tree", readiness.Name)), new ChildProcessOptions());
-        await guardian.StartAsync(TestContext.Current.CancellationToken);
-        await using var scope = new ProcessScope(guardian, NullLogger.Instance, "test guardian crash");
+        await supervisor.StartAsync(TestContext.Current.CancellationToken);
+        await using var scope = new ProcessScope(supervisor, NullLogger.Instance, "test supervisor crash");
         var identities = await readiness.ReadTreeAsync();
-        using var observedGuardian = Process.GetProcessById(scope.ProcessId);
+        using var observedSupervisor = Process.GetProcessById(scope.ProcessId);
 
-        observedGuardian.Kill(entireProcessTree: false);
+        observedSupervisor.Kill(entireProcessTree: false);
         await scope.DisposeAsync();
 
         await Task.WhenAll(identities.Select(ProcessTestFixture.AssertExitedAsync));
@@ -132,38 +133,38 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ExecutionWithoutScope_ReapsDescendantsAfterGuardianExit(bool cancel)
+    public async Task ExecutionWithoutScope_ReapsDescendantsAfterSupervisorExit(bool cancel)
     {
         using var readiness = new ProcessTestReadiness();
-        await using var guardian = ProcessTestFixture.CreateProcess(fixture.CreateSupervisorStartInfo(
+        await using var supervisor = ProcessTestFixture.CreateProcess(fixture.CreateSupervisorStartInfo(
             fixture.CreateStartInfo("tree", readiness.Name)), new ChildProcessOptions());
-        await guardian.StartAsync(TestContext.Current.CancellationToken);
+        await supervisor.StartAsync(TestContext.Current.CancellationToken);
         var identities = await readiness.ReadTreeAsync();
         if (cancel)
         {
             using var cancellation = new CancellationTokenSource();
             cancellation.Cancel();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => guardian.WaitForExitAsync(cancellation.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => supervisor.WaitForExitAsync(cancellation.Token));
         }
         else
         {
-            using var observedGuardian = Process.GetProcessById(guardian.ProcessId);
-            observedGuardian.Kill(entireProcessTree: false);
+            using var observedSupervisor = Process.GetProcessById(supervisor.ProcessId);
+            observedSupervisor.Kill(entireProcessTree: false);
         }
 
         // Execution itself must verify containment. No supervising owner wrapper
         // should be required to reap orphaned workers.
-        await guardian.DisposeAsync();
+        await supervisor.DisposeAsync();
         await Task.WhenAll(identities.Select(ProcessTestFixture.AssertExitedAsync));
     }
 
     [Fact]
-    public async Task OwnerCrash_GuardianIndependentlyReapsRuntimeAndWorker()
+    public async Task OwnerCrash_SupervisorIndependentlyReapsTargetAndWorker()
     {
         using var readiness = new ProcessTestReadiness();
         await using var owner = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("owner", readiness.Name), new ChildProcessOptions());
         await owner.StartAsync(TestContext.Current.CancellationToken);
-        var guardianIdentity = await readiness.ReadGuardianAsync();
+        var supervisorIdentity = await readiness.ReadSupervisorAsync();
         ProcessTestIdentity[] identities = [];
         try
         {
@@ -173,11 +174,11 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
             observedOwner.Kill(entireProcessTree: false);
             await owner.WaitForRootExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
-            await Task.WhenAll(identities.Append(guardianIdentity).Select(ProcessTestFixture.AssertExitedAsync));
+            await Task.WhenAll(identities.Append(supervisorIdentity).Select(ProcessTestFixture.AssertExitedAsync));
         }
         finally
         {
-            ProcessTestFixture.KillIfRunning(guardianIdentity);
+            ProcessTestFixture.KillIfRunning(supervisorIdentity);
             foreach (var identity in identities)
             {
                 ProcessTestFixture.KillIfRunning(identity);

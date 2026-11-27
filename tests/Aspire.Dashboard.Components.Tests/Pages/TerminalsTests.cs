@@ -28,7 +28,7 @@ public class TerminalsTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ModernLayout_RedirectsRouteSelectionWithoutOpeningTemporaryViewer(bool isDesktop)
+    public async Task ModernLayout_RendersFullTerminalForTheRouteSelection(bool isDesktop)
     {
         var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var client = CreateClient(
@@ -50,22 +50,28 @@ public class TerminalsTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal("http://localhost/resources/first?pane=tags&terminal=true#output", navigation.Uri);
+            Assert.Equal("http://localhost/terminals/resource/first?pane=tags#output", navigation.Uri);
             Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
+            var viewer = cut.FindComponent<TerminalView>().Instance;
+            Assert.Equal("first-instance", viewer.ResourceName);
+            Assert.False(viewer.Chromeless);
+            Assert.False(viewer.Embedded);
+            Assert.True(viewer.ShowDimensionsPicker);
+            Assert.True(viewer.ShowOpenInWindow);
+            Assert.True(viewer.AutoFit);
         });
         Assert.Empty(cut.FindComponents<ResourceSelect>());
-        Assert.Empty(cut.FindComponents<TerminalView>());
 
         resourceName = "second";
         navigation.NavigateTo(DashboardUrls.TerminalsUrl(resourceName));
         cut.Render();
-        cut.WaitForAssertion(() => Assert.Equal("http://localhost/resources/second?terminal=true", navigation.Uri));
-        Assert.Empty(cut.FindComponents<TerminalView>());
-        Assert.Equal(["second"], cut.Instance.SelectedResourceNames);
-        Assert.All(JSInterop.Invocations, invocation =>
+        cut.WaitForAssertion(() =>
         {
-            Assert.NotEqual("initTerminal", invocation.Identifier);
-            Assert.NotEqual("reconnectTerminal", invocation.Identifier);
+            Assert.Equal("http://localhost/terminals/resource/second", navigation.Uri);
+            Assert.Equal(["second"], cut.Instance.SelectedResourceNames);
+            var viewer = cut.FindComponent<TerminalView>().Instance;
+            Assert.Equal("second", viewer.ResourceName);
+            Assert.False(viewer.AutoFit);
         });
 
         storage.OnSetAsync = (key, _) =>
@@ -86,6 +92,33 @@ public class TerminalsTests : DashboardTestContext
 
         await cut.InvokeAsync(() => cut.FindComponent<Terminals>().Instance.DisposeAsync().AsTask());
         Assert.Empty(client.ClosedTerminals);
+    }
+
+    [Fact]
+    public void ModernLayout_HiddenResourceLink_OpensTerminalWithoutRevealingResource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var client = CreateClient(
+            TerminalSetupHelpers.CreateTerminalResource("hidden-instance", displayName: "hidden", hidden: true),
+            TerminalSetupHelpers.CreateTerminalResource("visible"));
+        TerminalsSetupHelpers.SetupResourcesPage(this, viewport, client);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var url = DashboardUrls.TerminalsUrl("hidden");
+        navigation.NavigateTo(url);
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Terminals>(0);
+            builder.AddAttribute(1, nameof(Terminals.ResourceName), "hidden");
+            builder.CloseComponent();
+        }));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("hidden-instance", cut.FindComponent<TerminalView>().Instance.ResourceName);
+            Assert.Equal(navigation.ToAbsoluteUri(url).AbsoluteUri, navigation.Uri);
+            Assert.Equal(["visible"], cut.Instance.GetPaneRows().Select(r => r.Resource.Name));
+        });
     }
 
     [Fact]

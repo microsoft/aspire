@@ -59,6 +59,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private TelemetryRefreshGeneration? _telemetryRefresh;
     private bool _isLoaded;
     private IReadOnlyList<string>? _scopedResourceNames;
+    private bool _showHiddenGraphResources;
+    private List<ResourceKey>? _scopedTelemetryKeys;
     private DotNetObjectReference<ApplicationSummaryInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
     private bool _graphInitializing;
@@ -75,6 +77,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     /// </summary>
     [Parameter]
     public IReadOnlyList<string>? ResourceNames { get; set; }
+
+    // Null queries all sources; an empty scope has no telemetry. The overview resolves these keys the same way as Traces.
+    [Parameter]
+    public IReadOnlyList<ResourceKey>? TelemetryResourceKeys { get; set; }
+
+    [CascadingParameter(Name = nameof(ResourcesLayout.ShowHiddenResources))]
+    public bool ShowHiddenResources { get; set; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
@@ -153,12 +162,25 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
 
+    private string GetActivityBucketTracesUrl(DateTime bucketStart)
+    {
+        const string timestampFormat = "yyyy-MM-dd'T'HH:mm:ssK";
+        List<FieldTelemetryFilter> filters =
+        [
+            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.GreaterThanOrEqual, Value = bucketStart.ToString(timestampFormat, CultureInfo.InvariantCulture) },
+            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.LessThan, Value = (bucketStart + s_activityBucketSize).ToString(timestampFormat, CultureInfo.InvariantCulture) }
+        ];
+
+        return DashboardUrls.AddResourceSelection(
+            DashboardUrls.TracesUrl(filters: TelemetryFilterFormatter.SerializeFiltersToString(filters)),
+            _scopedResourceNames ?? []);
+    }
+
     protected override async Task OnInitializedAsync()
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
-        await ViewPreferences.EnsureLoadedAsync();
         TagStore.Changed += OnTagsChanged;
-        await TagStore.EnsureLoadedAsync();
+        await Task.WhenAll(ViewPreferences.EnsureLoadedAsync(), TagStore.EnsureLoadedAsync());
 
         if (!DashboardClient.IsEnabled)
         {
@@ -252,16 +274,25 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
 
         // Resolve the first selection after the resource snapshot is available, not from a temporary unscoped query.
-        var scopeChanged = _scopedResourceNames is null != ResourceNames is null ||
+        var resourceNamesChanged = _scopedResourceNames is null != ResourceNames is null ||
             (_scopedResourceNames is not null && ResourceNames is not null && !_scopedResourceNames.SequenceEqual(ResourceNames, StringComparers.ResourceName));
-        if (scopeChanged)
+        if (resourceNamesChanged)
         {
             _scopedResourceNames = ResourceNames?.ToList();
         }
 
-        UpdateTelemetryRefresh(scopeChanged);
-        if (scopeChanged)
+        // Hiding telemetry-only sources can change the keys without changing the selected names.
+        var telemetryKeysChanged = _scopedTelemetryKeys is null != TelemetryResourceKeys is null ||
+            (_scopedTelemetryKeys is not null && TelemetryResourceKeys is not null && !_scopedTelemetryKeys.SequenceEqual(TelemetryResourceKeys));
+        if (telemetryKeysChanged)
         {
+            _scopedTelemetryKeys = TelemetryResourceKeys?.ToList();
+        }
+
+        UpdateTelemetryRefresh(resourceNamesChanged || telemetryKeysChanged);
+        if (resourceNamesChanged || _showHiddenGraphResources != ShowHiddenResources)
+        {
+            _showHiddenGraphResources = ShowHiddenResources;
             await UpdateResourceGraphResourcesAsync();
         }
     }
@@ -281,7 +312,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
 
         _telemetry = null;
-        var refresh = showSummary ? new TelemetryRefreshGeneration(_scopedResourceNames) : null;
+        var refresh = showSummary ? new TelemetryRefreshGeneration(_scopedTelemetryKeys) : null;
         Volatile.Write(ref _telemetryRefresh, refresh);
         previousRefresh?.Dispose();
         if (refresh is not null)
@@ -335,7 +366,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                     Interlocked.Exchange(ref refresh.Pending, 1);
 
                     cancellationToken.ThrowIfCancellationRequested();
-                    var telemetry = await LoadTelemetryAsync(refresh.ResourceNames, cancellationToken).ConfigureAwait(false);
+                    var telemetry = await LoadTelemetryAsync(refresh.ResourceKeys, cancellationToken).ConfigureAwait(false);
                     var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
                     await InvokeAsync(() =>
                     {
@@ -363,13 +394,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }, CancellationToken.None);
     }
 
-    private async Task<HomeTelemetry> LoadTelemetryAsync(IReadOnlyList<string>? resourceNames, CancellationToken cancellationToken)
+    private async Task<HomeTelemetry> LoadTelemetryAsync(List<ResourceKey>? resourceKeys, CancellationToken cancellationToken)
     {
         var repository = TelemetryRepository;
 
-        // Telemetry queries take resource keys, where an empty list means every resource. A selection of resources
-        // that send no telemetry has nothing to summarize.
-        var resourceKeys = GetScopedResourceKeys(resourceNames);
+        // The repository interprets an empty list as unrestricted, so don't query it for an empty pane scope.
         if (resourceKeys is { Count: 0 })
         {
             return HomeTelemetry.Empty;
@@ -613,30 +642,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         return values[Math.Clamp(index, 0, values.Count - 1)];
     }
 
-    /// <summary>
-    /// Gets the telemetry keys of the summarized resources, or <see langword="null"/> when every resource is summarized.
-    /// </summary>
-    private List<ResourceKey>? GetScopedResourceKeys(IReadOnlyList<string>? names)
-    {
-        if (names is null)
-        {
-            return null;
-        }
-
-        var keys = new List<ResourceKey>();
-        foreach (var name in names)
-        {
-            // Selections name resources as the resource list shows them, which can be a display name or a replica's name.
-            var resourceName = ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource) ? resource.Name : name;
-            if (TelemetryRepository.GetResourceByCompositeName(resourceName) is { } telemetryResource)
-            {
-                keys.Add(telemetryResource.ResourceKey);
-            }
-        }
-
-        return keys;
-    }
-
     private bool IsInScope(ResourceViewModel resource) => _scopedResourceNames is not { } names ||
         names.Contains(GetResourceName(resource), StringComparers.ResourceName) ||
         names.Contains(resource.Name, StringComparers.ResourceName);
@@ -687,7 +692,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private async Task<bool> ShowTagGroupContextMenuAsync(string tagName, int clientX, int clientY)
     {
         var items = ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, ResourceContextMenuHeaderId,
-            () => ResourceGraphMapper.GetTagMembers(GetResources(), tagName, TagStore),
+            () => ResourceGraphMapper.GetTagMembers(GetResourcesInScope(ShowHiddenResources), tagName, TagStore),
             (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
             ExecuteCommandAsync);
         if (_contextMenu is not { } contextMenu || items.Count == 0)
@@ -714,12 +719,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await InvokeAsync(StateHasChanged);
     }
 
-    private IEnumerable<ResourceViewModel> GetResourcesInScope() =>
-        _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r));
+    private IEnumerable<ResourceViewModel> GetResourcesInScope(bool showHiddenResources) =>
+        _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources) && IsInScope(r));
 
     private List<ResourceViewModel> GetResources()
     {
-        return GetResourcesInScope()
+        return GetResourcesInScope(showHiddenResources: false)
             .OrderBy(r => NeedsAttention(r) ? 0 : 1)
             .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -749,10 +754,10 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private List<ResourceDto> GetResourceGraphResources()
     {
-        var resources = ResourceGraphMapper.OrderResources(GetResourcesInScope());
+        var resources = ResourceGraphMapper.OrderResources(GetResourcesInScope(ShowHiddenResources));
         var tagsByResource = TagStore.GetTagsByResource(resources);
         return resources
-            .Select(resource => ResourceGraphMapper.MapResource(resource, resources, _resourceByName, ColumnsLoc, showHiddenResources: false, IconResolver,
+            .Select(resource => ResourceGraphMapper.MapResource(resource, resources, _resourceByName, ColumnsLoc, ShowHiddenResources, IconResolver,
                 tagsByResource.GetValueOrDefault(resource.DisplayName) ?? []))
             .ToList();
     }
@@ -955,13 +960,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     {
         private readonly CancellationTokenSource _cts = new();
 
-        public TelemetryRefreshGeneration(IReadOnlyList<string>? resourceNames)
+        public TelemetryRefreshGeneration(List<ResourceKey>? resourceKeys)
         {
-            ResourceNames = resourceNames;
+            ResourceKeys = resourceKeys;
             CancellationToken = _cts.Token;
         }
 
-        public IReadOnlyList<string>? ResourceNames { get; }
+        public List<ResourceKey>? ResourceKeys { get; }
         public CancellationToken CancellationToken { get; }
         // The generation starts with its immediate refresh already reserved.
         public int Pending = 1;
@@ -981,7 +986,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         [JSInvokable]
         public Task SelectTagGroup(string tagName, MouseEventArgs e) =>
             (summary.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout."))
-                .SelectGraphTagGroupAsync(tagName, e, summary.GetResourcesInScope(), showHiddenResources: false);
+                .SelectGraphTagGroupAsync(tagName, e, summary.GetResourcesInScope(summary.ShowHiddenResources), summary.ShowHiddenResources);
 
         [JSInvokable]
         public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>

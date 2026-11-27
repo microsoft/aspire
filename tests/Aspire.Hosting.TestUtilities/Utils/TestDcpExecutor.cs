@@ -47,6 +47,8 @@ internal sealed class TestDcpExecutor : IDcpExecutor
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
+    public Task<bool> StopAndWaitForResourceCleanupAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+
     public Task StopResourceAsync(IResourceReference resource, CancellationToken cancellationToken) => Task.CompletedTask;
 
     private sealed class TestResourceReference(IResource modelResource, string dcpResourceName) : IResourceReference
