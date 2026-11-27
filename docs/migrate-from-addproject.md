@@ -61,6 +61,10 @@ Removing `Aspire.AppHost.Sdk` is a related but separate step. See
 `Microsoft.NET.Sdk`, explicit package references, CLI bundle, and Central Package Management
 requirements. Keeping that SDK temporarily does not suppress `AddProject`'s own warning.
 
+When removing the SDK, declare `<IsAspireHost>true</IsAspireHost>` explicitly in the AppHost
+project so tools such as `azd` recognize it before package restore on a clean agent.
+This project-identity requirement is separate from changing resource registration calls.
+
 ## Replace each overload
 
 In the table, `path` is the actual project path, not a string derived from `TProject`'s name.

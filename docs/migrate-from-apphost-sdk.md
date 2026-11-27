@@ -43,6 +43,22 @@ After:
 <Project Sdk="Microsoft.NET.Sdk">
 ```
 
+Keep the AppHost identity explicit in the project:
+
+```xml
+<PropertyGroup>
+  <IsAspireHost>true</IsAspireHost>
+</PropertyGroup>
+```
+
+Tools such as `azd` query `IsAspireHost` before restoring packages to decide whether to
+generate infrastructure from the AppHost. The old SDK supplied this property before restore;
+with the plain SDK, the default from `Aspire.Hosting.AppHost` is only available after its
+NuGet imports have been generated. Declaring the property explicitly preserves detection
+on clean CI agents. Otherwise, `azd provision` can treat the project as an ordinary .NET
+service and look for a checked-in `infra/main.bicep` instead of generating infrastructure.
+Restoring the AppHost before starting `azd` is a workaround for this detection gap.
+
 ## 2. Add explicit AppHost and .NET project integration packages
 
 Choose a release that supports `AddDotnetProject`. Add explicit references to
