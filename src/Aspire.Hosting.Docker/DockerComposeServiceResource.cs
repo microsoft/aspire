@@ -344,7 +344,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
         var services = await runtime.ComposeListServicesAsync(composeContext, context.CancellationToken).ConfigureAwait(false);
 
         var endpoints = services is not null
-            ? ParseServiceEndpoints(services, externalEndpointMappings, context.Logger)
+            ? ParseServiceEndpoints(services, externalEndpointMappings, endpointName: null)
             : [];
 
         if (endpoints.Count > 0)
@@ -352,6 +352,23 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
             var endpointList = string.Join(", ", endpoints.Select(e => $"[{e}]({e})"));
             context.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{TargetResource.Name}** to {endpointList}."));
             context.Summary.Add(TargetResource.Name, string.Join(", ", endpoints));
+
+            // OTLP endpoints also use HTTP, but only the primary endpoint serves the login page.
+            var dashboardEndpoint = TargetResource is DockerComposeAspireDashboardResource && services is not null
+                ? ParseServiceEndpoints(services, externalEndpointMappings, endpointName: "http").FirstOrDefault()
+                : null;
+            if (dashboardEndpoint is not null)
+            {
+                // Include the output directory and existing env file because Podman's Compose provider
+                // can require the project files even when reading logs from an existing deployment.
+                var envFileArgument = File.Exists(composeContext.EnvFilePath)
+                    ? $" --env-file \"{Path.GetFileName(composeContext.EnvFilePath)}\""
+                    : string.Empty;
+                var command = $"{runtime.Name.ToLowerInvariant()} compose --file docker-compose.yaml{envFileArgument} --project-name {composeContext.ProjectName} logs --tail=50 {TargetResource.Name.ToLowerInvariant()}";
+                var instructions = new MarkdownString($"From `{composeContext.WorkingDirectory}`, run `{command}` to retrieve the dashboard login token. Copy the token from the logs into the login page at [{dashboardEndpoint}]({dashboardEndpoint}); the URL in the container logs uses the container port.");
+                context.ReportingStep.Log(LogLevel.Information, instructions);
+                context.Summary.Add($"{TargetResource.Name} login", instructions);
+            }
         }
         else
         {
@@ -368,7 +385,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
     private HashSet<string> ParseServiceEndpoints(
         IReadOnlyList<ComposeServiceInfo> services,
         List<EndpointMapping> externalEndpointMappings,
-        ILogger _)
+        string? endpointName)
     {
         var endpoints = new HashSet<string>(StringComparers.EndpointAnnotationName);
         var serviceName = TargetResource.Name.ToLowerInvariant();
@@ -398,8 +415,15 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
                 // Try to find a matching external endpoint to get the scheme
                 var targetPortStr = publisher.TargetPort?.ToString(CultureInfo.InvariantCulture);
+                // A host port can equal another endpoint's container port, so match the container port first.
                 var endpointMapping = externalEndpointMappings
-                    .FirstOrDefault(m => m.InternalPort == targetPortStr || m.ExposedPort == publisher.TargetPort);
+                    .FirstOrDefault(m => m.InternalPort == targetPortStr,
+                        externalEndpointMappings.FirstOrDefault(m => m.ExposedPort == publisher.TargetPort));
+
+                if (endpointName is not null && !StringComparers.EndpointAnnotationName.Equals(endpointMapping.EndpointName, endpointName))
+                {
+                    continue;
+                }
 
                 var scheme = endpointMapping.Scheme ?? "http";
 
