@@ -10,6 +10,10 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// Supports various types of metrics for monitoring and scaling, such as container resource metrics,
 /// external metrics, pod metrics, object metrics, and resource metrics.
 /// </summary>
+/// <remarks>
+/// Kubernetes requires that only the metric source matching <see cref="Type"/> is populated, so the
+/// metric source properties are <see langword="null"/> by default and only the ones that are set are emitted.
+/// </remarks>
 [YamlSerializable]
 public sealed class MetricSpecV2
 {
@@ -19,7 +23,7 @@ public sealed class MetricSpecV2
     /// on resource utilization metrics associated with a specific container within a pod.
     /// </summary>
     [YamlMember(Alias = "containerResource")]
-    public ContainerResourceMetricSourceV2 ContainerResource { get; set; } = new();
+    public ContainerResourceMetricSourceV2? ContainerResource { get; set; }
 
     /// <summary>
     /// Represents a resource-based metric source used for autoscaling in Kubernetes environments.
@@ -27,7 +31,7 @@ public sealed class MetricSpecV2
     /// for scaling purposes.
     /// </summary>
     [YamlMember(Alias = "resource")]
-    public ResourceMetricSourceV2 Resource { get; set; } = new();
+    public ResourceMetricSourceV2? Resource { get; set; }
 
     /// <summary>
     /// Specifies the type of metric source used for scaling in Kubernetes.
@@ -51,7 +55,7 @@ public sealed class MetricSpecV2
     /// resource and container metrics.
     /// </remarks>
     [YamlMember(Alias = "external")]
-    public ExternalMetricSourceV2 External { get; set; } = new();
+    public ExternalMetricSourceV2? External { get; set; }
 
     /// <summary>
     /// Represents a metric source targeted at Kubernetes Pods.
@@ -59,7 +63,7 @@ public sealed class MetricSpecV2
     /// monitoring and adjustment based on specific scale conditions of pod metrics.
     /// </summary>
     [YamlMember(Alias = "pods")]
-    public PodsMetricSourceV2 Pods { get; set; } = new();
+    public PodsMetricSourceV2? Pods { get; set; }
 
     /// <summary>
     /// Gets or sets the Object metric source.
@@ -68,5 +72,5 @@ public sealed class MetricSpecV2
     /// obtained from the described Kubernetes object.
     /// </summary>
     [YamlMember(Alias = "object")]
-    public ObjectMetricSourceV2 Object { get; set; } = new();
+    public ObjectMetricSourceV2? Object { get; set; }
 }
