@@ -79,6 +79,11 @@ parameters:
     type: boolean
     default: false
 
+  - name: UseEsrpForWinGet
+    displayName: '[Advanced] Prepare WinGet for ESRP (dry run only)'
+    type: boolean
+    default: false
+
   - name: SkipGitHubTasks
     displayName: '[Advanced] Skip GitHub Tasks dispatch (re-run after success)'
     type: boolean
@@ -253,6 +258,12 @@ extends:
               - checkout: none
 
               - powershell: |
+                  # Reject this combination before any release publishing jobs run.
+                  if ('${{ parameters.UseEsrpForWinGet }}' -eq 'true' -and '${{ parameters.DryRun }}' -ne 'true') {
+                    Write-Error "WinGet ESRP preparation only supports DryRun=true. ESRP publishing is not configured."
+                    exit 1
+                  }
+
                   Write-Host "=== Prepare Artifacts Stage ==="
                   Write-Host "Source Build ID: $(resources.pipeline.aspire-build.runID)"
                   Write-Host "Source Build Name: $(resources.pipeline.aspire-build.runName)"
@@ -806,6 +817,7 @@ extends:
                   Write-Host "Skip npm RID Publish: ${{ parameters.SkipNpmRidPublish }}"
                   Write-Host "Skip npm Pointer Publish: ${{ parameters.SkipNpmPointerPublish }}"
                   Write-Host "Skip Channel Promotion: ${{ parameters.SkipChannelPromotion }}"
+                  Write-Host "Prepare WinGet for ESRP: ${{ parameters.UseEsrpForWinGet }}"
                   Write-Host "Skip Nix Package Update: ${{ parameters.SkipNixPackageUpdate }}"
                   $installerOnlyMode = (
                     "${{ parameters.SkipNuGetPublish }}" -eq "true" -and
@@ -2330,9 +2342,9 @@ extends:
             templateContext:
               type: releaseJob
               isProduction: true
-              # No ESRP publish in this job (winget cli + git push to the WinGet community repo
-              # using a PAT). Skip the auto-injected MicroBuildAuthorizePublishPlugin@0 so it
-              # does not 401 against the devdiv MicroBuildToolset feed.
+              # Neither wingetcreate nor ESRP dry-run preparation uses MicroBuild
+              # publishing. Disable its authorization plugin to avoid an
+              # unnecessary authentication failure against the default feed.
               mb:
                 publish:
                   enabled: false
@@ -2341,11 +2353,18 @@ extends:
                   artifactName: winget-manifests-stable
                   targetPath: '$(Pipeline.Workspace)/winget/winget-manifests-stable'
             steps:
-              - template: /eng/pipelines/templates/publish-winget.yml@self
-                parameters:
-                  manifestArtifactPath: $(Pipeline.Workspace)/winget/winget-manifests-stable
-                  packageIdentifier: Microsoft.Aspire
-                  dryRun: ${{ parameters.DryRun }}
+              - ${{ if eq(parameters.UseEsrpForWinGet, false) }}:
+                - template: /eng/pipelines/templates/publish-winget.yml@self
+                  parameters:
+                    manifestArtifactPath: $(Pipeline.Workspace)/winget/winget-manifests-stable
+                    packageIdentifier: Microsoft.Aspire
+                    dryRun: ${{ parameters.DryRun }}
+              - ${{ if eq(parameters.UseEsrpForWinGet, true) }}:
+                - template: /eng/pipelines/templates/prepare-winget-esrp.yml@self
+                  parameters:
+                    manifestArtifactPath: $(Pipeline.Workspace)/winget/winget-manifests-stable
+                    packageIdentifier: Microsoft.Aspire
+                    dryRun: ${{ parameters.DryRun }}
 
       # ===== STAGE 3: GITHUB TASKS =====
       # Three responsibilities, all running as (or against) the aspire-repo-bot

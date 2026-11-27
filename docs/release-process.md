@@ -130,6 +130,7 @@ Before starting a release:
    | `SkipNpmPointerPublish` | Set `true` if the pointer package published but a later validation or promotion step failed. Registry validation still runs. | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success. | `false` |
    | `SkipWinGetPublish` | Set `true` if re-running a stable release after WinGet success. Prerelease releases skip WinGet automatically. | `false` |
+   | `UseEsrpForWinGet` | Prepare a WinGet manifest tree for ESRP evaluation; requires `DryRun=true` and does not submit anything. | `false` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow. | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading `aspire-cli-*` assets to the GitHub release. | `false` |
    | `SkipNixPackageUpdate` | Set `true` if the Nix flake update was already added to the baseline version PR. Stable releases dispatch the updater with checksums from the source build; prereleases skip it. | `false` |
@@ -171,6 +172,14 @@ The npm release path validates Windows, Linux, and macOS install summaries, publ
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
 > **Tip**: Use `DryRun: true` to test end-to-end without publishing, promoting, tagging, creating PRs, or uploading release assets. The dry-run state is propagated to the GitHub workflow as `dry_run: true`.
+
+### WinGet ESRP preparation
+
+The default WinGet release path continues to submit with `wingetcreate`. For a stable-release dry run, setting `UseEsrpForWinGet=true` prepares the manifest tree under `manifests/m/Microsoft/Aspire/<version>`. It reuses the normal version and release-notes preparation, but does **not** call ESRP or submit a WinGet PR. The pipeline rejects this option when `DryRun=false`, before the release publishing jobs run.
+
+ESRP submission is not configured. Before enabling it, confirm Aspire's WinGet onboarding, an authorized ESRP service connection and managed identity, required signing credentials and owner/approver configuration, and package ownership coordination with the WinGet team. Confirm the task inputs and whether the MicroBuild publishing wrapper supports this scenario. Ownership coordination can take several business days.
+
+The manifest's installer URLs point to `ci.dot.net`, not GitHub release assets; they must be publicly reachable when a future ESRP submission runs. A successful ESRP submission would mean validation and PR creation, not that the PR has merged or the package is available. The dry-run preparation does not verify either installer reachability or ESRP onboarding.
 
 ### Step 2: Prepare a VS Code extension release PR
 
