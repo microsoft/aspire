@@ -1,0 +1,77 @@
+# A separate invocation of release definition 1600, after the release manager
+# publishes the draft. No ESRP, promotion, release upload or GitHub dispatch.
+parameters:
+  - name: dryRun
+    type: boolean
+  - name: releaseRunId
+    type: string
+  - name: testOnly
+    type: boolean
+
+resources:
+  repositories:
+    - repository: 1ESPipelineTemplates
+      type: git
+      name: 1ESPipelineTemplates/1ESPipelineTemplates
+      ref: refs/tags/release
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    pool:
+      name: Azure Pipelines
+      vmImage: macOS-latest-internal
+      os: macOS
+    sdl:
+      sourceAnalysisPool:
+        name: NetCore1ESPool-Internal
+        image: windows.vs2026preview.scout.amd64
+        os: windows
+    stages:
+      - stage: Homebrew
+        # All versions share this protected resource. Configure its exclusive
+        # lock AND release-manager approval checks before authorizing credentials.
+        # https://learn.microsoft.com/azure/devops/pipelines/process/approvals#exclusive-lock
+        lockBehavior: sequential
+        jobs:
+          - ${{ if parameters.dryRun }}:
+            - job: HomebrewDryRun
+              timeoutInMinutes: 90
+              cancelTimeoutInMinutes: 2
+              templateContext:
+                outputs:
+                  - output: pipelineArtifact
+                    targetPath: $(Build.ArtifactStagingDirectory)/homebrew
+                    artifactName: homebrew-publisher
+                    condition: always()
+              steps:
+                - template: /eng/pipelines/templates/publish-homebrew-steps.yml@self
+                  parameters:
+                    dryRun: true
+                    releaseRunId: ${{ parameters.releaseRunId }}
+                    testOnly: ${{ parameters.testOnly }}
+          - ${{ else }}:
+            - deployment: HomebrewPublish
+              environment: aspire-homebrew-publisher
+              timeoutInMinutes: 90
+              cancelTimeoutInMinutes: 2
+              variables:
+                # This group must be restricted to this pipeline and contain
+                # only a tap-scoped token, not Aspire release credentials.
+                - group: Aspire-Homebrew-Publisher
+              templateContext:
+                outputs:
+                  - output: pipelineArtifact
+                    targetPath: $(Build.ArtifactStagingDirectory)/homebrew
+                    artifactName: homebrew-publisher
+                    condition: always()
+              strategy:
+                runOnce:
+                  deploy:
+                    steps:
+                      - download: none
+                      - template: /eng/pipelines/templates/publish-homebrew-steps.yml@self
+                        parameters:
+                          dryRun: false
+                          releaseRunId: ${{ parameters.releaseRunId }}
+                          testOnly: ${{ parameters.testOnly }}

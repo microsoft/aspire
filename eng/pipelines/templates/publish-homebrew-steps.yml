@@ -1,0 +1,122 @@
+parameters:
+  - name: dryRun
+    type: boolean
+  - name: releaseRunId
+    type: string
+  - name: testOnly
+    type: boolean
+
+steps:
+  - checkout: self
+    persistCredentials: false
+    clean: true
+  - bash: |
+      set -euo pipefail
+      mkdir -p "$OUTPUT"
+      if [[ "$TEST_ONLY" == "True" ]]; then
+        echo "##vso[task.logissue type=error;]HomebrewPublishOnly and HomebrewTestOnly are mutually exclusive."
+        exit 1
+      fi
+      if ! [[ "$RELEASE_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+        echo "##vso[task.logissue type=error;]Set HomebrewReleaseRunId to the exact original release run (definition 1600)."
+        exit 1
+      fi
+      echo "Original release run: $RELEASE_RUN_ID; publisher run: $PUBLISHER_RUN_ID; DryRun: $DRY_RUN"
+      printf '{"release_run_id":%s,"publisher_run_id":%s,"dry_run":"%s"}\n' \
+        "$RELEASE_RUN_ID" "$PUBLISHER_RUN_ID" "$DRY_RUN" > "$OUTPUT/publisher-run.json"
+    displayName: Verify explicit continuation mode and original release identity
+    env:
+      TEST_ONLY: ${{ parameters.testOnly }}
+      RELEASE_RUN_ID: ${{ parameters.releaseRunId }}
+      PUBLISHER_RUN_ID: $(Build.BuildId)
+      DRY_RUN: ${{ parameters.dryRun }}
+      OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew
+  - pwsh: |
+      & eng/pipelines/scripts/Get-HomebrewBuildMetadata.ps1 `
+        -BuildId $env:RELEASE_RUN_ID -ArtifactName homebrew-release-handoff `
+        -OutputPath "$env:OUTPUT/release-build.json"
+    displayName: Read exact original release run and handoff metadata
+    timeoutInMinutes: 5
+    env:
+      RELEASE_RUN_ID: ${{ parameters.releaseRunId }}
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+      OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew
+  - task: DownloadPipelineArtifact@2
+    displayName: Download handoff from the exact original release run
+    inputs:
+      buildType: specific
+      project: internal
+      definition: 1600
+      specificBuildWithTriggering: false
+      buildVersionToDownload: specific
+      pipelineId: ${{ parameters.releaseRunId }}
+      artifactName: homebrew-release-handoff
+      targetPath: $(Build.ArtifactStagingDirectory)/homebrew/handoff
+  - bash: |
+      set -euo pipefail
+      python3 eng/homebrew/release_handoff.py resolve \
+        --release-run-id "$RELEASE_RUN_ID" --handoff "$OUTPUT/handoff/handoff.json" \
+        --release-metadata "$OUTPUT/release-build.json" 2>&1 | tee "$OUTPUT/handoff.log"
+    displayName: Resolve original source build without a latest or version lookup
+    env:
+      RELEASE_RUN_ID: ${{ parameters.releaseRunId }}
+      OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew
+  - pwsh: |
+      & eng/pipelines/scripts/Get-HomebrewBuildMetadata.ps1 `
+        -BuildId $env:SOURCE_BUILD_ID -ArtifactName homebrew-cask-stable `
+        -OutputPath "$env:OUTPUT/source-build.json"
+    displayName: Read original official source build and cask provenance
+    timeoutInMinutes: 5
+    env:
+      SOURCE_BUILD_ID: $(HomebrewSourceBuildId)
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+      OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew
+  - task: DownloadBuildArtifacts@0
+    displayName: Download unchanged cask from the original official source run
+    inputs:
+      buildType: specific
+      project: internal
+      pipeline: 1602
+      specificBuildWithTriggering: false
+      buildVersionToDownload: specific
+      buildId: $(HomebrewSourceBuildId)
+      downloadType: single
+      artifactName: homebrew-cask-stable
+      downloadPath: $(Build.ArtifactStagingDirectory)/homebrew/download
+      checkDownloadedFiles: true
+      retryDownloadCount: 2
+  - bash: |
+      set -euo pipefail
+      git --no-pager -c http.lowSpeedLimit=1 \
+        -c http.lowSpeedTime=60 clone --quiet https://github.com/microsoft/homebrew-aspire.git "$TAP"
+      git --no-pager -C "$TAP" checkout --quiet 89a2b248e4c7ab883d072ecb2d10874e04c2d6b1
+    displayName: Prepare exact approved validator checkout
+    timeoutInMinutes: 5
+    env:
+      TAP: $(Agent.TempDirectory)/homebrew-validator
+  - bash: |
+      set -euo pipefail
+      args=()
+      if [[ "$DRY_RUN" == "False" ]]; then
+        args+=(--publish)
+      elif [[ "$DRY_RUN" != "True" ]]; then
+        echo "##vso[task.logissue type=error;]DryRun must be explicit."
+        exit 1
+      fi
+      python3 -u eng/homebrew/publish-cask.py \
+        --candidate "$OUTPUT/download/homebrew-cask-stable/aspire.rb" \
+        --version "$HOMEBREW_RELEASE_VERSION" --tap-checkout "$TAP" \
+        --source-build-metadata "$OUTPUT/source-build.json" \
+        --source-build-id "$SOURCE_BUILD_ID" --source-build-commit "$SOURCE_COMMIT" \
+        --wait-for-release-seconds 600 --output-dir "$OUTPUT" "${args[@]}" \
+        2>&1 | tee "$OUTPUT/console.log"
+    displayName: Validate public release and plan or submit one draft tap PR
+    env:
+      DRY_RUN: ${{ parameters.dryRun }}
+      HOMEBREW_RELEASE_VERSION: $(HomebrewReleaseVersion)
+      SOURCE_BUILD_ID: $(HomebrewSourceBuildId)
+      SOURCE_COMMIT: $(HomebrewSourceCommit)
+      TAP: $(Agent.TempDirectory)/homebrew-validator
+      OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew
+      ${{ if not(parameters.dryRun) }}:
+        HOMEBREW_TAP_WRITE_TOKEN: $(homebrew-tap-write-token)
