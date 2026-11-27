@@ -2526,7 +2526,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
             {
                 var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _environment, _logger);
-                runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+                runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain, directory);
             }
             else if (JavaAppHostToolchainResolver.IsJavaLanguage(_resolvedLanguage))
             {
