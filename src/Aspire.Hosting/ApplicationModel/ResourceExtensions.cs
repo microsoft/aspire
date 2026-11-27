@@ -56,6 +56,16 @@ public static class ResourceExtensions
     {
         var matchingTypeAnnotations = resource.Annotations.OfType<T>().ToArray();
 
+        // Generated configuration can depend on the complete environment, including values
+        // registered later by the AppHost. Preserve registration order within each group.
+        if (typeof(T) == typeof(EnvironmentCallbackAnnotation) &&
+            matchingTypeAnnotations.Any(static a => a is EnvironmentCallbackAnnotation { ExecuteAfterOtherCallbacks: true }))
+        {
+            matchingTypeAnnotations = matchingTypeAnnotations
+                .OrderBy(static a => a is EnvironmentCallbackAnnotation { ExecuteAfterOtherCallbacks: true })
+                .ToArray();
+        }
+
         if (matchingTypeAnnotations.Length > 0)
         {
             result = matchingTypeAnnotations;

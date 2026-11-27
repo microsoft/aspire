@@ -71,6 +71,32 @@ for the generated Dockerfile. Use `DisableBuildValidation()` only when the confi
 provided dynamically and cannot be statically inspected; it does not change the required build output.
 User-authored Dockerfiles are preserved rather than replaced by generated Dockerfiles.
 
+### Publish a static website
+
+`PublishAsStaticWebsite` serves built files with YARP. By default, unmatched GET and HEAD requests
+for paths without a file extension serve `index.html` for client-side routing. The fallback uses
+YARP's maximum route order, so proxy routes with a lower order take precedence. A competing
+catch-all with the same order can be overridden by the fallback; disable the fallback if that
+route should win. Missing files such as `.js` assets return 404. Disable the fallback for a site
+that should return 404 for unmatched paths:
+
+**C#**
+
+```csharp
+builder.AddViteApp("frontend", "../frontend")
+    .PublishAsStaticWebsite(options => options.EnableSpaFallback = false);
+```
+
+**TypeScript**
+
+```typescript
+await builder.addViteApp("frontend", "../frontend")
+    .publishAsStaticWebsite({ enableSpaFallback: false });
+```
+
+For a YARP image that supports the native `NavigationFallback__Path` setting, disable Aspire's
+fallback when configuring that setting. Otherwise, Aspire's `index.html` fallback takes precedence.
+
 ### Deno runtime and publishing
 
 The Deno hosting APIs are stable and do not require suppressing `ASPIREDENO001`.
