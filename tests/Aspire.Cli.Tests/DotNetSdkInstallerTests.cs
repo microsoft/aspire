@@ -64,10 +64,8 @@ public class DotNetSdkInstallerTests
             var installer = CreateDotNetSdkInstaller(createProcessStartInfo: (_, _) => startInfo);
             var checkTask = installer.CheckAsync(cancellationTokenSource.Token);
 
-            parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(parentPidFile, TestContext.Current.CancellationToken)
-                .DefaultTimeout();
-            childPid = await ProcessTestHelpers.WaitForProcessIdAsync(childPidFile, TestContext.Current.CancellationToken)
-                .DefaultTimeout();
+            parentPid = await WaitForShimProcessIdAsync(parentPidFile, checkTask);
+            childPid = await WaitForShimProcessIdAsync(childPidFile, checkTask);
 
             cancellationTokenSource.Cancel();
 
@@ -349,27 +347,47 @@ public class DotNetSdkInstallerTests
             return startInfo;
         }
 
-        var shellFile = Path.Combine(directory.FullName, "dotnet");
+        var shellFile = Path.Combine(directory.FullName, "dotnet-shim.sh");
         var shellScript =
-            "#!/usr/bin/env bash" + Environment.NewLine +
             $"echo $$ > '{EscapeShellPath(parentPidFile)}'" + Environment.NewLine +
             "sleep 60 &" + Environment.NewLine +
             $"echo $! > '{EscapeShellPath(childPidFile)}'" + Environment.NewLine +
             "wait $!" + Environment.NewLine;
         await File.WriteAllTextAsync(shellFile, shellScript);
-        File.SetUnixFileMode(
-            shellFile,
-            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
 
-        return new ProcessStartInfo(shellFile)
+        // Run the script through bash instead of exec'ing it. Exec of a file that was just written fails with
+        // ETXTBSY when a parallel test forks while the write handle is open, and CheckAsync reports that
+        // start failure as "SDK not found", so the shim would never write its PID file.
+        var bashStartInfo = new ProcessStartInfo("/bin/bash")
         {
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        bashStartInfo.ArgumentList.Add(shellFile);
+        return bashStartInfo;
+    }
+
+    private static async Task<int> WaitForShimProcessIdAsync(string pidFile, Task<(bool Success, string? HighestDetectedVersion, string MinimumRequiredVersion)> checkTask)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var pidTask = ProcessTestHelpers.WaitForProcessIdAsync(pidFile, cts.Token);
+        try
+        {
+            var completed = await Task.WhenAny(pidTask, checkTask).DefaultTimeout();
+            if (completed != pidTask)
+            {
+                var result = await checkTask;
+                Assert.Fail($"CheckAsync completed with {result} before the dotnet shim wrote '{Path.GetFileName(pidFile)}', so the shim did not start.");
+            }
+
+            return await pidTask;
+        }
+        finally
+        {
+            cts.Cancel();
+        }
     }
 
     private static string EscapeShellPath(string path) => path.Replace("'", "'\"'\"'", StringComparison.Ordinal);
