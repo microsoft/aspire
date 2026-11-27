@@ -380,24 +380,34 @@ public sealed partial class SqliteTelemetryRepository
             """, query.Parameters).AsList();
 
         var firstRecord = records[0];
+        var items = new List<LogSummary>(records.Count);
+        foreach (var record in records)
+        {
+            // A resource can be deleted after the rows are read, invalidating its cached metadata.
+            if (record.InternalId is not { } internalId || GetCachedResource(record.ResourceId!.Value) is not { } resource)
+            {
+                continue;
+            }
+
+            items.Add(new LogSummary
+            {
+                InternalId = internalId,
+                TimeStamp = new DateTime(record.TimestampTicks!.Value, DateTimeKind.Utc),
+                Severity = (LogLevel)record.Severity!.Value,
+                Message = record.Message!,
+                SpanId = record.SpanId!,
+                TraceId = record.TraceId!,
+                ScopeName = record.ScopeName!,
+                EventName = record.EventName,
+                Resource = resource,
+                ExceptionText = record.ExceptionText,
+                HasGenAI = record.HasGenAI!.Value
+            });
+        }
+
         return new PagedResult<LogSummary>
         {
-            Items = records
-                .Where(record => record.InternalId is not null)
-                .Select(record => new LogSummary
-                {
-                    InternalId = record.InternalId!.Value,
-                    TimeStamp = new DateTime(record.TimestampTicks!.Value, DateTimeKind.Utc),
-                    Severity = (LogLevel)record.Severity!.Value,
-                    Message = record.Message!,
-                    SpanId = record.SpanId!,
-                    TraceId = record.TraceId!,
-                    ScopeName = record.ScopeName!,
-                    EventName = record.EventName,
-                    Resource = GetCachedResource(record.ResourceId!.Value)!,
-                    ExceptionText = record.ExceptionText,
-                    HasGenAI = record.HasGenAI!.Value
-                }).ToList(),
+            Items = items,
             TotalItemCount = firstRecord.TotalItemCount,
             IsFull = firstRecord.IsFull
         };
@@ -777,7 +787,11 @@ public sealed partial class SqliteTelemetryRepository
         var results = new List<OtlpLogEntry>(records.Count);
         foreach (var record in records)
         {
-            var (_, view, scope) = GetCachedTelemetryMetadata(record.ResourceId!.Value, record.ResourceViewId!.Value, record.ScopeId!.Value, CachedTelemetryType.Logs);
+            // A resource can be deleted after the rows are read, invalidating its cached metadata.
+            if (GetCachedTelemetryMetadata(record.ResourceId!.Value, record.ResourceViewId!.Value, record.ScopeId!.Value, CachedTelemetryType.Logs) is not (_, var view, var scope))
+            {
+                continue;
+            }
 
             results.Add(new OtlpLogEntry(
                 record.LogId!.Value,

@@ -689,55 +689,74 @@ public sealed partial class SqliteTelemetryRepository
 
     private List<OtlpInstrumentSummary> GetCachedInstrumentSummaries(ResourceKey key)
     {
-        EnsureCachePopulated();
-        lock (_cacheLock)
-        {
-            return GetCachedResources(key)
-                .SelectMany(resource => resource.Scopes.Values)
-                .SelectMany(scope => scope.Instruments.Values)
-                .Select(instrument => instrument.Summary)
-                .DistinctBy(summary => summary.GetKey())
-                .ToList();
-        }
+        return ReadCache(() => GetCachedResources(key)
+            .SelectMany(resource => resource.Scopes.Values)
+            .SelectMany(scope => scope.Instruments.Values)
+            .Select(instrument => instrument.Summary)
+            .DistinctBy(summary => summary.GetKey())
+            .ToList());
     }
 
     private List<CachedInstrument> GetCachedInstruments(ResourceKey resourceKey, string meterName, string instrumentName)
     {
-        EnsureCachePopulated();
-        lock (_cacheLock)
-        {
-            return GetCachedResources(resourceKey)
-                .SelectMany(resource => resource.Scopes.Values)
-                .Where(scope => string.Equals(scope.Scope.Scope.Name, meterName, StringComparison.Ordinal))
-                .SelectMany(scope => scope.Instruments.Values)
-                .Where(instrument => string.Equals(instrument.Summary.Name, instrumentName, StringComparison.Ordinal))
-                .ToList();
-        }
+        return ReadCache(() => GetCachedResources(resourceKey)
+            .SelectMany(resource => resource.Scopes.Values)
+            .Where(scope => string.Equals(scope.Scope.Scope.Name, meterName, StringComparison.Ordinal))
+            .SelectMany(scope => scope.Instruments.Values)
+            .Where(instrument => string.Equals(instrument.Summary.Name, instrumentName, StringComparison.Ordinal))
+            .ToList());
     }
 
-    private (OtlpResource Resource, OtlpResourceView View, OtlpScope Scope) GetCachedTelemetryMetadata(
+    /// <summary>
+    /// Gets the cached metadata for a telemetry row. Returns <see langword="null"/> when the resource, view or scope no
+    /// longer exists, e.g. the row was read before its resource was deleted. Callers should skip the row.
+    /// </summary>
+    private (OtlpResource Resource, OtlpResourceView View, OtlpScope Scope)? GetCachedTelemetryMetadata(
         long resourceId,
         long resourceViewId,
         long scopeId,
         CachedTelemetryType telemetryType)
     {
-        EnsureCachePopulated();
-        lock (_cacheLock)
+        return ReadCache<(OtlpResource, OtlpResourceView, OtlpScope)?>(() =>
         {
-            var resource = _cachedResourcesById[resourceId];
-            var view = resource.ViewsById[resourceViewId];
-            var scope = _cachedScopesById[scopeId];
+            if (!_cachedResourcesById.TryGetValue(resourceId, out var resource) ||
+                !resource.ViewsById.TryGetValue(resourceViewId, out var view) ||
+                !_cachedScopesById.TryGetValue(scopeId, out var scope))
+            {
+                return null;
+            }
+
             AddCachedScope(resource, scope, telemetryType);
             return (resource.Resource, view.View, scope.Scope);
-        }
+        });
     }
 
     private OtlpResource? GetCachedResource(long resourceId)
     {
-        EnsureCachePopulated();
-        lock (_cacheLock)
+        return ReadCache(() => _cachedResourcesById.TryGetValue(resourceId, out var resource) ? resource.Resource : null);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="read"/> while holding <see cref="_cacheLock"/>, with the cache populated.
+    /// </summary>
+    private T ReadCache<T>(Func<T> read)
+    {
+        while (true)
         {
-            return _cachedResourcesById.TryGetValue(resourceId, out var resource) ? resource.Resource : null;
+            EnsureCachePopulated();
+            lock (_cacheLock)
+            {
+                // A writer can clear the cache between EnsureCachePopulated returning and this lock being acquired,
+                // e.g. after clearing another resource's telemetry. Reading the empty cache would make resources that
+                // still have telemetry look missing, so populate it again.
+                // EnsureCachePopulated can't be called while holding _cacheLock: populating takes the database write
+                // lock and then _cacheLock, the same order writers use, so waiting on the write lock here could deadlock
+                // with a writer waiting on _cacheLock. Release _cacheLock and retry instead.
+                if (_cachePopulated)
+                {
+                    return read();
+                }
+            }
         }
     }
 
@@ -786,10 +805,9 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
 
-        EnsureCachePopulated();
-        var sql = new StringBuilder("(");
-        lock (_cacheLock)
+        return ReadCache(() =>
         {
+            var sql = new StringBuilder("(");
             var first = true;
             foreach (var cachedResource in _cachedResourcesById.Values)
             {
@@ -805,11 +823,11 @@ public sealed partial class SqliteTelemetryRepository
                     first = false;
                 }
             }
-        }
 
-        // SQLite accepts an empty list, e.g. "resource_id IN ()", which matches no rows.
-        // https://www.sqlite.org/lang_expr.html#the_in_and_not_in_operators
-        return sql.Append(')').ToString();
+            // SQLite accepts an empty list, e.g. "resource_id IN ()", which matches no rows.
+            // https://www.sqlite.org/lang_expr.html#the_in_and_not_in_operators
+            return sql.Append(')').ToString();
+        });
     }
 
     private void ClearMetadataCache()

@@ -42,7 +42,7 @@ public sealed partial class SqliteTelemetryRepository
         foreach (var batch in records.Chunk(MaxTraceBatchSize))
         {
             var tracesById = MaterializeTraces(connection, batch.Select(record => record.TraceId).ToArray(), transaction);
-            traces.AddRange(batch.Select(record => tracesById[record.TraceId]));
+            traces.AddRange(batch.Select(record => tracesById.GetValueOrDefault(record.TraceId)).OfType<OtlpTrace>());
         }
         return new GetTracesResponse
         {
@@ -515,23 +515,32 @@ public sealed partial class SqliteTelemetryRepository
             ORDER BY p.start_time_ticks DESC;
             """, query.Parameters).AsList();
 
+        var items = new List<RequestSpanSummary>(records.Count);
+        foreach (var record in records)
+        {
+            // A resource can be deleted after the rows are read, invalidating its cached metadata.
+            if (record.ResourceId is not { } resourceId || GetCachedResource(resourceId) is not { } resource)
+            {
+                continue;
+            }
+
+            items.Add(new RequestSpanSummary
+            {
+                Resource = resource,
+                TraceId = record.TraceId!,
+                Name = record.Name!,
+                StartTime = new DateTime(record.StartTimeTicks!.Value, DateTimeKind.Utc),
+                Duration = TimeSpan.FromTicks(record.EndTimeTicks!.Value - record.StartTimeTicks.Value),
+                Status = (OtlpSpanStatusCode)record.Status!.Value,
+                HttpRoute = record.HttpRoute,
+                HttpMethod = record.HttpMethod
+            });
+        }
+
         return new GetRequestSpansResponse
         {
             TotalItemCount = records[0].TotalItemCount,
-            Items = records
-                .Where(record => record.ResourceId is not null)
-                .Select(record => new RequestSpanSummary
-                {
-                    Resource = GetCachedResource(record.ResourceId!.Value)!,
-                    TraceId = record.TraceId!,
-                    Name = record.Name!,
-                    StartTime = new DateTime(record.StartTimeTicks!.Value, DateTimeKind.Utc),
-                    Duration = TimeSpan.FromTicks(record.EndTimeTicks!.Value - record.StartTimeTicks.Value),
-                    Status = (OtlpSpanStatusCode)record.Status!.Value,
-                    HttpRoute = record.HttpRoute,
-                    HttpMethod = record.HttpMethod
-                })
-                .ToList()
+            Items = items
         };
     }
 
@@ -892,9 +901,16 @@ public sealed partial class SqliteTelemetryRepository
             var traceId = traceRecords.Key;
             var firstRecord = traceRecords.First();
             var trace = new OtlpTrace(Convert.FromHexString(traceId), new DateTime(firstRecord.LastUpdatedTimestampTicks, DateTimeKind.Utc));
+            var complete = true;
             foreach (var record in traceRecords)
             {
-                var (_, view, scope) = GetCachedTelemetryMetadata(record.ResourceId, record.ResourceViewId, record.ScopeId, CachedTelemetryType.Traces);
+                // A resource can be deleted after the rows are read, invalidating its cached metadata. Deleting a
+                // resource's telemetry removes whole traces, so skip the trace rather than return it with missing spans.
+                if (GetCachedTelemetryMetadata(record.ResourceId, record.ResourceViewId, record.ScopeId, CachedTelemetryType.Traces) is not (_, var view, var scope))
+                {
+                    complete = false;
+                    break;
+                }
 
                 var modelSpan = new OtlpSpan(view, trace, scope)
                 {
@@ -925,7 +941,10 @@ public sealed partial class SqliteTelemetryRepository
                 }));
                 trace.AddSpan(modelSpan, skipLastUpdatedDate: true);
             }
-            traces.Add(traceId, trace);
+            if (complete)
+            {
+                traces.Add(traceId, trace);
+            }
         }
         return traces;
 
