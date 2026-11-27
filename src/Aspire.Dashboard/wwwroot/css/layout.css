@@ -656,6 +656,15 @@ fluent-dialog-body .fluent-message-box {
     flex: 0 0 auto;
 }
 
+/* Keep a labeled toolbar control (e.g. Level) on one row when the filter toolbar wraps (#21866). */
+.toolbar-labeled-control {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: inherit;
+}
+
 .toolbar-end {
     display: contents;
 }

@@ -309,18 +309,21 @@
                               SelectedResource="@GetSignalsResource()"/>
 
         <div class="toolbar-end">
-            <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>
+            @* Group label + select so wrapping toolbars keep Duration together (#21866). *@
+            <div class="toolbar-labeled-control">
+                <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>
 
-            <DesktopToolbarDivider />
+                <DesktopToolbarDivider />
 
-            <FluentSelect TOption="SelectViewModel<TimeSpan>" TValue="SelectViewModel<TimeSpan>"
-                          Class="toolbar-select"
-                          Id="@_selectDurationId"
-                          Items="@_durations"
-                          OptionText="@(c => c?.Name)"
-                          @bind-Value="PageViewModel.SelectedDuration"
-                          @bind-Value:after="HandleSelectedDurationChangedAsync"
-                          AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
+                <FluentSelect TOption="SelectViewModel<TimeSpan>" TValue="SelectViewModel<TimeSpan>"
+                              Class="toolbar-select"
+                              Id="@_selectDurationId"
+                              Items="@_durations"
+                              OptionText="@(c => c?.Name)"
+                              @bind-Value="PageViewModel.SelectedDuration"
+                              @bind-Value:after="HandleSelectedDurationChangedAsync"
+                              AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
+            </div>
         </div>
 
         @if (!ViewportInformation.IsDesktop)

@@ -2,20 +2,23 @@
 
 @if (ViewportInformation.IsDesktop)
 {
-    <label for="@_logLevelSelectId">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevels)]</label>
+    @* Group label + select so wrapping toolbars keep Level together (#21866). *@
+    <div class="toolbar-labeled-control">
+        <label for="@_logLevelSelectId">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevels)]</label>
 
-    <DesktopToolbarDivider />
+        <DesktopToolbarDivider />
 
-    <FluentSelect TOption="SelectViewModel<LogLevel?>" TValue="SelectViewModel<LogLevel?>"
-                  Class="toolbar-select"
-                  Id="@_logLevelSelectId"
-                  Items="@LogLevels"
-                  Position="SelectPosition.Below"
-                  OptionText="@(c => c?.Name)"
-                  @bind-Value="@LogLevel"
-                  @bind-Value:after="@HandleSelectedLogLevelChangedInternalAsync"
-                  AriaLabel="@Loc[nameof(Resources.StructuredLogs.StructuredLogsSelectMinimumLogLevel)]"
-                  @attributes="@AdditionalAttributes" />
+        <FluentSelect TOption="SelectViewModel<LogLevel?>" TValue="SelectViewModel<LogLevel?>"
+                      Class="toolbar-select"
+                      Id="@_logLevelSelectId"
+                      Items="@LogLevels"
+                      Position="SelectPosition.Below"
+                      OptionText="@(c => c?.Name)"
+                      @bind-Value="@LogLevel"
+                      @bind-Value:after="@HandleSelectedLogLevelChangedInternalAsync"
+                      AriaLabel="@Loc[nameof(Resources.StructuredLogs.StructuredLogsSelectMinimumLogLevel)]"
+                      @attributes="@AdditionalAttributes" />
+    </div>
 }
 else
 {

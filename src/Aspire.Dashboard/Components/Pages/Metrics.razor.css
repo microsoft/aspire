@@ -31,9 +31,12 @@
     margin: 0 0 var(--spacingVerticalM) 0;
 }
 
+/* Cap at 250px but never exceed the toolbar column, or Duration paints over the resource title when
+   the header controls track shrinks (#21866). */
 ::deep .main-toolbar.filter-toolbar .toolbar-select,
 ::deep .main-toolbar.filter-toolbar .toolbar-select > fluent-dropdown {
-    width: 250px;
+    width: min(250px, 100%);
+    max-width: 100%;
 }
 
 .toolbar-organize {

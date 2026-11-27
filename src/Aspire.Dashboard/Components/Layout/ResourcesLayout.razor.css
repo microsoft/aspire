@@ -134,6 +134,8 @@
     flex-direction: column;
 }
 
+/* overflow:visible keeps Fluent's focus ring from being clipped. Name ellipsis is on .resource-picker-text;
+   column overlap is prevented by the shrinkable controls track on .resource-header (#21866). */
 .resource-title:has(.resource-picker-button) {
     overflow: visible;
 }
@@ -142,6 +144,7 @@
    doesn't change shape when the resource list is collapsed or opened. */
 .resource-title ::deep .resource-picker-button {
     max-width: 100%;
+    min-width: 0;
     font: inherit;
 }
 
@@ -1243,7 +1246,9 @@
 
 .resource-header {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    /* Title sizes to its content (min 12rem so the name stays readable). Controls take the remaining
+       width and wrap inside that column instead of sizing to max-content and starving the title (#21866). */
+    grid-template-columns: minmax(12rem, auto) minmax(0, 1fr);
     align-items: center;
     column-gap: var(--aspire-space-2);
     padding: 12px var(--layout-right-padding) 0 var(--layout-left-padding);
@@ -1309,6 +1314,7 @@
     align-items: center;
     gap: var(--aspire-space-2);
     min-width: 0;
+    max-width: 100%;
     margin-left: auto;
 }
 
@@ -1391,20 +1397,33 @@
     gap: var(--aspire-space-1);
 }
 
+/* Toolbar lives under .resource-header-controls (tabs moved to .resource-tabs-nav). Cap width so it wraps
+   inside the controls column instead of overflowing into the resource title (#21866). */
+.resource-header-controls > .resource-tab-toolbar {
+    min-width: 0;
+    max-width: 100%;
+    margin-left: 0;
+}
+
 .resource-tab-toolbar:empty {
     display: none;
 }
 
 /* The toolbar's controls keep their size, so when they don't fit they wrap onto another line instead of painting over
-   the tab picker. */
+   the tab picker. safe flex-end avoids start-edge overflow painting over the resource title when a non-shrinking
+   child (e.g. search) is wider than the controls column (#21866). */
 .resource-tab-toolbar ::deep .main-toolbar.filter-toolbar,
 .resource-tab-toolbar ::deep .main-toolbar.filter-toolbar > .toolbar-end {
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: safe flex-end;
     row-gap: var(--aspire-space-2);
 }
 
 .resource-tab-toolbar ::deep .main-toolbar.filter-toolbar {
+    /* Fill the controls column so wrap uses the real available width instead of intrinsic max-content (#21866). */
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     padding: 0;
 }
 
