@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BrowserStorageSaveFailed">
         <source>Couldn't save the change. Check that browser storage is available and try again.</source>
-        <target state="new">Couldn't save the change. Check that browser storage is available and try again.</target>
+        <target state="translated">無法儲存變更。檢查瀏覽器儲存體是否可用，然後再試一次。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuAccessibleLabel">

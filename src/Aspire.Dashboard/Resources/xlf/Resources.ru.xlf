@@ -264,7 +264,7 @@
       </trans-unit>
       <trans-unit id="HomeSingleRequestCount">
         <source>{0} request</source>
-        <target state="new">{0} request</target>
+        <target state="translated">{0} запрос</target>
         <note>{0} is the request count, which is one.</note>
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
@@ -659,7 +659,7 @@
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Expand console logs</source>
-        <target state="needs-review-translation">Открыть консоль</target>
+        <target state="new">Expand console logs</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">

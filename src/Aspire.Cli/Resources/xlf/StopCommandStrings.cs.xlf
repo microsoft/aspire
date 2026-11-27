@@ -129,27 +129,27 @@
       </trans-unit>
       <trans-unit id="ResourceTeardownMayContinue">
         <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
-        <target state="new">Resources may still be stopping in the background. Use {0} to wait until they are torn down.</target>
+        <target state="translated">Prostředky se možná stále zastavují na pozadí. Pokud chcete počkat na jejich uvolnění, použijte {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownNotConfirmed">
         <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
-        <target state="new">Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</target>
+        <target state="translated">Nelze potvrdit, že prostředky {0} byly zrušeny. Mohou se stále zastavovat v pozadí.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownTimedOut">
         <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
-        <target state="new">The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</target>
+        <target state="translated">Prostředky {0} nebyly zrušeny během {1} sekund. Mohou se stále zastavovat v pozadí.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownUnsupported">
         <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
-        <target state="new">{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</target>
+        <target state="translated">Hostitel {0} nepodporuje čekání na uvolnění svých prostředků. Jejich zastavování proto může stále probíhat na pozadí. Pokud chcete použít {1}, aktualizujte AppHost na novější verzi Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesTornDown">
         <source>The resources of {0} were torn down.</source>
-        <target state="new">The resources of {0} were torn down.</target>
+        <target state="translated">Prostředky hostitele {0} se uvolnily.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -174,17 +174,17 @@
       </trans-unit>
       <trans-unit id="TimeoutInvalid">
         <source>Timeout must be between 1 and {0} seconds.</source>
-        <target state="new">Timeout must be between 1 and {0} seconds.</target>
+        <target state="translated">Časový limit musí být mezi 1 a {0} sekundami.</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutOptionDescription">
         <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
-        <target state="new">Maximum time in seconds to wait for resources to be torn down (requires --wait)</target>
+        <target state="translated">Maximální doba čekání na uvolnění prostředků v sekundách (vyžaduje --wait)</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutRequiresWait">
         <source>The {0} option requires the {1} option.</source>
-        <target state="new">The {0} option requires the {1} option.</target>
+        <target state="translated">Možnost {0} vyžaduje možnost {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
@@ -204,12 +204,12 @@
       </trans-unit>
       <trans-unit id="WaitOptionDescription">
         <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
-        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <target state="translated">Před ukončením příkazu počkat na uvolnění prostředků AppHostu, například kontejnerů</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForResourceTeardown">
         <source>Waiting for the resources of {0} to be torn down...</source>
-        <target state="new">Waiting for the resources of {0} to be torn down...</target>
+        <target state="translated">Čeká se na uvolnění prostředků hostitele {0}...</target>
         <note />
       </trans-unit>
     </body>

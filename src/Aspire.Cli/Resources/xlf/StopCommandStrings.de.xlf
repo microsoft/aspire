@@ -129,27 +129,27 @@
       </trans-unit>
       <trans-unit id="ResourceTeardownMayContinue">
         <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
-        <target state="new">Resources may still be stopping in the background. Use {0} to wait until they are torn down.</target>
+        <target state="translated">Ressourcen werden möglicherweise weiterhin im Hintergrund angehalten. Verwenden Sie {0}, um zu warten, bis sie abgerissen werden.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownNotConfirmed">
         <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
-        <target state="new">Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</target>
+        <target state="translated">Es konnte nicht bestätigt werden, dass die Ressourcen von {0} gelöscht wurden. Möglicherweise werden sie noch im Hintergrund gelöscht.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownTimedOut">
         <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
-        <target state="new">The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</target>
+        <target state="translated">Die Ressourcen von {0} wurden nicht innerhalb von {1} Sekunden abgerissen. Sie könnten immer noch im Hintergrund anhalten.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownUnsupported">
         <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
-        <target state="new">{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</target>
+        <target state="translated">{0} unterstützt das Warten auf die Freigabe seiner Ressourcen nicht, sodass diese möglicherweise weiterhin im Hintergrund beendet werden. Aktualisieren Sie den AppHost auf eine neuere Aspire-Version, um {1} zu verwenden.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesTornDown">
         <source>The resources of {0} were torn down.</source>
-        <target state="new">The resources of {0} were torn down.</target>
+        <target state="translated">Die Ressourcen von {0} wurden gelöscht.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -174,17 +174,17 @@
       </trans-unit>
       <trans-unit id="TimeoutInvalid">
         <source>Timeout must be between 1 and {0} seconds.</source>
-        <target state="new">Timeout must be between 1 and {0} seconds.</target>
+        <target state="translated">Das Timeout muss zwischen 1 und {0} Sekunden liegen.</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutOptionDescription">
         <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
-        <target state="new">Maximum time in seconds to wait for resources to be torn down (requires --wait)</target>
+        <target state="translated">Maximale Wartezeit in Sekunden, bis Ressourcen gelöscht werden (erfordert --wait)</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutRequiresWait">
         <source>The {0} option requires the {1} option.</source>
-        <target state="new">The {0} option requires the {1} option.</target>
+        <target state="translated">Die Option „{0}“ erfordert die Option „{1}“.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
@@ -204,12 +204,12 @@
       </trans-unit>
       <trans-unit id="WaitOptionDescription">
         <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
-        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <target state="translated">Warten, bis die Ressourcen des AppHosts, z. B. Container, gelöscht worden sind, bevor die Steuerung zurückgegeben wird</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForResourceTeardown">
         <source>Waiting for the resources of {0} to be torn down...</source>
-        <target state="new">Waiting for the resources of {0} to be torn down...</target>
+        <target state="translated">Es wird darauf gewartet, dass die Ressourcen von {0} gelöscht werden...</target>
         <note />
       </trans-unit>
     </body>

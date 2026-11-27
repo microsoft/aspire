@@ -264,7 +264,7 @@
       </trans-unit>
       <trans-unit id="HomeSingleRequestCount">
         <source>{0} request</source>
-        <target state="new">{0} request</target>
+        <target state="translated">{0} 요청</target>
         <note>{0} is the request count, which is one.</note>
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
@@ -659,7 +659,7 @@
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Expand console logs</source>
-        <target state="needs-review-translation">콘솔 열기</target>
+        <target state="new">Expand console logs</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">
@@ -789,7 +789,7 @@
       </trans-unit>
       <trans-unit id="ResourceTagsLimitReached">
         <source>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</source>
-        <target state="new">Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</target>
+        <target state="translated">이 태그를 추가할 수 없습니다. 제한은 애플리케이션당 {0} 태그 할당입니다. 먼저 기존 태그 할당을 제거합니다.</target>
         <note>{0} is the maximum number of user-added resource tag assignments.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsRemove">

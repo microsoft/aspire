@@ -264,7 +264,7 @@
       </trans-unit>
       <trans-unit id="HomeSingleRequestCount">
         <source>{0} request</source>
-        <target state="new">{0} request</target>
+        <target state="translated">{0} richiesta</target>
         <note>{0} is the request count, which is one.</note>
       </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
@@ -659,7 +659,7 @@
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Expand console logs</source>
-        <target state="needs-review-translation">Apri console</target>
+        <target state="new">Expand console logs</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">
@@ -789,7 +789,7 @@
       </trans-unit>
       <trans-unit id="ResourceTagsLimitReached">
         <source>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</source>
-        <target state="new">Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</target>
+        <target state="translated">Non è possibile aggiungere questo tag. Il limite è {0} assegnazioni di tag per applicazione. Rimuovere prima un'assegnazione di tag esistente.</target>
         <note>{0} is the maximum number of user-added resource tag assignments.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsRemove">
