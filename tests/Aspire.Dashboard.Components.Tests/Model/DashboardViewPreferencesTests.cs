@@ -5,6 +5,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -135,5 +136,27 @@ public class DashboardViewPreferencesTests : DashboardTestContext
         await preferences.SetGroupOverviewAsync(GroupOverview.Graph);
 
         Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
+    }
+
+    [Fact]
+    public async Task Load_ReadsDensityAndGroupOverviewInSingleSnapshot()
+    {
+        var storage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key switch
+            {
+                BrowserStorageKeys.ResourceListDensity => (true, nameof(ResourceListDensity.Compact)),
+                BrowserStorageKeys.GroupOverview => (true, nameof(GroupOverview.Graph)),
+                _ => (false, null)
+            }
+        };
+        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: storage);
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+
+        await preferences.EnsureLoadedAsync().DefaultTimeout();
+
+        Assert.Equal(1, storage.SnapshotReadCount);
+        Assert.Equal(ResourceListDensity.Compact, preferences.Density);
+        Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
     }
 }

@@ -423,6 +423,62 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Landing_RestoresSelectionOnlyIfStillStored(bool clearSelectionDuringStartup)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var finishPaneRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var localStorage = new TestLocalStorage
+        {
+            OnBeforeGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneCollapsed ? finishPaneRead.Task : Task.CompletedTask
+        };
+        List<string> storedSelection = ["api"];
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.LastSelectedResources ? (true, storedSelection) : (false, null),
+            OnSetAsync = (key, value) =>
+            {
+                if (key == BrowserStorageKeys.LastSelectedResources)
+                {
+                    storedSelection = Assert.IsType<List<string>>(value);
+                }
+            }
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services =>
+            {
+                services.AddSingleton<ILocalStorage>(localStorage);
+                services.AddSingleton<ISessionStorage>(sessionStorage);
+            });
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        Assert.False(cut.Instance.IsLoaded);
+
+        await cut.InvokeAsync(async () =>
+        {
+            // Help can clear the selection and reopen the same overview URL while the layout is starting.
+            if (clearSelectionDuringStartup)
+            {
+                await sessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
+                navigation.NavigateTo(DashboardUrls.ResourceListUrl());
+            }
+
+            finishPaneRead.SetResult();
+        });
+
+        var expectedUrl = clearSelectionDuringStartup ? DashboardUrls.ResourceListUrl() : DashboardUrls.ResourceOverviewUrl("api");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll("[data-resource-name='api']"));
+            Assert.Equal(expectedUrl, new Uri(navigation.Uri).PathAndQuery);
+        });
+    }
+
     [Fact]
     public async Task TabOverflowRegistration_UsesStableLayoutIdForCleanup()
     {
@@ -3244,11 +3300,16 @@ public class ResourcesLayoutTests : DashboardTestContext
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => fromStorage && key == BrowserStorageKeys.ResourcePaneMode ? (true, "Tags") : (false, null);
         string? storedGrouping = null;
+        string? storedPaneMode = null;
         storage.OnSetUnprotectedAsync = (key, value) =>
         {
             if (key == BrowserStorageKeys.ResourcePaneGrouping)
             {
                 storedGrouping = Assert.IsType<string>(value);
+            }
+            else if (key == BrowserStorageKeys.ResourcePaneMode)
+            {
+                storedPaneMode = Assert.IsType<string>(value);
             }
         };
         await Services.GetRequiredService<ResourceTagStore>().AddTagAsync("api", "Backend");
@@ -3259,6 +3320,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal("Backend", Assert.Single(cut.FindAll(".resource-tag-group")).GetAttribute("aria-label"));
             Assert.Equal(ResourcePaneMode.Resources, Services.GetRequiredService<ResourcePaneState>().Mode);
             Assert.Equal("Tags", storedGrouping);
+            Assert.Equal(nameof(ResourcePaneMode.Resources), storedPaneMode);
         });
     }
 
@@ -3738,6 +3800,163 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(1, client.ResourceSubscriptionCount);
         cut.Find(".resource-pane-open-button").Click();
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
+    }
+
+    [Fact]
+    public async Task OnInitialize_StartsBrowserStorageReadsConcurrently()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        var collapsedKey = BrowserStorageKeys.CollapsedResourceNamesKey(client.ApplicationName);
+
+        var expectedKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+            BrowserStorageKeys.ResourcePaneCollapsed,
+            BrowserStorageKeys.ResourcePaneWidth,
+            BrowserStorageKeys.ResourcePaneMode,
+            BrowserStorageKeys.ResourcePaneGrouping,
+            BrowserStorageKeys.ResourcePaneKinds,
+            BrowserStorageKeys.ResourcesShowHiddenResources,
+            collapsedKey
+        };
+        var requestedKeys = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
+        var allReadsStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void RecordKey(string key)
+        {
+            requestedKeys.TryAdd(key, 0);
+            if (expectedKeys.All(requestedKeys.ContainsKey))
+            {
+                allReadsStarted.TrySetResult();
+            }
+        }
+
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetTaskAsync = async key =>
+            {
+                RecordKey(key);
+                await allReadsStarted.Task;
+                return (false, null);
+            }
+        };
+
+        ResourceSetupHelpers.SetupResourcesLayout(
+            this,
+            viewport,
+            client,
+            configureServices: services => services.AddSingleton<ISessionStorage>(sessionStorage));
+
+        var localStorage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        var appName = Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Aspire.Dashboard.Configuration.DashboardOptions>>().Value.GetApplicationNameOrDefault();
+        expectedKeys.Add(BrowserStorageKeys.ResourceTagsKey(appName));
+        expectedKeys.Add(BrowserStorageKeys.ResourceOrderKey(appName));
+        localStorage.OnBeforeGetAsync = key =>
+        {
+            RecordKey(key);
+            return allReadsStarted.Task;
+        };
+        localStorage.OnBeforeGetUnprotectedAsync = key =>
+        {
+            RecordKey(key);
+            return allReadsStarted.Task;
+        };
+        localStorage.OnGetUnprotectedAsync = key => key switch
+        {
+            BrowserStorageKeys.ResourcePaneCollapsed => (true, true),
+            BrowserStorageKeys.ResourcePaneWidth => (true, 320),
+            BrowserStorageKeys.ResourcePaneGrouping => (true, nameof(ResourcePaneGrouping.State)),
+            _ => (false, null)
+        };
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        await allReadsStarted.Task.DefaultTimeout();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Contains("pane-collapsed", cut.Find(".resources-layout").ClassList);
+        });
+    }
+
+    [Fact]
+    public async Task OnInitialize_WhenConnectedCompletesLater_LoadsCollapsedResourceNames()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var whenConnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var parent = ModelTestHelpers.CreateResource("parent");
+        var child = ModelTestHelpers.CreateResource("child", properties: new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Resource.ParentName] = new(KnownProperties.Resource.ParentName, Value.ForString("parent"), false, null, 0, null, false)
+        });
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [parent, child],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            whenConnected: whenConnected.Task);
+        var collapsedKey = BrowserStorageKeys.CollapsedResourceNamesKey(client.ApplicationName);
+
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client);
+        var localStorage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        var collapsedRequested = false;
+        localStorage.OnGetAsync = key =>
+        {
+            if (key == collapsedKey)
+            {
+                collapsedRequested = true;
+                return (true, new List<string> { parent.PersistentKey });
+            }
+
+            return (false, null);
+        };
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl("parent"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        Assert.False(collapsedRequested);
+        whenConnected.SetResult();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.True(collapsedRequested);
+            Assert.Single(cut.FindAll("[data-resource-name='parent']"));
+            Assert.Empty(cut.FindAll("[data-resource-name='child']"));
+        });
+    }
+
+    [Fact]
+    public void OnInitialize_WhenStoredPaneModeMatches_SkipsRedundantWrite()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client);
+
+        var localStorage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        localStorage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneMode
+            ? (true, nameof(ResourcePaneMode.Resources))
+            : (false, null);
+        var paneModeWrites = 0;
+        localStorage.OnSetUnprotectedAsync = (key, _) =>
+        {
+            if (key == BrowserStorageKeys.ResourcePaneMode)
+            {
+                paneModeWrites++;
+            }
+        };
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.Equal(0, paneModeWrites);
     }
 
     private Task AddTelemetryAsync(string name)

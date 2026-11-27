@@ -179,9 +179,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     protected override async Task OnInitializedAsync()
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
-        await ViewPreferences.EnsureLoadedAsync();
         TagStore.Changed += OnTagsChanged;
-        await TagStore.EnsureLoadedAsync();
+        await Task.WhenAll(ViewPreferences.EnsureLoadedAsync(), TagStore.EnsureLoadedAsync());
 
         if (!DashboardClient.IsEnabled)
         {

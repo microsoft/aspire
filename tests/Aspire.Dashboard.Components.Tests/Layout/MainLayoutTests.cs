@@ -394,6 +394,86 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task OnInitialize_StartsBrowserStorageAndBrowserInfoReadsConcurrently()
+    {
+        var expectedKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+            BrowserStorageKeys.ResourceListDensity,
+            BrowserStorageKeys.GroupOverview,
+            BrowserStorageKeys.TimeFormat,
+            BrowserStorageKeys.SelectedDashboardRunId,
+            BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey,
+            BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey
+        };
+        var requestedKeys = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
+        var allReadsStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void RecordKey(string key)
+        {
+            requestedKeys.TryAdd(key, 0);
+            if (expectedKeys.All(requestedKeys.ContainsKey))
+            {
+                allReadsStarted.TrySetResult();
+            }
+        }
+
+        var localStorage = new TestLocalStorage
+        {
+            OnBeforeGetAsync = key =>
+            {
+                RecordKey(key);
+                return allReadsStarted.Task;
+            },
+            OnBeforeGetUnprotectedAsync = key =>
+            {
+                RecordKey(key);
+                return allReadsStarted.Task;
+            },
+            OnGetAsync = key => key == BrowserStorageKeys.TimeFormat ? (true, TimeFormat.TwentyFourHour) : (false, null),
+            OnGetUnprotectedAsync = key => key switch
+            {
+                BrowserStorageKeys.ResourceListDensity => (true, nameof(ResourceListDensity.Comfortable)),
+                BrowserStorageKeys.GroupOverview => (true, nameof(GroupOverview.Graph)),
+                BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey => (true, true),
+                BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey => (true, true),
+                _ => (false, null)
+            }
+        };
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetTaskAsync = async key =>
+            {
+                RecordKey(key);
+                await allReadsStarted.Task;
+                return (false, null);
+            }
+        };
+
+        SetupMainLayoutServices(localStorage: localStorage, sessionStorage: sessionStorage);
+        var browserInfoPlanned = JSInterop.Setup<BrowserInfo>("window.getBrowserInfo");
+
+        var cut = Render<MainLayout>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        // Every storage key and getBrowserInfo must already be in flight before getBrowserInfo resolves.
+        await allReadsStarted.Task.DefaultTimeout();
+        Assert.Single(JSInterop.Invocations["window.getBrowserInfo"]);
+
+        browserInfoPlanned.SetResult(new BrowserInfo { TimeZone = "UTC", Is24HourTime = false, UserAgent = "test-agent" });
+
+        var timeProvider = Services.GetRequiredService<BrowserTimeProvider>();
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(TimeFormat.TwentyFourHour, timeProvider.ConfiguredTimeFormat);
+            Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
+            Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
+            // One snapshot for DashboardViewPreferences and one for MainLayout's dismissed message keys.
+            Assert.Equal(2, localStorage.SnapshotReadCount);
+        });
+    }
+
+    [Fact]
     public void OnInitialize_FreshBrowser_DoesNotShowWelcomeMessage()
     {
         SetupMainLayoutServices(configureOptions: options => options.Otlp.SuppressUnsecuredMessage = true);

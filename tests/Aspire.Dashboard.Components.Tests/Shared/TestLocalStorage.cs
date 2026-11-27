@@ -10,6 +10,7 @@ public sealed class TestLocalStorage : ILocalStorage
     private readonly Dictionary<string, object?> _protectedValues = new(StringComparer.Ordinal);
     private readonly Dictionary<string, object?> _unprotectedValues = new(StringComparer.Ordinal);
 
+    public Func<string, Task>? OnBeforeGetAsync { get; set; }
     public Func<string, Task>? OnBeforeGetUnprotectedAsync { get; set; }
     public Func<string, (bool Success, object? Value)>? OnGetUnprotectedAsync { get; set; }
     public Action<string, object?>? OnSetUnprotectedAsync { get; set; }
@@ -26,22 +27,33 @@ public sealed class TestLocalStorage : ILocalStorage
     /// </summary>
     public Func<string, bool>? IsUnprotectedReadFailed { get; set; }
 
+    public int SnapshotReadCount => _snapshotReadCount;
+    private int _snapshotReadCount;
+
     public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
     {
+        Interlocked.Increment(ref _snapshotReadCount);
+        // Match the browser snapshot: every key is requested before any of those reads completes.
+        var reads = keys.Select(key => (key, task: GetUnprotectedAsync<object>(key))).ToArray();
         var values = new Dictionary<string, StorageResult<object>>(StringComparer.Ordinal);
-        foreach (var key in keys)
+        foreach (var (key, task) in reads)
         {
-            values[key] = await GetUnprotectedAsync<object>(key);
+            values[key] = await task;
         }
 
         return new UnprotectedSnapshot(values);
     }
 
-    public Task<StorageResult<T>> GetAsync<T>(string key)
+    public async Task<StorageResult<T>> GetAsync<T>(string key)
     {
+        if (OnBeforeGetAsync is { } beforeCallback)
+        {
+            await beforeCallback(key);
+        }
+
         if (IsReadFailed?.Invoke(key) == true)
         {
-            return Task.FromResult(new StorageResult<T>(success: false, value: default) { ReadFailed = true });
+            return new StorageResult<T>(success: false, value: default) { ReadFailed = true };
         }
 
         if (OnGetAsync is { } callback)
@@ -49,7 +61,7 @@ public sealed class TestLocalStorage : ILocalStorage
             var (success, value) = callback(key);
             if (success)
             {
-                return Task.FromResult(new StorageResult<T>(success: true, value: (T)(value ?? default(T))!));
+                return new StorageResult<T>(success: true, value: (T)(value ?? default(T))!);
             }
         }
 
@@ -57,11 +69,11 @@ public sealed class TestLocalStorage : ILocalStorage
         {
             if (_protectedValues.TryGetValue(key, out var savedValue) && savedValue is T typedValue)
             {
-                return Task.FromResult(new StorageResult<T>(success: true, value: typedValue));
+                return new StorageResult<T>(success: true, value: typedValue);
             }
         }
 
-        return Task.FromResult(new StorageResult<T>(success: false, value: default));
+        return new StorageResult<T>(success: false, value: default);
     }
 
     public async Task<StorageResult<T>> GetUnprotectedAsync<T>(string key)
