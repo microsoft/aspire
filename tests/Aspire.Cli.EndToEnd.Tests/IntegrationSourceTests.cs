@@ -152,14 +152,18 @@ public sealed class IntegrationSourceTests(ITestOutputHelper output)
             source => (string?)source.Attribute("value") == containerFeed);
         var sourceKey = addedSource.Attribute("key")!.Value;
         var mappings = updatedConfig.Descendants("packageSourceMapping").Elements("packageSource");
-        if (hasMappings)
+        var mapping = Assert.Single(mappings, source => (string?)source.Attribute("key") == sourceKey);
+        Assert.Equal([packageId], mapping.Elements("package").Select(package => (string?)package.Attribute("pattern")));
+        if (!hasMappings)
         {
-            var mapping = Assert.Single(mappings, source => (string?)source.Attribute("key") == sourceKey);
-            Assert.Equal([packageId], mapping.Elements("package").Select(package => (string?)package.Attribute("pattern")));
-        }
-        else
-        {
-            Assert.Empty(mappings);
+            // Existing sources remain available for dependencies; the integration feed stays exact.
+            var ambientSources = originalConfig?.Descendants("packageSources").Elements("add") ?? [];
+            Assert.All(ambientSources, source =>
+            {
+                var fallback = Assert.Single(mappings,
+                    item => (string?)item.Attribute("key") == (string?)source.Attribute("key"));
+                Assert.Equal(["*"], fallback.Elements("package").Select(package => (string?)package.Attribute("pattern")));
+            });
         }
 
         foreach (var originalSource in originalConfig?.Descendants("packageSources").Elements("add") ?? [])

@@ -14,6 +14,28 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetConfigurationTests
 {
+    [Fact]
+    public void Build_FirstNamedIntegrationMappingPreservesOnlyEnabledAmbientFallbacks()
+    {
+        var settings = CreateSettings([]) with
+        {
+            Sources =
+            [
+                new("company", "ambient", true, false, false),
+                new("disabled", "disabled", false, false, false)
+            ]
+        };
+        var configuration = DotNetAppHostNuGetConfigBuilder.Build(settings, "integration-add",
+            [new("Contoso.Hosting.One", "https://team.example/v3/index.json") { SourceKey = "team" }]);
+
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        Assert.Equal(["Contoso.Hosting.One"], Assert.Single(persistence.PackageSourceMappings,
+            mapping => mapping.SourceKey == "aspire-integration-team").Patterns);
+        Assert.Equal(["*"], Assert.Single(persistence.PackageSourceMappings,
+            mapping => mapping.SourceKey == "company").Patterns);
+        Assert.Equal(2, persistence.PackageSourceMappings.Count);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

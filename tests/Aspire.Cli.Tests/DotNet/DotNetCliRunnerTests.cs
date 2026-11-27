@@ -556,6 +556,69 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         => Path.GetDirectoryName(Directory.EnumerateFiles(
             outputDirectory.FullName, projectFileName + ".nuget.dgspec.json", SearchOption.AllDirectories).Single())!;
 
+    [Fact]
+    public async Task NamedIntegrationMappingWithoutAmbientMappings_PersistsAcrossNativeRestores()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var ambientFeed = workspace.CreateDirectory("ambient-feed");
+        var selectedFeed = workspace.CreateDirectory("selected-feed");
+        var suffix = Guid.NewGuid().ToString("N");
+        var integrationPackage = $"Contoso.Hosting.{suffix}";
+        var dependencyPackage = $"Other.Dependency.{suffix}";
+        foreach (var feed in new[] { ambientFeed, selectedFeed })
+        {
+            foreach (var package in new[] { integrationPackage, dependencyPackage })
+            {
+                NuGetTestHelper.CreatePackage(feed, package, "1.0.0", new Dictionary<string, string>
+                {
+                    ["lib/net10.0/_._"] = "",
+                    ["content/origin.txt"] = feed.Name
+                });
+            }
+        }
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "NuGet.Config"), $$"""
+            <configuration>
+              <packageSources><clear /><add key="company" value="{{ambientFeed.FullName}}" /></packageSources>
+            </configuration>
+            """);
+        var project = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
+        await File.WriteAllTextAsync(project.FullName, $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework>
+                <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+                <NuGetAudit>false</NuGetAudit>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="{{integrationPackage}}" Version="1.0.0" />
+                <PackageReference Include="{{dependencyPackage}}" Version="1.0.0" />
+              </ItemGroup>
+            </Project>
+            """);
+        var service = NuGetTestHelper.CreateService();
+        var configuration = service.BuildAppHostConfiguration(workspace.WorkspaceRoot, "integration-add",
+            [new(integrationPackage, selectedFeed.FullName) { SourceKey = "team" }],
+            overrideIntegrationSources: false, TestContext.Current.CancellationToken);
+        await new DotNetAppHostNuGetConfigMerger(service).CreateOrUpdateAsync(
+            workspace.WorkspaceRoot, configuration, createIfMissing: true, globalPackagesFolder: null,
+            confirmationCallback: null, TestContext.Current.CancellationToken);
+
+        Assert.Equal([selectedFeed.FullName], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, integrationPackage));
+        Assert.Equal([ambientFeed.FullName], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, dependencyPackage));
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var cache = workspace.CreateDirectory($"package-cache-{attempt}");
+            var (exitCode, stdout, stderr) = await RunNativeDotNetAsync(
+                workspace.WorkspaceRoot, cache.FullName, ["restore", project.FullName, "--force"]);
+            Assert.True(exitCode == 0, stdout + stderr);
+            Assert.Equal(selectedFeed.Name, await ReadOriginAsync(integrationPackage));
+            Assert.Equal(ambientFeed.Name, await ReadOriginAsync(dependencyPackage));
+
+            Task<string> ReadOriginAsync(string package) => File.ReadAllTextAsync(
+                Path.Combine(cache.FullName, package.ToLowerInvariant(), "1.0.0", "content", "origin.txt"));
+        }
+    }
+
     private static async Task<(int ExitCode, string Output, string Error)> RunNativeDotNetAsync(
         DirectoryInfo workingDirectory, string? packagesDirectory, string[] arguments)
     {

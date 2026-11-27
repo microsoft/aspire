@@ -57,10 +57,14 @@ internal static class DotNetAppHostNuGetConfigBuilder
             ambientPatterns[group.Key] = [.. group.SelectMany(static mapping => mapping.Patterns)];
         }
         var ambientMapping = new PackageSourceMapping(ambientPatterns);
-        // Introducing the first mapping makes every unmapped dependency ineligible for
-        // restore. Keep mapping disabled rather than persisting ambient fallback policy.
+        // Persist explicit named integration routing even when this introduces the first
+        // mapping. Keep dependencies eligible on previously enabled ambient sources,
+        // without making a newly selected integration feed an unrestricted fallback.
         // https://learn.microsoft.com/nuget/consume-packages/package-source-mapping#package-pattern-requirements
-        var mappings = settings.PackageSourceMappings.Count == 0
+        var introduceMappings = settings.PackageSourceMappings.Count == 0 &&
+            integrationMappings.Any(static mapping => mapping.SourceKey is not null &&
+                PackageSourceOverrideMappings.IsExactPackagePattern(mapping.PackageFilter));
+        var mappings = settings.PackageSourceMappings.Count == 0 && !introduceMappings
             ? []
             : integrationSources.Select(source => new NuGetPackageSourceMapping(source.Key,
                 [.. integrationMappings
@@ -70,6 +74,11 @@ internal static class DotNetAppHostNuGetConfigBuilder
                     .Distinct(StringComparer.OrdinalIgnoreCase)]))
                 .Where(static mapping => mapping.Patterns.Count > 0)
                 .ToArray();
+        if (introduceMappings)
+        {
+            mappings = [.. mappings, .. settings.Sources.Where(static source => source.IsEnabled)
+                .Select(static source => new NuGetPackageSourceMapping(source.Name, [PackageMapping.AllPackages]))];
+        }
         var selectedPatterns = selectedMappings.Count == 0
             ? [PackageSourceOverrideMappings.DefaultPackagePattern]
             : integrationMappings.Select(static mapping => mapping.PackageFilter)
