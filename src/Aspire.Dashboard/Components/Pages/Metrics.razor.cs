@@ -359,7 +359,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         if (!sameScope && ResourcesLayout is { } layout && (state.Pinned || state.MeterName is not null))
         {
             var keys = resourceNames.Count == 0
-                ? layout.GetPaneTelemetryKeys()
+                ? layout.GetPaneTelemetryKeys(includeHiddenResources: layout.ShowHiddenResources)
                 : layout.GetSelectionTelemetryKeys(resourceNames) ?? [];
             if (PageViewModel.SelectedInstrument is { } instrument)
             {
