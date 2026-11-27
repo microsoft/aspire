@@ -65,8 +65,13 @@ internal class AppResource<TDcpResource> : IAppResource, IDisposable, IEquatable
     }
 }
 
+internal interface IRenderedModelResource : IAppResource
+{
+    IResource ModelResource { get; }
+}
+
 [DebuggerDisplay("ModelResource = {ModelResource}, DcpResourceName = {DcpResourceName}, DcpResourceKind = {DcpResourceKind}")]
-internal class RenderedModelResource<TDcpResource> : AppResource<TDcpResource>, IResourceReference where TDcpResource : CustomResource, IKubernetesStaticMetadata
+internal class RenderedModelResource<TDcpResource, TService> : AppResource<TDcpResource>, IRenderedModelResource, IResourceReference where TDcpResource : CustomResource, IKubernetesStaticMetadata
 {
     public IResource ModelResource { get; }
 
@@ -75,8 +80,14 @@ internal class RenderedModelResource<TDcpResource> : AppResource<TDcpResource>, 
         ModelResource = modelResource;
     }
 
-    public virtual List<ServiceWithModelResource> ServicesProduced { get; } = [];
-    public virtual List<ServiceWithModelResource> ServicesConsumed { get; } = [];
+    public virtual List<TService> ServicesProduced { get; } = [];
+    public virtual List<TService> ServicesConsumed { get; } = [];
+}
+
+internal class RenderedModelResource<TDcpResource>(IResource modelResource, TDcpResource dcpResource)
+    : RenderedModelResource<TDcpResource, ServiceWithModelResource>(modelResource, dcpResource)
+    where TDcpResource : CustomResource, IKubernetesStaticMetadata
+{
 }
 
 internal sealed class ServiceWithModelResource : RenderedModelResource<Service>
