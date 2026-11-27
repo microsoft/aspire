@@ -318,8 +318,10 @@ internal static class ParseResultHelper
     /// Checks unmatched tokens for options that differ only by case from a known option,
     /// and returns an error message if found. Returns null when no near-miss is detected.
     /// Only inspects tokens that appear before the "--" double-dash separator.
+    /// When <paramref name="rejectUnknownOptions"/> is true, an option before "--" that is a prefix of
+    /// known options is also reported, so typos such as "--isol" are not silently forwarded to the AppHost.
     /// </summary>
-    internal static string? CheckForMiscasedOptions(Command command, ParseResult parseResult)
+    internal static string? CheckForUnrecognizedOptions(Command command, ParseResult parseResult, bool rejectUnknownOptions)
     {
         // Only relevant when TreatUnmatchedTokensAsErrors is false; when true,
         // System.CommandLine already rejects unrecognized options during parsing.
@@ -355,7 +357,8 @@ internal static class ParseResultHelper
 
         foreach (var token in unmatchedTokens)
         {
-            if (!token.StartsWith('-'))
+            // A lone "-" is a common "stdin" placeholder, not an option.
+            if (!token.StartsWith('-') || token.Length == 1)
             {
                 continue;
             }
@@ -372,10 +375,37 @@ internal static class ParseResultHelper
             var equalsIndex = token.IndexOf('=');
             var optionName = equalsIndex >= 0 ? token[..equalsIndex] : token;
 
-            if (knownOptions.TryGetValue(optionName, out var correctName) &&
-                !string.Equals(optionName, correctName, StringComparison.Ordinal))
+            if (knownOptions.TryGetValue(optionName, out var correctName))
             {
-                return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, optionName, correctName);
+                if (!string.Equals(optionName, correctName, StringComparison.Ordinal))
+                {
+                    return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, optionName, correctName);
+                }
+
+                // An exact known option is unmatched only when its value also appears after "--"
+                // (e.g. "run --detach -- --detach"), so it belongs to the AppHost.
+                continue;
+            }
+
+            if (rejectUnknownOptions)
+            {
+                // Reject only likely typos: a prefix of a known option, e.g. "--isol" -> "--isolated".
+                // Other unknown options (e.g. "--environment Staging") are still forwarded to the AppHost.
+                var prefixMatches = knownOptions.Values
+                    .Where(name => name.StartsWith("--", StringComparison.Ordinal) && name.StartsWith(optionName, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.Ordinal)
+                    .Take(2)
+                    .ToList();
+
+                if (prefixMatches.Count == 1)
+                {
+                    return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, optionName, prefixMatches[0]);
+                }
+
+                if (prefixMatches.Count > 1)
+                {
+                    return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionFormat, token, command.Name);
+                }
             }
         }
 

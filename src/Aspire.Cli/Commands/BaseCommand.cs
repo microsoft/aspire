@@ -57,6 +57,13 @@ internal abstract class BaseCommand : Command
     /// </summary>
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
 
+    /// <summary>
+    /// For commands with <see cref="Command.TreatUnmatchedTokensAsErrors"/> set to false, whether an unknown
+    /// option before the "--" separator that is a prefix of known options (a likely typo, e.g. "--isol") is an
+    /// error instead of being forwarded. Other unknown options, bare tokens and everything after "--" are still forwarded.
+    /// </summary>
+    protected virtual bool RejectsUnknownOptionsBeforeDoubleDash => false;
+
     private readonly CliExecutionContext _executionContext;
     private bool _isMachineReadableFormatRequested;
     private bool? _prefetchesTemplatePackageMetadataForInvocation;
@@ -133,10 +140,12 @@ internal abstract class BaseCommand : Command
         // This intentionally also applies to resource command: users who want to pass arguments
         // that collide with CLI option names to the resource command's second-pass parser should
         // use the "--" separator (e.g. "aspire resource mydb cmd -- --AppHost primary").
-        var miscasedOptionError = ParseResultHelper.CheckForMiscasedOptions(this, parseResult);
-        if (miscasedOptionError is not null)
+        // Commands that opt in via RejectsUnknownOptionsBeforeDoubleDash (run, start) also reject
+        // prefixes of known options before "--" (e.g. "--isol" instead of "--isolated").
+        var unrecognizedOptionError = ParseResultHelper.CheckForUnrecognizedOptions(this, parseResult, RejectsUnknownOptionsBeforeDoubleDash);
+        if (unrecognizedOptionError is not null)
         {
-            InteractionService.DisplayError(miscasedOptionError);
+            InteractionService.DisplayError(unrecognizedOptionError);
             return CliExitCodes.InvalidCommand;
         }
 
