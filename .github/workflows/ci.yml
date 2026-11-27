@@ -114,10 +114,60 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    if: ${{ github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    if: ${{ github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && !(github.event_name == 'pull_request' && github.head_ref == 'ci-health/22438-r1-main-diagnostic') }}
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
       extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}
+
+  diagnose_windows_vsix:
+    if: ${{ github.repository == 'microsoft/aspire' && github.event_name == 'pull_request' && github.head_ref == 'ci-health/22438-r1-main-diagnostic' }}
+    name: Diagnose Windows debugger prerequisite downloads
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Fetch and verify the original Windows VSIX pins
+        shell: pwsh
+        run: |
+          function Test-PinnedVsix($Name, $Uri, $ExpectedSha256) {
+            $destination = Join-Path $env:RUNNER_TEMP "$Name.vsix"
+            $timer = [System.Diagnostics.Stopwatch]::StartNew()
+            Write-Host "Starting $Name"
+            try {
+              Invoke-WebRequest -Uri $Uri -OutFile $destination -MaximumRetryCount 3 -RetryIntervalSec 5
+            }
+            catch {
+              # Do not log exception messages or response URLs; redirects can carry signed query strings.
+              $exception = $_.Exception
+              while ($null -ne $exception) {
+                Write-Host "Download error for $Name ($($timer.ElapsedMilliseconds) ms): $($exception.GetType().Name)"
+                if ($exception -is [System.Net.Sockets.SocketException]) {
+                  Write-Host "Socket error: $($exception.SocketErrorCode)"
+                }
+                elseif ($exception -is [System.Net.Http.HttpRequestException]) {
+                  Write-Host "HTTP request error: $($exception.HttpRequestError); status: $($exception.StatusCode)"
+                }
+                elseif ($exception -is [Microsoft.PowerShell.Commands.HttpResponseException]) {
+                  Write-Host "HTTP response status: $([int]$exception.Response.StatusCode)"
+                }
+                $exception = $exception.InnerException
+              }
+              throw "Pinned VSIX download failed for $Name."
+            }
+
+            $actualSha256 = (Get-FileHash -Path $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualSha256 -ne $ExpectedSha256) {
+              throw "Checksum verification failed for $Name."
+            }
+            Write-Host "Verified $Name ($($timer.ElapsedMilliseconds) ms)"
+          }
+
+          Test-PinnedVsix 'vscode-dotnet-runtime-3.1.0' `
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/vscode-dotnet-runtime/3.1.0/vspackage' `
+            '8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a'
+          Test-PinnedVsix 'vscode-csharp-2.148.23-win32-x64' `
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.148.23/vspackage?targetPlatform=win32-x64' `
+            '27cf5f0fdcd677f7af61a6d43f2dc75bac7ca2cffa1f29e3262b615bbcabb952'
 
   # Stabilization gate.
   #
@@ -208,9 +258,13 @@ jobs:
     if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [actionlint, prepare_for_ci, tests, stabilization_check]
+    needs: [actionlint, prepare_for_ci, tests, stabilization_check, diagnose_windows_vsix]
 
     steps:
+      - name: Block merging the diagnostic PR
+        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'ci-health/22438-r1-main-diagnostic' }}
+        run: exit 1
+
       - name: Fail if any of the dependent jobs failed
         # Build and test jobs may be skipped, but handwritten workflow lint remains required.
         if: >-
