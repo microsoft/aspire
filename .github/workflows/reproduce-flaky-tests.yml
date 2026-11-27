@@ -20,7 +20,7 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Hosting.CodeGeneration.Go"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,18 +28,24 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: >-
+    --filter-method Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedCallbacks_ReceiveResourceBuilderWrapper
+    --filter-method Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoDerivedBuilderTests.GeneratedCode_CompilesWhenAnExportedValueRootIsNamedLikeAnAcceptingInterface
+    --filter-method Aspire.Hosting.CodeGeneration.Go.Tests.GoDocCommentTests.GeneratedSdk_PassesGoToolchainChecks
+    --filter-not-trait quarantined=true
+    --filter-not-trait outerloop=true
+  PRODUCT_REVISION: '9dfa1516fcf0478c78e64256933831a862e45480'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "ubuntu-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "2"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -166,6 +172,8 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.PRODUCT_REVISION }}
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -266,16 +274,49 @@ jobs:
           PASS=0
           FAIL=0
           ITERATIONS=${{ env.ITERATIONS_PER_RUNNER }}
+          echo "Product revision: $(git rev-parse HEAD)"
+          scratch=$(mktemp -d "$RUNNER_TEMP/go-21829.XXXXXXXX")
+          mkdir -p "$scratch/probe" "$scratch/bin"
+          printf 'module example.com/toolchain-probe\n\ngo 1.26\n' > "$scratch/probe/go.mod"
+          starter_root="$(
+            GOTOOLCHAIN=go1.24.13 GOMODCACHE="$scratch/tools" timeout 120s go env GOROOT
+          )"
+          export GO_STARTER_TOOLCHAIN="$starter_root/bin/go"
+          ready_root="$(
+            cd "$scratch/probe"
+            GOMODCACHE="$scratch/preseed" GOTOOLCHAIN=auto timeout 120s "$GO_STARTER_TOOLCHAIN" env GOROOT
+          )"
+          export GO_READY_TOOLCHAIN="$ready_root/bin/go"
+          GOTOOLCHAIN=local "$GO_STARTER_TOOLCHAIN" version
+          GOTOOLCHAIN=local "$GO_READY_TOOLCHAIN" version
+
+          cat > "$scratch/bin/go" <<'SH'
+          #!/usr/bin/env bash
+          printf '%s start pid=%s command=%s\n' "$(date -u +%FT%T.%NZ)" "$$" "${1:-none}" >> "$GO_TRACE_DIR/$$.log"
+          # Keep the first 12 markers live so a timeout cannot discard them before EOF.
+          "$GO_SELECTED_TOOLCHAIN" "$@" 2> >(tee >(grep --line-buffered -Eo 'go: downloading go[0-9.]+|go: using local toolchain go[0-9.]+|go: switching to go[0-9.]+' | sed -un '1,12p' >> "$GO_TRACE_DIR/$$.log") >&2)
+          result=$?
+          printf '%s exit pid=%s status=%s\n' "$(date -u +%FT%T.%NZ)" "$$" "$result" >> "$GO_TRACE_DIR/$$.log"
+          exit "$result"
+          SH
+          chmod +x "$scratch/bin/go"
+          export PATH="$scratch/bin:$PATH"
 
           for i in $(seq 1 "$ITERATIONS"); do
             echo "::group::Iteration $i/$ITERATIONS"
 
-            # Cleanup between iterations
-            rm -rf "${{ github.workspace }}/testresults" 2>/dev/null || true
-            pgrep -lf "dcp" 2>/dev/null | grep -E "\bdcp(\.exe|ctl)?\b" | awk '{print $1}' | while read pid; do
-              kill -9 "$pid" 2>/dev/null || true
-            done
-            sleep 1
+            # Alternate arm order across runners; both arms start with fresh module and build caches.
+            export GOMODCACHE="$scratch/modules-$i" GOCACHE="$scratch/build-$i" GO_TRACE_DIR="$scratch/trace-$i"
+            mkdir -p "$GO_TRACE_DIR"
+            if (( (i + ${{ matrix.index }}) % 2 == 0 )); then
+              export GO_SELECTED_TOOLCHAIN="$GO_STARTER_TOOLCHAIN" GOTOOLCHAIN=auto
+              echo "Arm: cold automatic toolchain selection"
+            else
+              export GO_SELECTED_TOOLCHAIN="$GO_READY_TOOLCHAIN" GOTOOLCHAIN=local
+              echo "Arm: preinstalled toolchain, fresh module and build caches"
+            fi
+            export GODEBUG=toolchaintrace=1
+            rm -rf "${{ github.workspace }}/testresults"
 
             # Run test (capture output for zero-test detection)
             ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
@@ -290,6 +331,7 @@ jobs:
               2>&1 | tee "$ITER_OUTPUT"
             RESULT=${PIPESTATUS[0]}
             set -e
+            find "$GO_TRACE_DIR" -type f -name '*.log' -print0 | sort -z | xargs -0 -r cat | head -c 32768 || true
 
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
             if [ "$RESULT" -eq 0 ]; then
