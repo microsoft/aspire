@@ -141,10 +141,10 @@ The AppHost automatically configures the dashboard, but you can override values 
 
 ### Standalone dashboard
 
-The **Telemetry sources** navigation icon opens a dedicated sidebar for services sending OpenTelemetry data
-that aren't part of the AppHost model. This view is available in both standalone and AppHost mode; these services
-are not listed under **Resources**. AppHost resources keep their own logs, traces, and metrics tabs.
-The standalone dashboard opens on the **Overview** of all sources: how many sources there are and the telemetry they
+Services that send OpenTelemetry data but aren't part of the AppHost model are telemetry sources. With an AppHost,
+they're listed under **Resources** in a **Telemetry sources** section after the app's resources, and the resource type
+filter can hide them. Without an AppHost, the **Telemetry sources** navigation icon opens a sidebar that lists only
+telemetry sources. The standalone dashboard opens on the **Overview** of all sources: how many sources there are and the telemetry they
 send, live activity, insights, and recent problems. Select a telemetry source to view its overview, with the resource
 attributes it reports and a summary of its logs, traces, and metrics, or select one or more sources to view their logs,
 traces, and metrics. Select **All sources** for the telemetry of every telemetry-only source. AppHost-only views and

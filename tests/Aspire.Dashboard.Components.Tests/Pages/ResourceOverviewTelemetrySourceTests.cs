@@ -21,8 +21,10 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
+using OpenTelemetry.Proto.Resource.V1;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
@@ -191,6 +193,33 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
             cut.FindAll("[aria-labelledby='overview-metrics-title'] .overview-metric-name").Select(name => name.TextContent)));
     }
 
+    // A source without a service.instance.id is named by its service name, which selects every instance of the service,
+    // so the overview summarizes them rather than showing the other instances' telemetry under that source.
+    [Fact]
+    public async Task TelemetrySource_WithoutInstanceIdAndReplicaShowsSummary()
+    {
+        Setup(hasAppHost: false);
+        await AddLogAsync(new Resource { Attributes = { new KeyValue { Key = "service.name", Value = new AnyValue { StringValue = "api" } } } });
+        await AddLogAsync("api", [], instanceId: "replica");
+        await AddLogAsync("api", [], instanceId: "replica");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+
+        var cut = RenderOverview("api");
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            [new ResourceKey("api", null), new ResourceKey("api", "replica")],
+            cut.FindComponent<ApplicationSummary>().Instance.TelemetryResourceKeys!.Order()));
+        Assert.Empty(cut.FindComponents<TelemetrySourceOverview>());
+
+        await DisposeComponentsAsync();
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceOverviewUrl("api-replica"));
+        cut = RenderOverview("api-replica");
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["2", "0", "0"],
+            cut.FindComponent<TelemetrySourceOverview>().FindAll("[aria-labelledby='overview-logs-title'] .overview-stat-value").Select(stat => stat.TextContent)));
+    }
+
     private void Setup(bool hasAppHost)
     {
         ResourceSetupHelpers.SetupResourceOverview(this, s_viewport, hasAppHost
@@ -209,12 +238,15 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
             builder.CloseComponent();
         }));
 
-    private Task AddLogAsync(string name, KeyValuePair<string, string>[] attributes) =>
+    private Task AddLogAsync(string name, KeyValuePair<string, string>[] attributes, string? instanceId = null) =>
+        AddLogAsync(TelemetryTestHelpers.CreateResource(name, instanceId, attributes));
+
+    private Task AddLogAsync(Resource resource) =>
         Services.GetRequiredService<SqliteTelemetryRepository>().AddLogsAsync(new AddContext(),
         [
             new ResourceLogs
             {
-                Resource = TelemetryTestHelpers.CreateResource(name, attributes: attributes),
+                Resource = resource,
                 ScopeLogs = { new ScopeLogs { Scope = TelemetryTestHelpers.CreateScope(), LogRecords = { TelemetryTestHelpers.CreateLogRecord() } } }
             }
         ]);
