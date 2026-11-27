@@ -42,7 +42,6 @@ public static class AzureSandboxesExtensions
             var sandboxResource = (AzureSandboxGroupResource)infrastructure.AspireResource;
             UserAssignedIdentity? newImagePullIdentity = null;
             BicepValue<string> imagePullIdentityId;
-            BicepValue<string> imagePullIdentityClientId;
             if (sandboxResource.TryGetLastAnnotation<AzureSandboxGroupAcrPullIdentityAnnotation>(out var imagePullIdentityAnnotation))
             {
                 if (sandboxResource.IsExisting() &&
@@ -52,7 +51,6 @@ public static class AzureSandboxesExtensions
                 }
 
                 imagePullIdentityId = imagePullIdentityAnnotation.Identity.Id.AsProvisioningParameter(infrastructure);
-                imagePullIdentityClientId = imagePullIdentityAnnotation.Identity.ClientId.AsProvisioningParameter(infrastructure);
             }
             else
             {
@@ -65,7 +63,6 @@ public static class AzureSandboxesExtensions
                     Infrastructure.NormalizeBicepIdentifier($"{sandboxResource.Name}_mi"));
                 infrastructure.Add(newImagePullIdentity);
                 imagePullIdentityId = newImagePullIdentity.Id.ToBicepExpression();
-                imagePullIdentityClientId = newImagePullIdentity.ClientId.ToBicepExpression();
             }
 
             var sandboxGroup = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
@@ -107,9 +104,9 @@ public static class AzureSandboxesExtensions
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = sandboxGroup.Id.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = sandboxGroup.Name.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("location", typeof(string)) { Value = sandboxGroup.Location.ToBicepExpression() });
-            infrastructure.Add(new ProvisioningOutput(AzureSandboxGroupResource.ImagePullIdentityClientIdOutputName, typeof(string))
+            infrastructure.Add(new ProvisioningOutput(AzureSandboxGroupResource.ImagePullIdentityIdOutputName, typeof(string))
             {
-                Value = imagePullIdentityClientId
+                Value = imagePullIdentityId
             });
 
             if (!sandboxResource.IsExisting())

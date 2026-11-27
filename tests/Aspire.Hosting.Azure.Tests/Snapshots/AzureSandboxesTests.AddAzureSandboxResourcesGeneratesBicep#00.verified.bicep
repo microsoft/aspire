@@ -60,4 +60,4 @@ output name string = hostgroup.name
 
 output location string = hostgroup.location
 
-output imagePullIdentityClientId string = hostgroup_mi.properties.clientId
+output imagePullIdentityId string = hostgroup_mi.id
