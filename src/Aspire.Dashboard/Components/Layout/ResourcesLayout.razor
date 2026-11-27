@@ -238,7 +238,7 @@
                  inert="@(_isPaneFullCanvas || _isPaneSelectionReveal || (!isDesktop && _isDrawerOpen))"
                  aria-hidden="@(_isPaneFullCanvas || _isPaneSelectionReveal || (!isDesktop && _isDrawerOpen) ? "true" : null)">
             <div class="resource-tab-body">
-                <CascadingValue Value="this" IsFixed="true" @key="IsTelemetryPane">
+                <CascadingValue Value="this" IsFixed="true">
                     @Body
                 </CascadingValue>
             </div>
@@ -408,13 +408,14 @@
         @foreach (var telemetryResource in rows)
         {
             var name = telemetryResource.Name;
+            var displayName = telemetryResource.DisplayName;
             var isSelected = IsSelected(name);
             var unavailableReason = GetTelemetryRowUnavailableReason(telemetryResource.Resource);
             <div class="resource-row resource-row-kind-telemetry @(isSelected ? "selected" : null) @(unavailableReason is not null ? "resource-row-unavailable" : null)" @key="@($"otlp:{name}")">
                 <a class="resource-row-link"
                    href="@GetRowUrl(name)"
                    aria-current="@GetRowAriaCurrent(isSelected)"
-                   aria-label="@name"
+                   aria-label="@displayName"
                    aria-description="@GetTelemetryRowAccessibilityDescription(telemetryResource.Resource, unavailableReason)"
                    data-tooltip="@unavailableReason"
                    data-resource-unavailable-reason="@unavailableReason"
@@ -423,12 +424,12 @@
                     <span class="resource-row-icon">
                         <FluentIcon Width="16px"
                                     Color="Color.Custom"
-                                    CustomColor="@GetRowIconColor(name, unavailableReason is not null)"
+                                    CustomColor="@GetRowIconColor(displayName, unavailableReason is not null)"
                                     Value="@(new Icons.Regular.Size16.DataUsage())" />
                     </span>
                     <span class="resource-row-text">
                         <span class="resource-row-title">
-                            <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@name" /></span>
+                            <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@displayName" /></span>
                         </span>
                         @if (!IsCompact)
                         {
@@ -637,7 +638,7 @@
             <span class="resource-header-icon">
                 <FluentIcon Width="@iconWidth"
                             Color="Color.Custom"
-                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.Name)"
+                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.DisplayName)"
                             Value="@(new Icons.Regular.Size20.DataUsage())" />
             </span>
         }
@@ -707,7 +708,7 @@
         {
             <div class="resource-header-text">
                 <div class="resource-header-title">
-                    @{ RenderTitle(__builder, telemetryOnly.Name, isDesktop); }
+                    @{ RenderTitle(__builder, telemetryOnly.DisplayName, isDesktop); }
                 </div>
             </div>
         }

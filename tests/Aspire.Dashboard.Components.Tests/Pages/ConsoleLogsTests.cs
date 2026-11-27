@@ -71,7 +71,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("Telemetry sources do not produce console logs. Select to view this telemetry source's overview.", cut.Markup);
+            Assert.Equal(Resources.ConsoleLogs.ConsoleLogsNoLogsForTelemetrySource, cut.Find(".aspire-page-empty-content .aspire-empty-message").TextContent.Trim());
             Assert.Empty(cut.FindComponents<LogViewer>());
         });
     }

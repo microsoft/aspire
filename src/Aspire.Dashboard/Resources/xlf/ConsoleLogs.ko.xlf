@@ -27,6 +27,11 @@
         <target state="translated">로그를 아직 사용할 수 없음</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNoLogsForTelemetrySource">
+        <source>No console logs for the selected telemetry source</source>
+        <target state="new">No console logs for the selected telemetry source</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsFound">
         <source>No logs found</source>
         <target state="translated">로그를 찾을 수 없음</target>

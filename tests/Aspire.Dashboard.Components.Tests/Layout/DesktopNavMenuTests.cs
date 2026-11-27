@@ -3,7 +3,6 @@
 
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Bunit;
@@ -28,31 +27,15 @@ public class DesktopNavMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchor(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: enabled));
-        if (!enabled)
-        {
-            Services.GetRequiredService<ResourcePaneState>().SetMode(ResourcePaneMode.Tags);
-        }
         Services.GetRequiredService<NavigationManager>().NavigateTo(enabled ? "/terminals/resource/shell" : "/traces/detail/abc");
         Render<FluentTooltipProvider>();
         var cut = Render<DesktopNavMenu>();
-        var expected = new List<string>();
-        if (enabled)
-        {
-            expected.Add(DashboardUrls.ResourceOverviewUrl("shell"));
-        }
-        expected.Add(DashboardUrls.TelemetrySourcesUrl());
-        var links = cut.FindAll("nav.desktop-nav-menu > a");
-        Assert.Equal(expected, links.Select(link => link.GetAttribute("href")));
-        if (enabled)
-        {
-            Assert.Equal("desktop-nav-resources", cut.Find("a[aria-current='page']").Id);
-        }
-        if (!enabled)
-        {
-            var structuredLogsLink = Assert.Single(links, link => link.GetAttribute("href") == DashboardUrls.TelemetrySourcesUrl());
-            Assert.Equal(Resources.Layout.NavMenuTelemetrySourcesTab, structuredLogsLink.GetAttribute("aria-label"));
-            Assert.Equal("page", structuredLogsLink.GetAttribute("aria-current"));
-        }
+
+        // With an AppHost, telemetry sources are part of the resources view, so it has the only entry.
+        var link = Assert.Single(cut.FindAll("nav.desktop-nav-menu > a"));
+        Assert.Equal(enabled ? DashboardUrls.ResourceOverviewUrl("shell") : DashboardUrls.StructuredLogsUrl(), link.GetAttribute("href"));
+        Assert.Equal(enabled ? Resources.Layout.NavMenuResourcesTab : Resources.Layout.NavMenuTelemetrySourcesTab, link.GetAttribute("aria-label"));
+        Assert.Equal("page", link.GetAttribute("aria-current"));
     }
 
     [Theory]
@@ -82,24 +65,12 @@ public class DesktopNavMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void Resources_FromSelectedTelemetrySource_ClearsTheTelemetrySelection()
+    public void Resources_FromSelectedTelemetrySource_KeepsTheSelection()
     {
-        RenderNavMenu(DashboardUrls.AddTelemetryPane(DashboardUrls.StructuredLogsUrl("telemetry-source")));
+        RenderNavMenu(DashboardUrls.StructuredLogsUrl("telemetry-source"));
         var cut = Render<DesktopNavMenu>();
 
-        Assert.Equal(DashboardUrls.ResourceListUrl(), cut.Find("#desktop-nav-resources").GetAttribute("href"));
-    }
-
-    [Fact]
-    public void EmptyTelemetrySources_StayEnabled()
-    {
-        RenderNavMenu(DashboardUrls.ResourceListUrl());
-        var cut = Render<DesktopNavMenu>();
-
-        var telemetry = cut.Find("#desktop-nav-telemetry");
-        Assert.Equal(DashboardUrls.TelemetrySourcesUrl(), telemetry.GetAttribute("href"));
-        Assert.Null(telemetry.GetAttribute("aria-disabled"));
-        Assert.Empty(cut.FindAll(".desktop-nav-item.disabled"));
+        Assert.Equal(DashboardUrls.ResourceOverviewUrl("telemetry-source"), cut.Find("#desktop-nav-resources").GetAttribute("href"));
     }
 
     private void RenderNavMenu(string url)

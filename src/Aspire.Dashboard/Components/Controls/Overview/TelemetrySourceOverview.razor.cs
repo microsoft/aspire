@@ -21,10 +21,16 @@ public sealed partial class TelemetrySourceOverview : ComponentBase, IDisposable
     private OverviewTelemetryLoader _telemetryLoader = default!;
 
     /// <summary>
-    /// Gets or sets the name the source is displayed and selected by.
+    /// Gets or sets the name the source is selected by. Links to the source's telemetry use it.
     /// </summary>
     [Parameter, EditorRequired]
     public required string Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name the source is displayed by.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string DisplayName { get; set; }
 
     [Parameter, EditorRequired]
     public required OtlpResource Source { get; set; }

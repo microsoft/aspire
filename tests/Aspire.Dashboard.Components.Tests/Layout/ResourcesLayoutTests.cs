@@ -3183,7 +3183,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         navigation.NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-tag-group")));
-        navigation.NavigateTo(DashboardUrls.TelemetrySourcesUrl());
+        navigation.NavigateTo(DashboardUrls.StructuredLogsUrl());
         cut.Render();
         Assert.Single(cut.FindAll("#resourcePaneGroupingButton"));
         Assert.Single(cut.FindAll(".resource-tag-group"));
@@ -3620,7 +3620,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task AppHost_TelemetryPanePreservesExternalSelectionAndNavigationContext()
+    public async Task AppHost_AllResourcesIncludesTelemetrySources()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -3635,7 +3635,6 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.False(cut.Instance.IsTelemetryPane);
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
             // Telemetry sources are listed by default, so "all resources" covers browser too.
             Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
@@ -3643,78 +3642,67 @@ public class ResourcesLayoutTests : DashboardTestContext
                 cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("href")));
             var header = cut.Find(".resource-pane-group[aria-label='Telemetry sources'] .resource-tag-header");
             Assert.Empty(header.QuerySelectorAll(".resource-tag-action"));
+            Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Console));
         });
 
-        navigation.NavigateTo(DashboardUrls.TelemetrySourcesUrl());
+        // A selected telemetry source doesn't change the URLs of the selection's pages.
+        navigation.NavigateTo(DashboardUrls.TracesUrl("browser"));
         cut.Render();
         cut.WaitForAssertion(() =>
         {
-            Assert.True(cut.Instance.IsTelemetryPane);
-            Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
-            Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
-            Assert.Equal(["/structuredlogs/resource/api", "/structuredlogs/resource/browser"],
-                cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("href")));
-        });
-        navigation.NavigateTo(DashboardUrls.AddTelemetryPane(DashboardUrls.TracesUrl("browser")));
-        cut.Render();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.True(cut.Instance.IsTelemetryPane);
-            Assert.Equal("/traces/resource/browser", cut.Instance.GetTabUrl(ResourceTab.Traces));
-            Assert.Equal("/metrics/resource/browser?duration=15&pane=telemetry",
-                cut.Instance.AddSelectionToUrl("/metrics/resource/browser?duration=15"));
-            Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+            Assert.Equal(["browser"], cut.Instance.SelectedResourceNames);
+            Assert.Equal("/metrics/resource/browser?duration=15", cut.Instance.AddSelectionToUrl("/metrics/resource/browser?duration=15"));
+            Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Console));
         });
 
-        navigation.NavigateTo(DashboardUrls.TelemetrySourcesUrl());
+        // Former telemetry pane links are ignored, so all resources still include the app's resources.
+        navigation.NavigateTo("/structuredlogs?pane=telemetry");
         cut.Render();
         await AddTelemetryAsync("worker");
-        cut.WaitForAssertion(() => Assert.Equal(["browser", "worker"],
-            cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name)));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["api", "browser", "worker"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+            Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Console));
+        });
+    }
 
+    [Fact]
+    public async Task AppHost_AllResourcesFromTelemetrySourceDoesNotRestorePreviousSelection()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var stored = new ConcurrentDictionary<string, object?>();
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => (stored.TryGetValue(key, out var value), value),
+            OnSetAsync = (key, value) => stored[key] = value
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<ISessionStorage>(sessionStorage));
+        await AddTelemetryAsync("browser");
+        var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(["api"], cut.Instance.GetAllResourceNames()));
+
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        cut.Render();
+        cut.WaitForAssertion(() =>
+            Assert.Equal(["api"], Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources])));
+
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("browser"));
+        cut.Render();
+        cut.WaitForAssertion(() =>
+            Assert.Equal(["browser"], Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources])));
+
+        await cut.Find(".resource-row-all .resource-row-link").ClickAsync(new MouseEventArgs());
         cut.Render();
         cut.WaitForAssertion(() =>
         {
-            Assert.False(cut.Instance.IsTelemetryPane);
-            Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
-        });
-    }
-
-    [Fact]
-    public void AppHost_EmptyTelemetryPaneStillShowsAppModelResources()
-    {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [ModelTestHelpers.CreateResource("api")], resourceChannelProvider: () => channel));
-        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.TelemetrySourcesUrl());
-        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Empty(cut.FindAll(".resource-pane-list > .aspire-pane-message"));
-            Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
-            Assert.Empty(cut.Instance.GetSelectionTelemetryKeys(null)!);
-            Assert.Single(cut.FindAll(".resource-row-all"));
-        });
-    }
-
-    [Fact]
-    public async Task AppHost_DirectTelemetrySourceLinkSelectsTelemetryPane()
-    {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [ModelTestHelpers.CreateResource("api")], resourceChannelProvider: () => channel));
-        await AddTelemetryAsync("browser");
-        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.TracesUrl("browser"));
-        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.True(cut.Instance.IsTelemetryPane);
-            Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
-            Assert.Equal("/traces/detail/abc?pane=telemetry", cut.Instance.AddPaneToUrl("/traces/detail/abc"));
+            Assert.Empty(Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources]));
+            Assert.Equal(DashboardUrls.ResourceListUrl(), new Uri(navigation.Uri).PathAndQuery);
+            Assert.Empty(cut.Instance.SelectedResourceNames);
         });
     }
 
@@ -3739,10 +3727,90 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
     }
 
-    private Task AddTelemetryAsync(string name)
+    [Fact]
+    public async Task Standalone_TelemetrySourceSelectionResolvesInstancesByStableName()
     {
-        var resource = CreateResource(name);
-        resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        await AddTelemetryAsync("api", instanceId: "a");
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.StructuredLogsUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["api-a"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.GetCompositeName()));
+            Assert.NotNull(cut.Instance.SelectedTelemetryOnlyResource);
+            Assert.Equal([DashboardUrls.StructuredLogsUrl("api")],
+                cut.FindAll(".resource-row-kind-telemetry .resource-row-link").Select(link => link.GetAttribute("href")));
+        });
+
+        // A second instance changes the labels, but the open link still selects the service: now both instances.
+        await AddTelemetryAsync("api", instanceId: "b");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+            Assert.Equal(["api-a", "api-b"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.GetCompositeName()));
+            Assert.True(cut.Instance.IsMultiSelection);
+            Assert.Null(cut.Instance.SelectedTelemetryOnlyResource);
+            var rows = cut.FindAll(".resource-row-kind-telemetry");
+            Assert.All(rows, row => Assert.True(row.ClassList.Contains("selected")));
+            Assert.Equal([DashboardUrls.StructuredLogsUrl("api-a"), DashboardUrls.StructuredLogsUrl("api-b")],
+                rows.Select(row => row.QuerySelector(".resource-row-link")!.GetAttribute("href")));
+        });
+
+        // Deselecting an instance keeps the other one.
+        cut.FindAll(".resource-row-kind-telemetry .resource-row-link").Single(link => link.GetAttribute("aria-label") == "api-a")
+            .Click(new MouseEventArgs { CtrlKey = true });
+        cut.Render();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["api-b"], cut.Instance.SelectedResourceNames);
+            Assert.Equal(["api-b"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.GetCompositeName()));
+            Assert.False(cut.Instance.IsMultiSelection);
+            Assert.Equal("b", cut.Instance.SelectedTelemetryOnlyResource?.Resource.InstanceId);
+        });
+    }
+
+    [Fact]
+    public async Task Standalone_TelemetrySourceWithGuidInstancesLinksByCompositeName()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        const string firstInstanceId = "0196c8ad-5f42-7c3e-9a1b-2d3e4f5a6b7c";
+        const string secondInstanceId = "0196c8ad-5f42-7c3e-9a1b-aaaabbbbcccc";
+        await AddTelemetryAsync("api", firstInstanceId);
+        await AddTelemetryAsync("api", secondInstanceId);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.StructuredLogsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        // Rows show the shortened instance ID, and link by the full one.
+        cut.WaitForAssertion(() =>
+        {
+            var links = cut.FindAll(".resource-row-kind-telemetry .resource-row-link");
+            Assert.Equal(["api-4f5a6b7c", "api-bbbbcccc"], links.Select(link => link.GetAttribute("aria-label")));
+            Assert.Equal([DashboardUrls.StructuredLogsUrl($"api-{firstInstanceId}"), DashboardUrls.StructuredLogsUrl($"api-{secondInstanceId}")],
+                links.Select(link => link.GetAttribute("href")));
+        });
+
+        // Telemetry pages link to a source by its label, which still selects it.
+        navigation.NavigateTo(DashboardUrls.StructuredLogsUrl("api-bbbbcccc"));
+        cut.Render();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(secondInstanceId, cut.Instance.SelectedTelemetryOnlyResource?.Resource.InstanceId);
+            Assert.True(cut.FindAll(".resource-row-kind-telemetry")[1].ClassList.Contains("selected"));
+        });
+    }
+
+    private Task AddTelemetryAsync(string name, string? instanceId = null)
+    {
+        var resource = CreateResource(name, instanceId);
+        if (instanceId is null)
+        {
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        }
+
         return Services.GetRequiredService<SqliteTelemetryRepository>().AddLogsAsync(new AddContext(),
         [
             new ResourceLogs

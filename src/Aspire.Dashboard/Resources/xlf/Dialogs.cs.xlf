@@ -748,11 +748,6 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
         <target state="translated">Strukturované protokoly</target>
         <note />
       </trans-unit>
-      <trans-unit id="HelpDialogGoToTelemetrySources">
-        <source>Telemetry sources</source>
-        <target state="translated">Zdroje telemetrie</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
         <target state="translated">Terminály</target>

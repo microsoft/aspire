@@ -97,9 +97,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required IStringLocalizer<Dashboard.Resources.Resources> ResourcesLoc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
-
-    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
 
     [Inject]

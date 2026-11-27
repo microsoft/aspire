@@ -62,7 +62,10 @@
             @if (IsTelemetryOnlySourceSelected)
             {
                 <div class="aspire-empty-content aspire-page-empty-content" role="status">
-                    @LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetrySourceNoConsoleLogs)]
+                    <TelemetryEmptyContent>
+                        <FluentIcon Icon="Icons.Regular.Size24.SlideText" Color="Color.Primary" />
+                        @Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoLogsForTelemetrySource)]
+                    </TelemetryEmptyContent>
                 </div>
             }
             else

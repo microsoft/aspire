@@ -4,7 +4,7 @@
 @using Aspire.Dashboard.Components.Controls.Overview
 @using Aspire.Dashboard.Components.Layout
 
-<PageTitle><ApplicationName AdditionalText="@(Resource is { } r ? GetResourceName(r) : TelemetrySource?.Name)" ResourceName="@nameof(Dashboard.Resources.Resources.ResourceOverviewPageTitle)" Loc="@Loc" /></PageTitle>
+<PageTitle><ApplicationName AdditionalText="@(Resource is { } r ? GetResourceName(r) : TelemetrySource?.DisplayName)" ResourceName="@nameof(Dashboard.Resources.Resources.ResourceOverviewPageTitle)" Loc="@Loc" /></PageTitle>
 
 @if (ResourceName is not null && ResourcesLayout is { IsMultiSelection: false } && (Resource is { IsParameter: false } || TelemetrySource is not null))
 {
@@ -66,7 +66,7 @@
     }
     else if (TelemetrySource is { } source)
     {
-        <TelemetrySourceOverview Name="@source.Name" Source="@source.Resource" HideEmptyPanels="@_hideEmptyPanels" />
+        <TelemetrySourceOverview Name="@source.Name" DisplayName="@source.DisplayName" Source="@source.Resource" HideEmptyPanels="@_hideEmptyPanels" />
     }
     else if (Resource is { } resource)
     {

@@ -425,7 +425,7 @@
     <value>Parameters do not support terminal sessions. Select to view this parameter's overview.</value>
   </data>
   <data name="ResourcePaneTelemetrySourceNoConsoleLogs" xml:space="preserve">
-    <value>Telemetry sources do not produce console logs. Select to view this telemetry source's overview.</value>
+    <value>Telemetry sources do not produce console logs.</value>
   </data>
   <data name="ResourceTabOverview" xml:space="preserve">
     <value>Overview</value>

@@ -748,11 +748,6 @@ aspire otel logs --dashboard-url {0}
         <target state="translated">구조화된 로그</target>
         <note />
       </trans-unit>
-      <trans-unit id="HelpDialogGoToTelemetrySources">
-        <source>Telemetry sources</source>
-        <target state="translated">원격 분석 원본</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
         <target state="translated">터미널</target>

@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class ConsoleLogs {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal ConsoleLogs() {
+        public ConsoleLogs() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error watching logs.
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsErrorWatchingLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Finished watching logs.
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsFinishedWatchingLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Console logs.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Loading resources ....
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsLoadingResources", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Logs not yet available.
         /// </summary>
@@ -104,7 +104,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsLogsNotYetAvailable", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No console logs for the selected telemetry source.
+        /// </summary>
+        public static string ConsoleLogsNoLogsForTelemetrySource {
+            get {
+                return ResourceManager.GetString("ConsoleLogsNoLogsForTelemetrySource", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to No logs found.
         /// </summary>
@@ -113,7 +122,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNoLogsFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No logs match the filter.
         /// </summary>
@@ -122,7 +131,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNoLogsMatchFilter", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No resource selected.
         /// </summary>
@@ -131,7 +140,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNoResourceSelected", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Console logs weren&apos;t captured for this run. Console logs are only captured if this page is visited while the AppHost is running..
         /// </summary>
@@ -140,7 +149,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNotCapturedForRun", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Don&apos;t wrap log lines.
         /// </summary>
@@ -149,7 +158,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNoWrapLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} console logs.
         /// </summary>
@@ -158,7 +167,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsPageTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to &lt;Log capture paused at {0}, {1} log(s) filtered out&gt;.
         /// </summary>
@@ -167,7 +176,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsPauseActive", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to &lt;Log capture paused between {0} and {1}, {2} log(s) filtered out&gt;.
         /// </summary>
@@ -176,7 +185,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsPauseDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Select resource.
         /// </summary>
@@ -185,7 +194,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsSelectResourceToolbar", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Settings.
         /// </summary>
@@ -194,7 +203,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsSettings", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Console logs filter.
         /// </summary>
@@ -203,7 +212,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsTextFilter", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Hide timestamps.
         /// </summary>
@@ -212,7 +221,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsTimestampHide", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Show timestamps.
         /// </summary>
@@ -221,7 +230,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsTimestampShow", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to UTC timestamps.
         /// </summary>
@@ -230,7 +239,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsTimestampShowUtc", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Unknown state.
         /// </summary>
@@ -239,7 +248,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsUnknownState", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Watching logs....
         /// </summary>
@@ -248,7 +257,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsWatchingLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Wrap log lines.
         /// </summary>
@@ -257,7 +266,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsWrapLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Download logs.
         /// </summary>
@@ -266,7 +275,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DownloadLogs", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Service log status.
         /// </summary>
@@ -275,7 +284,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("LogStatusLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Console logs capture paused at {0}.
         /// </summary>

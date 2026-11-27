@@ -748,11 +748,6 @@ Para saber mais sobre como usar os agentes de IA com o painel, incluindo como co
         <target state="translated">Logs estruturados</target>
         <note />
       </trans-unit>
-      <trans-unit id="HelpDialogGoToTelemetrySources">
-        <source>Telemetry sources</source>
-        <target state="translated">Fontes de telemetria</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
         <target state="translated">Terminais</target>

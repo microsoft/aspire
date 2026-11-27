@@ -1267,15 +1267,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Telemetry sources.
-        /// </summary>
-        public static string HelpDialogGoToTelemetrySources {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToTelemetrySources", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Terminals.
         /// </summary>
         public static string HelpDialogGoToTerminals {

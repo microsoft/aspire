@@ -3,12 +3,9 @@
 @inject IDashboardClient DashboardClient
 
 <nav class="desktop-nav-menu" aria-label="@Loc[nameof(Layout.NavMenuLandmark)]">
-    @{
-        var displayedSection = GetDisplayedSection();
-    }
     @foreach (var item in GetItems())
     {
-        var isActive = item.Section == displayedSection;
+        var isActive = item.Section == _activeSection;
         var id = $"desktop-nav-{item.Section.ToString().ToLowerInvariant()}";
         <a id="@id"
            href="@item.Href"

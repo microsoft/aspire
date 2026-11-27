@@ -16,17 +16,11 @@ public enum ResourcePaneMode
     /// <summary>
     /// Legacy mode for links to the former Tags view. The layout applies tag grouping in the Resources pane.
     /// </summary>
-    Tags,
-
-    /// <summary>
-    /// Services sending telemetry that aren't part of the AppHost model.
-    /// </summary>
-    Telemetry
+    Tags
 }
 
 /// <summary>
-/// Shares the resource list's mode between the resources layout, which owns the list, and the main navigation, which
-/// highlights the entry for the current mode.
+/// Shares the resource list's state across instances of the resources layout, which owns the list.
 /// </summary>
 public sealed class ResourcePaneState
 {

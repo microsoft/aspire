@@ -32,7 +32,6 @@ public partial class KeyboardShortcutsHelp
             ]),
             new(Loc[nameof(Resources.Dialogs.HelpDialogCategoryTelemetry)],
             [
-                new KeyboardShortcut(AspireKeyboardShortcut.GoToTelemetrySources, ["o"], Loc[nameof(Resources.Dialogs.HelpDialogGoToTelemetrySources)]),
                 new KeyboardShortcut(AspireKeyboardShortcut.GoToConsoleLogs, ["c"], Loc[nameof(Resources.Dialogs.HelpDialogGoToConsoleLogs)]),
                 new KeyboardShortcut(AspireKeyboardShortcut.GoToStructuredLogs, ["s"], Loc[nameof(Resources.Dialogs.HelpDialogGoToStructuredLogs)]),
                 new KeyboardShortcut(AspireKeyboardShortcut.GoToTraces, ["t"], Loc[nameof(Resources.Dialogs.HelpDialogGoToTraces)]),

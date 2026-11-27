@@ -1132,7 +1132,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Telemetry sources do not produce console logs. Select to view this telemetry source&apos;s overview..
+        ///   Looks up a localized string similar to Telemetry sources do not produce console logs..
         /// </summary>
         public static string ResourcePaneTelemetrySourceNoConsoleLogs {
             get {

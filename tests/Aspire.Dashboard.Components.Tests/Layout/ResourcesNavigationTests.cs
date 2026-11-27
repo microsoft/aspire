@@ -22,7 +22,7 @@ public class ResourcesNavigationTests
     [InlineData("consolelogs", nameof(NavSection.Resources))]
     [InlineData("consolelogs?pane=resources#logs", nameof(NavSection.Resources))]
     [InlineData("consolelogs?resource=api&resource=worker", nameof(NavSection.Resources))]
-    [InlineData("consolelogs?pane=telemetry", nameof(NavSection.Telemetry))]
+    [InlineData("consolelogs?pane=telemetry", nameof(NavSection.Resources))]
     [InlineData("structuredlogs?logLevel=error", nameof(NavSection.Resources))]
     [InlineData("traces/detail/abc", nameof(NavSection.Resources))]
     [InlineData("metrics/resource/frontend", nameof(NavSection.Resources))]
@@ -53,7 +53,7 @@ public class ResourcesNavigationTests
     [Theory]
     [InlineData("resources?pane=tags", ResourcePaneMode.Tags)]
     [InlineData("resources?pane=TAGS", ResourcePaneMode.Tags)]
-    [InlineData("structuredlogs?pane=telemetry", ResourcePaneMode.Telemetry)]
+    [InlineData("structuredlogs?pane=telemetry", null)]
     [InlineData("resources?resource=api&pane=resources", ResourcePaneMode.Resources)]
     [InlineData("consolelogs/resource/api?pane=tags#end", ResourcePaneMode.Tags)]
     [InlineData("resources", null)]
@@ -62,25 +62,6 @@ public class ResourcesNavigationTests
     public void ParsePaneMode_ReturnsModeFromQuery(string path, ResourcePaneMode? expectedMode)
     {
         Assert.Equal(expectedMode, ResourcesLayout.ParsePaneMode(path));
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void TelemetryUrls_SelectDedicatedSection(bool hasResourceService)
-    {
-        Assert.Equal(NavSection.Telemetry, DesktopNavMenu.GetSection(DashboardUrls.TelemetrySourcesUrl().TrimStart('/'), hasResourceService));
-        Assert.Equal(NavSection.Telemetry, DesktopNavMenu.GetSection("traces/detail/abc?pane=telemetry", hasResourceService));
-        Assert.Equal("/structuredlogs?pane=telemetry", DashboardUrls.TelemetrySourcesUrl());
-    }
-
-    [Theory]
-    [InlineData("/traces?pane=telemetry", "/traces?pane=telemetry")]
-    [InlineData("/traces?pane=tags", "/traces?pane=telemetry")]
-    [InlineData("/traces?resource=api#details", "/traces?resource=api&pane=telemetry#details")]
-    public void TelemetryUrls_PreserveQueryAndFragment(string url, string expected)
-    {
-        Assert.Equal(expected, DashboardUrls.AddTelemetryPane(url));
     }
 
     [Theory]

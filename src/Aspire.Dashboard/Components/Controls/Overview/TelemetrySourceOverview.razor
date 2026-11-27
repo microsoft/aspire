@@ -7,7 +7,7 @@
 }
 
 <div class="overview-grid telemetry-source-overview" data-resource-subscription="@Name">
-    <OverviewStatusCard TelemetrySourceName="@Name" HideCommandButtons="false" Style="@cardLayout.Style(OverviewCard.Status)" />
+    <OverviewStatusCard TelemetrySourceName="@DisplayName" HideCommandButtons="false" Style="@cardLayout.Style(OverviewCard.Status)" />
 
     <OverviewMetricsCard ResourceName="@Name"
                          ResourceKey="@Source.ResourceKey"

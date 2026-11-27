@@ -72,7 +72,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task TelemetrySourceRow_OnConsoleLogs_IsUnavailableAndOpensOverview()
+    public async Task TelemetrySourceRow_OnConsoleLogs_IsUnavailableAndStaysOnConsoleLogs()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
@@ -89,14 +89,14 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         var link = row.QuerySelector(".resource-row-link")!;
         Assert.True(row.ClassList.Contains("resource-row-unavailable"));
         Assert.Equal(Resources.Layout.ResourcePaneTelemetrySourceNoConsoleLogs, link.GetAttribute("data-resource-unavailable-reason"));
-        Assert.Equal("/resources/test", link.GetAttribute("href"));
+        Assert.Equal("/consolelogs/resource/test", link.GetAttribute("href"));
 
         await link.ClickAsync();
         cut.Render();
 
-        Assert.Equal("resources/test", navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.Equal("consolelogs/resource/test", navigation.ToBaseRelativePath(navigation.Uri));
         Assert.Equal(["test"], cut.Instance.SelectedResourceNames);
-        Assert.False(cut.Find(".resource-row-kind-telemetry").ClassList.Contains("resource-row-unavailable"));
+        Assert.Equal("test", cut.Instance.SelectedTelemetryOnlyResource?.Name);
     }
 
     [Fact]

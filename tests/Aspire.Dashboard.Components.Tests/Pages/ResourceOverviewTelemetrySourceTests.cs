@@ -127,19 +127,19 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
         });
     }
 
-    // With an app host, the overview without a selection summarizes the app's resources, even in the telemetry pane.
+    // With an app host, the overview without a selection summarizes the app's resources, even when telemetry sources
+    // are also sending telemetry.
     [Fact]
-    public async Task AppHost_TelemetryPaneSummaryIsTheResourceSummary()
+    public async Task AppHost_AllResourcesSummaryIsTheResourceSummary()
     {
         Setup(hasAppHost: true);
         await AddLogAsync("browser", []);
-        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.AddTelemetryPane(DashboardUrls.ResourceListUrl()));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
 
         var cut = RenderOverview(resourceName: null);
 
         cut.WaitForAssertion(() => Assert.Equal("No resources need attention", cut.Find(".home-hero-headline").TextContent));
-        Assert.True(cut.Instance.IsTelemetryPane);
-        Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Console));
+        Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Console));
         Assert.Empty(cut.FindAll(".home-telemetry-sources"));
         Assert.Single(cut.FindComponents<IconToggleGroup<GroupOverview>>());
     }
