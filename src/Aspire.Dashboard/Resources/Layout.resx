@@ -331,9 +331,6 @@
   <data name="ResourcePaneTelemetryOnlyGroup" xml:space="preserve">
     <value>Telemetry sources</value>
   </data>
-  <data name="ResourcePaneTelemetryOnly" xml:space="preserve">
-    <value>Telemetry sources</value>
-  </data>
   <data name="ResourcePaneCountSingular" xml:space="preserve">
     <value>{0} resource</value>
   </data>
@@ -426,6 +423,9 @@
   </data>
   <data name="ResourcePaneParameterNoTerminal" xml:space="preserve">
     <value>Parameters do not support terminal sessions. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneTelemetrySourceNoConsoleLogs" xml:space="preserve">
+    <value>Telemetry sources do not produce console logs.</value>
   </data>
   <data name="ResourceTabOverview" xml:space="preserve">
     <value>Overview</value>

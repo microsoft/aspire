@@ -3,8 +3,12 @@
 
 using Aspire.Dashboard.Components.Legacy.Layout;
 using Aspire.Dashboard.Components.Resize;
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared;
 using Bunit;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
@@ -27,5 +31,40 @@ public partial class MainLayoutTests
         await cut.InvokeAsync(() => cut.Find($"#{LegacyMainLayout.AIAgentsButtonId}").Click());
 
         Assert.Equal(["AIAgentsDialog"], openedDialogIds);
+    }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/graph")]
+    [InlineData("/legacy")]
+    [InlineData("/legacy/resources")]
+    [InlineData("/resources")]
+    [InlineData("/resources/api")]
+    [InlineData("/RESOURCES/frontend%20web?pane=telemetry#details")]
+    public void LegacyStandalone_ResourcePagesNavigateToLegacyStructuredLogs(string url)
+    {
+        SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: false));
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        Render<LegacyMainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        navigationManager.NavigateTo(url);
+
+        Assert.Equal(navigationManager.ToAbsoluteUri(TargetLocationInterceptor.LegacyStructuredLogsPath).AbsoluteUri, navigationManager.Uri);
+    }
+
+    [Theory]
+    [InlineData("/structuredlogs/resource/api?logLevel=error", "/legacy/structuredlogs/resource/api?logLevel=error")]
+    [InlineData("/metrics/resource/api?duration=5", "/legacy/metrics/resource/api?duration=5")]
+    public void LegacyStandalone_TelemetryPagesKeepResourceAndQuery(string url, string expectedUrl)
+    {
+        SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: false));
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        Render<LegacyMainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        navigationManager.NavigateTo(url);
+
+        Assert.Equal(navigationManager.ToAbsoluteUri(expectedUrl).AbsoluteUri, navigationManager.Uri);
     }
 }

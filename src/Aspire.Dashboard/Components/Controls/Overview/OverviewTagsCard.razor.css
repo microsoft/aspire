@@ -1,0 +1,12 @@
+/* Tags fit on one line next to the card title, so the card stays short. */
+.overview-tags-card {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--aspire-space-2) var(--aspire-space-4);
+    padding-block: 10px;
+}
+
+.overview-tags-card .overview-card-header {
+    margin-bottom: 0;
+}

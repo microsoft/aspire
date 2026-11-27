@@ -573,8 +573,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         AspireKeyboardShortcut.Settings,
         AspireKeyboardShortcut.GoToStructuredLogs,
         AspireKeyboardShortcut.GoToTraces,
-        AspireKeyboardShortcut.GoToMetrics,
-        AspireKeyboardShortcut.GoToTelemetrySources
+        AspireKeyboardShortcut.GoToMetrics
     };
 
     private static readonly IReadOnlySet<AspireKeyboardShortcut> s_resourceServiceSubscribedShortcuts = new HashSet<AspireKeyboardShortcut>(
@@ -646,9 +645,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                 break;
             case AspireKeyboardShortcut.GoToExtensions when DashboardClient.IsEnabled:
                 NavigationManager.NavigateTo(DashboardUrls.ExtensionsUrl());
-                break;
-            case AspireKeyboardShortcut.GoToTelemetrySources:
-                NavigationManager.NavigateTo(DashboardUrls.TelemetrySourcesUrl());
                 break;
         }
     }

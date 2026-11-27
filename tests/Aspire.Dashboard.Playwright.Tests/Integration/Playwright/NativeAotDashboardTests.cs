@@ -3,8 +3,10 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
@@ -93,7 +95,11 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
             var response = await page.GotoAsync("/");
             Assert.NotNull(response);
             Assert.Equal(HttpStatusCode.OK, (HttpStatusCode)response.Status);
-            await page.GetByRole(AriaRole.Heading, new() { Name = "Structured logs" }).WaitForAsync();
+            // Without a resource service, the home page redirects to the overview, which summarizes the telemetry
+            // sources. The span sent above is from one source.
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            var telemetrySourcesHeadline = string.Format(CultureInfo.CurrentCulture, Layout.TelemetryPaneCountSingular, 1);
+            await page.GetByRole(AriaRole.Heading, new() { Name = telemetrySourcesHeadline, Exact = true }).WaitForAsync();
 
             // The navigation button is named by aria-label. Its tooltip comes from data-tooltip, so it has no title.
             await page.GetByRole(AriaRole.Button, new() { Name = Dialogs.HelpDialogCategoryNavigation, Exact = true }).ClickAsync();

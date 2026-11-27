@@ -7,6 +7,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +42,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
         await themeManager.EnsureInitializedAsync();
         FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
         FluentUISetupHelpers.SetupFluentList(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
 
         var cut = Render<SettingsDialog>();
 
@@ -57,11 +59,27 @@ public sealed class SettingsDialogTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
         FluentUISetupHelpers.SetupFluentList(this);
         Services.Configure<DashboardOptions>(options => options.UI.DisableResourceGraph = true);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
 
         var cut = Render<SettingsDialog>();
 
         Assert.Equal(GetExpectedIconLabels().Where(label => label != "Graph"),
             cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
+    }
+
+    [Fact]
+    public async Task Render_Standalone_HidesGroupOverview()
+    {
+        var themeManager = new ThemeManager(new TestThemeResolver());
+        await themeManager.EnsureInitializedAsync();
+        FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
+        FluentUISetupHelpers.SetupFluentList(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: false));
+
+        var cut = Render<SettingsDialog>();
+
+        Assert.Equal(GetExpectedIconLabels(includeGroupOverview: false), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
+        Assert.Empty(cut.FindComponents<IconToggleGroup<GroupOverview>>());
     }
 
     [Fact]
@@ -82,6 +100,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
         };
         FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager, localStorage: localStorage);
         FluentUISetupHelpers.SetupFluentList(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
         var preferences = Services.GetRequiredService<DashboardViewPreferences>();
 
         var cut = Render<SettingsDialog>();
@@ -124,16 +143,18 @@ public sealed class SettingsDialogTests : DashboardTestContext
         Assert.Equal(expectedPath, invocation.Arguments[1]);
     }
 
-    private static IReadOnlyList<string> GetExpectedIconLabels()
+    private static IReadOnlyList<string> GetExpectedIconLabels(bool includeGroupOverview = true)
     {
         var labels = new List<string>
         {
             "System", "Light", "Dark",
-            "Comfortable", "Compact",
-            "Summary", "Graph",
-            "System", "12-hour", "24-hour",
-            "New dashboard"
+            "Comfortable", "Compact"
         };
+        if (includeGroupOverview)
+        {
+            labels.AddRange(["Summary", "Graph"]);
+        }
+        labels.AddRange(["System", "12-hour", "24-hour", "New dashboard"]);
         if (DashboardExperienceComponents.IsLegacyAvailable)
         {
             labels.Add("Previous dashboard");

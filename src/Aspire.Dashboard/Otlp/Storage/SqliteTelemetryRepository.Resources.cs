@@ -135,16 +135,12 @@ public sealed partial class SqliteTelemetryRepository
 
     private List<OtlpResource> GetTelemetryResources(bool includeUninstrumentedPeers, string? name)
     {
-        EnsureCachePopulated();
-        lock (_cacheLock)
-        {
-            return _cachedResourcesByKey.Values
-                .Select(resource => resource.Resource)
-                .Where(resource => includeUninstrumentedPeers || !resource.UninstrumentedPeer)
-                .Where(resource => name is null || string.Equals(resource.ResourceName, name, StringComparisons.ResourceName))
-                .OrderBy(resource => resource.ResourceKey)
-                .ToList();
-        }
+        return ReadCache(() => _cachedResourcesByKey.Values
+            .Select(resource => resource.Resource)
+            .Where(resource => includeUninstrumentedPeers || !resource.UninstrumentedPeer)
+            .Where(resource => name is null || string.Equals(resource.ResourceName, name, StringComparisons.ResourceName))
+            .OrderBy(resource => resource.ResourceKey)
+            .ToList());
     }
 
     private sealed class ResourceViewPropertiesComparer : IEqualityComparer<KeyValuePair<string, string>[]>

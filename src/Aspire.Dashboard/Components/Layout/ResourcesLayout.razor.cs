@@ -215,8 +215,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
-    internal bool IsTelemetryPane => !DashboardClient.IsEnabled || PaneState.Mode == ResourcePaneMode.Telemetry;
-
     /// <summary>
     /// Gets a value indicating whether the initial resource snapshot has been received.
     /// </summary>
@@ -234,9 +232,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     internal IReadOnlyList<string> SelectedResourceNames => _selectedResourceNames;
 
     /// <summary>
-    /// Gets a value indicating whether more than one resource is selected.
+    /// Gets a value indicating whether more than one resource is selected. A telemetry source's service name selects
+    /// every instance of it, so one selected name can select several sources.
     /// </summary>
-    internal bool IsMultiSelection => _selectedResourceNames.Count > 1;
+    internal bool IsMultiSelection => _selectedItems.Count > 1;
 
     /// <summary>
     /// Gets the resource name when exactly one resource is selected, otherwise <c>null</c>.
@@ -268,6 +267,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// not included.
     /// </summary>
     internal IEnumerable<ResourceViewModel> SelectedResources => _selectedItems.Select(i => i.Resource).OfType<ResourceViewModel>();
+
+    /// <summary>
+    /// Gets a value indicating whether resources are selected and all of them are parameters. A selection that also
+    /// includes a telemetry source, or a name that doesn't match a resource, isn't parameter-only.
+    /// </summary>
+    internal bool IsParameterOnlySelection => _selectedItems.Count > 0 && _selectedItems.All(i => i.Resource is { IsParameter: true });
+
+    /// <summary>
+    /// Gets a value indicating whether resources are selected and all of them are telemetry sources. A selection that
+    /// also includes an app model resource, or a name that doesn't match a resource, isn't telemetry-only.
+    /// </summary>
+    internal bool IsTelemetryOnlySelection => _selectedItems.Count > 0 && _selectedItems.All(i => i.TelemetryOnly is not null);
 
     internal IReadOnlyList<string> AvailableResourceTags => TagStore.GetAllTags(_resourceByName.Values);
 
@@ -324,7 +335,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The URL selects the mode when navigating from the main navigation. Other resource URLs, such as a row's
         // link, don't include it, so the last mode is remembered.
         var paneModeResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneMode);
-        if (DashboardClient.IsEnabled && paneModeResult.Success && Enum.TryParse<ResourcePaneMode>(paneModeResult.Value, ignoreCase: true, out var storedPaneMode) && storedPaneMode != ResourcePaneMode.Telemetry)
+        if (DashboardClient.IsEnabled && paneModeResult.Success && Enum.TryParse<ResourcePaneMode>(paneModeResult.Value, ignoreCase: true, out var storedPaneMode))
         {
             // Migrate the former Tags navigation view to the resource pane's grouping preference.
             _grouping = storedPaneMode == ResourcePaneMode.Tags ? ResourcePaneGrouping.Tags : ResourcePaneGrouping.None;
@@ -875,13 +886,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         // The overview without a selection lists all resources. Entering the resources view that way, for example
         // from the navigation rail, restores the last selection instead. Switching to the overview tab while all
-        // resources are already shown keeps them. Telemetry sources has its own selection, so it must not restore
-        // the last app-resource selection when its overview route has no selected source.
+        // resources are already shown keeps them.
         // The home page lists every resource and has no selection of its own, so it never restores one. That holds on
         // narrow layouts too, where "/" gives way to the overview of all resources (see Home): restoring a selection
         // there would race that redirect and could open a resource instead.
         _pendingLandingRedirect = DashboardClient.IsEnabled
-            && ParsePaneMode(baseRelativePath) != ResourcePaneMode.Telemetry
             && parsedLocation.Tab == ResourceTab.Overview
             && parsedLocation.SelectedResourceNames.Count == 0
             && !wasAllResources
@@ -927,16 +936,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return WithCurrentResourceViewState(GetTabUrl(tab, _selectedResourceNames, RouteResourceName));
         }
 
-        if (tab == ResourceTab.Metrics && _selectedResourceNames.Count == 0 && !DashboardClient.IsEnabled &&
-            _telemetryOnlyResources.FirstOrDefault(resource => resource.Resource.HasMetrics) is { } metricsResource)
-        {
-            return GetTabUrl(tab, [metricsResource.Name], metricsResource.Name);
-        }
-
         return GetTabUrl(tab, _selectedResourceNames, RouteResourceName);
     }
-
-    internal string AddPaneToUrl(string url) => DashboardClient.IsEnabled && IsTelemetryPane ? DashboardUrls.AddTelemetryPane(url) : url;
 
     internal string? DetailParentUrl
     {
@@ -995,7 +996,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             foreach (var key in query.AllKeys.OfType<string>())
             {
                 // Selection is encoded by the parent route. Other query values, including repeated
-                // filters and the telemetry pane, keep their scope when closing a deep link.
+                // filters, keep their scope when closing a deep link.
                 if (key != DashboardUrls.ResourceSelectionQueryName || parentQuery[key] is null)
                 {
                     parentQuery.Remove(key);
@@ -1007,7 +1008,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
 
             var parentPath = parentQueryIndex >= 0 ? parentUrl[..parentQueryIndex] : parentUrl;
-            return AddPaneToUrl(parentPath + (parentQuery.Count > 0 ? $"?{parentQuery}" : string.Empty));
+            return parentPath + (parentQuery.Count > 0 ? $"?{parentQuery}" : string.Empty);
         }
     }
 
@@ -1026,37 +1027,26 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
         }
 
-        return AddPaneToUrl(url);
+        return url;
     }
 
     private async Task ApplyPaneModeFromLocationAsync(string location)
     {
         if (!DashboardClient.IsEnabled)
         {
-            PaneState.SetMode(ResourcePaneMode.Telemetry);
             return;
         }
 
-        var mode = ParsePaneMode(NavigationManager.ToBaseRelativePath(location));
-        if (mode is null)
-        {
-            // A direct telemetry resource link can select the telemetry pane without a query parameter.
-            mode = _selectedItems.Any(i => i.TelemetryOnly is not null) ? ResourcePaneMode.Telemetry
-                : PaneState.Mode == ResourcePaneMode.Telemetry ? ResourcePaneMode.Resources : PaneState.Mode;
-        }
+        var mode = ParsePaneMode(NavigationManager.ToBaseRelativePath(location)) ?? PaneState.Mode;
         if (mode == ResourcePaneMode.Tags)
         {
             await SetGroupingAsync(ResourcePaneGrouping.Tags);
             mode = ResourcePaneMode.Resources;
         }
-        PaneState.SetMode(mode.Value);
-        if (mode == ResourcePaneMode.Telemetry)
-        {
-            return;
-        }
+        PaneState.SetMode(mode);
         try
         {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneMode, mode.Value.ToString());
+            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneMode, mode.ToString());
         }
         catch (JSDisconnectedException)
         {
@@ -1092,7 +1082,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             DashboardUrls.ResourcePaneResourcesValue => ResourcePaneMode.Resources,
             DashboardUrls.ResourcePaneTagsValue => ResourcePaneMode.Tags,
-            DashboardUrls.ResourcePaneTelemetryValue => ResourcePaneMode.Telemetry,
             _ => null
         };
     }
@@ -1181,16 +1170,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private void UpdateSelection()
     {
-        _selectedItems = _selectedResourceNames.Select(name =>
-        {
-            if (ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource))
-            {
-                return new SelectedResourceItem(name, resource, TelemetryOnly: null);
-            }
-
-            var telemetryOnly = _telemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName));
-            return new SelectedResourceItem(name, Resource: null, telemetryOnly);
-        }).ToList();
+        _selectedItems = GetSelectionItems(_selectedResourceNames);
 
         SelectedResource = _selectedItems is [{ Resource: { } selected }] ? selected : null;
 
@@ -1201,13 +1181,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 .Where(i => i.Resource is not null)
                 .ToDictionary(i => i.Name, i => i.Resource!.PersistentKey, StringComparers.ResourceName);
         }
-
-        if (DashboardClient.IsEnabled && _selectedItems.Any(i => i.TelemetryOnly is not null) &&
-            ParsePaneMode(NavigationManager.ToBaseRelativePath(NavigationManager.Uri)) is null)
-        {
-            PaneState.SetMode(ResourcePaneMode.Telemetry);
-        }
-
     }
 
     /// <summary>
@@ -1227,7 +1200,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         foreach (var name in _selectedResourceNames)
         {
             string? match = null;
-            if (IsKnownResourceName(name) || _telemetryOnlyResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName)))
+            if (IsKnownResourceName(name) || ResolveTelemetrySources(name).Count > 0)
             {
                 match = name;
             }
@@ -1297,7 +1270,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task SetStoredSelectionAsync(IReadOnlyList<string> resourceNames)
     {
-        if (IsTelemetryPane)
+        // Only the AppHost's resources view restores a remembered selection (see TryRedirectLandingAsync).
+        if (!DashboardClient.IsEnabled)
         {
             return;
         }
@@ -1336,17 +1310,85 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
         }
 
+        var instanceCounts = telemetryResources.CountBy(r => r.ResourceName, StringComparers.ResourceName)
+            .ToDictionary(StringComparers.ResourceName);
         _telemetryOnlyResources = telemetryResources
             .Where(r => !appModelKeys.Contains(r.ResourceKey))
-            .Select(r => new TelemetryOnlyResource(OtlpHelpers.GetResourceName(r, telemetryResources), r))
-            .OrderBy(r => r.Name, StringComparers.ResourceName)
+            .Select(r => new TelemetryOnlyResource(
+                GetTelemetrySourceName(r, instanceCounts[r.ResourceName]),
+                OtlpHelpers.GetResourceName(r, telemetryResources),
+                r))
+            .OrderBy(r => r.DisplayName, StringComparers.ResourceName)
             .ToList();
+    }
+
+    /// <summary>
+    /// Gets the name that URLs and the selection use for a telemetry source: its service name while it's the only
+    /// instance, otherwise its composite name, for example "api-0196c8ad-5f42-7c3e-9a1b-2d3e4f5a6b7c". These names
+    /// resolve the way the telemetry API and CLI resolve resource names (see <see cref="ResolveTelemetrySources"/>),
+    /// so a link keeps working when instances come and go: the service name then selects every instance. The display
+    /// label can't be used because it changes when a second instance appears and shortens GUID instance IDs.
+    /// </summary>
+    private static string GetTelemetrySourceName(OtlpResource resource, int instanceCount) =>
+        instanceCount > 1 ? resource.ResourceKey.GetCompositeName() : resource.ResourceName;
+
+    /// <summary>
+    /// Gets the telemetry sources a selected name stands for. A service name selects every instance of that service,
+    /// and a composite name selects one instance. An ambiguous composite name selects nothing.
+    /// </summary>
+    private List<TelemetryOnlyResource> ResolveTelemetrySources(string name)
+    {
+        var matches = OtlpHelpers.ResolveResourceNameMatches(name, _telemetryOnlyResources.Select(r => r.Resource));
+        if (matches.Count > 0)
+        {
+            return _telemetryOnlyResources.Where(r => matches.Contains(r.Resource)).ToList();
+        }
+
+        // Telemetry pages link to a source by its display label, which shortens a GUID instance ID to its last eight
+        // characters, for example "api-4f5a6b7c". That label isn't a composite name, so match it exactly.
+        return _telemetryOnlyResources.Where(r => string.Equals(r.DisplayName, name, StringComparisons.ResourceName)).Take(2).ToList() is [var labelMatch]
+            ? [labelMatch]
+            : [];
+    }
+
+    /// <summary>
+    /// Gets the resources and telemetry sources the given names select. A telemetry source's service name expands to
+    /// an item for each of its instances. A name that matches nothing keeps an item so pages can report it.
+    /// </summary>
+    private List<SelectedResourceItem> GetSelectionItems(IEnumerable<string> resourceNames)
+    {
+        var items = new List<SelectedResourceItem>();
+        foreach (var name in resourceNames)
+        {
+            if (ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource))
+            {
+                items.Add(new SelectedResourceItem(name, resource, TelemetryOnly: null));
+                continue;
+            }
+
+            var sources = ResolveTelemetrySources(name);
+            if (sources.Count == 0)
+            {
+                items.Add(new SelectedResourceItem(name, Resource: null, TelemetryOnly: null));
+                continue;
+            }
+
+            foreach (var source in sources)
+            {
+                if (!items.Any(item => item.TelemetryOnly == source))
+                {
+                    items.Add(new SelectedResourceItem(source.Name, Resource: null, source));
+                }
+            }
+        }
+
+        return items;
     }
 
     private IEnumerable<TelemetryOnlyResource> GetVisibleTelemetryResources() =>
         _telemetryOnlyResources.Where(r =>
             (!DashboardClient.IsEnabled || ShowTelemetryOnlyResources || IsSelected(r.Name)) &&
-            r.Name.Contains(_filter.TextFilter, StringComparisons.UserTextSearch));
+            r.DisplayName.Contains(_filter.TextFilter, StringComparisons.UserTextSearch));
 
     private IEnumerable<ResourceViewModel> GetOrderableResources() =>
         _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(_filter.ShowHiddenResources));
@@ -1387,17 +1429,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 yield return new TreePaneSection(treeRows);
             }
-
-            // Tags already include parameters in their groups.
-            if (_grouping != ResourcePaneGrouping.Tags && GetParameterPaneRows() is { Count: > 0 } parameterRows)
-            {
-                yield return new ParametersPaneSection(parameterRows);
-            }
         }
 
         if (GetVisibleTelemetryResources().ToList() is { Count: > 0 } telemetryRows)
         {
             yield return new TelemetryPaneSection(telemetryRows);
+        }
+
+        // Tags already include parameters in their groups.
+        if (DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.Tags && GetParameterPaneRows() is { Count: > 0 } parameterRows)
+        {
+            yield return new ParametersPaneSection(parameterRows);
         }
     }
 
@@ -1637,7 +1679,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _filter.ResourceTagsToVisibility.Values.All(v => v);
 
     private bool CanReorderPane =>
-        _isLoaded && !IsTelemetryPane &&
+        _isLoaded && DashboardClient.IsEnabled &&
         _filter.TextFilter.Length == 0 && NoFiltersSet;
 
     private bool CanReorderResources => CanReorderPane && _grouping == ResourcePaneGrouping.None;
@@ -2045,7 +2087,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool CanViewResourceTerminal(ResourceViewModel resource) =>
         DashboardClient.IsEnabled && !DashboardClient.IsReadOnly && ResourceSelectHelpers.HasUsableTerminal(resource);
 
-    private bool HasViewableResourceTerminal => !IsTelemetryPane && _resourceByName.Values.Any(CanViewResourceTerminal);
+    private bool HasViewableResourceTerminal => _resourceByName.Values.Any(CanViewResourceTerminal);
 
     private string GetResourceTerminalUrl(ResourceViewModel resource) =>
         WithCurrentResourceViewState(DashboardUrls.TerminalsUrl(GetResourceName(resource)));
@@ -2093,6 +2135,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal string GetResourceName(ResourceViewModel resource) =>
         IsReplica(resource) ? resource.Name : resource.DisplayName;
+
+    private static string GetRowIconColor(string name, bool isUnavailable) =>
+        isUnavailable
+            ? "var(--colorNeutralForeground3)"
+            : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(name)})";
 
     internal bool IsReplica(ResourceViewModel resource) =>
         GetDuplicateDisplayNames().Contains(resource.DisplayName);
@@ -2277,13 +2324,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         };
     }
 
-    // A telemetry-only row has no overview, console or terminal, and is unavailable for those tabs. Like the other rows,
-    // it's never unavailable while the content is closed (see GetResourceUnavailableReason).
+    // A telemetry source isn't part of the app model, so like a parameter it has no console logs or terminal. Choosing
+    // it from console logs keeps that page, which explains why it's empty, and choosing it from the terminal opens its
+    // overview (see GetSelectionUrl). Like the other rows, it's never unavailable while the content is closed (see
+    // GetResourceUnavailableReason).
     private string? GetTelemetryRowUnavailableReason(OtlpResource resource) =>
         _isPaneFullCanvas ? null
-        : CurrentTab is ResourceTab.Overview or ResourceTab.Console or ResourceTab.Terminal or ResourceTab.Parameters
-            ? Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value
-            : GetTelemetryUnavailableReason(resource);
+        : CurrentTab switch
+        {
+            ResourceTab.Console => Loc[nameof(Resources.Layout.ResourcePaneTelemetrySourceNoConsoleLogs)].Value,
+            ResourceTab.Terminal or ResourceTab.Parameters => Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
+            _ => GetTelemetryUnavailableReason(resource)
+        };
 
     private string? GetTelemetryUnavailableReason(OtlpResource? resource)
     {
@@ -2307,7 +2359,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             : 0;
     }
 
-    private TelemetryOnlyResource? SelectedTelemetryOnlyResource =>
+    /// <summary>
+    /// Gets the telemetry source that matches <see cref="SelectedResourceName"/>, if any. Telemetry sources send
+    /// telemetry without being part of the app model.
+    /// </summary>
+    internal TelemetryOnlyResource? SelectedTelemetryOnlyResource =>
         _selectedItems is [{ TelemetryOnly: { } telemetryOnly }] ? telemetryOnly : null;
 
     /// <summary>
@@ -2329,18 +2385,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Resolve even a single selection here. A page opened before the resource's first signal can
         // still have its "all resources" key; returning null would widen the query when telemetry arrives.
         var keys = new List<ResourceKey>();
-        foreach (var name in resourceNames)
+        foreach (var item in GetSelectionItems(resourceNames))
         {
-            OtlpResource? otlpResource = null;
-            if (ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource))
-            {
-                otlpResource = GetTelemetryResource(resource);
-            }
-            else if (_telemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName)) is { } telemetryOnly)
-            {
-                otlpResource = telemetryOnly.Resource;
-            }
-
+            var otlpResource = item.Resource is { } resource ? GetTelemetryResource(resource) : item.TelemetryOnly?.Resource;
             if (otlpResource is not null && !keys.Contains(otlpResource.ResourceKey))
             {
                 keys.Add(otlpResource.ResourceKey);
@@ -2366,22 +2413,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         IEnumerable<string> names;
         if (resourceNames.Count > 0)
         {
-            names = resourceNames.Select(name =>
-                ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource)
+            names = GetSelectionItems(resourceNames).Select(item =>
+                item.Resource is { } resource
                     ? GetPinResourceName(resource)
-                    : _telemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName))?.Resource.ResourceKey.Name)
+                    : item.TelemetryOnly?.Resource.ResourceKey.Name)
                 .OfType<string>();
-        }
-        else if (IsTelemetryPane)
-        {
-            names = _telemetryOnlyResources.Select(r => r.Resource.ResourceKey.Name);
         }
         else
         {
             // All resources: the app's resources, and the telemetry sources while the pane lists them. Parameters don't
             // send telemetry.
             names = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetPinResourceName);
-            if (ShowTelemetryOnlyResources)
+            if (!DashboardClient.IsEnabled || ShowTelemetryOnlyResources)
             {
                 names = names.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey.Name));
             }
@@ -2395,15 +2438,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal IReadOnlyList<ResourceKey> GetPaneTelemetryKeys()
     {
-        if (IsTelemetryPane)
-        {
-            return _telemetryOnlyResources.Select(r => r.Resource.ResourceKey).Distinct().ToList();
-        }
-
         // "All resources" covers the app's resources, and the telemetry sources while the pane lists them. Parameters
         // don't send telemetry.
         var keys = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey);
-        if (ShowTelemetryOnlyResources)
+        if (!DashboardClient.IsEnabled || ShowTelemetryOnlyResources)
         {
             keys = keys.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey));
         }
@@ -2492,7 +2530,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// Adds the current multi-resource selection to a page URL, so changing page state such as filters keeps the
     /// selection. A single selected resource is already part of the page's URL path.
     /// </summary>
-    internal string AddSelectionToUrl(string url) => AddPaneToUrl(IsMultiSelection ? DashboardUrls.AddResourceSelection(url, _selectedResourceNames) : url);
+    internal string AddSelectionToUrl(string url) => _selectedResourceNames.Count > 1 ? DashboardUrls.AddResourceSelection(url, _selectedResourceNames) : url;
 
     internal bool IsTabAvailable(ResourceTab tab) => IsTabAvailable(tab, _selectedItems);
 
@@ -2500,7 +2538,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         if (tab == ResourceTab.Terminal)
         {
-            return !IsTelemetryPane && selection is [{ Resource: { } resource }] && CanViewResourceTerminal(resource);
+            return selection is [{ Resource: { } resource }] && CanViewResourceTerminal(resource);
         }
 
         if (tab == ResourceTab.Parameters)
@@ -2510,7 +2548,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 _resourceByName.Values.Any(r => r.IsParameter);
         }
 
-        if (IsTelemetryPane && tab is ResourceTab.Overview or ResourceTab.Console)
+        // Console logs come from the app host.
+        if (!DashboardClient.IsEnabled && tab is ResourceTab.Console)
         {
             return false;
         }
@@ -2545,7 +2584,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         if (item.TelemetryOnly is not null)
         {
-            return tab is ResourceTab.StructuredLogs or ResourceTab.Traces or ResourceTab.Metrics;
+            return tab is ResourceTab.Overview or ResourceTab.StructuredLogs or ResourceTab.Traces or ResourceTab.Metrics;
         }
 
         // The resource isn't known (yet). Keep the tab so the page can report it.
@@ -2604,15 +2643,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private string GetSelectionUrl(IReadOnlyList<string> resourceNames)
     {
-        var selection = resourceNames.Select(name =>
-        {
-            if (ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource))
-            {
-                return new SelectedResourceItem(name, resource, TelemetryOnly: null);
-            }
-
-            return new SelectedResourceItem(name, Resource: null, _telemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName)));
-        }).ToList();
+        var selection = GetSelectionItems(resourceNames);
 
         ResourceTab tab;
         if (IsTabAvailable(CurrentTab, selection) || (CurrentTab == ResourceTab.Terminal && selection.Count == 0))
@@ -2625,18 +2656,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // Keep the chosen telemetry page so it can explain why the selection has no data.
             tab = CurrentTab;
         }
-        else if (selection is [{ Resource: { IsParameter: true } }])
+        else if (CurrentTab == ResourceTab.Console && selection is [{ TelemetryOnly: not null }])
         {
-            tab = ResourceTab.Overview;
-        }
-        else if (!IsTelemetryPane && (selection.Any(i => i.Resource is not null) || selection.Count == 0))
-        {
-            tab = ResourceTab.Overview;
+            // Console logs explains that a telemetry source has no console logs.
+            tab = CurrentTab;
         }
         else
         {
-            // Resources that only send telemetry don't have an overview.
-            tab = ResourceTab.StructuredLogs;
+            // Every selection has an overview, including parameters and telemetry sources.
+            tab = ResourceTab.Overview;
         }
 
         if (tab == CurrentTab && _selectionUrlProvider is { } registered && registered.Tab == tab)
@@ -2644,7 +2672,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             var resourceName = GetRouteResourceName(resourceNames, RouteResourceName);
             var sameScope = resourceNames.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName);
             var url = registered.Provider(resourceName, resourceNames, sameScope);
-            return AddPaneToUrl(resourceNames.Count > 1 ? DashboardUrls.AddResourceSelection(url, resourceNames) : url);
+            return resourceNames.Count > 1 ? DashboardUrls.AddResourceSelection(url, resourceNames) : url;
         }
 
         return GetTabUrl(tab, resourceNames, RouteResourceName);
@@ -2699,7 +2727,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // A single selected resource is shown by its row alone, so a one-resource group doesn't duplicate the highlight.
     private bool IsResourceGroupSelected(List<string> groupResourceNames) =>
         groupResourceNames.Count > 1 &&
-        groupResourceNames.Count == _selectedResourceNames.Count &&
+        groupResourceNames.Count == _selectedItems.Count &&
         groupResourceNames.All(IsSelected);
 
     internal Task SelectGraphTagGroupAsync(string tagName, MouseEventArgs e, IEnumerable<ResourceViewModel> graphResources, bool showHiddenResources) => InvokeAsync(async () =>
@@ -2788,13 +2816,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// <summary>
     /// Gets the selection a Ctrl+click (Cmd+click on macOS) adds a resource to or removes it from. "Select all" is an
     /// empty selection, and toggling a resource then starts from every resource it stands for, so the click deselects
-    /// that resource instead of selecting it alone.
+    /// that resource instead of selecting it alone. Likewise a telemetry source's service name stands for each of its
+    /// instances, so one instance can be deselected.
     /// </summary>
     private List<string> GetToggleBaseSelection()
     {
         if (!IsAllSelected)
         {
-            return _selectedResourceNames.ToList();
+            return _selectedItems.Select(item => item.Name).ToList();
         }
 
         // "Select all" covers telemetry sources only while the pane lists them, as its telemetry scope does (see
@@ -2866,7 +2895,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return names;
     }
 
-    private bool IsSelected(string resourceName) => _selectedResourceNames.Contains(resourceName, StringComparers.ResourceName);
+    private bool IsSelected(string resourceName) => _selectedItems.Any(item => string.Equals(item.Name, resourceName, StringComparisons.ResourceName));
 
     // An empty selection means everything is selected, so every row is shown selected. Only the look follows: the
     // rows aren't each announced as current, "Select all" being pressed already says it.
@@ -2927,16 +2956,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             yield break;
         }
 
-        var isTelemetryOnly = SelectedTelemetryOnlyResource is not null;
-
         // Tabs that don't apply are returned hidden rather than left out, so the menus and the strip agree on them.
         var errorCount = _selectedItems.Sum(i => i.Resource is { } r ? GetUnviewedErrorCount(r) : 0);
         // Overview stays for a resource that isn't known, such as a replica that was replaced: its page says the
-        // resource wasn't found, and the tab is the way back to it from the resource's other pages.
+        // resource wasn't found, and the tab is the way back to it from the resource's other pages. Console logs come
+        // from the app host, so a dashboard without one has no console.
         yield return CreateTab(ResourceTab.Overview, Loc[nameof(Resources.Layout.ResourceTabOverview)], new Icons.Regular.Size24.Board(),
-            isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
+            isVisible: true);
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
-            isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
+            isVisible: DashboardClient.IsEnabled);
         // Shown whenever any resource has a terminal, not only when the selection does, so the navigation doesn't
         // shift as the selection changes. Without a terminal in the selection it opens the Terminals page instead.
         yield return CreateTab(ResourceTab.Terminal, Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], new Icons.Regular.Size20.WindowConsole(),
@@ -3094,7 +3122,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal sealed record ResourceLocation(ResourceTab Tab, string? RouteResourceName, IReadOnlyList<string> SelectedResourceNames, bool KeepSelection);
 
-    private sealed record TelemetryOnlyResource(string Name, OtlpResource Resource);
+    /// <summary>
+    /// A telemetry source listed in the resource pane.
+    /// </summary>
+    /// <param name="Name">The stable name that URLs and the selection use. See <see cref="GetTelemetrySourceName"/>.</param>
+    /// <param name="DisplayName">The label shown for the source, which shortens GUID instance IDs.</param>
+    /// <param name="Resource">The telemetry source.</param>
+    internal sealed record TelemetryOnlyResource(string Name, string DisplayName, OtlpResource Resource);
 
     private sealed record SelectedResourceItem(string Name, ResourceViewModel? Resource, TelemetryOnlyResource? TelemetryOnly);
 

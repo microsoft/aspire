@@ -521,9 +521,6 @@
   <data name="HomeNoRecentErrors" xml:space="preserve">
     <value>No errors logged</value>
   </data>
-  <data name="ParametersPageTitle" xml:space="preserve">
-    <value>Parameters</value>
-  </data>
   <data name="GraphPageTitle" xml:space="preserve">
     <value>Graph</value>
   </data>
@@ -596,6 +593,10 @@
   </data>
   <data name="HomeHeadlineHealthy" xml:space="preserve">
     <value>No resources need attention</value>
+  </data>
+  <data name="HomeNoTelemetry" xml:space="preserve">
+    <value>No telemetry</value>
+    <comment>Headline of the overview of a dashboard without an app host, before any telemetry source has sent telemetry.</comment>
   </data>
   <data name="HomeStartedAt" xml:space="preserve">
     <value>Started {0}</value>
@@ -803,5 +804,13 @@
   </data>
   <data name="HomeActivityNoRecordedRequests" xml:space="preserve">
     <value>No requests were recorded in this run.</value>
+  </data>
+  <data name="TelemetrySourceOverviewType" xml:space="preserve">
+    <value>Telemetry source</value>
+    <comment>The type shown on the overview of a resource that sends telemetry without being part of the app model.</comment>
+  </data>
+  <data name="TelemetrySourceOverviewAttributesTitle" xml:space="preserve">
+    <value>Resource attributes</value>
+    <comment>Title of the card listing the OpenTelemetry resource attributes a telemetry source reports.</comment>
   </data>
 </root>

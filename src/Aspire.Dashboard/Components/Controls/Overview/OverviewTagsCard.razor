@@ -1,0 +1,10 @@
+@* Tags are keyed by display name so they apply to every replica and survive the random replica suffix changing between runs. *@
+<section class="overview-card overview-tags-card span-12" aria-labelledby="overview-tags-title">
+    <div class="overview-card-header">
+        <span class="card-header-icon" aria-hidden="true">
+            <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+        </span>
+        <h2 id="overview-tags-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsLabel)]</h2>
+    </div>
+    <ResourceTagEditor ResourceName="@Resource.DisplayName" AppHostTags="@Resource.AppHostTags" AvailableTags="@AvailableTags" />
+</section>

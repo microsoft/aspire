@@ -1,0 +1,481 @@
+﻿.resource-overview {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    margin-top: var(--layout-top-padding);
+    padding: 0 var(--layout-right-padding) 24px var(--layout-left-padding);
+    container-type: inline-size;
+    outline: none;
+}
+
+.resource-overview:has(> .home.graph-view) {
+    /* The graph's menu otherwise adds a line box below the full-height canvas. */
+    overflow: hidden;
+    margin-top: 0;
+    padding: 0;
+}
+
+.overview-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--aspire-space-2);
+    padding: 48px 16px;
+    color: var(--colorNeutralForeground2);
+}
+
+::deep .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--aspire-space-3);
+}
+
+::deep .overview-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: var(--aspire-radius-large);
+    background: var(--aspire-control-background);
+}
+
+::deep .overview-card[hidden] {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    .overview-panel-selector ::deep .icon-toggle-label {
+        display: none;
+    }
+}
+
+/* Spans are computed per card from its content (see OverviewCardLayout) and passed in as custom properties. */
+::deep .overview-grid > .overview-card,
+::deep .overview-grid > .overview-status-card {
+    grid-column: span var(--overview-span, 12);
+}
+
+/* Grid rows size to their tallest content and stretch the other cards to match. Keep the tags picker unclipped. */
+::deep .overview-grid > .overview-card:not(.overview-tags-card),
+::deep .overview-grid > .overview-status-card {
+    overflow: hidden;
+}
+
+::deep .overview-grid > .overview-terminal-card {
+    min-height: var(--overview-card-height, 300px);
+}
+
+/* Child-component roots lack this component's scope attribute, so anchor it on the card. */
+::deep .overview-grid > .overview-card:not(.overview-tags-card) > :not(.overview-card-header) {
+    flex-shrink: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* Cap the scrollable content, not the card, so different card limits don't leave uneven row bottoms. */
+::deep .overview-grid > .overview-card:not(.overview-tags-card):not(.overview-terminal-card) > :not(.overview-card-header) {
+    max-height: var(--overview-card-height, none);
+}
+
+::deep .overview-card-empty .overview-empty {
+    flex: 1 1 auto;
+}
+
+@container (max-width: 1100px) {
+    ::deep .overview-grid > .overview-card,
+    ::deep .overview-grid > .overview-status-card {
+        grid-column: span var(--overview-span-md, 12);
+    }
+}
+
+@container (max-width: 760px) {
+    ::deep .overview-grid > .overview-card,
+    ::deep .overview-grid > .overview-status-card {
+        grid-column: span 12;
+    }
+}
+
+/* Space between a parameter's tags card and the parameter overview below it. */
+.overview-parameter-tags {
+    margin-bottom: 14px;
+}
+
+::deep .overview-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    margin-bottom: 10px;
+}
+
+::deep .overview-card-header h2 {
+    margin: 0;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
+    /* Headings inherit a 40px line height from the global styles, which is too tall for a card header. */
+    line-height: 20px;
+}
+
+::deep .overview-card-count {
+    font-weight: var(--aspire-font-weight-semibold);
+}
+
+::deep .overview-card-link {
+    margin-inline-start: auto;
+    color: var(--colorBrandForegroundLink);
+    font-size: var(--aspire-font-size-body);
+    text-decoration: none;
+}
+
+::deep .overview-card-link:hover {
+    text-decoration: underline;
+}
+
+/* Card actions get a visible button surface so they read as buttons rather than decorative icons.
+   They stay short enough that the header remains as tall as its title. */
+::deep .overview-card-header .overview-card-action {
+    --aspire-control-height: 26px;
+    margin-block: -3px;
+}
+
+::deep .overview-card-header .overview-card-action::part(control) {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-radius-small);
+    background: var(--colorNeutralBackground1);
+}
+
+::deep .overview-card-header a.overview-card-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    text-decoration: none;
+}
+
+::deep .overview-card-header .overview-card-action:hover::part(control) {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+::deep .overview-card-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    margin-inline-start: auto;
+}
+
+/* Keep the header as tall as its title so the filter doesn't add space above the card content. */
+::deep .overview-card-actions .overview-card-filter {
+    width: 160px;
+    margin-block: -6px;
+}
+
+::deep .overview-show-more {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    width: 100%;
+    margin-top: 2px;
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
+    color: var(--colorBrandForegroundLink);
+    font: inherit;
+    font-size: var(--aspire-font-size-body);
+    text-align: start;
+    cursor: pointer;
+}
+
+::deep .overview-show-more:hover {
+    text-decoration: underline;
+}
+
+::deep .overview-show-more:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+    border-radius: var(--aspire-radius-small);
+}
+
+/* Match the density of the other card lists, and align the first column with the card header. */
+::deep .overview-card .overview-property-grid td {
+    font-size: var(--aspire-font-size-body);
+}
+
+::deep .overview-card .overview-property-grid td:first-child {
+    padding-inline-start: 0;
+}
+
+/* Remove the default cell padding on the value column so its mask/visualizer buttons
+   align with the card header's rightmost action button instead of sitting inset from it. */
+::deep .overview-card .overview-property-grid td:last-child {
+    padding-inline-end: 0;
+}
+
+::deep .overview-empty {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-height: 40px;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-body);
+}
+
+::deep .overview-mono {
+    font-family: var(--aspire-font-mono);
+    font-size: var(--aspire-font-size-secondary);
+}
+
+::deep .overview-state {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+}
+
+/* Status colors don't reach text contrast on every theme, so only the icon carries the state color. */
+::deep .overview-state.state-success svg {
+    color: var(--success);
+}
+
+::deep .overview-state.state-error svg {
+    color: var(--error);
+}
+
+::deep .overview-state.state-warning svg,
+::deep .overview-state.state-pending svg {
+    color: var(--warning);
+}
+
+::deep .overview-list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+::deep .overview-list li,
+::deep .overview-list-row-link {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    min-width: 0;
+    padding: 6px 0;
+}
+
+::deep .overview-list li {
+    border-top: 1px solid var(--colorNeutralStroke3);
+    font-size: var(--aspire-font-size-body);
+}
+
+::deep .overview-list li:first-child {
+    border-top: 0;
+}
+
+::deep .overview-list li:has(> .overview-list-row-link) {
+    padding: 0;
+    border-top-color: var(--property-grid-row-divider-color, var(--colorNeutralStroke3));
+}
+
+::deep .overview-list-row-link {
+    flex: 1;
+    color: inherit;
+    text-decoration: none;
+}
+
+::deep .overview-list-row-link:hover,
+::deep .overview-list-row-link:focus-visible {
+    background-color: var(--property-grid-row-hover-color);
+}
+
+::deep .overview-list-row-link:focus-visible {
+    outline-offset: -2px;
+}
+
+::deep .overview-list-label {
+    flex: 0 0 auto;
+    max-width: 40%;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Sized and bordered like .overview-card-action so these read as buttons rather than bare icons. */
+::deep .overview-list .overview-volume-action {
+    --aspire-control-height: 20px;
+    flex: 0 0 auto;
+}
+
+::deep .overview-list .overview-volume-action::part(control) {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-radius-small);
+    background: var(--colorNeutralBackground1);
+}
+
+::deep .overview-list .overview-volume-action:hover::part(control) {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+::deep .overview-list-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground1);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+::deep .overview-list-time {
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground2);
+    font-variant-numeric: tabular-nums;
+}
+
+::deep .overview-list .overview-endpoint {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    /* A different subgrid gap would expand the first track beyond its 30% cap. */
+    column-gap: inherit;
+    align-items: flex-start;
+    padding: 0;
+    border-top: 0;
+}
+
+::deep .overview-level {
+    display: inline-grid;
+    flex: 0 0 12px;
+    place-items: center;
+}
+
+::deep .overview-log-level-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--colorNeutralForeground3);
+}
+
+::deep .overview-log-level-dot[data-log-level="Information"] {
+    background-color: var(--colorPaletteBlueBorderActive);
+}
+
+::deep .overview-log-level-dot[data-log-level="Debug"] {
+    background-color: var(--success);
+}
+
+::deep .overview-dot {
+    display: inline-block;
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
+    margin: 0 2px;
+    border-radius: 50%;
+    background: var(--success);
+}
+
+::deep .overview-stats {
+    display: flex;
+    gap: 22px;
+    margin-bottom: 8px;
+}
+
+::deep .overview-stats:has(> a.overview-stat) {
+    flex-wrap: wrap;
+    gap: var(--aspire-space-2);
+    /* Offset the whole group so its scroll container doesn't clip the hover background. */
+    margin-inline-start: -2px;
+}
+
+::deep .overview-stats:has(> a.overview-stat) > .overview-stat {
+    padding: var(--aspire-space-1);
+}
+
+::deep .overview-stat {
+    display: flex;
+    flex-direction: column;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+::deep a.overview-stat {
+    box-sizing: border-box;
+    min-width: 35px;
+    border-radius: var(--aspire-control-radius);
+}
+
+::deep a.overview-stat:is(:hover, :focus-visible) {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep a.overview-stat:focus-visible {
+    outline-offset: -2px;
+}
+
+::deep .overview-stat-value {
+    font-family: var(--aspire-font-display);
+    font-size: var(--aspire-font-size-title);
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+}
+
+::deep .overview-stat-label {
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-secondary);
+}
+
+::deep .overview-stat.warning .overview-stat-value {
+    color: var(--warning);
+}
+
+::deep .overview-stat.error .overview-stat-value {
+    color: var(--error);
+}
+
+/* Metric instruments are compact tiles that flow into as many columns as the card width allows. */
+::deep .overview-metrics-empty {
+    flex-wrap: wrap;
+    gap: var(--aspire-space-1) var(--aspire-space-2);
+}
+
+/* ::deep so these also style the live tiles rendered by the LiveMetricTiles component. */
+::deep .overview-metric-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--aspire-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+::deep .overview-metric-tile {
+    --overview-metric-tile-padding-inline: 10px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px var(--overview-metric-tile-padding-inline);
+    border: 1px solid var(--property-grid-row-divider-color, var(--datagrid-border-color));
+    border-radius: var(--aspire-radius-medium);
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+::deep .overview-metric-tile:hover {
+    background-color: var(--property-grid-row-hover-color);
+}
+
+@media (max-width: 767px) {
+    .resource-overview {
+        padding: 0 12px 12px;
+    }
+}

@@ -2,80 +2,64 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Dashboard.Components.Controls;
-using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
-using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Otlp;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
-namespace Aspire.Dashboard.Components.Pages;
+namespace Aspire.Dashboard.Components.Controls.Overview;
 
 /// <summary>
-/// Summarizes the selected resource: its status, endpoints and relationships, a preview of recent console output and
+/// Summarizes an app model resource: its status, endpoints and relationships, a preview of recent console output and
 /// telemetry, and the complete resource details. Each summary links to the tab that shows the full data.
-/// When several resources are selected, it displays a summary card for each of them instead.
 /// </summary>
+/// <remarks>
+/// The instance is reused when navigating between resources, so the console and telemetry subscriptions follow
+/// <see cref="Resource"/>.
+/// </remarks>
 public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 {
     private const int ConsolePreviewLineCount = 10;
-    private const int RecentItemCount = 5;
-    private const int MetricsPreviewCount = 8;
-    // Matches the metrics page's default duration, so a tile's sparkline looks like the card it opens.
-    private static readonly TimeSpan s_metricsPreviewDuration = TimeSpan.FromMinutes(5);
 
-    // Telemetry can arrive many times per second. Coalesce updates so the overview queries the repository at most
-    // a couple of times per second.
-    private static readonly TimeSpan s_telemetryRefreshDelay = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan s_consoleRenderDelay = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan s_consoleLoadingTimeout = TimeSpan.FromSeconds(1);
 
-    private static readonly FieldTelemetryFilter s_failedTraceFilter = new() { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) };
-    private static readonly string s_serializedFailedTraceFilter = TelemetryFilterFormatter.SerializeFiltersToString([s_failedTraceFilter]);
-
     private readonly object _consoleLock = new();
     private readonly List<ConsolePreviewLine> _consoleLines = new();
-    private CancellationTokenSource? _resourceCts;
+    private CancellationTokenSource? _consoleCts;
     private string? _subscribedResourceName;
-    private ResourceKey? _telemetryKey;
-    private Subscription? _logsSubscription;
-    private Subscription? _tracesSubscription;
-    private Subscription? _metricsSubscription;
-    // Replaced when the selection changes, so a canceled refresh that hasn't observed its cancellation yet can't make
-    // the next resource's first refresh look like it's already pending.
-    private TelemetryRefreshGeneration _telemetryRefresh = new();
+    private ResourceViewModel? _telemetryResource;
+    private OverviewTelemetryLoader _telemetryLoader = default!;
 
     // Tests replace this to hold a refresh at the point where it can be canceled, because how soon a real delay handles
     // its cancellation depends on thread pool timing.
     internal Func<TimeSpan, CancellationToken, Task> TelemetryRefreshDelayAsync { get; set; } = Task.Delay;
-    internal Task TelemetryRefreshTask { get; private set; } = Task.CompletedTask;
+    internal Task TelemetryRefreshTask => _telemetryLoader.RefreshTask;
     private int _consoleRenderPending;
     private bool _hasConsoleLogs;
     private bool _consoleLogsLoaded;
-    private bool _telemetryLoaded;
-    private OverviewTelemetry? _telemetry;
-    private ResourcesLayout? _subscribedLayout;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
     private int? _terminalFontSize;
     private readonly EventCallback<TerminalToolbarState> _terminalToolbarStateChanged;
-    private bool _hideEmptyPanels = true;
 
     public ResourceOverview()
     {
         // The terminal reports toolbar state on every resize and connection change. A null receiver stops Blazor
-        // from re-rendering this whole page for each report; only a font change affects the window button.
+        // from re-rendering the whole overview for each report; only a font change affects the window button.
         _terminalToolbarStateChanged = new EventCallback<TerminalToolbarState>(null, (Func<TerminalToolbarState, Task>)OnTerminalToolbarStateChangedAsync);
     }
 
+    [Parameter, EditorRequired]
+    public required ResourceViewModel Resource { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether cards without content are hidden.
+    /// </summary>
     [Parameter]
-    public string? ResourceName { get; set; }
+    public bool HideEmptyPanels { get; set; }
 
     [CascadingParameter]
     public ResourcesLayout? ResourcesLayout { get; set; }
@@ -99,9 +83,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
-    public required IconResolver IconResolver { get; init; }
-
-    [Inject]
     public required IVolumePathLauncher VolumePathLauncher { get; init; }
 
     [Inject]
@@ -114,13 +95,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Dashboard.Resources.Resources> Loc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Dashboard.Resources.Columns> ColumnsLoc { get; init; }
-
-    [Inject]
     public required IStringLocalizer<Dashboard.Resources.ControlsStrings> ControlsStringsLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
 
     [Inject]
     public required IStringLocalizer<Dashboard.Resources.ConsoleLogs> ConsoleLogsLoc { get; init; }
@@ -134,12 +109,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
-    [Inject]
-    public required MetricPinStore PinStore { get; init; }
-
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
-
-    private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
     // A recording's terminal endpoint would resolve through the live dashboard client, and recorded instance names can
     // still match a running AppHost after a dashboard-only restart. Showing it would open a writable connection to a
@@ -162,241 +132,56 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         return InvokeAsync(StateHasChanged);
     }
 
-    private IReadOnlyList<IconToggleOption<bool>> PanelOptions =>
-    [
-        new(true, new AspireIcons.Size20.HideEmptyPanels(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewHideEmptyPanels)]),
-        new(false, new Icons.Regular.Size20.Grid(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowAllPanels)])
-    ];
-
-    private Task SetHideEmptyPanelsAsync(bool value)
-    {
-        _hideEmptyPanels = value;
-        return InvokeAsync(StateHasChanged);
-    }
-
     protected override async Task OnInitializedAsync()
     {
-        // The Metrics card lists pinned instruments, which can be changed from the card's charts.
-        PinStore.Changed += OnPinsChanged;
+        _telemetryLoader = new OverviewTelemetryLoader(
+            TelemetryRepository,
+            Logger,
+            InvokeAsync,
+            StateHasChanged,
+            (delay, cancellationToken) => TelemetryRefreshDelayAsync(delay, cancellationToken));
+
         TerminalDockState.Changed += OnTerminalDockStateChanged;
-        // Not awaited, so the console preview and other cards don't start a browser round trip later. The Metrics card
-        // re-renders through OnPinsChanged when the pins are read. The load never faults.
-        _ = PinStore.EnsureLoadedAsync();
 
         // The console preview hides lines removed with the console logs page's "Remove" action, which are stored
         // as filters in session storage.
         await ConsoleLogsManager.EnsureInitializedAsync();
         _consoleLogsFiltersChangedSubscription = ConsoleLogsManager.OnFiltersChanged(() => InvokeAsync(() =>
         {
-            if (_subscribedResourceName is { } resourceName)
-            {
-                StartConsoleSubscription(resourceName);
-
-                // Replacing the subscription cancels a refresh that's still waiting. Nothing else queues another one
-                // for a quiet resource, which would otherwise keep showing its loading skeleton.
-                QueueTelemetryRefresh(immediate: !_telemetryLoaded);
-            }
-
+            StartConsoleSubscription(Resource.Name);
             StateHasChanged();
         }));
     }
 
     protected override void OnParametersSet()
     {
-        if (!ReferenceEquals(_subscribedLayout, ResourcesLayout))
+        if (!string.Equals(_subscribedResourceName, Resource.Name, StringComparisons.ResourceName))
         {
-            _subscribedLayout?.ResourcesChanged -= OnResourcesChanged;
-            _subscribedLayout = ResourcesLayout;
-            _subscribedLayout?.ResourcesChanged += OnResourcesChanged;
+            StartConsoleSubscription(Resource.Name);
         }
 
-        EnsureSubscriptions();
+        // A resource's telemetry can start or stop arriving without its name changing, so the key is looked up again
+        // whenever the resource is updated.
+        var telemetryKey = TelemetryRepository.GetResourceByCompositeName(Resource.Name)?.ResourceKey;
+        if (!_telemetryLoader.SetKey(telemetryKey) && !ReferenceEquals(_telemetryResource, Resource))
+        {
+            _telemetryLoader.QueueRefresh();
+        }
+        _telemetryResource = Resource;
+
         UpdateDetails();
     }
 
-    private void OnPinsChanged()
-    {
-        _ = InvokeAsync(StateHasChanged);
-    }
-
-    private void OnResourcesChanged()
-    {
-        // A changed telemetry resource already starts its own first refresh.
-        if (!EnsureSubscriptions())
-        {
-            QueueTelemetryRefresh();
-        }
-        UpdateDetails();
-        StateHasChanged();
-    }
-
     /// <summary>
-    /// Starts console log and telemetry subscriptions for the selected resource, replacing subscriptions for a
-    /// previously selected resource. The page instance is reused when navigating between resources.
+    /// Replaces the console log subscription and clears the preview. Called when the resource changes, and when
+    /// console log filters change so removed lines disappear from the preview.
     /// </summary>
-    private bool EnsureSubscriptions()
+    private void StartConsoleSubscription(string resourceName)
     {
-        var resource = Resource;
-        var otlpResource = resource is not null ? TelemetryRepository.GetResourceByCompositeName(resource.Name) : null;
-
-        if (string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName) &&
-            Equals(_telemetryKey, otlpResource?.ResourceKey))
-        {
-            return false;
-        }
-
-        var resourceChanged = !string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName);
-        _subscribedResourceName = resource?.Name;
-
-        if (resourceChanged)
-        {
-            StartConsoleSubscription(resource?.Name);
-        }
-
-        _logsSubscription?.Dispose();
-        _tracesSubscription?.Dispose();
-        _metricsSubscription?.Dispose();
-        _logsSubscription = _tracesSubscription = _metricsSubscription = null;
-        _telemetry = null;
-        // Cleared whenever the telemetry key changes so the telemetry cards show their loading skeleton again
-        // instead of flashing the previous resource's stale data or popping in abruptly once the new data arrives.
-        _telemetryLoaded = false;
-        _telemetryKey = otlpResource?.ResourceKey;
-        _telemetryRefresh = new();
-
-        if (_telemetryKey is { } key)
-        {
-            _logsSubscription = TelemetryRepository.OnNewLogs(key, SubscriptionType.Other, OnTelemetryChangedAsync);
-            _tracesSubscription = TelemetryRepository.OnNewTraces(key, SubscriptionType.Other, OnTelemetryChangedAsync);
-            _metricsSubscription = TelemetryRepository.OnNewMetrics(key, SubscriptionType.Other, OnTelemetryChangedAsync);
-            QueueTelemetryRefresh(immediate: true);
-        }
-
-        return true;
-    }
-
-    private Task OnTelemetryChangedAsync() => InvokeAsync(() => QueueTelemetryRefresh());
-
-    private void QueueTelemetryRefresh(bool immediate = false)
-    {
-        var refresh = _telemetryRefresh;
-        if (_telemetryKey is not { } key)
-        {
-            return;
-        }
-
-        // Keep the gate on the render dispatcher through publication so a slower read cannot overwrite a newer one.
-        if (refresh.IsRunning)
-        {
-            refresh.RefreshRequested = true;
-            return;
-        }
-
-        refresh.IsRunning = true;
-        TelemetryRefreshTask = RefreshTelemetryAsync(refresh, key, immediate, _resourceCts?.Token ?? CancellationToken.None);
-    }
-
-    private async Task RefreshTelemetryAsync(TelemetryRefreshGeneration refresh, ResourceKey key, bool immediate, CancellationToken cancellationToken)
-    {
-        try
-        {
-            do
-            {
-                refresh.RefreshRequested = false;
-                try
-                {
-                    if (!immediate)
-                    {
-                        await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken);
-                    }
-                    immediate = false;
-                    if (!IsCurrentRefresh())
-                    {
-                        return;
-                    }
-
-                    // This read covers notifications that arrived during the delay.
-                    refresh.RefreshRequested = false;
-                    var telemetry = await Task.Run(() => LoadTelemetryAsync(key, cancellationToken), cancellationToken);
-                    if (!IsCurrentRefresh())
-                    {
-                        return;
-                    }
-
-                    _telemetry = telemetry;
-                    _telemetryLoaded = true;
-                    StateHasChanged();
-                }
-                catch (OperationCanceledException) when (!IsCurrentRefresh())
-                {
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning(ex, "Error loading telemetry summary for the resource overview.");
-                }
-            }
-            while (refresh.RefreshRequested && IsCurrentRefresh());
-        }
-        finally
-        {
-            refresh.IsRunning = false;
-        }
-
-        bool IsCurrentRefresh() => ReferenceEquals(_telemetryRefresh, refresh) && !cancellationToken.IsCancellationRequested;
-    }
-
-    private async Task<OverviewTelemetry> LoadTelemetryAsync(ResourceKey key, CancellationToken cancellationToken)
-    {
-        var repository = TelemetryRepository;
-
-        var logsTask = repository.GetOverviewLogsAsync([key], RecentItemCount, errorsOnly: false, cancellationToken);
-        var tracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([], RecentItemCount), cancellationToken);
-        var failedTracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([s_failedTraceFilter], 0), cancellationToken);
-        await Task.WhenAll(logsTask, tracesTask, failedTracesTask).ConfigureAwait(false);
-        var logs = await logsTask.ConfigureAwait(false);
-        var traces = (await tracesTask.ConfigureAwait(false)).PagedResult;
-        var failedTraces = (await failedTracesTask.ConfigureAwait(false)).PagedResult;
-
-        var instruments = repository.GetInstrumentSummaries(key)
-            .OrderBy(i => i.Parent.Name, StringComparer.Ordinal)
-            .ThenBy(i => i.Name, StringComparer.Ordinal)
-            .ToList();
-
-        var hasAttentionLogs = logs.ErrorCount + logs.WarningCount > 0;
-        return new OverviewTelemetry
-        {
-            LogCount = logs.TotalCount,
-            ErrorLogCount = logs.ErrorCount,
-            WarningLogCount = logs.WarningCount,
-            RecentAttentionLogs = hasAttentionLogs ? logs.Recent : [],
-            RecentLogs = hasAttentionLogs ? [] : logs.Recent,
-            TraceCount = traces.TotalItemCount,
-            FailedTraceCount = failedTraces.TotalItemCount,
-            RecentTraces = traces.Items.AsEnumerable().Reverse().ToList(),
-            Instruments = instruments
-        };
-
-        GetTracesRequest CreateTracesRequest(List<TelemetryFilter> filters, int count) => new()
-        {
-            ResourceKeys = [key],
-            StartIndex = 0,
-            Count = count,
-            LatestItemCount = count,
-            Filters = filters
-        };
-    }
-
-    /// <summary>
-    /// Replaces the console log subscription and clears the preview. Called when the selected resource changes, and
-    /// when console log filters change so removed lines disappear from the preview.
-    /// </summary>
-    private void StartConsoleSubscription(string? resourceName)
-    {
-        _resourceCts?.Cancel();
-        _resourceCts?.Dispose();
-        _resourceCts = null;
-        _telemetryRefresh = new();
+        _subscribedResourceName = resourceName;
+        _consoleCts?.Cancel();
+        _consoleCts?.Dispose();
+        _consoleCts = new CancellationTokenSource();
 
         lock (_consoleLock)
         {
@@ -405,11 +190,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             _consoleLogsLoaded = false;
         }
 
-        if (resourceName is not null)
-        {
-            _resourceCts = new CancellationTokenSource();
-            _ = SubscribeConsoleLogsAsync(resourceName, _resourceCts.Token);
-        }
+        _ = SubscribeConsoleLogsAsync(resourceName, _consoleCts.Token);
     }
 
     private async Task SubscribeConsoleLogsAsync(string resourceName, CancellationToken cancellationToken)
@@ -621,12 +402,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         }
     }
 
-    private sealed class TelemetryRefreshGeneration
-    {
-        public bool IsRunning;
-        public bool RefreshRequested;
-    }
-
     private sealed record EndpointGroup(DisplayedUrl Primary, DisplayedUrl? Secondary);
 
     /// <summary>
@@ -729,21 +504,13 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
         => DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
 
-    private Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command, ExecuteResourceCommandOptions options)
-        => DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName, options);
-
     public ValueTask DisposeAsync()
     {
-        _subscribedLayout?.ResourcesChanged -= OnResourcesChanged;
-        PinStore.Changed -= OnPinsChanged;
         TerminalDockState.Changed -= OnTerminalDockStateChanged;
 
-        _telemetryKey = null;
-        _resourceCts?.Cancel();
-        _resourceCts?.Dispose();
-        _logsSubscription?.Dispose();
-        _tracesSubscription?.Dispose();
-        _metricsSubscription?.Dispose();
+        _telemetryLoader?.Dispose();
+        _consoleCts?.Cancel();
+        _consoleCts?.Dispose();
         _consoleLogsFiltersChangedSubscription?.Dispose();
         return ValueTask.CompletedTask;
     }
@@ -753,126 +520,5 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private sealed record ConsolePreviewLine(int LineNumber, string Content, DateTimeOffset? Timestamp, bool IsError);
 
-    private sealed record SelectionGroup(string Title, List<string> Names);
-
-    // Common app model types come first in a fixed order; any other types follow alphabetically.
-    private static readonly string[] s_selectionGroupOrder = [KnownResourceTypes.Project, KnownResourceTypes.Container, KnownResourceTypes.Executable];
-
-    private List<SelectionGroup> GetSelectionGroups(IEnumerable<string> names)
-    {
-        var telemetryOnlyTitle = LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetryOnly)].Value;
-        return names
-            .GroupBy(name => ResourcesLayout is not null && ResourceViewModel.TryGetResourceByName(name, ResourcesLayout.ResourceByName, out var resource)
-                ? resource.ResourceType
-                : telemetryOnlyTitle, StringComparer.Ordinal)
-            .OrderBy(g => g.Key == telemetryOnlyTitle ? 1 : 0)
-            .ThenBy(g => Array.IndexOf(s_selectionGroupOrder, g.Key) is var index and >= 0 ? index : s_selectionGroupOrder.Length)
-            .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new SelectionGroup(g.Key, g.ToList()))
-            .ToList();
-    }
-
     private sealed record RelatedResource(ResourceViewModel Resource, string Type, bool IsIncoming);
-
-    private sealed class OverviewTelemetry
-    {
-        public required int LogCount { get; init; }
-        public required int ErrorLogCount { get; init; }
-        public required int WarningLogCount { get; init; }
-        public required List<OverviewLog> RecentAttentionLogs { get; init; }
-        public required List<OverviewLog> RecentLogs { get; init; }
-        public required int TraceCount { get; init; }
-        public required int FailedTraceCount { get; init; }
-        public required List<TraceSummary> RecentTraces { get; init; }
-        public required List<OtlpInstrumentSummary> Instruments { get; init; }
-    }
-
-    internal enum OverviewCard
-    {
-        Status,
-        Endpoints,
-        Relationships,
-        Console,
-        Logs,
-        Traces,
-        Metrics,
-        Properties,
-        Environment,
-        Volumes,
-        Health
-    }
-
-    /// <summary>
-    /// Packs cards into rows of a 12 column grid in page order. Each card requests a span based on its content, and the
-    /// spare columns at the end of a row are shared between that row's cards so rows never have trailing gaps.
-    /// Medium widths use a separate two-per-row packing where wide cards take the full row.
-    /// </summary>
-    internal sealed class OverviewCardLayout
-    {
-        private const int Columns = 12;
-
-        private readonly Dictionary<OverviewCard, int> _spans;
-        private readonly Dictionary<OverviewCard, int> _mediumSpans;
-
-        private OverviewCardLayout(Dictionary<OverviewCard, int> spans, Dictionary<OverviewCard, int> mediumSpans)
-        {
-            _spans = spans;
-            _mediumSpans = mediumSpans;
-        }
-
-        public static OverviewCardLayout Create(IReadOnlyList<(OverviewCard Card, int Span)> cards)
-        {
-            return new OverviewCardLayout(
-                Pack(cards),
-                Pack(cards.Select(c => (c.Card, c.Span >= 7 ? Columns : Columns / 2)).ToList()));
-        }
-
-        public string Style(OverviewCard card)
-        {
-            return string.Create(CultureInfo.InvariantCulture, $"--overview-span: {_spans.GetValueOrDefault(card, Columns)}; --overview-span-md: {_mediumSpans.GetValueOrDefault(card, Columns)}; --overview-card-height: {GetHeight(card)}px;");
-        }
-
-        // Bound scrollable content while allowing each grid row to fit its tallest card.
-        // Terminals use the console limit as their minimum interactive viewport instead.
-        private static int GetHeight(OverviewCard card) => card switch
-        {
-            OverviewCard.Status or OverviewCard.Endpoints or OverviewCard.Metrics => 260,
-            OverviewCard.Console or OverviewCard.Logs => 300,
-            OverviewCard.Traces or OverviewCard.Relationships => 300,
-            OverviewCard.Properties or OverviewCard.Environment => 340,
-            _ => 240
-        };
-
-        private static Dictionary<OverviewCard, int> Pack(IReadOnlyList<(OverviewCard Card, int Span)> cards)
-        {
-            var result = new Dictionary<OverviewCard, int>();
-            var row = new List<(OverviewCard Card, int Span)>();
-            var used = 0;
-
-            foreach (var (card, requested) in cards)
-            {
-                var span = Math.Clamp(requested, 1, Columns);
-                if (used + span > Columns)
-                {
-                    CompleteRow();
-                }
-                row.Add((card, span));
-                used += span;
-            }
-            CompleteRow();
-
-            return result;
-
-            void CompleteRow()
-            {
-                var spare = Columns - used;
-                for (var i = 0; i < row.Count; i++)
-                {
-                    result[row[i].Card] = row[i].Span + (spare / row.Count) + (i < spare % row.Count ? 1 : 0);
-                }
-                row.Clear();
-                used = 0;
-            }
-        }
-    }
 }

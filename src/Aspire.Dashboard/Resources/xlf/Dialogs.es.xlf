@@ -748,11 +748,6 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
         <target state="translated">Registros estructurados</target>
         <note />
       </trans-unit>
-      <trans-unit id="HelpDialogGoToTelemetrySources">
-        <source>Telemetry sources</source>
-        <target state="translated">Orígenes de telemetría</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
         <target state="translated">Terminales</target>

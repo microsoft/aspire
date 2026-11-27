@@ -27,8 +27,8 @@ Grouping adds no extra indentation; nested resources still indent under their pa
 Search matches group names as well as resources, and the grouping preference is remembered across navigation and reloads.
 Tag grouping replaces the separate Tags navigation entry; resources with multiple tags appear under each tag,
 with untagged resources initially listed last. Telemetry sources keep their ungrouped list.
-The **...** menu on each group header lists commands for that group's resources. Parameter commands are
-available on individual parameter rows, not as bulk actions.
+The **...** menu on a group header lists commands for that group's resources. Telemetry sources do not
+have an actions menu. Parameter commands are available on individual parameter rows, not as bulk actions.
 
 When search and filters are clear, drag a group's header handle to move the entire group, or focus its
 handle and press **Alt+Up** or **Alt+Down**. Group moves are saved per grouping mode in protected browser local storage.
@@ -141,12 +141,14 @@ The AppHost automatically configures the dashboard, but you can override values 
 
 ### Standalone dashboard
 
-The **Telemetry sources** navigation icon opens a dedicated sidebar for services sending OpenTelemetry data
-that aren't part of the AppHost model. This view is available in both standalone and AppHost mode; these services
-are not listed under **Resources**. AppHost resources keep their own logs, traces, and metrics tabs.
-Select one or more telemetry sources to view their logs, traces, and metrics, or select **All sources**
-for logs and traces from every telemetry-only source. AppHost-only views and actions,
-such as resource configuration, console logs, parameters, and terminals, are not shown.
+Services that send OpenTelemetry data but aren't part of the AppHost model are telemetry sources. With an AppHost,
+they're listed under **Resources** in a **Telemetry sources** section after the app's resources, and the resource type
+filter can hide them. Without an AppHost, the **Telemetry sources** navigation icon opens a sidebar that lists only
+telemetry sources. The standalone dashboard opens on the **Overview** of all sources: how many sources there are and the telemetry they
+send, live activity, insights, and recent problems. Select a telemetry source to view its overview, with the resource
+attributes it reports and a summary of its logs, traces, and metrics, or select one or more sources to view their logs,
+traces, and metrics. Select **All sources** for the telemetry of every telemetry-only source. AppHost-only views and
+actions, such as resource configuration, console logs, parameters, terminals, and the resource graph, are not shown.
 
 There are many ways to provide configuration:
 

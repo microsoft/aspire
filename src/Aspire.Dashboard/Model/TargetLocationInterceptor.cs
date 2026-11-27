@@ -10,20 +10,21 @@ internal static class TargetLocationInterceptor
 {
     public const string ResourcesPath = "/";
     public const string StructuredLogsPath = "/structuredlogs";
+    public const string OverviewPath = "/resources";
     public const string LegacyResourcesPath = "/legacy";
     public const string LegacyStructuredLogsPath = "/legacy/structuredlogs";
 
     /// <summary>
     /// Gets the page that replaces an app model page when there is no resource service, or null when the page doesn't
-    /// need the resource service. The previous experience keeps main's behavior: only its resources page, which
-    /// requires the resource service, goes to its structured logs page. That page is routed at both /legacy and
-    /// /legacy/resources.
+    /// need the resource service. Those pages go to the overview, which summarizes the telemetry sources. The previous
+    /// experience keeps main's behavior: only its resources page, which requires the resource service, goes to its
+    /// structured logs page. That page is routed at both /legacy and /legacy/resources.
     /// </summary>
     public static string? GetStandaloneLocation(string path)
     {
         if (IsResourceServicePath(path))
         {
-            return StructuredLogsPath;
+            return OverviewPath;
         }
 
         var trimmedPath = path.TrimEnd('/');
@@ -35,7 +36,8 @@ internal static class TargetLocationInterceptor
 
     /// <summary>
     /// Returns a value indicating whether the path is a page that displays the app model. These pages can't be shown
-    /// without a resource service, so they're redirected to structured logs.
+    /// without a resource service, so they're redirected to the overview. The overview itself, at /resources, summarizes
+    /// telemetry sources without a resource service.
     /// </summary>
     public static bool IsResourceServicePath(string path)
     {
@@ -47,8 +49,7 @@ internal static class TargetLocationInterceptor
         var trimmedPath = path.TrimStart('/');
         var firstSegment = trimmedPath.Split('/', 2)[0];
 
-        return string.Equals(firstSegment, DashboardUrls.ResourceOverviewBasePath, StringComparisons.UrlPath)
-            || (string.Equals(firstSegment, DashboardUrls.ParametersBasePath, StringComparisons.UrlPath) && trimmedPath.Length == firstSegment.Length)
+        return (string.Equals(firstSegment, DashboardUrls.ParametersBasePath, StringComparisons.UrlPath) && trimmedPath.Length == firstSegment.Length)
             || (string.Equals(firstSegment, DashboardUrls.GraphBasePath, StringComparisons.UrlPath) && trimmedPath.Length == firstSegment.Length);
     }
 

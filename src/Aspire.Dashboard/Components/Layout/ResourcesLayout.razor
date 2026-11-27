@@ -238,7 +238,7 @@
                  inert="@(_isPaneFullCanvas || _isPaneSelectionReveal || (!isDesktop && _isDrawerOpen))"
                  aria-hidden="@(_isPaneFullCanvas || _isPaneSelectionReveal || (!isDesktop && _isDrawerOpen) ? "true" : null)">
             <div class="resource-tab-body">
-                <CascadingValue Value="this" IsFixed="true" @key="IsTelemetryPane">
+                <CascadingValue Value="this" IsFixed="true">
                     @Body
                 </CascadingValue>
             </div>
@@ -337,16 +337,19 @@
                 <span class="resource-tag-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@groupName" /></span>
                 <span class="aspire-count-badge aspire-count-badge-compact resource-tag-count" aria-hidden="true">@resourceNames.Count</span>
             </a>
-            <div class="resource-tag-actions">
-                <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
-                                  ButtonClass="resource-tag-header-button resource-tag-action"
-                                  Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                                  ItemsProvider="@(() => GetPaneGroupMenuItems(groupKey, groupName, isTag: actionTag is not null))"
-                                  RefreshItemsWhileOpen="false"
-                                  Title="@(actionTag is not null
-                                      ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]
-                                      : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions), groupName])" />
-            </div>
+            @if (groupKey != TelemetrySectionKey)
+            {
+                <div class="resource-tag-actions">
+                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
+                                      ButtonClass="resource-tag-header-button resource-tag-action"
+                                      Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                                      ItemsProvider="@(() => GetPaneGroupMenuItems(groupKey, groupName, isTag: actionTag is not null))"
+                                      RefreshItemsWhileOpen="false"
+                                      Title="@(actionTag is not null
+                                          ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]
+                                          : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions), groupName])" />
+                </div>
+            }
             <FluentButton Appearance="ButtonAppearance.Transparent"
                           Class="@($"resource-tag-header-button resource-row-toggle {(isCollapsed ? "collapsed" : null)}")"
                           IconOnly="true"
@@ -405,13 +408,14 @@
         @foreach (var telemetryResource in rows)
         {
             var name = telemetryResource.Name;
+            var displayName = telemetryResource.DisplayName;
             var isSelected = IsSelected(name);
             var unavailableReason = GetTelemetryRowUnavailableReason(telemetryResource.Resource);
             <div class="resource-row resource-row-kind-telemetry @(isSelected ? "selected" : null) @(unavailableReason is not null ? "resource-row-unavailable" : null)" @key="@($"otlp:{name}")">
                 <a class="resource-row-link"
                    href="@GetRowUrl(name)"
                    aria-current="@GetRowAriaCurrent(isSelected)"
-                   aria-label="@name"
+                   aria-label="@displayName"
                    aria-description="@GetTelemetryRowAccessibilityDescription(telemetryResource.Resource, unavailableReason)"
                    data-tooltip="@unavailableReason"
                    data-resource-unavailable-reason="@unavailableReason"
@@ -420,12 +424,12 @@
                     <span class="resource-row-icon">
                         <FluentIcon Width="16px"
                                     Color="Color.Custom"
-                                    CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
+                                    CustomColor="@GetRowIconColor(displayName, unavailableReason is not null)"
                                     Value="@(new Icons.Regular.Size16.DataUsage())" />
                     </span>
                     <span class="resource-row-text">
                         <span class="resource-row-title">
-                            <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@name" /></span>
+                            <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@displayName" /></span>
                         </span>
                         @if (!IsCompact)
                         {
@@ -634,7 +638,7 @@
             <span class="resource-header-icon">
                 <FluentIcon Width="@iconWidth"
                             Color="Color.Custom"
-                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.Name)"
+                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.DisplayName)"
                             Value="@(new Icons.Regular.Size20.DataUsage())" />
             </span>
         }
@@ -704,7 +708,7 @@
         {
             <div class="resource-header-text">
                 <div class="resource-header-title">
-                    @{ RenderTitle(__builder, telemetryOnly.Name, isDesktop); }
+                    @{ RenderTitle(__builder, telemetryOnly.DisplayName, isDesktop); }
                 </div>
             </div>
         }
@@ -1128,10 +1132,7 @@
 
     private void RenderRowIcon(RenderTreeBuilder __builder, ResourceRowContext item)
     {
-        var iconColor = item.UnavailableReason is not null
-            ? "var(--colorNeutralForeground3)"
-            : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(item.Name)})";
-
+        var iconColor = GetRowIconColor(item.Name, item.UnavailableReason is not null);
         RenderResourceIcon(__builder, item.Resource, iconColor, "16px", IconSize.Size16);
     }
 

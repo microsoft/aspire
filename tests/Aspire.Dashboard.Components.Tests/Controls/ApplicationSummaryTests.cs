@@ -316,7 +316,7 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport).Add(p => p.Body, body =>
         {
-            body.OpenComponent<ResourceOverview>(0);
+            body.OpenComponent<Overview>(0);
             body.CloseComponent();
         }));
 
@@ -354,7 +354,7 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport).Add(p => p.Body, body =>
         {
-            body.OpenComponent<ResourceOverview>(0);
+            body.OpenComponent<Overview>(0);
             body.CloseComponent();
         }));
 

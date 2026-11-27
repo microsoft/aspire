@@ -748,11 +748,6 @@ Per altre informazioni sull'uso degli agenti basati sull'IA con la dashboard, in
         <target state="translated">Log strutturati</target>
         <note />
       </trans-unit>
-      <trans-unit id="HelpDialogGoToTelemetrySources">
-        <source>Telemetry sources</source>
-        <target state="translated">Origini della telemetria</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
         <target state="translated">Terminali</target>

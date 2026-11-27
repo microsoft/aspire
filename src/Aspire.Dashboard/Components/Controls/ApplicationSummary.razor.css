@@ -341,6 +341,14 @@
     font-size: var(--aspire-font-size-body);
 }
 
+/* The telemetry setup note's two sentences share a line in the header, wrapping only when it's narrow. Blazor drops
+   the whitespace between them, so the gap stands in for the space. */
+.home-telemetry-sources ::deep .telemetry-help-message {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 0.25em;
+}
+
 .home-health-bar {
     display: flex;
     gap: 2px;

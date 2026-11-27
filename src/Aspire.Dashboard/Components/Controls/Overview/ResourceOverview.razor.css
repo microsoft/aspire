@@ -1,0 +1,123 @@
+.overview-badge {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-caption);
+}
+
+.overview-badge.overview-volume-type {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+}
+
+.overview-console-paused {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    margin-top: 8px;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-secondary);
+}
+
+.overview-endpoints {
+    display: grid;
+    grid-template-columns: fit-content(30%) minmax(0, 1fr);
+    gap: var(--aspire-space-1) var(--aspire-space-3);
+}
+
+.overview-endpoint .overview-list-label {
+    min-width: 0;
+    max-width: none;
+    color: var(--colorNeutralForeground3);
+}
+
+.overview-endpoint-value {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--aspire-space-2);
+    min-width: 0;
+}
+
+.overview-endpoint-addresses {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+}
+
+.overview-endpoint-address {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-endpoint-name {
+    color: var(--colorNeutralForeground1);
+    overflow-wrap: anywhere;
+}
+
+a.overview-endpoint-address,
+a.overview-endpoint-name,
+.overview-endpoint a.overview-list-label {
+    color: var(--colorBrandForegroundLink);
+    text-decoration: none;
+}
+
+a.overview-endpoint-address:hover,
+a.overview-endpoint-name:hover,
+.overview-endpoint a.overview-list-label:hover {
+    text-decoration: underline;
+}
+
+/* The console output fills the card so it lines up with taller cards in the same row. */
+.overview-console {
+    flex: 1 1 auto;
+    overflow: hidden;
+    padding: 8px 10px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--console-background-color, #1b1b1b);
+    color: var(--console-foreground-color, #e6e6e6);
+    font-family: var(--aspire-font-mono);
+    font-size: var(--aspire-font-size-secondary);
+    line-height: 1.6;
+}
+
+.overview-terminal {
+    /* A terminal's canvas must not determine its row height; it fills the row's stable minimum viewport. */
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--terminal-background, var(--colorNeutralBackground1));
+}
+
+.overview-terminal ::deep .terminal-view,
+.overview-terminal ::deep .terminal-frame {
+    height: 100%;
+}
+
+.overview-terminal ::deep .terminal-footer {
+    display: none;
+}
+
+.overview-console-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-console-line.error {
+    color: #ff8a8a;
+}
+
+.overview-console-time {
+    margin-inline-end: 8px;
+    color: #8a8a8a;
+}
+
+.overview-relationships-card ::deep .relationship-graph {
+    flex: 0 1 auto;
+}

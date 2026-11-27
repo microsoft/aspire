@@ -42,7 +42,7 @@ public sealed partial class SqliteTelemetryRepository
         foreach (var batch in records.Chunk(MaxTraceBatchSize))
         {
             var tracesById = MaterializeTraces(connection, batch.Select(record => record.TraceId).ToArray(), transaction);
-            traces.AddRange(batch.Select(record => tracesById[record.TraceId]));
+            traces.AddRange(batch.Select(record => tracesById.GetValueOrDefault(record.TraceId)).OfType<OtlpTrace>());
         }
         return new GetTracesResponse
         {
@@ -180,28 +180,14 @@ public sealed partial class SqliteTelemetryRepository
             new(resourceName, instanceId, uninstrumentedPeer, _otlpContext);
     }
 
-    private static TraceQuery BuildTraceQuery(SqliteConnection connection, SqliteTransaction? transaction, GetTracesRequest context)
+    private TraceQuery BuildTraceQuery(SqliteConnection connection, SqliteTransaction? transaction, GetTracesRequest context)
     {
         var sql = new StringBuilder("FROM telemetry_traces t WHERE 1 = 1");
         var parameters = new DynamicParameters();
-        string? resourcePredicate = null;
-        if (context.ResourceKeys.Count > 0)
+        var resourceIds = GetResourceIdSqlList(context.ResourceKeys);
+        if (resourceIds is not null)
         {
-            var resourcePredicates = new List<string>(context.ResourceKeys.Count);
-            for (var index = 0; index < context.ResourceKeys.Count; index++)
-            {
-                var key = context.ResourceKeys[index];
-                parameters.Add($"ResourceName{index}", key.Name);
-                var predicate = $"r.resource_name = @ResourceName{index} COLLATE NOCASE";
-                if (key.InstanceId is not null)
-                {
-                    parameters.Add($"InstanceId{index}", key.InstanceId);
-                    predicate += $" AND r.instance_id = @InstanceId{index} COLLATE NOCASE";
-                }
-                resourcePredicates.Add($"({predicate})");
-            }
-            resourcePredicate = string.Join(" OR ", resourcePredicates);
-            sql.Append(CultureInfo.InvariantCulture, $" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr JOIN telemetry_resources r ON r.resource_id = tr.resource_id WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND ({resourcePredicate}))");
+            sql.Append(CultureInfo.InvariantCulture, $" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND tr.resource_id IN {resourceIds})");
         }
         if (!string.IsNullOrWhiteSpace(context.TraceNameFilterText))
         {
@@ -264,8 +250,8 @@ public sealed partial class SqliteTelemetryRepository
         {
             // "All resources" can also arrive as explicit keys. Check coverage using resource metadata so that
             // only a selection that excludes trace sources takes the trace-first path.
-            var excludesTraceSources = resourcePredicate is not null && connection.QuerySingle<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM telemetry_resources r WHERE r.has_traces = 1 AND ({resourcePredicate}) IS NOT TRUE);
+            var excludesTraceSources = resourceIds is not null && connection.QuerySingle<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM telemetry_resources r WHERE r.has_traces = 1 AND r.resource_id NOT IN {resourceIds});
                 """, parameters, transaction);
             if (excludesTraceSources)
             {
@@ -529,27 +515,36 @@ public sealed partial class SqliteTelemetryRepository
             ORDER BY p.start_time_ticks DESC;
             """, query.Parameters).AsList();
 
+        var items = new List<RequestSpanSummary>(records.Count);
+        foreach (var record in records)
+        {
+            // A resource can be deleted after the rows are read, invalidating its cached metadata.
+            if (record.ResourceId is not { } resourceId || GetCachedResource(resourceId) is not { } resource)
+            {
+                continue;
+            }
+
+            items.Add(new RequestSpanSummary
+            {
+                Resource = resource,
+                TraceId = record.TraceId!,
+                Name = record.Name!,
+                StartTime = new DateTime(record.StartTimeTicks!.Value, DateTimeKind.Utc),
+                Duration = TimeSpan.FromTicks(record.EndTimeTicks!.Value - record.StartTimeTicks.Value),
+                Status = (OtlpSpanStatusCode)record.Status!.Value,
+                HttpRoute = record.HttpRoute,
+                HttpMethod = record.HttpMethod
+            });
+        }
+
         return new GetRequestSpansResponse
         {
             TotalItemCount = records[0].TotalItemCount,
-            Items = records
-                .Where(record => record.ResourceId is not null)
-                .Select(record => new RequestSpanSummary
-                {
-                    Resource = GetCachedResource(record.ResourceId!.Value)!,
-                    TraceId = record.TraceId!,
-                    Name = record.Name!,
-                    StartTime = new DateTime(record.StartTimeTicks!.Value, DateTimeKind.Utc),
-                    Duration = TimeSpan.FromTicks(record.EndTimeTicks!.Value - record.StartTimeTicks.Value),
-                    Status = (OtlpSpanStatusCode)record.Status!.Value,
-                    HttpRoute = record.HttpRoute,
-                    HttpMethod = record.HttpMethod
-                })
-                .ToList()
+            Items = items
         };
     }
 
-    private static TraceQuery BuildSpanQuery(GetSpansRequest context)
+    private TraceQuery BuildSpanQuery(GetSpansRequest context)
     {
         var sql = new StringBuilder("""
             FROM telemetry_spans s
@@ -575,26 +570,10 @@ public sealed partial class SqliteTelemetryRepository
             sql.AppendJoin(" OR ", identityPredicates);
             sql.Append(')');
         }
-        if (context.ResourceKeys.Count > 0)
+        if (GetResourceIdSqlList(context.ResourceKeys) is { } resourceIds)
         {
-            var predicates = new List<string>(context.ResourceKeys.Count);
-            for (var index = 0; index < context.ResourceKeys.Count; index++)
-            {
-                var key = context.ResourceKeys[index];
-                parameters.Add($"SpanResourceName{index}", key.Name);
-                var source = $"r.resource_name = @SpanResourceName{index} COLLATE NOCASE";
-                var peer = $"pr.resource_name = @SpanResourceName{index} COLLATE NOCASE";
-                if (key.InstanceId is not null)
-                {
-                    parameters.Add($"SpanInstanceId{index}", key.InstanceId);
-                    source += $" AND r.instance_id = @SpanInstanceId{index} COLLATE NOCASE";
-                    peer += $" AND pr.instance_id = @SpanInstanceId{index} COLLATE NOCASE";
-                }
-                predicates.Add($"(({source}) OR ({peer}))");
-            }
-            sql.Append(" AND (");
-            sql.AppendJoin(" OR ", predicates);
-            sql.Append(')');
+            // A span matches a resource when the resource sent it or is its uninstrumented peer.
+            sql.Append(CultureInfo.InvariantCulture, $" AND (s.resource_id IN {resourceIds} OR s.uninstrumented_peer_resource_id IN {resourceIds})");
         }
         if (!string.IsNullOrEmpty(context.TraceId))
         {
@@ -922,9 +901,16 @@ public sealed partial class SqliteTelemetryRepository
             var traceId = traceRecords.Key;
             var firstRecord = traceRecords.First();
             var trace = new OtlpTrace(Convert.FromHexString(traceId), new DateTime(firstRecord.LastUpdatedTimestampTicks, DateTimeKind.Utc));
+            var complete = true;
             foreach (var record in traceRecords)
             {
-                var (_, view, scope) = GetCachedTelemetryMetadata(record.ResourceId, record.ResourceViewId, record.ScopeId, CachedTelemetryType.Traces);
+                // A resource can be deleted after the rows are read, invalidating its cached metadata. Deleting a
+                // resource's telemetry removes whole traces, so skip the trace rather than return it with missing spans.
+                if (GetCachedTelemetryMetadata(record.ResourceId, record.ResourceViewId, record.ScopeId, CachedTelemetryType.Traces) is not (_, var view, var scope))
+                {
+                    complete = false;
+                    break;
+                }
 
                 var modelSpan = new OtlpSpan(view, trace, scope)
                 {
@@ -955,7 +941,10 @@ public sealed partial class SqliteTelemetryRepository
                 }));
                 trace.AddSpan(modelSpan, skipLastUpdatedDate: true);
             }
-            traces.Add(traceId, trace);
+            if (complete)
+            {
+                traces.Add(traceId, trace);
+            }
         }
         return traces;
 

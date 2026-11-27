@@ -72,6 +72,34 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task TelemetrySourceRow_OnConsoleLogs_IsUnavailableAndStaysOnConsoleLogs()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        await TelemetryHelpSetupHelpers.AddSignalAsync(Services.GetRequiredService<SqliteTelemetryRepository>(), AspireDataType.StructuredLogs);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/consolelogs");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-row-kind-telemetry")));
+        await UseComfortableDensityAsync(cut);
+
+        var row = cut.Find(".resource-row-kind-telemetry");
+        var link = row.QuerySelector(".resource-row-link")!;
+        Assert.True(row.ClassList.Contains("resource-row-unavailable"));
+        Assert.Equal(Resources.Layout.ResourcePaneTelemetrySourceNoConsoleLogs, link.GetAttribute("data-resource-unavailable-reason"));
+        Assert.Equal("/consolelogs/resource/test", link.GetAttribute("href"));
+
+        await link.ClickAsync();
+        cut.Render();
+
+        Assert.Equal("consolelogs/resource/test", navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.Equal(["test"], cut.Instance.SelectedResourceNames);
+        Assert.Equal("test", cut.Instance.SelectedTelemetryOnlyResource?.Name);
+    }
+
+    [Fact]
     public async Task CompactDensity_UnavailableRowKeepsReasonWithoutBadge()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

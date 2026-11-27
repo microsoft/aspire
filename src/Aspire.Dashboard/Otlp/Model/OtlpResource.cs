@@ -64,6 +64,20 @@ public class OtlpResource : IOtlpResource
 
     internal List<OtlpResourceView> GetViews() => _resourceViews.Values.ToList();
 
+    /// <summary>
+    /// Gets the resource identity attributes and the distinct attributes reported across its views, ordered by
+    /// key and then value. A key with a different value in another view is returned once for each value.
+    /// </summary>
+    internal List<KeyValuePair<string, string>> GetAttributes() =>
+        _resourceViews.Values
+            .SelectMany(view => view.Properties)
+            .Append(new(SERVICE_NAME, ResourceName))
+            .Concat(InstanceId is { } instanceId ? [new(SERVICE_INSTANCE_ID, instanceId)] : [])
+            .Distinct()
+            .OrderBy(attribute => attribute.Key, StringComparers.OtlpAttribute)
+            .ThenBy(attribute => attribute.Value, StringComparer.Ordinal)
+            .ToList();
+
     internal OtlpResourceView GetView(RepeatedField<KeyValue> attributes)
     {
         return GetView(new OtlpResourceView(this, attributes));

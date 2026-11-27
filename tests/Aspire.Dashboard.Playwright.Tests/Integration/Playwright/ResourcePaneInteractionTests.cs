@@ -40,7 +40,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
 
         await RunTestAsync(async page =>
         {
-            await page.GotoAsync(DashboardUrls.TelemetrySourcesUrl());
+            await page.GotoAsync(DashboardUrls.StructuredLogsUrl());
 
             var pane = page.Locator(".resource-pane");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "resource-a", Exact = true })).ToBeVisibleAsync();
@@ -276,7 +276,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
                     """);
             }
             await page.SetViewportSizeAsync(1280, 900);
-            await page.GotoAsync(DashboardUrls.AddTelemetryPane(DashboardUrls.StructuredLogsUrl(resource: "multi-a")));
+            await page.GotoAsync(DashboardUrls.StructuredLogsUrl(resource: "multi-a"));
 
             // Read the browser, not the test host: iPadOS desktop mode reports MacIntel.
             var usesCommand = await page.EvaluateAsync<bool>("""

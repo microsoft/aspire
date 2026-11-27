@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
@@ -12,9 +11,9 @@ namespace Aspire.Dashboard.Components.Layout;
 
 /// <summary>
 /// The top-level navigation displayed across the top of the desktop layout. With a resource
-/// service the dashboard is organized around the resource selection and
-/// telemetry is reached from the pages of a resource selection. Telemetry-only services have a separate section
-/// in both AppHost and standalone mode.
+/// service the dashboard is organized around the resource selection, which includes telemetry-only services, and
+/// telemetry is reached from the pages of a resource selection. Standalone, the navigation has a single telemetry
+/// section.
 /// </summary>
 public partial class DesktopNavMenu : ComponentBase, IDisposable
 {
@@ -66,31 +65,13 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
-    [Inject]
-    public required ResourcePaneState ResourcePaneState { get; init; }
-
     private NavSection _activeSection;
 
     protected override void OnInitialized()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
-        ResourcePaneState.Changed += OnResourcePaneChanged;
         _activeSection = GetSection(NavigationManager.ToBaseRelativePath(NavigationManager.Uri), DashboardClient.IsEnabled);
     }
-
-    private void OnResourcePaneChanged()
-    {
-        if (_activeSection == NavSection.Resources)
-        {
-            _ = InvokeAsync(StateHasChanged);
-        }
-    }
-
-    // Telemetry-source pages share the resource routes, so the pane determines their navigation highlight.
-    private NavSection GetDisplayedSection() =>
-        _activeSection == NavSection.Resources && ResourcePaneState.Mode == ResourcePaneMode.Telemetry
-            ? NavSection.Telemetry
-            : _activeSection;
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
@@ -106,14 +87,9 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     internal static string GetSelectionPageUrl(NavigationManager navigationManager, ResourceTab tab)
     {
         var path = navigationManager.ToBaseRelativePath(navigationManager.Uri);
-        if (tab == ResourceTab.Overview && ResourcesLayout.ParsePaneMode(path) == ResourcePaneMode.Telemetry)
-        {
-            return DashboardUrls.ResourceListUrl();
-        }
-
         IReadOnlyList<string> resourceNames = [];
         string? routeResourceName = null;
-        if (GetSection(path, hasResourceService: true) is NavSection.Resources or NavSection.Telemetry)
+        if (GetSection(path, hasResourceService: true) is NavSection.Resources)
         {
             var location = ResourcesLayout.ParseLocation(path);
             resourceNames = location.SelectedResourceNames;
@@ -126,10 +102,7 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
             return DashboardUrls.ResourceListUrl();
         }
 
-        var url = ResourcesLayout.GetTabUrl(tab, resourceNames, routeResourceName);
-        return ResourcesLayout.ParsePaneMode(path) == ResourcePaneMode.Telemetry && tab is not (ResourceTab.Overview or ResourceTab.Console)
-            ? DashboardUrls.AddTelemetryPane(url)
-            : url;
+        return ResourcesLayout.GetTabUrl(tab, resourceNames, routeResourceName);
     }
 
     private IEnumerable<NavItem> GetItems()
@@ -137,10 +110,14 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         if (DashboardClient.IsEnabled)
         {
             // The pages of a selection (overview, console logs, structured logs, traces and metrics) are icons at the
-            // top of the resources view, so the app navigation has a single entry for them.
+            // top of the resources view, so the app navigation has a single entry for them. Telemetry sources are
+            // listed with the app's resources.
             yield return new NavItem(NavSection.Resources, GetSelectionPageUrl(NavigationManager, ResourceTab.Overview), Loc[nameof(Resources.Layout.NavMenuResourcesTab)], ResourcesIcon(), ResourcesIcon(active: true));
         }
-        yield return new NavItem(NavSection.Telemetry, DashboardUrls.TelemetrySourcesUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true));
+        else
+        {
+            yield return new NavItem(NavSection.Telemetry, DashboardUrls.StructuredLogsUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true));
+        }
     }
 
     /// <summary>
@@ -148,11 +125,6 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     /// </summary>
     internal static NavSection GetSection(string baseRelativePath, bool hasResourceService)
     {
-        if (ResourcesLayout.ParsePaneMode(baseRelativePath) == ResourcePaneMode.Telemetry)
-        {
-            return NavSection.Telemetry;
-        }
-
         var path = baseRelativePath;
         var queryIndex = path.IndexOfAny(['?', '#']);
         if (queryIndex >= 0)
@@ -166,6 +138,9 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         {
             return firstSegment switch
             {
+                // The root URL redirects to the overview, which summarizes the telemetry sources.
+                "" or
+                DashboardUrls.ResourceOverviewBasePath or
                 DashboardUrls.StructuredLogsBasePath or
                 DashboardUrls.TracesBasePath or
                 DashboardUrls.MetricsBasePath => NavSection.Telemetry,
@@ -196,7 +171,6 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
-        ResourcePaneState.Changed -= OnResourcePaneChanged;
     }
 
     internal enum NavSection

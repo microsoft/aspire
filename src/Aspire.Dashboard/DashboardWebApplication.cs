@@ -147,9 +147,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Login))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Metrics))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(NotFound))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Overview))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ParametersRedirect))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ResourceOverview))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Resources))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(StructuredLogs))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Terminals))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TerminalWindow))]
@@ -571,7 +570,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         });
 
-        // Redirect browser directly to /structuredlogs address if the dashboard is running without a resource service.
+        // Redirect standalone app-model requests to the overview, or to structured logs for the legacy UI.
         // This is done to avoid immediately navigating in the Blazor app.
         // Only redirect frontend requests. OTLP-only endpoints don't serve the UI, so a redirect there points to a 404.
         _app.Use(async (context, next) =>

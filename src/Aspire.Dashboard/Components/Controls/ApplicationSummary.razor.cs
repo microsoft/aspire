@@ -81,6 +81,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [Parameter]
     public IReadOnlyList<ResourceKey>? TelemetryResourceKeys { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the summarized resources are telemetry sources rather than resources of the app model,
+    /// as they are without an app host or when only telemetry sources are selected. Telemetry sources have no state or
+    /// relationships, so the header counts the sources instead of summarizing resource health, and there's no graph.
+    /// </summary>
+    [Parameter]
+    public bool IsTelemetrySourceSummary { get; set; }
+
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
@@ -124,6 +132,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Dashboard.Resources.Dialogs> DialogsLoc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
+
+    [Inject]
     public required IJSRuntime JS { get; init; }
 
     [Inject]
@@ -156,7 +167,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
                 .Select(resource => resource.Name));
 
-    private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
+    private bool ShowsMovingActivityWindow => CurrentGroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
+
+    // Telemetry sources have no relationships to draw, so their summary never shows the graph, whatever was chosen
+    // for the app's resources.
+    private GroupOverview CurrentGroupOverview => IsTelemetrySourceSummary ? GroupOverview.Summary : ViewPreferences.GroupOverview;
 
     private string GetActivityBucketTracesUrl(DateTime bucketStart)
     {
@@ -179,16 +194,18 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         TagStore.Changed += OnTagsChanged;
         await TagStore.EnsureLoadedAsync();
 
-        if (!DashboardClient.IsEnabled)
-        {
-            return;
-        }
-
         _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
         _logsSubscription = TelemetryRepository.OnNewLogs(null, SubscriptionType.Other, OnTelemetryChanged);
         _tracesSubscription = TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, OnTelemetryChanged);
         _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
         _activityRefreshTask = RefreshActivityPeriodicallyAsync(_cts.Token);
+
+        // Without an app host, every resource is a telemetry source and there's no resource service to subscribe to.
+        if (!DashboardClient.IsEnabled)
+        {
+            _isLoaded = true;
+            return;
+        }
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
         foreach (var resource in snapshot)
@@ -224,7 +241,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_isDisposing || ViewPreferences.GroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
+        if (_isDisposing || CurrentGroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
         {
             return;
         }
@@ -301,7 +318,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
 
         var previousRefresh = _telemetryRefresh;
-        var showSummary = ViewPreferences.GroupOverview == GroupOverview.Summary;
+        var showSummary = CurrentGroupOverview == GroupOverview.Summary;
         if (!scopeChanged && showSummary == (previousRefresh is not null))
         {
             return;
@@ -642,6 +659,28 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         names.Contains(GetResourceName(resource), StringComparers.ResourceName) ||
         names.Contains(resource.Name, StringComparers.ResourceName);
 
+    /// <summary>
+    /// Gets the telemetry sources the summary covers. Uninstrumented peers, such as a database that only appears in
+    /// other resources' traces, don't send telemetry, so they aren't sources.
+    /// </summary>
+    private List<OtlpResource> GetTelemetrySources()
+    {
+        var sources = TelemetryRepository.GetResources();
+        if (TelemetryResourceKeys is not { } keys)
+        {
+            return sources;
+        }
+
+        return sources.Where(source => keys.Contains(source.ResourceKey)).ToList();
+    }
+
+    private string GetTelemetrySourcesHeadline(int count) => count switch
+    {
+        0 => Loc[nameof(Dashboard.Resources.Resources.HomeNoTelemetry)],
+        1 => LayoutLoc[nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular), count],
+        _ => LayoutLoc[nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural), count]
+    };
+
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
     private void NavigateToResource(ResourceViewModel resource) => NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)));
@@ -729,7 +768,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private async Task UpdateResourceGraphResourcesAsync()
     {
-        if (ViewPreferences.GroupOverview != GroupOverview.Graph || !_graphInitialized || _jsModule is null)
+        if (CurrentGroupOverview != GroupOverview.Graph || !_graphInitialized || _jsModule is null)
         {
             return;
         }
@@ -1007,16 +1046,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
     }
 
-    private enum HealthBucket
-    {
-        Attention,
-        Pending,
-        Running,
-        Finished,
-        NotStarted,
-        Unknown
-    }
-
     private readonly record struct HealthSummary(int Total, int Running, int Pending, int Attention, int Finished, int NotStarted, int Unknown, DateTime? StartedAt, int MissingParameters);
 
     private sealed class HomeActivity
@@ -1078,4 +1107,16 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         public required List<TraceSummary> RecentFailedTraces { get; init; }
         public required int InstrumentCount { get; init; }
     }
+}
+
+// Keep this enum outside the component so Blazor's OpenComponent does not preserve its
+// inherited Enum.GetValues(Type), which requires dynamic code under Native AOT.
+internal enum HealthBucket
+{
+    Attention,
+    Pending,
+    Running,
+    Finished,
+    NotStarted,
+    Unknown
 }

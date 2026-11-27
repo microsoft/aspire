@@ -592,14 +592,14 @@
         <target state="translated">Expandir ou recolher {0}</target>
         <note>{0} is the group name</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneTelemetryOnly">
+      <trans-unit id="ResourcePaneTelemetryOnlyGroup">
         <source>Telemetry sources</source>
         <target state="translated">Fontes de telemetria</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneTelemetryOnlyGroup">
-        <source>Telemetry sources</source>
-        <target state="translated">Fontes de telemetria</target>
+      <trans-unit id="ResourcePaneTelemetrySourceNoConsoleLogs">
+        <source>Telemetry sources do not produce console logs.</source>
+        <target state="new">Telemetry sources do not produce console logs.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneUntaggedGroup">

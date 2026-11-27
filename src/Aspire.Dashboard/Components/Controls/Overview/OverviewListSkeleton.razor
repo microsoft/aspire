@@ -1,0 +1,22 @@
+@* Reuses the exact same CSS classes as the real Logs/Traces stats+list body so the skeleton occupies
+   identical space to the content that replaces it once telemetry finishes loading. This is what prevents
+   the overview grid from visibly reflowing a moment after the rest of the page has already settled. *@
+<div class="overview-stats" aria-hidden="true">
+    @for (var i = 0; i < StatCount; i++)
+    {
+        <div class="overview-stat">
+            <span class="overview-stat-value"><FluentSkeleton Width="28px" Height="22px" Shimmer="true" /></span>
+            <span class="overview-stat-label"><FluentSkeleton Width="48px" Height="12px" Shimmer="true" /></span>
+        </div>
+    }
+</div>
+<ul class="overview-list" aria-hidden="true">
+    @for (var i = 0; i < RowCount; i++)
+    {
+        <li>
+            <span class="overview-level"><FluentSkeleton Width="12px" Height="12px" Shimmer="true" /></span>
+            <span class="overview-list-value"><FluentSkeleton Width="60%" Height="12px" Shimmer="true" /></span>
+            <span class="overview-list-time"><FluentSkeleton Width="32px" Height="12px" Shimmer="true" /></span>
+        </li>
+    }
+</ul>

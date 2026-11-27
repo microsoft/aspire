@@ -455,6 +455,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     private bool IsMissingResourceSelected() => _missingResource is not null && PageViewModel.SelectedResource == _missingResource;
 
+    private bool IsTelemetryOnlySourceSelected => ResourcesLayout?.SelectedTelemetryOnlyResource is not null;
+
     private void SetStatus(ConsoleLogsViewModel viewModel, string statusName)
     {
         Logger.LogDebug("Setting status to '{StatusName}'.", statusName);

@@ -27,6 +27,11 @@
         <target state="translated">Protokolle noch nicht verfügbar</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNoLogsForTelemetrySource">
+        <source>No console logs for the selected telemetry source</source>
+        <target state="new">No console logs for the selected telemetry source</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsFound">
         <source>No logs found</source>
         <target state="translated">Keine Protokolle gefunden</target>

@@ -139,6 +139,9 @@
   <data name="ConsoleLogsNoLogsMatchFilter" xml:space="preserve">
     <value>No logs match the filter</value>
   </data>
+  <data name="ConsoleLogsNoLogsForTelemetrySource" xml:space="preserve">
+    <value>No console logs for the selected telemetry source</value>
+  </data>
   <data name="ConsoleLogsTextFilter" xml:space="preserve">
     <value>Console logs filter</value>
   </data>

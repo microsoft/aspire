@@ -592,14 +592,14 @@
         <target state="translated">Rozwiń lub zwiń {0}</target>
         <note>{0} is the group name</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneTelemetryOnly">
+      <trans-unit id="ResourcePaneTelemetryOnlyGroup">
         <source>Telemetry sources</source>
         <target state="translated">Źródła telemetrii</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneTelemetryOnlyGroup">
-        <source>Telemetry sources</source>
-        <target state="translated">Źródła telemetrii</target>
+      <trans-unit id="ResourcePaneTelemetrySourceNoConsoleLogs">
+        <source>Telemetry sources do not produce console logs.</source>
+        <target state="new">Telemetry sources do not produce console logs.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneUntaggedGroup">

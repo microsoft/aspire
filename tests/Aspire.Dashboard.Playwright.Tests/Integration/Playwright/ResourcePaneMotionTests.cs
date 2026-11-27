@@ -180,7 +180,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                                     nav.x, nav.y, nav.width, nav.height, toolbar.y, toolbar.height]);
                                 window.selectionRevealTitles.push(layout.querySelector('h1.resource-title')?.textContent.trim());
                                 window.selectionRevealResources.push(layout.querySelector('.resource-overview')?.dataset.resourceName);
-                                window.selectionRevealSubscriptions.push(layout.querySelector('.resource-overview')?.dataset.resourceSubscription);
+                                window.selectionRevealSubscriptions.push(layout.querySelector('.resource-overview [data-resource-subscription]')?.dataset.resourceSubscription);
                                 if (layout.classList.contains('pane-selection-reveal') && performance.now() - start < 2000)
                                     requestAnimationFrame(sample);
                                 else resolve(frames);
@@ -277,7 +277,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                                 layout.querySelector('.resource-overview')?.dataset.resourceName,
                                 selected?.querySelector('.resource-row-name')?.textContent.trim(),
                                 layout.querySelector('h1.resource-title')?.textContent.trim(),
-                                layout.querySelector('.resource-overview')?.dataset.resourceSubscription
+                                layout.querySelector('.resource-overview [data-resource-subscription]')?.dataset.resourceSubscription
                             ]);
                         }
                     };

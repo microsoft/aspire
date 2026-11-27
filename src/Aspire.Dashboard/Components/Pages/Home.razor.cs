@@ -17,8 +17,8 @@ namespace Aspire.Dashboard.Components.Pages;
 /// <para>
 /// Some requests for the root URL are for another page, and are redirected to it:
 /// links created by older tools, such as <c>/?resource=api</c> or <c>/?view=Graph</c>; and a dashboard without a
-/// resource service, which has no resources to list. The viewport width doesn't redirect: a narrow layout shows home
-/// as the open resource drawer, so resizing the window keeps the user on home.
+/// resource service, which opens the telemetry overview. The viewport width doesn't redirect: a narrow layout
+/// shows home as the open resource drawer, so resizing the window keeps the user on home.
 /// </para>
 /// </remarks>
 public sealed partial class Home : ComponentBase
@@ -41,7 +41,7 @@ public sealed partial class Home : ComponentBase
     protected override void OnParametersSet()
     {
         var url = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind)
-            ?? (!DashboardClient.IsEnabled ? DashboardUrls.StructuredLogsUrl() : null);
+            ?? (!DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : null);
 
         // The layout re-renders this page while the redirect is in flight. Ask for it once.
         if (url is null || string.Equals(url, _redirectedTo, StringComparison.Ordinal))
@@ -53,14 +53,19 @@ public sealed partial class Home : ComponentBase
         NavigationManager.NavigateTo(url, new NavigationOptions { ReplaceHistoryEntry = true });
     }
 
+    // Older links select the view with "?view=Graph" or "?view=Parameters". Any other value, such as "Table", is the
+    // resource table.
+    private const string LegacyGraphViewKind = "Graph";
+    private const string LegacyParametersViewKind = "Parameters";
+
     internal static string? TryGetLegacyRedirectUrl(string? resourceName, string? viewKind)
     {
-        if (string.Equals(viewKind, nameof(Resources.ResourceViewKind.Graph), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(viewKind, LegacyGraphViewKind, StringComparison.OrdinalIgnoreCase))
         {
             return DashboardUrls.GraphUrl();
         }
 
-        if (string.Equals(viewKind, nameof(Resources.ResourceViewKind.Parameters), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(viewKind, LegacyParametersViewKind, StringComparison.OrdinalIgnoreCase))
         {
             return DashboardUrls.ResourceListUrl();
         }

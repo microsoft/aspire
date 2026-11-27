@@ -41,9 +41,6 @@ using System.Diagnostics.CodeAnalysis;
     Target = "M:Aspire.Dashboard.Components.Dialogs.ManageDataDialog.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
     Justification = "Opening FluentDataGrid preserves its nested ColumnHeaderUiKind enum and inherited Enum.GetValues(Type).")]
 [assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "member",
-    Target = "M:Aspire.Dashboard.Components.Pages.Resources.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
-    Justification = "Opening FluentDataGrid preserves its nested ColumnHeaderUiKind enum and inherited Enum.GetValues(Type).")]
-[assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "member",
     Target = "M:Aspire.Dashboard.Components.Pages.StructuredLogs.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
     Justification = "Opening FluentDataGrid preserves its nested ColumnHeaderUiKind enum and inherited Enum.GetValues(Type).")]
 [assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "member",
@@ -77,10 +74,10 @@ using System.Diagnostics.CodeAnalysis;
     Target = "M:Aspire.Dashboard.Components.Dialogs.DashboardFeedbackDialog.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
     Justification = "Opening FluentSelect preserves inherited enum parsing paths that call Enum.GetValues(Type); the dashboard enumeration uses Enum.GetValues<TEnum>().")]
 [assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "member",
-    Target = "M:Aspire.Dashboard.Components.Pages.ResourceOverview.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
-    Justification = "Opening Fluent UI components such as FluentTextInput preserves their nested enums and inherited Enum.GetValues(Type). The page doesn't call Enum.GetValues(Type).")]
+    Target = "M:Aspire.Dashboard.Components.Controls.Overview.ResourceOverview.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
+    Justification = "Opening Fluent UI components such as FluentTextInput preserves their nested enums and inherited Enum.GetValues(Type). The component doesn't call Enum.GetValues(Type).")]
 [assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "member",
-    Target = "M:Aspire.Dashboard.Components.Pages.ResourceOverview.TagsCard(Aspire.Dashboard.Model.ResourceViewModel)",
+    Target = "M:Aspire.Dashboard.Components.Controls.Overview.OverviewTagsCard.BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder)",
     Justification = "The tags card opens the tag editor, whose Fluent UI components preserve their nested enums and inherited Enum.GetValues(Type).")]
 [assembly: UnconditionalSuppressMessage("AOT", "IL3050", Scope = "type",
     Target = "T:__Blazor.Aspire.Dashboard.Components.ChartFilters.TypeInference",

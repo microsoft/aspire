@@ -1,0 +1,50 @@
+@* The overview of a telemetry source: a resource that sends telemetry without being part of the app model, such as
+   a browser app, or any resource of a dashboard that runs without an app host. Only its telemetry is known, so it
+   shows the resource attributes the source reports and the telemetry it has sent. *@
+@{
+    var view = GetView();
+    var cardLayout = view.Layout;
+}
+
+<div class="overview-grid telemetry-source-overview" data-resource-subscription="@Name">
+    <OverviewStatusCard TelemetrySourceName="@DisplayName" HideCommandButtons="false" Style="@cardLayout.Style(OverviewCard.Status)" />
+
+    <OverviewMetricsCard ResourceName="@Name"
+                         ResourceKey="@Source.ResourceKey"
+                         Layout="@cardLayout"
+                         HasContent="@view.ShowMetrics"
+                         IsLoaded="@_telemetryLoader.IsLoaded"
+                         Telemetry="@_telemetryLoader.Telemetry"
+                         HideEmptyPanels="@HideEmptyPanels" />
+
+    <OverviewLogsCard ResourceName="@Name"
+                      Layout="@cardLayout"
+                      HasContent="@view.ShowLogs"
+                      IsLoaded="@_telemetryLoader.IsLoaded"
+                      Telemetry="@_telemetryLoader.Telemetry"
+                      HideEmptyPanels="@HideEmptyPanels" />
+
+    <OverviewTracesCard ResourceName="@Name"
+                        Layout="@cardLayout"
+                        HasContent="@view.ShowTraces"
+                        IsLoaded="@_telemetryLoader.IsLoaded"
+                        Telemetry="@_telemetryLoader.Telemetry"
+                        HideEmptyPanels="@HideEmptyPanels" />
+
+    <section class="overview-card" style="@cardLayout.Style(OverviewCard.Attributes)" aria-labelledby="overview-attributes-title">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListSquare())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-attributes-title">@Loc[nameof(Dashboard.Resources.Resources.TelemetrySourceOverviewAttributesTitle)]</h2>
+            <OverviewCardCount Shown="@Math.Min(view.Attributes.Count, _attributesExpanded ? view.Attributes.Count : AttributesPreviewCount)" Total="@view.Attributes.Count" />
+        </div>
+        <PropertyGrid TItem="TelemetryPropertyViewModel"
+                      Items="@(_attributesExpanded ? view.Attributes : view.Attributes.Take(AttributesPreviewCount))"
+                      GridTemplateColumns="1fr 1.5fr"
+                      GenerateHeader="DataGridGeneratedHeaderType.None"
+                      RowSize="DataGridRowSize.Small"
+                      Class="overview-property-grid" />
+        <OverviewShowMoreButton Total="@view.Attributes.Count" PreviewCount="@AttributesPreviewCount" Expanded="@_attributesExpanded" OnClick="@ToggleAttributesExpanded" />
+    </section>
+</div>

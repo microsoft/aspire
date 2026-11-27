@@ -748,11 +748,6 @@ Pour découvrir plus d’informations sur l’utilisation des assistants IA avec
         <target state="translated">Journaux structurés</target>
         <note />
       </trans-unit>
-      <trans-unit id="HelpDialogGoToTelemetrySources">
-        <source>Telemetry sources</source>
-        <target state="translated">Sources de télémétrie</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
         <target state="translated">Terminaux</target>

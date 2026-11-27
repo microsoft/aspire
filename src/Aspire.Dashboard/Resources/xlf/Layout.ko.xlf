@@ -592,14 +592,14 @@
         <target state="translated">{0} 확장 또는 축소</target>
         <note>{0} is the group name</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneTelemetryOnly">
+      <trans-unit id="ResourcePaneTelemetryOnlyGroup">
         <source>Telemetry sources</source>
         <target state="translated">원격 분석 원본</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneTelemetryOnlyGroup">
-        <source>Telemetry sources</source>
-        <target state="translated">원격 분석 원본</target>
+      <trans-unit id="ResourcePaneTelemetrySourceNoConsoleLogs">
+        <source>Telemetry sources do not produce console logs.</source>
+        <target state="new">Telemetry sources do not produce console logs.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneUntaggedGroup">

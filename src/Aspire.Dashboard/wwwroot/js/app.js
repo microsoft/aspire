@@ -448,8 +448,6 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
                     return 280;
                 case "x": // go to extensions
                     return 290;
-                case "o": // go to telemetry sources (observability)
-                    return 295;
             }
         }
 

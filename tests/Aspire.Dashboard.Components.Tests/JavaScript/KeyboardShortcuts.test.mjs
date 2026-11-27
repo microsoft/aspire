@@ -10,7 +10,7 @@ const source = await readFile(new URL("../../../src/Aspire.Dashboard/wwwroot/js/
 
 const backquote = { key: "`", code: "Backquote", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false };
 const dashboardKeys = [
-    ...["c", "r", "s", "t", "m", "e", "p", "g", "x", "o", "?", "S", "+", "-"].map(key => ({ key })),
+    ...["c", "r", "s", "t", "m", "e", "p", "g", "x", "?", "S", "+", "-"].map(key => ({ key })),
     backquote,
     { ...backquote, key: "~", shiftKey: true },
 ];
@@ -110,7 +110,7 @@ test("Fluent dropdown controls and options suppress dashboard shortcuts", () => 
 
 test("dashboard shortcuts remain available outside inputs", () => {
     for (const target of [element("BODY"), element("BUTTON"), element("DIV", element("BUTTON"))]) {
-        assert.deepEqual(shortcutsFor(target), [210, 200, 220, 230, 240, 250, 270, 280, 290, 295, 100, 110, 330, 340, 400]);
+        assert.deepEqual(shortcutsFor(target), [210, 200, 220, 230, 240, 250, 270, 280, 290, 100, 110, 330, 340, 400]);
     }
 });
 
@@ -128,7 +128,7 @@ test("only unmodified e navigates to the terminals page", () => {
 });
 
 test("new navigation shortcuts use unmodified keys without overriding browser shortcuts", () => {
-    for (const [key, shortcut] of [["p", 270], ["g", 280], ["x", 290], ["o", 295]]) {
+    for (const [key, shortcut] of [["p", 270], ["g", 280], ["x", 290]]) {
         assert.deepEqual(shortcutsFor(element("BODY"), [{ key }]), [shortcut]);
         for (const modifier of ["altKey", "ctrlKey", "metaKey", "shiftKey"]) {
             assert.deepEqual(shortcutsFor(element("BODY"), [{ key, [modifier]: true }]), []);

@@ -23,7 +23,6 @@ public enum AspireKeyboardShortcut
     GoToParameters = 270,
     GoToGraph = 280,
     GoToExtensions = 290,
-    GoToTelemetrySources = 295,
 
     ToggleOrientation = 300,
     ClosePanel = 310,

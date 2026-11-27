@@ -7,6 +7,8 @@ using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
@@ -18,7 +20,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
+using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -30,6 +34,46 @@ public partial class ConsoleLogsTests : DashboardTestContext
     public ConsoleLogsTests(ITestOutputHelper testOutputHelper)
     {
         _testOutputHelper = testOutputHelper;
+    }
+
+    [Fact]
+    public async Task TelemetryOnlySource_ShowsUnavailableMessageInsteadOfEmptyLogViewer()
+    {
+        var viewport = CreateViewport(isDesktop: true);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource(resourceName: "api", state: KnownResourceState.Running)],
+            resourceChannelProvider: () => Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>());
+        SetupConsoleLogsServices(dashboardClient);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, dashboardClient);
+
+        var telemetryResource = CreateResource(name: "browser");
+        telemetryResource.Attributes.Remove(telemetryResource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        await Services.GetRequiredService<SqliteTelemetryRepository>().AddLogsAsync(new AddContext(),
+        [
+            new ResourceLogs
+            {
+                Resource = telemetryResource,
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord() } } }
+            }
+        ]);
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("browser"));
+        var layout = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        layout.WaitForAssertion(() => Assert.Equal("browser", layout.Instance.SelectedTelemetryOnlyResource?.Name));
+
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "browser");
+            builder.Add(p => p.ResourcesLayout, layout.Instance);
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(Resources.ConsoleLogs.ConsoleLogsNoLogsForTelemetrySource, cut.Find(".aspire-page-empty-content .aspire-empty-message").TextContent.Trim());
+            Assert.Empty(cut.FindComponents<LogViewer>());
+        });
     }
 
     [Fact]
