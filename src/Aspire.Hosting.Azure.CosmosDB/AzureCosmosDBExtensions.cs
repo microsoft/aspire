@@ -119,7 +119,8 @@ public static class AzureCosmosExtensions
         CosmosClient? cosmosClient = null;
         builder.OnConnectionStringAvailable(async (cosmosDb, @event, ct) =>
         {
-            var connectionString = await cosmosDb.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            var connectionString = await cosmosDb.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ApplicationBuilder.ExecutionContext, cosmosDb), ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

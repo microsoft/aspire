@@ -2525,6 +2525,11 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.color.id, 'list.warningForeground');
     });
 
+    test('UnresolvedParameters shows warning icon', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.UnresolvedParameters }));
+        assert.strictEqual(icon.id, 'warning');
+    });
+
     test('Starting shows loading spinner', () => {
         const icon = getResourceIcon(makeResource({ state: ResourceState.Starting }));
         assert.strictEqual(icon.id, 'loading~spin');
@@ -2609,6 +2614,13 @@ suite('buildResourceDescription', () => {
 
     test('with state shows type and state', () => {
         assert.strictEqual(buildResourceDescription(makeResource({ state: 'Running' })), 'Project · Running');
+    });
+
+    test('UnresolvedParameters has a humanized description and tooltip', () => {
+        const resource = makeResource({ state: ResourceState.UnresolvedParameters });
+
+        assert.strictEqual(buildResourceDescription(resource), 'Project · Unresolved parameters');
+        assert.strictEqual(buildResourceTooltip(resource).value, '**my-service**\n\nType: Project\n\nState: Unresolved parameters\n\n');
     });
 
     test('appends canonical source for a container', () => {

@@ -135,8 +135,8 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionStringResource = Assert.Single(appModel.Resources.OfType<RedisResource>());
+        var connectionString = await connectionStringResource.GetConnectionStringAsync(new ValueProviderContext(), TestContext.Current.CancellationToken);
         var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
         Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={myRedis-password.value}", valueExpression);
         AssertContainsConditionalReference(valueExpression);
@@ -535,7 +535,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var containerResource = Assert.Single(appModel.Resources.OfType<RedisResource>());
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
         AssertContainsConditionalReference(valueExpression);
         if (withPassword)
@@ -877,7 +877,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var containerResource = Assert.Single(appModel.Resources.OfType<RedisResource>());
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
         Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={pass.value}", valueExpression);
         AssertContainsConditionalReference(valueExpression);

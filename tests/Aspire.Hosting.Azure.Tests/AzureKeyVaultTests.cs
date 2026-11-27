@@ -463,7 +463,7 @@ public class AzureKeyVaultTests(ITestOutputHelper testOutputHelper)
         keyVault.Resource.Annotations.Add(new ConnectionStringRedirectAnnotation(redirectTarget));
 
         var connectionString = keyVault.Resource.ConnectionStringExpression;
-        var connectionStringValue = await keyVault.Resource.GetConnectionStringAsync(default);
+        var connectionStringValue = await keyVault.Resource.GetConnectionStringAsync(new ValueProviderContext(), TestContext.Current.CancellationToken);
 
         Assert.Equal(redirectTarget.ConnectionStringExpression.ValueExpression, connectionString.ValueExpression);
         Assert.Equal("https://redirected-vault.vault.azure.net", connectionStringValue);
@@ -492,7 +492,7 @@ public class AzureKeyVaultTests(ITestOutputHelper testOutputHelper)
         // Add ConnectionStringRedirectAnnotation - this should take precedence
         keyVault.Resource.Annotations.Add(new ConnectionStringRedirectAnnotation(redirectTarget));
 
-        var connectionStringValue = await keyVault.Resource.GetConnectionStringAsync(default);
+        var connectionStringValue = await keyVault.Resource.GetConnectionStringAsync();
 
         // The redirect annotation should take precedence over emulator
         Assert.Equal("https://redirected-vault.vault.azure.net", connectionStringValue);

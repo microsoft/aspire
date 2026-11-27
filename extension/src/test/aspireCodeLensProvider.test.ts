@@ -187,6 +187,36 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('shows an unresolved parameters warning lens until the resource starts', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const resource = makeResource('cache', { state: ResourceState.UnresolvedParameters });
+        const harness = createHarness({
+            appHosts: [{ ...makeAppHost(hostPath), resources: [resource] }],
+        });
+
+        try {
+            const doc = createMockDocument(APP_HOST_DOC, docPath);
+            const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            const stateLenses = lenses.filter(lens => lens.command?.command === 'aspire-vscode.codeLensRevealResource');
+
+            assert.strictEqual(stateLenses.length, 1);
+            assert.deepStrictEqual(stateLenses[0].command, {
+                title: '$(warning)\u200A Unresolved parameters',
+                command: 'aspire-vscode.codeLensRevealResource',
+                tooltip: 'cache: Unresolved parameters',
+                arguments: ['cache', hostPath],
+            });
+
+            resource.state = ResourceState.Running;
+            const runningLenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            const runningStateLenses = runningLenses.filter(lens => lens.command?.command === 'aspire-vscode.codeLensRevealResource');
+            assert.deepStrictEqual(runningStateLenses.map(lens => lens.command?.title), ['$(pass)\u200A Running']);
+        } finally {
+            harness.dispose();
+        }
+    });
+
     test('shows Go builder and resource lenses and running gutter state', async () => {
         const appHostPath = p('repo', 'AppHost', 'apphost.go');
         const harness = createHarness({

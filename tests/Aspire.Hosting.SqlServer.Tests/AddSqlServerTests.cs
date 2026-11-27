@@ -5,6 +5,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using HealthChecks.SqlServer;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -94,7 +95,7 @@ public class AddSqlServerTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<SqlServerServerResource>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync(new ValueProviderContext(), TestContext.Current.CancellationToken);
 
         Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true", connectionString);
         Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value};TrustServerCertificate=true", connectionStringResource.ConnectionStringExpression.ValueExpression);
@@ -280,7 +281,7 @@ public class AddSqlServerTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<SqlServerServerResource>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true", connectionString);
         Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value};TrustServerCertificate=true", connectionStringResource.ConnectionStringExpression.ValueExpression);
     }
@@ -323,5 +324,44 @@ public class AddSqlServerTests
 
         Assert.IsType<SqlServerHealthCheck>(serverRegistration.Factory(app.Services));
         Assert.IsType<SqlServerHealthCheck>(dbRegistration.Factory(app.Services));
+    }
+
+    [Theory]
+    [InlineData("server")]
+    [InlineData("database")]
+    [InlineData("redirect")]
+    public async Task ConnectionStringAvailableCallbackReportsAndClearsPasswordWait(string source)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var password = builder.AddPendingSecretParameter("password");
+        var sqlServer = builder.AddSqlServer("sqlserver", password: source == "redirect" ? null : password)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new(e, "localhost", 2000));
+        if (source == "redirect")
+        {
+            var redirect = builder.AddConnectionString("redirect", ReferenceExpression.Create($"Server=localhost;User ID=sa;Password={password.Resource}"));
+            sqlServer.WithAnnotation(new ConnectionStringRedirectAnnotation(redirect.Resource));
+        }
+
+        IResource resource = source == "database" ? sqlServer.AddDatabase("db").Resource : sqlServer.Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var startingState = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info);
+        await notifications.PublishUpdateAsync(resource, snapshot => snapshot with { State = startingState });
+
+        // Publish directly so only the integration's callback can report the wait.
+        var connectionAvailable = builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(resource, app.Services), cts.Token);
+        try
+        {
+            await notifications.AssertWaitingForParameterAsync(resource, password.Resource, cts.Token);
+            Assert.False(connectionAvailable.IsCompleted);
+        }
+        finally
+        {
+            await password.Resource.SetValueAsync("test-value").DefaultTimeout();
+            await connectionAvailable.DefaultTimeout();
+        }
+
+        Assert.Equal(startingState, notifications.AssertParameterWaitCleared(resource));
     }
 }

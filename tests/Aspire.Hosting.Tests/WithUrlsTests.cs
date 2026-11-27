@@ -57,6 +57,48 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper) : WithUrlsTests<P
         Assert.Null(annotation.Endpoint);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ContainerDisplayUrlsUseLocalhostNetwork(bool useEditor, bool specifyEndpoint)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(TestOutputHelper);
+        var container = builder.AddContainer("container", "test-image")
+            .WithHttpEndpoint(targetPort: 8080);
+        var endpoint = container.GetEndpoint("http");
+        var annotation = endpoint.EndpointAnnotation;
+        annotation.AllocatedEndpoint = new(annotation, "localhost", 18080);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new(annotation, "container", 8080, EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var expression = ReferenceExpression.Create($"{endpoint}/manage");
+        var urls = new List<ResourceUrlAnnotation>();
+        if (useEditor)
+        {
+            var editor = new ResourceUrlsEditor(executionContext, container.Resource, urls);
+            if (specifyEndpoint)
+            {
+                await editor.AddForEndpoint(endpoint, expression, "Manage");
+            }
+            else
+            {
+                await editor.Add(expression, "Manage");
+            }
+        }
+        else
+        {
+            container.WithUrl(expression, "Manage");
+            var callback = Assert.Single(container.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
+            await callback.Callback(new ResourceUrlsCallbackContext(executionContext, container.Resource, urls));
+        }
+
+        var url = Assert.Single(urls);
+        Assert.Equal("http://localhost:18080/manage", url.Url);
+    }
+
     [Fact]
     public async Task CustomResourceUrlsTransitionThroughExpectedLifecycleStates()
     {

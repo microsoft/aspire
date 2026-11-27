@@ -63,7 +63,8 @@ public static class NatsBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(nats, async (@event, ct) =>
         {
-            var connectionString = await nats.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+            var valueContext = ValueProviderContext.ForHost(builder.ExecutionContext, nats);
+            var connectionString = await nats.ConnectionStringExpression.GetValueAsync(valueContext, ct).ConfigureAwait(false)
             ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{nats.Name}' resource but the connection string was null.");
 
             var options = NatsOpts.Default with
@@ -76,8 +77,8 @@ public static class NatsBuilderExtensions
                 Url = connectionString,
                 AuthOpts = new()
                 {
-                    Username = await nats.UserNameReference.GetValueAsync(ct).ConfigureAwait(false),
-                    Password = await nats.PasswordParameter!.GetValueAsync(ct).ConfigureAwait(false),
+                    Username = await nats.UserNameReference.GetValueAsync(valueContext, ct).ConfigureAwait(false),
+                    Password = await nats.PasswordParameter!.GetValueAsync(valueContext, ct).ConfigureAwait(false),
                 }
             };
 

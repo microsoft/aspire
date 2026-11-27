@@ -667,13 +667,18 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
             await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.Services, cancellationToken).ConfigureAwait(false);
 
             var dcpBuildArgs = new List<EnvVar>();
+            // Preserve host-facing resolution for build inputs. Caller attributes parameter waits;
+            // it does not mean these values are consumed on the container's runtime network
+            // (for example, they may be embedded in browser assets). An endpoint reference's
+            // explicitly selected network still takes precedence over this default.
+            var valueContext = ValueProviderContext.ForHost(executionContext, modelContainerResource);
 
             foreach (var buildArgument in dockerfileBuildAnnotation.BuildArguments)
             {
                 var valueString = buildArgument.Value switch
                 {
                     string stringValue => stringValue,
-                    IValueProvider valueProvider => await valueProvider.GetValueAsync(cancellationToken).ConfigureAwait(false),
+                    IValueProvider valueProvider => await valueProvider.GetValueAsync(valueContext, cancellationToken).ConfigureAwait(false),
                     bool boolValue => boolValue ? "true" : "false",
                     null => null,
                     _ => buildArgument.Value.ToString()
@@ -689,7 +694,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
                 var valueString = buildSecret.Value switch
                 {
                     FileInfo filePath => filePath.FullName,
-                    IValueProvider valueProvider => await valueProvider.GetValueAsync(cancellationToken).ConfigureAwait(false),
+                    IValueProvider valueProvider => await valueProvider.GetValueAsync(valueContext, cancellationToken).ConfigureAwait(false),
                     _ => throw new InvalidOperationException("Build secret can only be a parameter or a file.")
                 };
 

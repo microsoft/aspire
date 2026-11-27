@@ -221,6 +221,32 @@ public class ResourceStateViewModelTests
         Assert.Equal(["messaging"], dependencies);
     }
 
+    [Fact]
+    public void UnresolvedParameterTooltipIdentifiesParameters()
+    {
+        var resource = ModelTestHelpers.CreateResource(
+            state: KnownResourceState.UnresolvedParameters,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.UnresolvedParameters] = new(
+                    KnownProperties.Resource.UnresolvedParameters,
+                    Value.ForList(Value.ForString("username"), Value.ForString("password")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
+            });
+        var localizer = new TestStringLocalizer<Columns>();
+
+        Assert.Equal($"Localized:{nameof(Columns.StateColumnResourceWaitingForParameters)}:username, password",
+            ResourceStateViewModel.GetResourceStateTooltip(resource, localizer));
+        var viewModel = ResourceStateViewModel.GetStateViewModel(resource, localizer);
+        Assert.Equal("Unresolved parameters", viewModel.Text);
+        Assert.Equal("Warning", viewModel.Icon.Name);
+        Assert.Equal(Color.Warning, viewModel.Color);
+    }
+
     private sealed class CopyToThrowingResourceCollection(params ResourceViewModel[] resources) : ICollection<ResourceViewModel>, IReadOnlyCollection<ResourceViewModel>
     {
         public int Count => resources.Length;

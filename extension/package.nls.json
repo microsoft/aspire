@@ -324,6 +324,8 @@
   "aspire-vscode.strings.resourceCommandInvalidNumber": "Enter a number using invariant culture, for example 1, -1.5, or 1e3.",
   "aspire-vscode.strings.resourceCommandMaxLength": "Value must be {0} characters or fewer.",
   "aspire-vscode.strings.parameterValueMissing": "Value missing",
+  "aspire-vscode.strings.resourceUnresolvedParameters": "Unresolved parameters",
+  "aspire-vscode.strings.codeLensResourceUnresolvedParameters": "$(warning)\u200A Unresolved parameters",
   "aspire-vscode.strings.resourceCommandDisabledDescription": "(disabled)",
   "aspire-vscode.strings.resourceCommandRunning": "Running '{0}' on '{1}'...",
   "aspire-vscode.strings.resourceCommandSucceeded": "Command '{0}' completed on '{1}'.",

@@ -3055,6 +3055,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 KnownResourceState.Running when resource.HealthStatus is Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy => "state-warning",
                 KnownResourceState.Running => "state-success",
+                KnownResourceState.UnresolvedParameters => "state-warning",
                 KnownResourceState.FailedToStart or KnownResourceState.RuntimeUnhealthy => "state-error",
                 KnownResourceState.Exited when resource.TryGetExitCode(out var exitCode) && exitCode is not 0 => "state-error",
                 KnownResourceState.Starting or KnownResourceState.Building or KnownResourceState.Waiting or KnownResourceState.Stopping => "state-pending",

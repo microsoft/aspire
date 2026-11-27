@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Garnet.Tests;
@@ -79,9 +80,38 @@ public class AddGarnetTests(ITestOutputHelper testOutputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("{myGarnet.bindings.tcp.host}:{myGarnet.bindings.tcp.port},password={myGarnet-password.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith("localhost:2000", connectionString);
+    }
+
+    [Fact]
+    public async Task ConnectionStringAvailableCallbackReportsAndClearsPasswordWait()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var password = builder.AddPendingSecretParameter("password");
+        var garnet = builder.AddGarnet("garnet", password: password)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new(e, "localhost", 2000)).Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var startingState = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info);
+        await notifications.PublishUpdateAsync(garnet, snapshot => snapshot with { State = startingState });
+
+        // Publish directly so only the integration's callback can report the wait.
+        var connectionAvailable = builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(garnet, app.Services), cts.Token);
+        try
+        {
+            await notifications.AssertWaitingForParameterAsync(garnet, password.Resource, cts.Token);
+            Assert.False(connectionAvailable.IsCompleted);
+        }
+        finally
+        {
+            await password.Resource.SetValueAsync("test-value").DefaultTimeout();
+            await connectionAvailable.DefaultTimeout();
+        }
+
+        Assert.Equal(startingState, notifications.AssertParameterWaitCleared(garnet));
     }
 
     [Fact]
@@ -345,7 +375,7 @@ public class AddGarnetTests(ITestOutputHelper testOutputHelper)
         var containerResource = Assert.Single(appModel.Resources.OfType<GarnetResource>());
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("{myGarnet.bindings.tcp.host}:{myGarnet.bindings.tcp.port},password={pass.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith($"localhost:5001,password={password}", connectionString);
     }

@@ -20,6 +20,11 @@ public static class KnownResourceStates
     public static readonly string Starting = nameof(Starting);
 
     /// <summary>
+    /// The unresolved parameters state. Indicates that startup is waiting for parameter values.
+    /// </summary>
+    public static readonly string UnresolvedParameters = nameof(UnresolvedParameters);
+
+    /// <summary>
     /// The running state. Useful for showing the resource is running.
     /// </summary>
     public static readonly string Running = nameof(Running);

@@ -7,11 +7,12 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Provides an ATS-first editor for resource URLs within polyglot callbacks.
 /// </summary>
 [AspireExport]
-internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext executionContext, List<ResourceUrlAnnotation> urls, CancellationToken cancellationToken = default)
+internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext executionContext, IResource resource, List<ResourceUrlAnnotation> urls, CancellationToken cancellationToken = default)
 {
     private readonly DistributedApplicationExecutionContext _executionContext = executionContext ?? throw new ArgumentNullException(nameof(executionContext));
     private readonly List<ResourceUrlAnnotation> _urls = urls ?? throw new ArgumentNullException(nameof(urls));
     private readonly CancellationToken _cancellationToken = cancellationToken;
+    private readonly ValueProviderContext _valueContext = ValueProviderContext.ForHost(executionContext, resource);
 
     /// <summary>
     /// Adds a displayed URL.
@@ -30,7 +31,7 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
                 break;
             case ReferenceExpression referenceExpression:
                 var endpoint = referenceExpression.ValueProviders.OfType<EndpointReference>().FirstOrDefault();
-                var urlValue = await referenceExpression.GetValueAsync(_cancellationToken).ConfigureAwait(false);
+                var urlValue = await referenceExpression.GetValueAsync(_valueContext, _cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(urlValue))
                 {
                     AddUrlAnnotation(urlValue, displayText, endpoint);
@@ -61,7 +62,7 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
                 AddUrlAnnotation(stringUrl, displayText, endpoint);
                 break;
             case ReferenceExpression referenceExpression:
-                var urlValue = await referenceExpression.GetValueAsync(_cancellationToken).ConfigureAwait(false);
+                var urlValue = await referenceExpression.GetValueAsync(_valueContext, _cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(urlValue))
                 {
                     AddUrlAnnotation(urlValue, displayText, endpoint);

@@ -35,6 +35,7 @@ internal static class KnownProperties
         public const string AppArgsSensitivity = "resource.appArgsSensitivity";
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
         public const string WaitingFor = "resource.waitingFor";
+        public const string UnresolvedParameters = "resource.unresolvedParameters";
         public const string TraitPrefix = "resource.trait.";
         public const string DisplayOrder = "resource.displayOrder";
     }

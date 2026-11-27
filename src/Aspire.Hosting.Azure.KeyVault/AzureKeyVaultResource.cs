@@ -92,6 +92,17 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
         return ConnectionStringExpression.GetValueAsync(cancellationToken);
     }
 
+    /// <inheritdoc cref="IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext, CancellationToken)"/>
+    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    {
+        if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
+        {
+            return connectionStringAnnotation.Resource.GetConnectionStringAsync(context, cancellationToken);
+        }
+
+        return ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+    }
+
     BicepOutputReference IAzureKeyVaultResource.VaultUriOutputReference => VaultUri;
 
     // In run mode, this is set to the secret client used to access the Azure Key Vault.

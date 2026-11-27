@@ -671,6 +671,7 @@ public class ResourceNotificationService : IDisposable
         state is null
         || (allowNotStarted && state == KnownResourceStates.NotStarted)
         || state == KnownResourceStates.Starting
+        || state == KnownResourceStates.UnresolvedParameters
         || state == KnownResourceStates.Waiting;
 
     private Task ClearWaitingForDependenciesAsync(IResource resource)
@@ -886,16 +887,13 @@ public class ResourceNotificationService : IDisposable
     public Task PublishUpdateAsync(IResource resource, string resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
         var notificationState = GetResourceNotificationState(resourceId, resource);
-        if (notificationState.Resource != resource)
-        {
-            throw new InvalidOperationException($"Resource instance doesn't match resource previously registered with specified resource id '{resourceId}'.");
-        }
 
         lock (notificationState)
         {
             var previousState = GetCurrentSnapshot(resource, notificationState);
 
-            var newState = stateFactory(previousState);
+            var (newState, stateBeforeParameterWait, isParameterWaitStateActive) =
+                UpdateParameterWaitState(notificationState, stateFactory(previousState));
 
             if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState))
             {
@@ -930,6 +928,16 @@ public class ResourceNotificationService : IDisposable
                 };
             }
 
+            // Command-state callbacks can throw. Commit restoration metadata and discard empty wait
+            // bookkeeping only after snapshot construction succeeds, so failed publications can retry.
+            var unchanged = notificationState.LastSnapshot is { } lastSnapshot && lastSnapshot.ContentEquals(newState);
+            notificationState.StateBeforeParameterWait = stateBeforeParameterWait;
+            notificationState.IsParameterWaitStateActive = isParameterWaitStateActive;
+            if (notificationState.ParameterWaits is { Count: 0 })
+            {
+                notificationState.ParameterWaits = null;
+            }
+
             // Producers can recompute a snapshot that is identical to the one already published. DCP is
             // the common case: its watches are periodically torn down and re-established, and each fresh
             // watch replays every object that exists, so a resource that never changes again keeps
@@ -937,7 +945,7 @@ public class ResourceNotificationService : IDisposable
             // anything having changed. Subscribers that start watching later are still seeded from
             // LastSnapshot, so suppressing here cannot cost anyone an update.
             // See https://github.com/microsoft/aspire/issues/18869.
-            if (notificationState.LastSnapshot is { } lastSnapshot && lastSnapshot.ContentEquals(newState))
+            if (unchanged)
             {
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
@@ -1018,6 +1026,157 @@ public class ResourceNotificationService : IDisposable
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Exposes pending initialization parameter reads on the instance selected for manual start.
+    /// </summary>
+    internal async Task WaitForInitializationOnManualStartAsync(IResource resource, string resourceId, Task initialization, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var state = GetResourceNotificationState(resourceId, resource);
+        lock (state)
+        {
+            state.ManualStartsWaitingForInitialization++;
+        }
+
+        try
+        {
+            await PublishUpdateAsync(resource, resourceId, static snapshot => snapshot).ConfigureAwait(false);
+            await initialization.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (state)
+            {
+                state.ManualStartsWaitingForInitialization--;
+            }
+
+            await PublishUpdateAsync(resource, resourceId, static snapshot => snapshot).ConfigureAwait(false);
+        }
+    }
+
+    internal async ValueTask<string?> WaitForParameterAsync(IResource resource, ParameterResource parameter, ValueTask<string?> valueTask)
+    {
+        // Known limitation: the caller identifies a model resource, not a specific replica,
+        // so a parameter read is attributed to every replica.
+
+        // Capture instance IDs once so cancellation removes waits from the instances that registered
+        // them, even if the resource's replica set changes in the meantime.
+        var resourceIds = resource.GetResolvedResourceNames();
+        var registeredResourceIds = new List<string>(resourceIds.Length);
+        try
+        {
+            foreach (var resourceId in resourceIds)
+            {
+                try
+                {
+                    var state = GetResourceNotificationState(resourceId, resource);
+                    lock (state)
+                    {
+                        var waits = state.ParameterWaits ??= new(StringComparers.ResourceName);
+                        waits.TryGetValue(parameter.Name, out var count);
+                        waits[parameter.Name] = count + 1;
+                        registeredResourceIds.Add(resourceId);
+                    }
+
+                    // Track registrations independently of publication: user callbacks can throw,
+                    // but reporting failures must not change the parameter read's outcome.
+                    await PublishUpdateAsync(resource, resourceId, snapshot => snapshot).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to report resource {ResourceName}/{ResourceId} waiting for parameter {ParameterName}.", resource.Name, resourceId, parameter.Name);
+                }
+            }
+
+            return await valueTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var resourceId in registeredResourceIds)
+            {
+                try
+                {
+                    var state = GetResourceNotificationState(resourceId, resource);
+                    lock (state)
+                    {
+                        var waits = state.ParameterWaits!;
+                        var count = waits[parameter.Name];
+                        if (count == 1)
+                        {
+                            waits.Remove(parameter.Name);
+                        }
+                        else
+                        {
+                            waits[parameter.Name] = count - 1;
+                        }
+                    }
+
+                    await PublishUpdateAsync(resource, resourceId, snapshot => snapshot).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to clear parameter {ParameterName} wait for resource {ResourceName}/{ResourceId}.", parameter.Name, resource.Name, resourceId);
+                }
+            }
+        }
+    }
+
+    private static (CustomResourceSnapshot Snapshot, ResourceStateSnapshot? StateBeforeParameterWait, bool IsParameterWaitStateActive) UpdateParameterWaitState(
+        ResourceNotificationState notificationState, CustomResourceSnapshot snapshot)
+    {
+        var stateBeforeParameterWait = notificationState.StateBeforeParameterWait;
+        var isParameterWaitStateActive = notificationState.IsParameterWaitStateActive;
+        if (notificationState.ParameterWaits is null)
+        {
+            return (snapshot, stateBeforeParameterWait, isParameterWaitStateActive);
+        }
+
+        // If the last Start request left initialization, the initialization read may still be
+        // pending (for example, if the request was canceled). Don't keep displaying that wait.
+        var manualStartPending = notificationState.ManualStartsWaitingForInitialization > 0;
+        if (!manualStartPending && stateBeforeParameterWait?.Text == KnownResourceStates.NotStarted &&
+            snapshot.State?.Text == KnownResourceStates.UnresolvedParameters)
+        {
+            snapshot = snapshot with { State = stateBeforeParameterWait };
+        }
+
+        // Custom resources also use Waiting during initialization. Dependency annotations remain after
+        // dependencies are ready, so use the pending list to identify active dependency waits.
+        // Leaving Waiting during an active dependency wait would release WaitFor prematurely.
+        // URL callbacks can resolve parameters before a resource has a state.
+        if (snapshot.State is null || snapshot.State.Text == KnownResourceStates.Starting ||
+            (manualStartPending && snapshot.State.Text == KnownResourceStates.NotStarted) ||
+            (snapshot.State?.Text == KnownResourceStates.Waiting && !TryGetWaitingForDependencies(snapshot.Properties, out _)))
+        {
+            stateBeforeParameterWait = snapshot.State;
+            isParameterWaitStateActive = true;
+        }
+        else if (snapshot.State?.Text != KnownResourceStates.UnresolvedParameters)
+        {
+            return (snapshot with { Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters) }, null, false);
+        }
+
+        if (notificationState.ParameterWaits is { Count: > 0 } waits)
+        {
+            return (snapshot with
+            {
+                State = new(KnownResourceStates.UnresolvedParameters, KnownResourceStateStyles.Warn),
+                Properties = snapshot.Properties.SetResourceProperty(
+                    KnownProperties.Resource.UnresolvedParameters, waits.Keys.Order(StringComparers.ResourceName).ToArray())
+            }, stateBeforeParameterWait, isParameterWaitStateActive);
+        }
+
+        var restoredState = isParameterWaitStateActive
+            ? stateBeforeParameterWait
+            : snapshot.State;
+
+        return (snapshot with
+        {
+            State = restoredState,
+            Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters)
+        }, null, false);
     }
 
     private void RecordResourceLifecycleMilestones(
@@ -1332,8 +1491,16 @@ public class ResourceNotificationService : IDisposable
         return previousState;
     }
 
-    private ResourceNotificationState GetResourceNotificationState(string resourceId, IResource resource) =>
-        _resourceNotificationStates.GetOrAdd(resourceId, _ => new ResourceNotificationState(resource));
+    private ResourceNotificationState GetResourceNotificationState(string resourceId, IResource resource)
+    {
+        var state = _resourceNotificationStates.GetOrAdd(resourceId, _ => new ResourceNotificationState(resource));
+        if (state.Resource != resource)
+        {
+            throw new InvalidOperationException($"Resource instance doesn't match resource previously registered with specified resource id '{resourceId}'.");
+        }
+
+        return state;
+    }
 
     private string BuildCancellationErrorMessage(string cancellationMessage, string resourceName)
     {
@@ -1460,6 +1627,11 @@ public class ResourceNotificationService : IDisposable
         public long GetNextVersion() => _lastVersion++;
         public CustomResourceSnapshot? LastSnapshot { get; set; }
         public IResource Resource { get; } = resource;
+        public Dictionary<string, int>? ParameterWaits { get; set; }
+        public int ManualStartsWaitingForInitialization { get; set; }
+        public ResourceStateSnapshot? StateBeforeParameterWait { get; set; }
+        // Null is a valid pre-start state, not an indication that no state was captured.
+        public bool IsParameterWaitStateActive { get; set; }
         // These profiling fields stay unset unless startup profiling is enabled. Keep the event list
         // lazy so normal resource notifications do not allocate milestone storage for every resource.
         public DateTimeOffset? FirstObservedAt { get; set; }

@@ -91,6 +91,7 @@ function getModelSafeResourceState(state: string | null): EditorAssistanceResour
         case ResourceState.Stopping:
         case ResourceState.Stopped:
         case ResourceState.Waiting:
+        case ResourceState.UnresolvedParameters:
         case ResourceState.NotStarted:
         case ResourceState.Finished:
         case ResourceState.Exited:

@@ -99,7 +99,8 @@ public static class MongoDBBuilderExtensions
             })
             .OnConnectionStringAvailable(async (resource, @event, ct) =>
             {
-                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+                connectionString = await resource.ConnectionStringExpression.GetValueAsync(
+                    ValueProviderContext.ForHost(builder.ExecutionContext, resource), ct).ConfigureAwait(false)
                     ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{resource.Name}' resource but the connection string was null.");
             })
             .WithHealthCheck(healthCheckKey)
@@ -273,7 +274,8 @@ public static class MongoDBBuilderExtensions
 
         builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(mongoDBDatabase, async (@event, ct) =>
         {
-            connectionString = await mongoDBDatabase.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await mongoDBDatabase.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ApplicationBuilder.ExecutionContext, mongoDBDatabase), ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {
@@ -616,10 +618,10 @@ public static class MongoDBBuilderExtensions
             .WithAnnotation(new MongoDBServerKeyFileAnnotation(keyValue, keyFilePath))
             .WithContainerFiles(
                 destinationPath: keyFileDirectory,
-                callback: async (_, ct) => [new ContainerFile
+                callback: async (context, ct) => [new ContainerFile
                 {
                     Name = keyFileName,
-                    Contents = await keyValue.GetValueAsync(ct).ConfigureAwait(false),
+                    Contents = await keyValue.GetValueAsync(new ValueProviderContext { ExecutionContext = builder.ApplicationBuilder.ExecutionContext, Caller = context.Model }, ct).ConfigureAwait(false),
                     Mode = UnixFileMode.UserRead,
                 }],
                 // NOTE: 999 is the default user and group id used by the official MongoDB container image for the mongod process
