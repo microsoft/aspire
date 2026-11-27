@@ -12,11 +12,14 @@ namespace Aspire.Hosting.Dcp;
 
 internal sealed class ExecutableConfigurationResult(
     IExecutionConfigurationResult configuration,
-    List<PemCertificate>? certificates)
+    List<PemCertificate>? certificates,
+    string certificatesRootDirectory)
 {
     public IExecutionConfigurationResult Configuration { get; } = configuration;
 
     public List<PemCertificate>? Certificates { get; } = certificates;
+
+    public string CertificatesRootDirectory { get; } = certificatesRootDirectory;
 }
 
 internal sealed class ExecutableConfigurationResolver(
@@ -142,10 +145,10 @@ internal sealed class ExecutableConfigurationResolver(
             }
         }
 
-        return new(configuration, certificates);
+        return new(configuration, certificates, certificatesRootDirectory);
     }
 
-    private static void CreatePrivateDirectory(string path)
+    internal static void CreatePrivateDirectory(string path)
     {
         if (OperatingSystem.IsWindows())
         {
