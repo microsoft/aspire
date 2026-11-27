@@ -8,6 +8,7 @@ using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Model;
@@ -19,7 +20,9 @@ using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
@@ -142,6 +145,50 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
         Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Console));
         Assert.Empty(cut.FindAll(".home-telemetry-sources"));
         Assert.Single(cut.FindComponents<IconToggleGroup<GroupOverview>>());
+    }
+
+    [Fact]
+    public async Task AppHost_ParameterAndTelemetrySourceSelectionShowsSummary()
+    {
+        Setup(hasAppHost: true);
+        await AddLogAsync("browser", []);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?resource=api-key&resource=browser");
+
+        var cut = RenderOverview(resourceName: null);
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<ApplicationSummary>()));
+        Assert.Empty(cut.FindComponents<MissingParametersPanel>());
+    }
+
+    [Fact]
+    public async Task TelemetrySource_MetricsCardLoadsSavedPins()
+    {
+        Setup(hasAppHost: false);
+        var storage = Services.GetRequiredService<ILocalStorage>();
+        var applicationName = Services.GetRequiredService<IOptions<DashboardOptions>>().Value.GetApplicationNameOrDefault();
+        await storage.SetAsync(BrowserStorageKeys.MetricPinsKey(applicationName), new List<MetricPin> { new("browser", "test-meter", "requests") });
+        await Services.GetRequiredService<SqliteTelemetryRepository>().AddMetricsAsync(new AddContext(),
+        [
+            new ResourceMetrics
+            {
+                Resource = TelemetryTestHelpers.CreateResource("browser"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope("test-meter"),
+                        Metrics = { TelemetryTestHelpers.CreateSumMetric("requests", DateTime.UtcNow, value: 1) }
+                    }
+                }
+            }
+        ]);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceOverviewUrl("browser"));
+
+        var cut = RenderOverview("browser");
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["requests"],
+            cut.FindAll("[aria-labelledby='overview-metrics-title'] .overview-metric-name").Select(name => name.TextContent)));
     }
 
     private void Setup(bool hasAppHost)

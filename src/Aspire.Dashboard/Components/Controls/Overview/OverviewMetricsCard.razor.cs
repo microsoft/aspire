@@ -11,7 +11,7 @@ namespace Aspire.Dashboard.Components.Controls.Overview;
 /// <summary>
 /// Summarizes a resource's metrics: its instrument and meter counts, and live tiles for its pinned instruments.
 /// </summary>
-public sealed partial class OverviewMetricsCard : ComponentBase
+public sealed partial class OverviewMetricsCard : ComponentBase, IDisposable
 {
     private const int MetricsPreviewCount = 8;
     // Matches the metrics page's default duration, so a tile's sparkline looks like the card it opens.
@@ -55,4 +55,23 @@ public sealed partial class OverviewMetricsCard : ComponentBase
 
     [Inject]
     public required IStringLocalizer<Dashboard.Resources.Resources> Loc { get; init; }
+
+    protected override void OnInitialized()
+    {
+        // Pinned instruments can be changed from the tiles' charts or in another tab.
+        PinStore.Changed += OnPinsChanged;
+        // Not awaited, so the overview's other cards don't wait on a browser round trip. The card re-renders through
+        // OnPinsChanged when the pins are read. The load never faults.
+        _ = PinStore.EnsureLoadedAsync();
+    }
+
+    private void OnPinsChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        PinStore.Changed -= OnPinsChanged;
+    }
 }

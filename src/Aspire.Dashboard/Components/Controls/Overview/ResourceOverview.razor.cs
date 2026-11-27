@@ -109,9 +109,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
-    [Inject]
-    public required MetricPinStore PinStore { get; init; }
-
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     // A recording's terminal endpoint would resolve through the live dashboard client, and recorded instance names can
@@ -144,12 +141,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             StateHasChanged,
             (delay, cancellationToken) => TelemetryRefreshDelayAsync(delay, cancellationToken));
 
-        // The Metrics card lists pinned instruments, which can be changed from the card's charts.
-        PinStore.Changed += OnPinsChanged;
         TerminalDockState.Changed += OnTerminalDockStateChanged;
-        // Not awaited, so the console preview and other cards don't start a browser round trip later. The Metrics card
-        // re-renders through OnPinsChanged when the pins are read. The load never faults.
-        _ = PinStore.EnsureLoadedAsync();
 
         // The console preview hides lines removed with the console logs page's "Remove" action, which are stored
         // as filters in session storage.
@@ -178,11 +170,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         _telemetryResource = Resource;
 
         UpdateDetails();
-    }
-
-    private void OnPinsChanged()
-    {
-        _ = InvokeAsync(StateHasChanged);
     }
 
     /// <summary>
@@ -519,7 +506,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        PinStore.Changed -= OnPinsChanged;
         TerminalDockState.Changed -= OnTerminalDockStateChanged;
 
         _telemetryLoader?.Dispose();

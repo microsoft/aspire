@@ -268,6 +268,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     internal IEnumerable<ResourceViewModel> SelectedResources => _selectedItems.Select(i => i.Resource).OfType<ResourceViewModel>();
 
+    /// <summary>
+    /// Gets a value indicating whether resources are selected and all of them are parameters. A selection that also
+    /// includes a telemetry source, or a name that doesn't match a resource, isn't parameter-only.
+    /// </summary>
+    internal bool IsParameterOnlySelection => _selectedItems.Count > 0 && _selectedItems.All(i => i.Resource is { IsParameter: true });
+
     internal IReadOnlyList<string> AvailableResourceTags => TagStore.GetAllTags(_resourceByName.Values);
 
     internal ConcurrentDictionary<string, ResourceViewModel> ResourceByName => _resourceByName;
