@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Metrics;
 using Xunit;
+using static Aspire.Confluent.Kafka.Tests.MetricTestHelpers;
 
 namespace Aspire.Confluent.Kafka.Tests;
 
@@ -33,6 +34,7 @@ public class OtelMetricsTests
         List<Metric> metrics = new();
         var builder = Host.CreateEmptyApplicationBuilder(null);
         var key = useKeyed ? "messaging" : null;
+        var groupId = $"otel-group-{Guid.NewGuid()}";
         builder.Configuration.AddInMemoryCollection([
             new KeyValuePair<string, string?>("ConnectionStrings:messaging", _containerFixture?.Container?.GetBootstrapAddress()),
         ]);
@@ -42,7 +44,7 @@ public class OtelMetricsTests
             builder.AddKeyedKafkaProducer<string, string>("messaging");
             builder.AddKeyedKafkaConsumer<string, string>("messaging", configureSettings: settings =>
             {
-                settings.Config.GroupId = "unused";
+                settings.Config.GroupId = groupId;
                 settings.Config.EnablePartitionEof = true;
                 settings.Config.AutoOffsetReset = AutoOffsetReset.Earliest;
             });
@@ -52,7 +54,7 @@ public class OtelMetricsTests
             builder.AddKafkaProducer<string, string>("messaging");
             builder.AddKafkaConsumer<string, string>("messaging", configureSettings: settings =>
             {
-                settings.Config.GroupId = "unused";
+                settings.Config.GroupId = groupId;
                 settings.Config.EnablePartitionEof = true;
                 settings.Config.AutoOffsetReset = AutoOffsetReset.Earliest;
             });
@@ -62,8 +64,6 @@ public class OtelMetricsTests
 
         using var host = builder.Build();
         await host.StartAsync();
-        IGrouping<string, Metric>[] groups;
-
         string topic = $"otel-topic-{Guid.NewGuid()}";
         using (var producer = useKeyed
             ? host.Services.GetRequiredKeyedService<IProducer<string, string>>(key)
@@ -82,21 +82,24 @@ public class OtelMetricsTests
             await producer.FlushAsync();
         }
 
+        var pollCount = 0;
         using (var consumer = useKeyed
             ? host.Services.GetRequiredKeyedService<IConsumer<string, string>>(key)
             : host.Services.GetRequiredService<IConsumer<string, string>>())
         {
             consumer.Subscribe(topic);
 
+            using var consumeCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             int j = 0;
             while (true)
             {
-                var consumerResult = consumer.Consume();
+                var consumerResult = consumer.Consume(consumeCancellation.Token);
                 if (consumerResult == null)
                 {
                     continue;
                 }
 
+                pollCount++;
                 if (consumerResult.IsPartitionEOF)
                 {
                     break;
@@ -111,14 +114,58 @@ public class OtelMetricsTests
 
         await host.StopAsync();
 
-        groups = metrics.Where(x => x.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka")
-            .GroupBy(x => x.Name).ToArray();
+        var metricNames = metrics
+            .Where(x => x.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka")
+            .Select(x => x.Name)
+            .Distinct()
+            .Order()
+            .ToArray();
 
-        Assert.Equal(4, groups.Length);
+        Assert.Equal(
+            [
+                "messaging.client.consumed.messages",
+                "messaging.client.operation.duration",
+                "messaging.client.sent.messages",
+            ],
+            metricNames);
 
-        Assert.Contains(groups, x => x.Key == "messaging.receive.duration");
-        Assert.Contains(groups, x => x.Key == "messaging.receive.messages");
-        Assert.Contains(groups, x => x.Key == "messaging.publish.duration");
-        Assert.Contains(groups, x => x.Key == "messaging.publish.messages");
+        Assert.All(metrics.Where(metric => metric.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka"), metric =>
+        {
+            Assert.Equal("0.3.0.0", metric.MeterVersion);
+            Assert.Equal("https://opentelemetry.io/schemas/1.44.0", metric.MeterSchemaUrl);
+        });
+
+        var durationMetric = metrics.Last(metric =>
+            metric.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka"
+            && metric.Name == "messaging.client.operation.duration");
+        Assert.Equal("s", durationMetric.Unit);
+        var durationPoints = new List<MetricPoint>();
+        foreach (ref readonly var point in durationMetric.GetMetricPoints())
+        {
+            if (Equals(GetTagValue(point, "messaging.destination.name"), topic))
+            {
+                durationPoints.Add(point);
+            }
+        }
+
+        Assert.Equal(2, durationPoints.Count);
+        var sendPoint = Assert.Single(durationPoints, point => Equals(GetTagValue(point, "messaging.operation.name"), "send"));
+        Assert.Equal(5, sendPoint.GetHistogramCount());
+        Assert.Equal("send", GetTagValue(sendPoint, "messaging.operation.type"));
+        Assert.True(sendPoint.GetHistogramSum() >= 0);
+        var pollPoint = Assert.Single(durationPoints, point => Equals(GetTagValue(point, "messaging.operation.name"), "poll"));
+        Assert.Equal(pollCount, pollPoint.GetHistogramCount());
+        Assert.Equal("receive", GetTagValue(pollPoint, "messaging.operation.type"));
+        Assert.True(pollPoint.GetHistogramSum() >= 0);
+
+        foreach (var metricName in new[] { "messaging.client.sent.messages", "messaging.client.consumed.messages" })
+        {
+            var metric = metrics.Last(metric =>
+                metric.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka"
+                && metric.Name == metricName);
+            Assert.Equal("{message}", metric.Unit);
+            var point = Assert.IsType<MetricPoint>(GetMetricPointWithTag(metric, "messaging.destination.name", topic));
+            Assert.Equal(5, point.GetSumLong());
+        }
     }
 }

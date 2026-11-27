@@ -54,6 +54,8 @@ internal sealed class ConfluentKafkaMetrics
         public const string TxBytes = "messaging.kafka.network.transmitted";
         public const string Rx = "messaging.kafka.network.rx";
         public const string RxBytes = "messaging.kafka.network.received";
+        // Keep the Aspire 8 schema: librdkafka txmsgs/rxmsgs count broker traffic,
+        // not producer send attempts or messages delivered at the Consume boundary.
         public const string TxMessages = "messaging.publish.messages";
         public const string TxMessageBytes = "messaging.kafka.message.transmitted";
         public const string RxMessages = "messaging.receive.messages";
