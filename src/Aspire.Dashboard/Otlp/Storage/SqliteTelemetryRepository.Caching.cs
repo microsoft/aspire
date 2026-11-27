@@ -748,6 +748,70 @@ public sealed partial class SqliteTelemetryRepository
             : _cachedResourcesByKey.TryGetValue(key, out var resource) ? [resource] : [];
     }
 
+    /// <summary>
+    /// Formats the database IDs of the resources matching <paramref name="resourceKeys"/> as a SQL list, e.g. <c>(3,7,12)</c>.
+    /// Returns <see langword="null"/> when there are no keys, which means the query isn't filtered by resource.
+    /// </summary>
+    /// <remarks>
+    /// Resource filters can contain one key per telemetry source (up to <see cref="Configuration.TelemetryLimitOptions.MaxResourceCount"/>).
+    /// A predicate per key exceeds SQLite's expression depth limit at around 1,000 keys, and binding each value as a parameter
+    /// is capped by SQLite's bound parameter limit. The IDs are integers read from the cache, so writing them into the SQL
+    /// is safe and has neither limit.
+    /// IDs are resolved for each query rather than once per request: a resource row can be deleted and recreated with a new ID
+    /// while a watch request is open, and a key without an instance ID must also match instances that arrive later.
+    /// </remarks>
+    private string? GetResourceIdSqlList(IReadOnlyList<ResourceKey> resourceKeys)
+    {
+        if (resourceKeys.Count == 0)
+        {
+            return null;
+        }
+
+        // Match names and instance IDs case-insensitively, consistent with other resource name comparisons.
+        // A null instance set means the key has no instance ID, so every instance with the name matches.
+        var instancesByName = new Dictionary<string, HashSet<string>?>(StringComparers.ResourceName);
+        foreach (var key in resourceKeys)
+        {
+            if (key.InstanceId is null)
+            {
+                instancesByName[key.Name] = null;
+            }
+            else if (!instancesByName.TryGetValue(key.Name, out var instances))
+            {
+                instancesByName[key.Name] = new HashSet<string>(StringComparers.ResourceName) { key.InstanceId };
+            }
+            else
+            {
+                instances?.Add(key.InstanceId);
+            }
+        }
+
+        EnsureCachePopulated();
+        var sql = new StringBuilder("(");
+        lock (_cacheLock)
+        {
+            var first = true;
+            foreach (var cachedResource in _cachedResourcesById.Values)
+            {
+                var resource = cachedResource.Resource;
+                if (instancesByName.TryGetValue(resource.ResourceName, out var instances) &&
+                    (instances is null || (resource.InstanceId is not null && instances.Contains(resource.InstanceId))))
+                {
+                    if (!first)
+                    {
+                        sql.Append(',');
+                    }
+                    sql.Append(cachedResource.ResourceId.ToString(CultureInfo.InvariantCulture));
+                    first = false;
+                }
+            }
+        }
+
+        // SQLite accepts an empty list, e.g. "resource_id IN ()", which matches no rows.
+        // https://www.sqlite.org/lang_expr.html#the_in_and_not_in_operators
+        return sql.Append(')').ToString();
+    }
+
     private void ClearMetadataCache()
     {
         lock (_cacheLock)

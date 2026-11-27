@@ -1464,6 +1464,49 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task ResourceKeys_MoreThanSqliteExpressionDepthLimit_ReturnsAllMatchingTelemetry()
+    {
+        // Arrange
+        // A per-key predicate exceeds SQLite's expression depth limit of 1,000 with fewer keys than this.
+        const int resourceCount = 1_100;
+        using var repositoryContext = await CreateRepositoryAsync();
+        var repository = repositoryContext.Repository;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var resourceLogs = new RepeatedField<ResourceLogs>();
+        var resourceSpans = new RepeatedField<ResourceSpans>();
+        for (var i = 0; i < resourceCount; i++)
+        {
+            var resource = CreateResource(name: $"service{i}", instanceId: "instance");
+            resourceLogs.Add(new ResourceLogs
+            {
+                Resource = resource,
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(time: s_testTime.AddSeconds(i), message: $"log{i}", severity: SeverityNumber.Info) } } }
+            });
+            resourceSpans.Add(new ResourceSpans
+            {
+                Resource = resource,
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: $"trace{i}", spanId: $"span{i}", startTime: s_testTime.AddSeconds(i), endTime: s_testTime.AddSeconds(i + 1)) } } }
+            });
+        }
+        await repository.AsWriter().AddLogsAsync(new AddContext(), resourceLogs);
+        await repository.AsWriter().AddTracesAsync(new AddContext(), resourceSpans);
+        var resourceKeys = repository.GetResources().Select(resource => resource.ResourceKey).ToList();
+        Assert.Equal(resourceCount, resourceKeys.Count);
+
+        // Act
+        var logs = await repository.GetLogsAsync(new GetLogsContext { ResourceKeys = resourceKeys, StartIndex = 0, Count = 1, Filters = [] }, cancellationToken);
+        var overviewLogs = await repository.GetOverviewLogsAsync(resourceKeys, recentCount: 1, errorsOnly: false, cancellationToken);
+        var traceSummaries = await repository.GetTraceSummariesAsync(new GetTracesRequest { ResourceKeys = resourceKeys, StartIndex = 0, Count = 1, Filters = [] }, cancellationToken);
+        var spans = await repository.GetSpansAsync(new GetSpansRequest { ResourceKeys = resourceKeys, StartIndex = 0, Count = 1, Filters = [] }, cancellationToken);
+
+        // Assert
+        Assert.Equal(resourceCount, logs.TotalItemCount);
+        Assert.Equal(resourceCount, overviewLogs.TotalCount);
+        Assert.Equal(resourceCount, traceSummaries.PagedResult.TotalItemCount);
+        Assert.Equal(resourceCount, spans.PagedResult.TotalItemCount);
+    }
+
+    [Fact]
     public async Task WatchSpansAsync_SnapshotFailure_SurfacesWatchError()
     {
         // Arrange

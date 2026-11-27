@@ -411,10 +411,8 @@ public sealed partial class SqliteTelemetryRepository
         using var connection = _database.OpenConnection();
         using var interrupt = connection.RegisterInterrupt(cancellationToken);
         var parameters = new DynamicParameters();
-        var resourcePredicate = BuildLogResourcePredicate(resourceKeys, parameters);
-        var from = resourcePredicate is null
-            ? "FROM telemetry_logs l"
-            : "FROM telemetry_logs l JOIN telemetry_resources r ON r.resource_id = l.resource_id";
+        var resourcePredicate = BuildLogResourcePredicate(resourceKeys);
+        const string from = "FROM telemetry_logs l";
         parameters.Add("Warning", (int)LogLevel.Warning);
         parameters.Add("Error", (int)LogLevel.Error);
         parameters.Add("Critical", (int)LogLevel.Critical);
@@ -556,7 +554,7 @@ public sealed partial class SqliteTelemetryRepository
         return values.ToDictionary(record => record.FieldValue!, record => record.ValueCount, StringComparers.OtlpAttribute);
     }
 
-    private static LogQuery BuildLogQuery(GetLogsContext context)
+    private LogQuery BuildLogQuery(GetLogsContext context)
     {
         var parameters = new DynamicParameters();
         var predicates = new List<string>();
@@ -565,7 +563,7 @@ public sealed partial class SqliteTelemetryRepository
             parameters.Add("LogIds", context.LogIds);
             predicates.Add("l.log_id IN @LogIds");
         }
-        if (BuildLogResourcePredicate(context.ResourceKeys, parameters) is { } resourcePredicate)
+        if (BuildLogResourcePredicate(context.ResourceKeys) is { } resourcePredicate)
         {
             predicates.Add(resourcePredicate);
         }
@@ -618,29 +616,8 @@ public sealed partial class SqliteTelemetryRepository
             """, parameters);
     }
 
-    private static string? BuildLogResourcePredicate(IReadOnlyList<ResourceKey> resourceKeys, DynamicParameters parameters)
-    {
-        if (resourceKeys.Count == 0)
-        {
-            return null;
-        }
-
-        var resourcePredicates = new List<string>(resourceKeys.Count);
-        for (var i = 0; i < resourceKeys.Count; i++)
-        {
-            var key = resourceKeys[i];
-            var predicate = $"r.resource_name = @ResourceName{i} COLLATE NOCASE";
-            parameters.Add($"ResourceName{i}", key.Name);
-            if (key.InstanceId is not null)
-            {
-                predicate += $" AND r.instance_id = @InstanceId{i} COLLATE NOCASE";
-                parameters.Add($"InstanceId{i}", key.InstanceId);
-            }
-            resourcePredicates.Add($"({predicate})");
-        }
-
-        return $"({string.Join(" OR ", resourcePredicates)})";
-    }
+    private string? BuildLogResourcePredicate(IReadOnlyList<ResourceKey> resourceKeys) =>
+        GetResourceIdSqlList(resourceKeys) is { } resourceIds ? $"l.resource_id IN {resourceIds}" : null;
 
     private HashSet<long> GetMatchingLogIdsFromDatabase(GetLogsContext context)
     {

@@ -180,28 +180,14 @@ public sealed partial class SqliteTelemetryRepository
             new(resourceName, instanceId, uninstrumentedPeer, _otlpContext);
     }
 
-    private static TraceQuery BuildTraceQuery(SqliteConnection connection, SqliteTransaction? transaction, GetTracesRequest context)
+    private TraceQuery BuildTraceQuery(SqliteConnection connection, SqliteTransaction? transaction, GetTracesRequest context)
     {
         var sql = new StringBuilder("FROM telemetry_traces t WHERE 1 = 1");
         var parameters = new DynamicParameters();
-        string? resourcePredicate = null;
-        if (context.ResourceKeys.Count > 0)
+        var resourceIds = GetResourceIdSqlList(context.ResourceKeys);
+        if (resourceIds is not null)
         {
-            var resourcePredicates = new List<string>(context.ResourceKeys.Count);
-            for (var index = 0; index < context.ResourceKeys.Count; index++)
-            {
-                var key = context.ResourceKeys[index];
-                parameters.Add($"ResourceName{index}", key.Name);
-                var predicate = $"r.resource_name = @ResourceName{index} COLLATE NOCASE";
-                if (key.InstanceId is not null)
-                {
-                    parameters.Add($"InstanceId{index}", key.InstanceId);
-                    predicate += $" AND r.instance_id = @InstanceId{index} COLLATE NOCASE";
-                }
-                resourcePredicates.Add($"({predicate})");
-            }
-            resourcePredicate = string.Join(" OR ", resourcePredicates);
-            sql.Append(CultureInfo.InvariantCulture, $" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr JOIN telemetry_resources r ON r.resource_id = tr.resource_id WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND ({resourcePredicate}))");
+            sql.Append(CultureInfo.InvariantCulture, $" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND tr.resource_id IN {resourceIds})");
         }
         if (!string.IsNullOrWhiteSpace(context.TraceNameFilterText))
         {
@@ -264,8 +250,8 @@ public sealed partial class SqliteTelemetryRepository
         {
             // "All resources" can also arrive as explicit keys. Check coverage using resource metadata so that
             // only a selection that excludes trace sources takes the trace-first path.
-            var excludesTraceSources = resourcePredicate is not null && connection.QuerySingle<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM telemetry_resources r WHERE r.has_traces = 1 AND ({resourcePredicate}) IS NOT TRUE);
+            var excludesTraceSources = resourceIds is not null && connection.QuerySingle<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM telemetry_resources r WHERE r.has_traces = 1 AND r.resource_id NOT IN {resourceIds});
                 """, parameters, transaction);
             if (excludesTraceSources)
             {
@@ -549,7 +535,7 @@ public sealed partial class SqliteTelemetryRepository
         };
     }
 
-    private static TraceQuery BuildSpanQuery(GetSpansRequest context)
+    private TraceQuery BuildSpanQuery(GetSpansRequest context)
     {
         var sql = new StringBuilder("""
             FROM telemetry_spans s
@@ -575,26 +561,10 @@ public sealed partial class SqliteTelemetryRepository
             sql.AppendJoin(" OR ", identityPredicates);
             sql.Append(')');
         }
-        if (context.ResourceKeys.Count > 0)
+        if (GetResourceIdSqlList(context.ResourceKeys) is { } resourceIds)
         {
-            var predicates = new List<string>(context.ResourceKeys.Count);
-            for (var index = 0; index < context.ResourceKeys.Count; index++)
-            {
-                var key = context.ResourceKeys[index];
-                parameters.Add($"SpanResourceName{index}", key.Name);
-                var source = $"r.resource_name = @SpanResourceName{index} COLLATE NOCASE";
-                var peer = $"pr.resource_name = @SpanResourceName{index} COLLATE NOCASE";
-                if (key.InstanceId is not null)
-                {
-                    parameters.Add($"SpanInstanceId{index}", key.InstanceId);
-                    source += $" AND r.instance_id = @SpanInstanceId{index} COLLATE NOCASE";
-                    peer += $" AND pr.instance_id = @SpanInstanceId{index} COLLATE NOCASE";
-                }
-                predicates.Add($"(({source}) OR ({peer}))");
-            }
-            sql.Append(" AND (");
-            sql.AppendJoin(" OR ", predicates);
-            sql.Append(')');
+            // A span matches a resource when the resource sent it or is its uninstrumented peer.
+            sql.Append(CultureInfo.InvariantCulture, $" AND (s.resource_id IN {resourceIds} OR s.uninstrumented_peer_resource_id IN {resourceIds})");
         }
         if (!string.IsNullOrEmpty(context.TraceId))
         {
