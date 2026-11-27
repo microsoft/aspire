@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -49,7 +50,7 @@ internal sealed class ContainerNetworkService
 /// <summary>
 /// Provisions endpoints, and starts associated container tunnels, that make host resources reachable from the default container network.
 /// </summary>
-internal sealed partial class ContainerNetworkEndpointProvisioner : IDisposable
+internal sealed class ContainerNetworkEndpointProvisioner : IDisposable
 {
     private const string DefaultAspireNetworkName = "aspire-session-network";
     private const string DefaultAspirePersistentNetworkName = "aspire-persistent-network";
@@ -506,14 +507,14 @@ internal sealed partial class ContainerNetworkEndpointProvisioner : IDisposable
     }
 
     // The application name is only a suffix of the physical network name, so invalid characters can be omitted.
-    private static string NormalizeApplicationName(string applicationName)
+    internal static string NormalizeApplicationName(string applicationName)
     {
         if (string.IsNullOrEmpty(applicationName))
         {
             return applicationName;
         }
 
-        applicationName = ApplicationNameRegex().Match(applicationName) switch
+        applicationName = ApplicationNameHelper.ApplicationNameRegex().Match(applicationName) switch
         {
             Match { Success: true } match => match.Groups["name"].Value,
             _ => applicationName
@@ -539,6 +540,4 @@ internal sealed partial class ContainerNetworkEndpointProvisioner : IDisposable
         return normalizedName.ToString();
     }
 
-    [GeneratedRegex("""^(?<name>.+?)\.?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
-    private static partial Regex ApplicationNameRegex();
 }
