@@ -39,8 +39,17 @@ public class NativeProviderClientTests
             Assert.Equal($"catalog{index}", await previous.GetResourceNameAsync());
             await provider.DisposeAsync();
             await Assert.ThrowsAsync<NativeCapabilityException>(() => previous.GetResourceNameAsync());
-            Assert.Equal(0, (await app.GetIntegrationCapabilitiesAsync(TestContext.Current.CancellationToken))
-                .GetProperty("capabilities").GetArrayLength());
+            // A disconnected invocation can fail before the server removes the provider's registrations.
+            var cancellationToken = TestContext.Current.CancellationToken;
+            var capabilities = await app.GetIntegrationCapabilitiesAsync(cancellationToken);
+            var count = capabilities.GetProperty("capabilities").GetArrayLength();
+            for (var attempt = 0; count != 0 && attempt < 50; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+                capabilities = await app.GetIntegrationCapabilitiesAsync(cancellationToken);
+                count = capabilities.GetProperty("capabilities").GetArrayLength();
+            }
+            Assert.Equal(0, count);
             Assert.Equal(index + 1, (await composition.InspectAsync()).Resources.Length);
         }
         await session.RetireGenerationAsync(composition);
