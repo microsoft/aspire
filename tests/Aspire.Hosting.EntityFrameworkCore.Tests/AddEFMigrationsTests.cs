@@ -4,8 +4,10 @@
 #pragma warning disable ASPIREDOTNETTOOL
 #pragma warning disable ASPIREPROJECTS001
 #pragma warning disable CS0618 // Retains legacy project overload and property compatibility alongside V2 coverage.
+#pragma warning disable ASPIRECOMPUTE002
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -295,11 +297,103 @@ public class AddEFMigrationsTests
 
         var toolResource = Assert.Single(appModel.Resources.OfType<DotnetToolResource>(), r => r.Name == "ef-tool-mymigrations");
 
-#pragma warning disable CS0618 // Type or member is obsolete
         var env = await toolResource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
-#pragma warning restore CS0618 // Type or member is obsolete
 
         Assert.Equal("{db1.connectionString}", Assert.Contains("ConnectionStrings__db1", env));
+    }
+
+    [Fact]
+    public async Task ToolResourceReusesStartupProjectEnvironmentCallbackResult()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var callbackInvocationCount = 0;
+        var project = builder.AddProject<Projects.ServiceA>("myproject")
+            .WithEnvironment("ConnectionStrings__db", () =>
+            {
+                callbackInvocationCount++;
+                return $"Data Source={Guid.NewGuid():N}.db";
+            });
+
+        project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var toolResource = Assert.Single(appModel.Resources.OfType<DotnetToolResource>(), r => r.Name == "ef-tool-mymigrations");
+
+        var toolEnvironment = await toolResource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+        var projectEnvironment = await project.Resource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+
+        Assert.Equal(Assert.Contains("ConnectionStrings__db", projectEnvironment), Assert.Contains("ConnectionStrings__db", toolEnvironment));
+        Assert.Equal(1, callbackInvocationCount);
+    }
+
+    [Fact]
+    public async Task ToolResourceUsesStartupProjectContextForLateVolumeEnvironmentCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddProject<Projects.ServiceA>("myproject", launchProfileName: null);
+
+        project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
+        project.WithVolume("data", "/data", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var toolResource = Assert.Single(appModel.Resources.OfType<DotnetToolResource>(), r => r.Name == "ef-tool-mymigrations");
+
+        var toolEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            toolResource,
+            serviceProvider: app.Services);
+        var projectEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            serviceProvider: app.Services);
+
+        Assert.Equal(projectEnvironment["DATA_PATH"], toolEnvironment["DATA_PATH"]);
+    }
+
+    [Fact]
+    public async Task ToolResourceReusesMigrationResourceEnvironmentCallbackResult()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var callbackInvocationCount = 0;
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .WithEnvironment(context =>
+            {
+                callbackInvocationCount++;
+                context.EnvironmentVariables["MIGRATION_VALUE"] = $"{context.Resource.Name}-{Guid.NewGuid():N}";
+            });
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var toolResource = Assert.Single(appModel.Resources.OfType<DotnetToolResource>(), r => r.Name == "ef-tool-mymigrations");
+
+        var toolEnvironment = await toolResource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+        var migrationEnvironment = await migrations.Resource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+
+        Assert.Equal(Assert.Contains("MIGRATION_VALUE", migrationEnvironment), Assert.Contains("MIGRATION_VALUE", toolEnvironment));
+        Assert.StartsWith($"{migrations.Resource.Name}-", Assert.Contains("MIGRATION_VALUE", toolEnvironment));
+        Assert.Equal(1, callbackInvocationCount);
+    }
+
+    [Fact]
+    public async Task ExplicitToolEnvironmentOverridesLateStartupProjectEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+
+        project.AddEFMigrations(
+            "mymigrations",
+            typeof(TestDbContext).FullName!,
+            tool => tool.WithEnvironment("ConnectionStrings__db", "tool-credentials"));
+        project.WithEnvironment("ConnectionStrings__db", "application-credentials");
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var toolResource = Assert.Single(appModel.Resources.OfType<DotnetToolResource>(), r => r.Name == "ef-tool-mymigrations");
+
+        var toolEnvironment = await toolResource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+
+        Assert.Equal("tool-credentials", Assert.Contains("ConnectionStrings__db", toolEnvironment));
     }
 
     // Test classes for DbContext types
