@@ -443,7 +443,7 @@ public class FrontendBrowserTokenAuthTests
         {
             config[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = frontendUrl;
             config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
-        }, testSink: testSink);
+        }, preConfigureBuilder: IntegrationTestHelpers.BindWildcardEndpointsToLoopback, testSink: testSink);
 
         // Act
         await app.StartAsync().DefaultTimeout();
@@ -459,7 +459,10 @@ public class FrontendBrowserTokenAuthTests
         var queryString = HttpUtility.ParseQueryString(uri.Query);
         Assert.NotNull(queryString["t"]);
 
+        var boundFrontendEndpoint = Assert.Single(app.FrontendEndPointsAccessor)().EndPoint;
+        Assert.Equal(IPAddress.Loopback, boundFrontendEndpoint.Address);
         Assert.Equal(linkHost, uri.Host);
+        Assert.Equal(boundFrontendEndpoint.Port, uri.Port);
     }
 
     [Fact]
