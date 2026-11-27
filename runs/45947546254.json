@@ -1,0 +1,102 @@
+{
+  "run_id": 45947546254,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45947546254",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-27T06:18:11Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22688,
+    "title": "Use a private temporary storage area for the Aspire CLI",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny/private-temp-cli-di",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22688",
+    "merged_at": "2026-11-27T05:43:59Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1f53da3c18fbada3e1ad7ac7584e37073321562d",
+    "failed_sha": "b05cf7702f718ebf1fb96d692e153e3dfb44fb23",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "da6316e088ae282d1a9f20679c59a8f9c9e13cef",
+        "message": "[automated] test: Replace the stapler retry JavaScript harness with C# (#21811) ## Description **Replace the stapler retry JavaScript harness with C#, following [this review feedback](https://github.com/microsoft/aspire/pull/21768#discussion_r4483055066).** The C# test delegated fixture setup and assertions to Node just to exercise a Bash script, adding an unnecessary language hop and runtime dependency. Run the real script from C# using `TemporaryWorkspace` and `TestProcessRunner`. Small Bash s",
+        "html_url": "https://github.com/microsoft/aspire/commit/da6316e088ae282d1a9f20679c59a8f9c9e13cef",
+        "pull_request": {
+          "number": 21811,
+          "title": "[automated] test: Replace the stapler retry JavaScript harness with C#",
+          "url": "https://github.com/microsoft/aspire/pull/21811",
+          "merged_at": "2026-11-27T00:12:38Z"
+        }
+      },
+      {
+        "sha": "b7dcf2882f470e0b2c1234c45d340ed34e203ca5",
+        "message": "Disable product telemetry in E2E tests (#22686) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `b063ec9f2d685a46dcd4e302fd06be62349e9957` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8/10 | ↑ CLI and deployment host inheritance tests pass; a real prebuilt Docker terminal confirms container opt-outs.<br>↑ Deployment CI sets the CLI opt-out before install/setup commands.<br>↓ Full profiling E",
+        "html_url": "https://github.com/microsoft/aspire/commit/b7dcf2882f470e0b2c1234c45d340ed34e203ca5",
+        "pull_request": {
+          "number": 22686,
+          "title": "Disable product telemetry in E2E tests",
+          "url": "https://github.com/microsoft/aspire/pull/22686",
+          "merged_at": "2026-11-27T00:48:58Z"
+        }
+      },
+      {
+        "sha": "fba4362efa9424710de884dd08f37b68957b6cd7",
+        "message": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3147124 (#22717) This is the pull request automatically created by the OneLocBuild task in the build process to check-in localized files generated based upon translation source files (.lcl files) handed-back from the downstream localization pipeline. If there are issues in translations, visit https://aka.ms/icxLocBug and log bugs for fixes. The OneLocBuild wiki is https://aka.ms/onelocbuild and the localization proce",
+        "html_url": "https://github.com/microsoft/aspire/commit/fba4362efa9424710de884dd08f37b68957b6cd7",
+        "pull_request": {
+          "number": 22717,
+          "title": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3147124",
+          "url": "https://github.com/microsoft/aspire/pull/22717",
+          "merged_at": "2026-11-27T01:45:35Z"
+        }
+      },
+      {
+        "sha": "b05cf7702f718ebf1fb96d692e153e3dfb44fb23",
+        "message": "Use a private temporary storage area for the Aspire CLI (#22688) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `5c66af8b5d167441b9deec8c7e6ca74fdf742b17` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 7.5/10 | ↑ Full `./build.sh --build` with the banned-API analyzer at this head: 0 warnings, 0 errors.<br>↑ Focused temp storage, bootstrap and DCP tests: 36 passed, 1 Linux-only skip, on macOS,",
+        "html_url": "https://github.com/microsoft/aspire/commit/b05cf7702f718ebf1fb96d692e153e3dfb44fb23",
+        "pull_request": {
+          "number": 22688,
+          "title": "Use a private temporary storage area for the Aspire CLI",
+          "url": "https://github.com/microsoft/aspire/pull/22688",
+          "merged_at": "2026-11-27T05:43:59Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "id": 140336196611,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45947546254/job/140336196611",
+      "classification": "flaky-test",
+      "reason": "Windows recovery test failed on exit-code file-in-use during process scope cleanup; unrelated to merge changes",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.RemoteHost.Tests.IntegrationHostProcessTests.UnexpectedExit_RestartsAndRediscoversWithoutReplayingSideEffects(useAppHostExecutable: True)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "error": "System.InvalidOperationException : Server exited during recovery: info: Aspire.Hosting.RemoteHost.JsonRpcServer[0]\n      Starting RemoteAppHost JsonRpc Server on aspire-host-lifetime-ec2253967c1445e1a9798203651a46df...\ninfo: Aspire.Hosting.RemoteHost.JsonRpcServer[0]\n      Starting JsonRpc server on named pipe: aspire-host-lifetime-ec2253967c1445e1a9798203651a46df\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Launching integration host 'lifetime-test' [test/node]: C:\\Program Files\\nodejs\\node.EXE (entry: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\n4ywnuch.0ee\\daeb11a9\\host.js, cwd: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\n4ywnuch.0ee\\daeb11a9).\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Started integration host supervisor 'lifetime-test' (PID 1940).\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Integration host 'lifetime-test' registration started: attempt 72093c3729ff4651b2c0de6603094e1d, supervisor PI",
+      "stack_trace": "   at Aspire.Hosting.RemoteHost.Tests.IntegrationHostServerProcess.WaitForRecoveryAsync(String expected) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.RemoteHost.Tests\\TestServices\\IntegrationHostProcessFixture.cs:line 422\n   at Aspire.Hosting.RemoteHost.Tests.IntegrationHostProcessTests.UnexpectedExit_RestartsAndRediscoversWithoutReplayingSideEffects(Boolean useAppHostExecutable) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.RemoteHost.Tests\\IntegrationHostProcessTests.cs:line 109\n   at Aspire.Hosting.RemoteHost.Tests.IntegrationHostProcessTests.UnexpectedExit_RestartsAndRediscoversWithoutReplayingSideEffects(Boolean useAppHostExecutable) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.RemoteHost.Tests\\IntegrationHostProcessTests.cs:line 116\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at StreamJsonRpc.JsonRpc.InvokeCoreAsync(JsonRpcRequest request, Type expectedResultType, CancellationToken cancellationToken)\n   at StreamJsonRpc.JsonRpc.InvokeCoreAsync[TResult](RequestId id, String targetName, IReadOnlyList`1 arguments, IReadOnlyList`1 positionalArgumentDeclaredTypes, IReadOnlyDictionary`2 namedArgumentDeclaredTypes, CancellationToken cancellationToken, Boolean isParameterObject)\n   at Aspire.Hosting.RemoteHost.Tests.IntegrationHostServerProcess.WaitForRecoveryAsync(String expected) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.RemoteHost.Tests\\TestServices\\IntegrationHostProcessFixture.cs:line 418\n----- Inner Stack Trace -----\n   at System.Threading.CancellationToken.ThrowOperationCanceledException()\n   at StreamJsonRpc.MessageHandlerBase.WriteAsync(JsonRpcMessage content, CancellationToken cancellationToken)\n   at StreamJsonRpc.JsonRpc.SendAsync(JsonRpcMessage message, CancellationToken cancellationToken)\n   at StreamJsonRpc.JsonRpc.InvokeCoreAsync(JsonRpcRequest request, Type expectedResultType, CancellationToken cancellationToken)",
+      "standard_output": "info: Aspire.Hosting.RemoteHost.JsonRpcServer[0]\n      Starting RemoteAppHost JsonRpc Server on aspire-host-lifetime-ec2253967c1445e1a9798203651a46df...\ninfo: Aspire.Hosting.RemoteHost.JsonRpcServer[0]\n      Starting JsonRpc server on named pipe: aspire-host-lifetime-ec2253967c1445e1a9798203651a46df\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Launching integration host 'lifetime-test' [test/node]: C:\\Program Files\\nodejs\\node.EXE (entry: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\n4ywnuch.0ee\\daeb11a9\\host.js, cwd: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\n4ywnuch.0ee\\daeb11a9).\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Started integration host supervisor 'lifetime-test' (PID 1940).\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Integration host 'lifetime-test' registration started: attempt 72093c3729ff4651b2c0de6603094e1d, supervisor PID 1940, timeout 00:02:00.\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Process supervisor 1940: Started 'C:\\Program Files\\nodejs\\node.EXE' (runtime PID 7132, owner PID 7424, cwd 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\n4ywnuch.0ee\\daeb11a9').\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration host connected (2730334), total: 1\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Integration host 'lifetime-test' registered: attempt 72093c3729ff4651b2c0de6603094e1d, supervisor PID 1940, connection 2730334, elapsed 00:00:00.1789245.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Initializing 1 integration host(s)...\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration capability discovery started: package lifetime-test, connection 2730334, timeout 00:02:00.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration capability discovery finished: package lifetime-test, connection 2730334, elapsed 00:00:00.0370358, timeout 00:02:00.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Registered external capability: test.external/value\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration hosts initialized. External capabilities: 1\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\n4ywnuch.0ee\\daeb11a9\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration invocation 5ef69138a0e341edb90a047789a4b757 started: capability test.external/value, host 2730334, timeout 00:01:00.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration invocation 5ef69138a0e341edb90a047789a4b757 finished: capability test.external/value, host 2730334, elapsed 00:00:00.0092224.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration invocation b5e564ae50d145d0abdf0d60e0817a3e started: capability test.external/value, host 2730334, timeout 00:01:00.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration invocation b5e564ae50d145d0abdf0d60e0817a3e finished: capability test.external/value, host 2730334, elapsed 00:00:00.0114367.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration invocation 146d37114c2d45d6a1bf6d0edf6f6814 started: capability test.external/value, host 2730334, timeout 00:01:00.\nwarn: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Process supervisor 1940: Supervised command 'C:\\Program Files\\nodejs\\node.EXE' exited with code 23.\nfail: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration invocation 146d37114c2d45d6a1bf6d0edf6f6814 failed: capability test.external/value, host 2730334, elapsed 00:00:00.0115447.\n      StreamJso",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Process scope cleanup hit a transient file lock on exit-code file during recovery",
+      "job_id": 140336196611,
+      "execution_id": "5425b658-e849-49eb-af44-2b70a3a7d444",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "remotehost-integrationhost-exit-code-file-in-use"
+  ]
+}
