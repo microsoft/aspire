@@ -7,6 +7,7 @@ using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
@@ -387,6 +388,56 @@ public partial class ConsoleLogsTests : DashboardTestContext
         Assert.False(cut.Instance.ShowHiddenResources);
 
         IEnumerable<string?> GetLogs() => page.Instance._logEntries.GetEntries().Select(entry => entry.RawContent).Order();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ResourcesLayout_ExplicitHiddenResource_CanClearAndContinueStreamingLogs(bool initiallyShowHiddenResources)
+    {
+        var viewport = CreateViewport(isDesktop: true);
+        var worker = ModelTestHelpers.CreateResource("worker", hidden: true);
+        var logs = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var client = new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), worker],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            consoleLogsChannelProvider: _ => logs);
+        SetupConsoleLogsServices(client);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, client);
+        var sessionStorage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        sessionStorage.OnGetAsync = key => key == BrowserStorageKeys.ResourcesShowHiddenResources
+            ? (true, initiallyShowHiddenResources)
+            : (false, null);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl(worker.Name));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport).Add(p => p.Body, body =>
+        {
+            body.OpenComponent<Components.Pages.ConsoleLogs>(0);
+            body.AddComponentParameter(1, nameof(Components.Pages.ConsoleLogs.ResourceName), worker.Name);
+            body.CloseComponent();
+        }));
+        var page = cut.WaitForComponent<Components.Pages.ConsoleLogs>();
+
+        await logs.Writer.WriteAsync([new ResourceLogLine(1, "before clear", IsErrorMessage: false)]);
+        page.WaitForAssertion(() => Assert.Collection(page.Instance._logEntries.GetEntries(),
+            entry => Assert.Equal("before clear", entry.RawContent)));
+
+        Assert.Equal(initiallyShowHiddenResources, cut.Instance.ShowHiddenResources);
+        if (initiallyShowHiddenResources)
+        {
+            await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: false);
+        }
+
+        Assert.False(cut.Instance.ShowHiddenResources);
+        Assert.Equal(worker.Name, page.Instance.PageViewModel.SelectedResource.Id?.InstanceId);
+        var clearButton = cut.FindComponent<ClearSignalsButton>().FindComponent<AspireMenuButton>();
+        var clearItem = Assert.Single(clearButton.Instance.ItemsProvider(), item => item.Id == "clear-menu-resource");
+        Assert.False(clearItem.IsDisabled);
+        await page.InvokeAsync(clearItem.OnClick!);
+
+        Assert.Equal([worker.Name], Assert.Single(client.ClearedConsoleLogs).ResourceNames);
+        await logs.Writer.WriteAsync([new ResourceLogLine(2, "after clear", IsErrorMessage: false)]);
+        page.WaitForAssertion(() => Assert.Collection(page.Instance._logEntries.GetEntries(),
+            entry => Assert.Equal("after clear", entry.RawContent)));
     }
 
     [Fact]

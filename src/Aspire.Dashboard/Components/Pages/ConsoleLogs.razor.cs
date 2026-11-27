@@ -435,7 +435,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private SelectViewModel<ResourceTypeDetails> GetSelectedOption()
     {
         Debug.Assert(_resources is not null);
-        return _resources.GetResource(Logger, ResourceName, canSelectGrouping: true, fallbackViewModel: GetFallbackOption());
+        // The visibility filter applies to the picker, not to an explicit link.
+        var options = ResourceName is not null && !_showHiddenResources
+            ? ResourceSelectHelpers.CreateOptions(_resourceByName, Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsUnknownState)], showHiddenResources: true)
+            : _resources;
+        return options.GetResource(Logger, ResourceName, canSelectGrouping: true, fallbackViewModel: GetFallbackOption());
     }
 
     // A page about one resource never falls back to every resource's logs: when the resource isn't known, for example

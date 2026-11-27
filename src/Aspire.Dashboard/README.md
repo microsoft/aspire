@@ -63,8 +63,8 @@ the button highlight; the all-resources scope and filters are unchanged.
 
 In the modern dashboard's **All resources** view, Console Logs, Metrics, Structured Logs, and Traces exclude hidden resources unless
 **View options > Show hidden resources** is enabled. The **Overview > Graph** view also follows this setting.
-A trace that includes a visible resource
-still shows all its spans, including spans from hidden resources.
+Direct Console Logs links to individual resources work regardless of this setting.
+A trace that includes a visible resource still shows all its spans, including spans from hidden resources.
 
 ## Closing detail pages
 
