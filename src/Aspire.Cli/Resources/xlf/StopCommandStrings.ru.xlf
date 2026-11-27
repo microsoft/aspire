@@ -129,27 +129,27 @@
       </trans-unit>
       <trans-unit id="ResourceTeardownMayContinue">
         <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
-        <target state="new">Resources may still be stopping in the background. Use {0} to wait until they are torn down.</target>
+        <target state="translated">Ресурсы могут по-прежнему останавливаться в фоновом режиме. Используйте {0}, чтобы дождаться их удаления.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownNotConfirmed">
         <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
-        <target state="new">Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</target>
+        <target state="translated">Не удалось подтвердить, что ресурсы {0} удалены. Они могут по-прежнему останавливаться в фоновом режиме.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownTimedOut">
         <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
-        <target state="new">The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</target>
+        <target state="translated">Ресурсы {0} не были полностью удалены в течение {1} сек. Они могут по-прежнему останавливаться в фоновом режиме.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTeardownUnsupported">
         <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
-        <target state="new">{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</target>
+        <target state="translated">{0} не поддерживает ожидание удаления ресурсов, поэтому они могут по-прежнему останавливаться в фоновом режиме. Обновите AppHost до более новой версии Aspire, чтобы использовать {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesTornDown">
         <source>The resources of {0} were torn down.</source>
-        <target state="new">The resources of {0} were torn down.</target>
+        <target state="translated">Ресурсы {0} были удалены.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -179,7 +179,7 @@
       </trans-unit>
       <trans-unit id="TimeoutOptionDescription">
         <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
-        <target state="new">Maximum time in seconds to wait for resources to be torn down (requires --wait)</target>
+        <target state="translated">Максимальное время ожидания удаления ресурсов в секундах (требуется --wait)</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutRequiresWait">
@@ -204,12 +204,12 @@
       </trans-unit>
       <trans-unit id="WaitOptionDescription">
         <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
-        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <target state="translated">Дождаться удаления ресурсов AppHost, например контейнеров, прежде чем продолжить</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForResourceTeardown">
         <source>Waiting for the resources of {0} to be torn down...</source>
-        <target state="new">Waiting for the resources of {0} to be torn down...</target>
+        <target state="translated">Ожидание удаления ресурсов {0}...</target>
         <note />
       </trans-unit>
     </body>

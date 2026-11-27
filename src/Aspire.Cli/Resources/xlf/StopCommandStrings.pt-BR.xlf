@@ -149,7 +149,7 @@
       </trans-unit>
       <trans-unit id="ResourcesTornDown">
         <source>The resources of {0} were torn down.</source>
-        <target state="new">The resources of {0} were torn down.</target>
+        <target state="translated">Os recursos de {0} foram desmontados.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -179,7 +179,7 @@
       </trans-unit>
       <trans-unit id="TimeoutOptionDescription">
         <source>Maximum time in seconds to wait for resources to be torn down (requires --wait)</source>
-        <target state="new">Maximum time in seconds to wait for resources to be torn down (requires --wait)</target>
+        <target state="translated">Tempo máximo, em segundos, para aguardar a desmontagem dos recursos (requer --wait)</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutRequiresWait">
@@ -204,7 +204,7 @@
       </trans-unit>
       <trans-unit id="WaitOptionDescription">
         <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
-        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <target state="translated">Aguarda até que os recursos do AppHost, como contêineres, sejam desmontados antes de retornar</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForResourceTeardown">
