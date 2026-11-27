@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Security.Authentication;
 using System.Text;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Yarp.Transforms;
 using Aspire.TestUtilities;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Yarp.ReverseProxy.Configuration;
 using Yarp.ReverseProxy.Forwarder;
 using Yarp.ReverseProxy.LoadBalancing;
@@ -259,6 +262,121 @@ public class YarpConfigGeneratorTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(30_000L, "00:00:30")]
+    [InlineData(0L, "00:00:00")]
+    [InlineData(1_500L, "00:00:01.5000000")]
+    [InlineData(93_784_005L, "1.02:03:04.0050000")]
+    [InlineData(-5_000L, "-00:00:05")]
+    public void TimeSpanIsSerializedAsSingleEnvVariable(long milliseconds, string expected)
+    {
+        var activityTimeout = TimeSpan.FromMilliseconds(milliseconds);
+        var cluster = new ClusterConfig
+        {
+            ClusterId = "cluster_chats",
+            HttpRequest = new ForwarderRequestConfig
+            {
+                ActivityTimeout = activityTimeout
+            }
+        };
+
+        var variables = GenerateClusterEnvVariables(cluster, "http://chats:8080");
+
+        // The YARP container binds HttpRequest:ActivityTimeout from a single TimeSpan string. Reflecting
+        // over TimeSpan's properties (TICKS, SECONDS, TOTALSECONDS, ...) produces child keys YARP ignores.
+        // See https://github.com/microsoft/aspire/issues/21905.
+        Assert.Collection(
+            variables.OrderBy(v => v.Key, StringComparer.Ordinal),
+            v =>
+            {
+                Assert.Equal("REVERSEPROXY__CLUSTERS__cluster_chats__DESTINATIONS__destination1__ADDRESS", v.Key);
+                Assert.Equal("http://chats:8080", v.Value);
+            },
+            v =>
+            {
+                Assert.Equal("REVERSEPROXY__CLUSTERS__cluster_chats__HTTPREQUEST__ACTIVITYTIMEOUT", v.Key);
+                Assert.Equal(expected, v.Value);
+            });
+        Assert.Equal(activityTimeout, TimeSpan.ParseExact(expected, "c", CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void TimeSpanSerializationIsCultureInvariant()
+    {
+        var cluster = new ClusterConfig
+        {
+            ClusterId = "cluster_chats",
+            HttpRequest = new ForwarderRequestConfig
+            {
+                ActivityTimeout = new TimeSpan(days: 2, hours: 3, minutes: 4, seconds: 5, milliseconds: 250)
+            }
+        };
+
+        // CurrentCulture is async-local, so changing it here doesn't affect concurrently running tests.
+        // fr-FR uses ',' as the decimal separator, which would leak into culture-sensitive formats like "g".
+        var originalCulture = CultureInfo.CurrentCulture;
+        Dictionary<string, object> variables;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
+            variables = GenerateClusterEnvVariables(cluster, "http://chats:8080");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+
+        Assert.Equal("2.03:04:05.2500000", variables["REVERSEPROXY__CLUSTERS__cluster_chats__HTTPREQUEST__ACTIVITYTIMEOUT"]);
+    }
+
+    [Fact]
+    public void EnvVariablesConfigurationIsBoundByYarp()
+    {
+        var variables = new Dictionary<string, object>();
+
+        YarpEnvConfigGenerator.PopulateEnvVariables(
+            variables,
+            _validRoutes.Select(r => new YarpRoute(r)).ToList(),
+            _validClusters.Select(c => new YarpCluster(c, c.Destinations!.First().Value.Address)).ToList());
+
+        // Mirror what the environment variables configuration provider does in the YARP container:
+        // "__" in an environment variable name becomes the ':' configuration key delimiter.
+        // See https://learn.microsoft.com/dotnet/core/extensions/configuration-providers#environment-variable-configuration-provider
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(variables.Select(v => new KeyValuePair<string, string?>(
+                v.Key.Replace("__", ConfigurationPath.KeyDelimiter, StringComparison.Ordinal),
+                (string)v.Value)))
+            .Build();
+
+        // Use YARP's own configuration loader so the values are parsed exactly as the proxy parses them.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddReverseProxy().LoadFromConfig(configuration.GetSection("ReverseProxy"));
+        using var serviceProvider = services.BuildServiceProvider();
+        var proxyConfig = serviceProvider.GetRequiredService<IProxyConfigProvider>().GetConfig();
+
+        var expectedRouteA = _validRoutes.Single(r => r.RouteId == "routeA");
+        var routeA = proxyConfig.Routes.Single(r => r.RouteId == "routeA");
+        Assert.Equal(expectedRouteA.Timeout, routeA.Timeout);
+        Assert.Equal(expectedRouteA.Order, routeA.Order);
+        Assert.Equal(expectedRouteA.MaxRequestBodySize, routeA.MaxRequestBodySize);
+
+        var expectedCluster1 = _validClusters.Single(c => c.ClusterId == "cluster1");
+        var cluster1 = proxyConfig.Clusters.Single(c => c.ClusterId == "cluster1");
+        Assert.Equal(expectedCluster1.HttpRequest!.ActivityTimeout, cluster1.HttpRequest!.ActivityTimeout);
+        Assert.Equal(expectedCluster1.HttpRequest.Version, cluster1.HttpRequest.Version);
+        Assert.Equal(expectedCluster1.HttpRequest.VersionPolicy, cluster1.HttpRequest.VersionPolicy);
+        Assert.Equal(expectedCluster1.HttpRequest.AllowResponseBuffering, cluster1.HttpRequest.AllowResponseBuffering);
+        Assert.Equal(expectedCluster1.HealthCheck!.Active!.Interval, cluster1.HealthCheck!.Active!.Interval);
+        Assert.Equal(expectedCluster1.HealthCheck.Active.Timeout, cluster1.HealthCheck.Active.Timeout);
+        Assert.Equal(expectedCluster1.HealthCheck.Passive!.ReactivationPeriod, cluster1.HealthCheck.Passive!.ReactivationPeriod);
+        Assert.Equal(expectedCluster1.SessionAffinity!.Cookie!.Expiration, cluster1.SessionAffinity!.Cookie!.Expiration);
+        Assert.Equal(expectedCluster1.SessionAffinity.Cookie.MaxAge, cluster1.SessionAffinity.Cookie.MaxAge);
+        Assert.Equal(expectedCluster1.HttpClient!.SslProtocols, cluster1.HttpClient!.SslProtocols);
+        Assert.Equal(expectedCluster1.HttpClient.MaxConnectionsPerServer, cluster1.HttpClient.MaxConnectionsPerServer);
+        Assert.Equal(expectedCluster1.LoadBalancingPolicy, cluster1.LoadBalancingPolicy);
+    }
+
     [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task GenerateEnvVariablesConfigurationDockerCompose()
@@ -294,5 +412,12 @@ public class YarpConfigGeneratorTests(ITestOutputHelper outputHelper)
 
         var content = await File.ReadAllTextAsync(composeFile);
         await Verify(content, "env");
+    }
+
+    private static Dictionary<string, object> GenerateClusterEnvVariables(ClusterConfig cluster, string destinationAddress)
+    {
+        var variables = new Dictionary<string, object>();
+        YarpEnvConfigGenerator.PopulateEnvVariables(variables, [], [new YarpCluster(cluster, destinationAddress)]);
+        return variables;
     }
 }
