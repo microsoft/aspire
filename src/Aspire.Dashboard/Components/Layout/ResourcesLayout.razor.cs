@@ -3058,6 +3058,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 KnownResourceState.FailedToStart or KnownResourceState.RuntimeUnhealthy => "state-error",
                 KnownResourceState.Exited when resource.TryGetExitCode(out var exitCode) && exitCode is not 0 => "state-error",
                 KnownResourceState.Starting or KnownResourceState.Building or KnownResourceState.Waiting or KnownResourceState.Stopping => "state-pending",
+                null when resource.StateStyle == "error" => "state-error",
+                null when resource.StateStyle == "warning" => "state-warning",
+                null when resource.StateStyle == "success" => "state-success",
+                null when resource.IsStateInProgress => "state-pending",
                 _ => "state-neutral"
             };
 

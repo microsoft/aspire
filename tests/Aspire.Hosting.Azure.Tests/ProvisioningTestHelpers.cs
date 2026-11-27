@@ -632,6 +632,7 @@ internal sealed class TestResourceGroupResource : IResourceGroupResource
     private const string DefaultSubscriptionId = "12345678-1234-1234-1234-123456789012";
     private readonly string _name;
     private readonly RequestFailedException? _deleteException;
+    private readonly Func<CancellationToken, Task>? _deleteCallback;
 
     public TestResourceGroupResource(string name, Dictionary<string, object> deploymentOutputs, string subscriptionId = DefaultSubscriptionId)
     {
@@ -657,6 +658,12 @@ internal sealed class TestResourceGroupResource : IResourceGroupResource
         _deleteException = deleteException;
     }
 
+    public TestResourceGroupResource(string name, Func<CancellationToken, Task> deleteCallback)
+        : this(name)
+    {
+        _deleteCallback = deleteCallback;
+    }
+
     public int DeleteCallCount { get; private set; }
 
     public ResourceIdentifier Id { get; }
@@ -671,16 +678,21 @@ internal sealed class TestResourceGroupResource : IResourceGroupResource
     public bool WasDeleteCalled { get; private set; }
     public bool WasGetResourcesCalled { get; private set; }
 
-    public Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default)
+    public async Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default)
     {
         WasDeleteCalled = true;
         DeleteCallCount++;
         if (_deleteException is not null)
         {
-            return Task.FromException<ArmOperation>(_deleteException);
+            throw _deleteException;
         }
 
-        return Task.FromResult<ArmOperation>(new TestDeleteArmOperation());
+        if (_deleteCallback is not null)
+        {
+            await _deleteCallback(cancellationToken).ConfigureAwait(false);
+        }
+
+        return new TestDeleteArmOperation();
     }
 
     public async IAsyncEnumerable<(string Name, string ResourceType)> GetResourcesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)

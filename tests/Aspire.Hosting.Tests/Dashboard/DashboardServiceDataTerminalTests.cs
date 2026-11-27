@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Dashboard;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -26,6 +27,27 @@ namespace Aspire.Hosting.Tests.Dashboard;
 [Trait("Partition", "3")]
 public class DashboardServiceDataTerminalTests
 {
+    [Fact]
+    public async Task Snapshot_ProgressMarkerFollowsResourceState()
+    {
+        var (data, notifications, resource) = CreateHarness(addTerminal: false);
+        using var _ = data;
+
+        await notifications.PublishUpdateAsync(resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Waiting for Deployment", KnownResourceStateStyles.Info) { IsInProgress = true }
+        }).DefaultTimeout();
+        var active = await data.WaitForResourceAsync(resource.Name, r => r.State == "Waiting for Deployment").DefaultTimeout();
+        Assert.True(Assert.Single(active.Properties, p => p.Name == KnownProperties.Resource.StateIsInProgress).Value.BoolValue);
+
+        await notifications.PublishUpdateAsync(resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Canceled", KnownResourceStateStyles.Info)
+        }).DefaultTimeout();
+        var canceled = await data.WaitForResourceAsync(resource.Name, r => r.State == "Canceled").DefaultTimeout();
+        Assert.Equal(0, canceled.Properties.Count(p => p.Name == KnownProperties.Resource.StateIsInProgress));
+    }
+
     [Fact]
     public async Task Snapshot_WithRepeatedTraits_PreservesAllValuesAlongsideTerminalMetadata()
     {

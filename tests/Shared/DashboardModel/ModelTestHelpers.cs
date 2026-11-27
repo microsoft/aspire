@@ -30,7 +30,9 @@ public static class ModelTestHelpers
         ImmutableArray<HealthReportViewModel>? healthReports = null,
         string? resourceTypeDisplayName = null,
         DateTime? startTimeStamp = null,
-        DateTime? stopTimeStamp = null)
+        DateTime? stopTimeStamp = null,
+        string? stateText = null,
+        bool isStateInProgress = false)
     {
         return new ResourceViewModel
         {
@@ -47,9 +49,10 @@ public static class ModelTestHelpers
             Urls = urls ?? [],
             Volumes = volumes ?? [],
             Properties = properties?.ToImmutableDictionary() ?? ImmutableDictionary<string, ResourcePropertyViewModel>.Empty,
-            State = state?.ToString(),
+            State = stateText ?? state?.ToString(),
             KnownState = state,
             StateStyle = stateStyle,
+            IsStateInProgress = isStateInProgress,
             HealthReports = healthReports ?? (reportHealthStatus is null && !createNullHealthReport ? [] : [new HealthReportViewModel("healthcheck", reportHealthStatus, null, null)]),
             Commands = commands ?? [],
             Relationships = relationships ?? [],
