@@ -59,6 +59,16 @@ parameters:
     type: boolean
     default: false
 
+  - name: NuGetPublishOwners
+    displayName: '[Advanced] NuGet ESRP owner (single Microsoft alias or email; confirm onboarding before publishing)'
+    type: string
+    default: 'joperezr'
+
+  - name: NuGetPublishApprovers
+    displayName: '[Advanced] NuGet ESRP approver (single Microsoft alias or email; must differ from the owner)'
+    type: string
+    default: 'adamratzman'
+
   - name: SkipNpmRidPublish
     displayName: '[Advanced] Skip npm RID Package Publishing (set true if RID packages already completed but pointer package did not)'
     type: boolean
@@ -180,7 +190,7 @@ extends:
     # Network isolation policy for ES4.2.4 CFS compliance.
     # CFSClean is intentionally omitted here because it blocks all NuGet endpoints
     # (api.nuget.org, www.nuget.org, etc.) via DNS sinkhole and this release pipeline
-    # must push packages to NuGet.org via the 1ES.PublishNuget@1 task. ES4.2.4 requires
+    # needs public registry access for release checks. ES4.2.4 requires
     # pipelines to *consume* packages from internal feeds (which we do — NuGet.config
     # only uses pkgs.dev.azure.com/dnceng feeds), but does not prohibit *publishing* to
     # public registries. CFSClean2 is retained to block Docker, PowerShell Gallery, and
@@ -210,7 +220,7 @@ extends:
               # Disable the auto-injected MicroBuildAuthorizePublishPlugin@0 task for jobs
               # that do not perform an ESRP publish. PrepareJob only downloads artifacts
               # and re-publishes them as pipeline artifacts (so 1ES PT can attach SBOM);
-              # the actual NuGet/npm push happens in ReleaseJob via 1ES.PublishNuget@1 and
+              # the actual NuGet/npm submission happens in ReleaseJob via
               # MicroBuild.Publish.yml. Without this opt-out, the plugin tries to fetch its
               # nuget package from devdiv.pkgs.visualstudio.com/_packaging/MicroBuildToolset
               # using credentials this pipeline (in the dnceng collection) does not have,
@@ -441,8 +451,13 @@ extends:
                       New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
                     }
 
-                    # Copy all nupkg files
-                    $packages = Get-ChildItem -Path $sourcePath -Filter "*.nupkg" -Recurse
+                    # The release artifact is flat. Reject collisions before copying so one
+                    # signed package cannot silently overwrite another with the same filename.
+                    $packages = @(Get-ChildItem -Path $sourcePath -Filter "*.nupkg" -Recurse -File)
+                    $collisions = @($packages | Group-Object Name | Where-Object Count -gt 1)
+                    if ($collisions.Count -gt 0) {
+                      throw "PackageArtifacts cannot be flattened: duplicate package filenames: $($collisions.Name -join ', ')."
+                    }
                     Write-Host "Found $($packages.Count) packages to copy"
 
                     foreach ($pkg in $packages) {
@@ -748,7 +763,8 @@ extends:
         jobs:
           - job: ReleaseJob
             displayName: 'Validate, Publish, and Promote'
-            timeoutInMinutes: 240
+            # NuGet and both npm submissions wait sequentially for ESRP approval/completion.
+            timeoutInMinutes: 360
             pool:
               name: NetCore1ESPool-Internal
               image: windows.vs2026preview.scout.amd64
@@ -760,14 +776,14 @@ extends:
             templateContext:
               type: releaseJob
               isProduction: true
-              # ReleaseJob is the only job that performs ESRP-backed publish (1ES.PublishNuget@1,
-              # MicroBuild.Publish.yml for npm via DryRun=true gating). The auto-injected
+              # ReleaseJob submits NuGet and npm through MicroBuild.Publish.yml when
+              # DryRun=false. The auto-injected
               # MicroBuildAuthorizePublishPlugin@0 task must therefore be able to authenticate
               # to the MicroBuildToolset feed. The dnceng collection (b55de4ed-4b5a-4215-a8e4-0a0a5f71e7d8)
               # hosts its own mirror at pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset,
               # which is accessible to builds in this collection automatically. Using the dnceng
-              # mirror avoids needing the DevDivEsrpAzDoSrvConn service connection (which is
-              # only required for the actual sign/publish ESRP calls, gated by DryRun=false).
+              # mirror supplies toolset access without invoking the EsrpThirdPartyPackageManager
+              # service connection used for actual publishing, gated by DryRun=false.
               # Pattern: dotnet/roslyn uses the same dnceng MicroBuildToolset mirror.
               mb:
                 publish:
@@ -815,24 +831,24 @@ extends:
                   )
                   Write-Host "Installer-only mode: $installerOnlyMode"
 
-                  if ("${{ parameters.SkipNpmRidPublish }}" -ne "true" -or "${{ parameters.SkipNpmPointerPublish }}" -ne "true") {
+                  $publishNpm = "${{ parameters.SkipNpmRidPublish }}" -ne "true" -or "${{ parameters.SkipNpmPointerPublish }}" -ne "true"
+                  if ("${{ parameters.SkipNuGetPublish }}" -ne "true" -or $publishNpm) {
                     # Validate ESRP owner/approver configuration on dry runs as well
                     # as real publishes so a misconfigured alias set fails the cheap
                     # dry run instead of only surfacing on the real release. The
                     # prerelease hard-block below stays gated on DryRun=false because
                     # a dry run never actually publishes and is the documented way to
                     # exercise the npm path for a prerelease build.
-                    if ("${{ parameters.DryRun }}" -eq "false" -and "${{ parameters.IsPrerelease }}" -eq "true") {
+                    if ($publishNpm -and "${{ parameters.DryRun }}" -eq "false" -and "${{ parameters.IsPrerelease }}" -eq "true") {
                       Write-Error "npm publishing is blocked for prerelease runs because the MicroBuild npm publish template does not yet expose a dist-tag parameter. Set SkipNpmRidPublish=true and SkipNpmPointerPublish=true, or run with DryRun=true until prereleases can publish under a non-latest tag."
                       exit 1
                     }
 
-                    # The alias-validation helpers below are mirrored in
+                    # Reuse the alias-validation helpers for both registries. They are mirrored in
                     # eng/scripts/validate-npm-release-aliases.ps1, which is exercised directly by
                     # ValidateNpmReleaseAliasesTests. releaseJob runs with `checkout: none`, so these
-                    # functions are inlined here instead of dot-sourced; the
-                    # ReleasePublishNugetPipelineTests.NpmAliasValidationHelpersMatchScript test keeps
-                    # the inline copy and the script in sync.
+                    # functions are inlined here instead of dot-sourced. Manually keep the helper
+                    # bodies in sync with the script; the script tests do not enforce synchronization.
                     # >>> BEGIN npm release alias helpers (keep in sync with eng/scripts/validate-npm-release-aliases.ps1) >>>
                     function Format-NpmReleaseAliasForError([string] $value) {
                       $escaped = $value.Replace("`r", '\r').Replace("`n", '\n')
@@ -936,11 +952,23 @@ extends:
                     # interpolation would let an operator-supplied value break out of the quoted
                     # literal and run as code; passing them through the step's env block keeps the
                     # values as data until ConvertTo-NpmReleaseAliasSet validates them.
-                    $owners = $env:NPM_PUBLISH_OWNERS
-                    $approvers = $env:NPM_PUBLISH_APPROVERS
-                    $requiredNpmOwnersValue = $env:NPM_PUBLISH_REQUIRED_OWNERS
+                    if ("${{ parameters.SkipNuGetPublish }}" -ne "true") {
+                      $nugetOwners = ConvertTo-NpmReleaseAliasSet $env:NUGET_PUBLISH_OWNERS 'NuGetPublishOwners'
+                      $nugetApprovers = ConvertTo-NpmReleaseAliasSet $env:NUGET_PUBLISH_APPROVERS 'NuGetPublishApprovers'
+                      Assert-SingleNpmReleaseAlias $nugetOwners 'NuGetPublishOwners'
+                      Assert-SingleNpmReleaseAlias $nugetApprovers 'NuGetPublishApprovers'
 
-                    Invoke-NpmReleaseAliasValidation $owners $approvers $requiredNpmOwnersValue
+                      if ($nugetOwners.Overlaps($nugetApprovers)) {
+                        throw 'NuGetPublishOwners and NuGetPublishApprovers must not contain the same alias.'
+                      }
+
+                      Write-Host "##vso[task.setvariable variable=NuGetPublishOwnersEffective]$($nugetOwners -join ',')"
+                      Write-Host "##vso[task.setvariable variable=NuGetPublishApproversEffective]$($nugetApprovers -join ',')"
+                    }
+
+                    if ($publishNpm) {
+                      Invoke-NpmReleaseAliasValidation $env:NPM_PUBLISH_OWNERS $env:NPM_PUBLISH_APPROVERS $env:NPM_PUBLISH_REQUIRED_OWNERS
+                    }
                   }
 
                   Write-Host "==================================="
@@ -951,6 +979,8 @@ extends:
                 # preserving expression-object typing for the env value while still avoiding
                 # interpolation into the PowerShell source.
                 env:
+                  NUGET_PUBLISH_OWNERS: '${{ parameters.NuGetPublishOwners }}'
+                  NUGET_PUBLISH_APPROVERS: '${{ parameters.NuGetPublishApprovers }}'
                   NPM_PUBLISH_OWNERS: '${{ parameters.NpmPublishOwners }}'
                   NPM_PUBLISH_APPROVERS: '${{ parameters.NpmPublishApprovers }}'
                   NPM_PUBLISH_REQUIRED_OWNERS: $(NPM_PUBLISH_REQUIRED_OWNERS)
@@ -1004,11 +1034,23 @@ extends:
                     packageType: 'sdk'
                     version: '10.0.x'
 
-                - powershell: |
+                - pwsh: |
+                    $ErrorActionPreference = 'Stop'
                     $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    $submissionPath = "$(Pipeline.Workspace)/nuget-esrp-submission"
                     Write-Host "=== Package Inventory ==="
 
-                    $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                    # The existing publish contract is root-level *.nupkg in the flattened
+                    # PackageArtifacts. SBOMs and other sidecars must not enter the ESRP folder.
+                    $packages = @(Get-ChildItem -LiteralPath $packagesPath -Filter "*.nupkg" -File)
+                    $nestedPackages = @(Get-ChildItem -LiteralPath $packagesPath -Filter "*.nupkg" -Recurse -File |
+                      Where-Object DirectoryName -ne (Get-Item -LiteralPath $packagesPath).FullName)
+                    if ($nestedPackages.Count -gt 0) {
+                      throw "Expected flat PackageArtifacts, but found nested packages: $($nestedPackages.FullName -join ', ')."
+                    }
+                    if (@($packages | Where-Object Name -like '*.symbols.nupkg').Count -gt 0) {
+                      throw 'PackageArtifacts contains legacy symbol packages; refusing to submit symbols to ESRP.'
+                    }
                     Write-Host "Found $($packages.Count) packages:"
 
                     foreach ($pkg in $packages) {
@@ -1017,12 +1059,20 @@ extends:
                     }
 
                     if ($packages.Count -eq 0) {
-                      Write-Error "No packages found in artifacts!"
-                      exit 1
+                      throw 'No packages found in artifacts!'
                     }
 
+                    if (Test-Path -LiteralPath $submissionPath) {
+                      Remove-Item -LiteralPath $submissionPath -Recurse -Force
+                    }
+                    New-Item -ItemType Directory -Path $submissionPath | Out-Null
+                    foreach ($pkg in $packages) {
+                      Copy-Item -LiteralPath $pkg.FullName -Destination $submissionPath
+                    }
+
+                    Write-Host "Staged $($packages.Count) unchanged packages for NuGet ESRP submission."
                     Write-Host "==========================="
-                  displayName: 'List Packages'
+                  displayName: 'Stage NuGet Packages for ESRP'
 
                 # ===== VERIFY SIGNATURES =====
                 # Verify packages in parallel via ForEach-Object -Parallel.
@@ -1032,7 +1082,7 @@ extends:
                 # cert-revocation checks `dotnet nuget verify` performs. The
                 # runner ships PowerShell 7+, so -Parallel is available.
                 - pwsh: |
-                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    $packagesPath = "$(Pipeline.Workspace)/nuget-esrp-submission"
                     Write-Host "=== Verifying Package Signatures (parallel) ==="
 
                     $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
@@ -1082,7 +1132,7 @@ extends:
               # Dry Run: List packages that would be published (skip actual publish)
               - ${{ if and(eq(parameters.DryRun, true), eq(parameters.SkipNuGetPublish, false)) }}:
                 - powershell: |
-                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    $packagesPath = "$(Pipeline.Workspace)/nuget-esrp-submission"
                     Write-Host "=== DRY RUN MODE ==="
                     Write-Host "⚠️ The following packages would be published to NuGet.org:"
                     Write-Host ""
@@ -1096,19 +1146,20 @@ extends:
                     Write-Host "=== DRY RUN - No packages were actually published ==="
                   displayName: 'Dry Run - List Packages (No Publish)'
 
-              # Actual Publish: Use 1ES.PublishNuget task (only when not dry run and not skipped)
-              # Pattern from dotnet-diagnostics-internal-components and dotnet-macios:
-              # - useDotNetTask: false (required - DotNetCoreCLI@2 doesn't support encrypted API keys)
-              # - nuGetFeedType: external + publishFeedCredentials for NuGet.org
+              # NuGet previews use this same route; only npm has a prerelease restriction.
+              # Confirm aspire organization onboarding and shared-publisher authorization
+              # before a live run; see docs/release-process.md.
               - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNuGetPublish, false)) }}:
-                - task: 1ES.PublishNuget@1
-                  displayName: 'Push Packages to NuGet.org'
-                  inputs:
-                    useDotNetTask: false
-                    packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
-                    packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
-                    nuGetFeedType: external
-                    publishFeedCredentials: 'NuGet.org - dotnet/aspire'
+                - template: MicroBuild.Publish.yml@MicroBuildTemplate
+                  parameters:
+                    intent: 'PackageDistribution'
+                    contentType: 'NuGet'
+                    organizationName: 'aspire'
+                    contentSource: 'Folder'
+                    folderLocation: '$(Pipeline.Workspace)\nuget-esrp-submission'
+                    waitForReleaseCompletion: true
+                    owners: '$(NuGetPublishOwnersEffective)'
+                    approvers: '$(NuGetPublishApproversEffective)'
 
               # Skip message when SkipNuGetPublish is true
               - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
