@@ -147,7 +147,7 @@
     <PackageVersion Include="MySqlConnector.Logging.Microsoft.Extensions.Logging" Version="2.1.0" />
     <PackageVersion Include="NATS.Net" Version="2.8.2" />
     <PackageVersion Include="NCrontab.Signed" Version="3.4.0" />
-    <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.4" />
     <PackageVersion Include="OpenAI" Version="2.14.0" />
     <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.300" />
     <PackageVersion Include="Polly.Core" Version="8.7.0" />
@@ -167,7 +167,7 @@
     <PackageVersion Include="Microsoft.DevTunnels.Connections" Version="1.3.56" />
     <!-- Open Telemetry -->
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="$(AzureMonitorOpenTelemetryExporterVersion)" />
-    <PackageVersion Include="Npgsql.OpenTelemetry" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.OpenTelemetry" Version="10.0.4" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OpenTelemetryExporterOpenTelemetryProtocolVersion)" />
@@ -271,7 +271,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerNet10Version)" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsNet10Version)" />
     <PackageVersion Include="MongoDB.EntityFrameworkCore" Version="10.0.4" />
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.4" />
     <PackageVersion Include="Oracle.EntityFrameworkCore" Version="10.23.26000" />
     <!-- ASP.NET Core -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateNet10Version)" />
@@ -317,9 +317,8 @@
     <PackageVersion Update="Microsoft.Extensions.FileProviders.Embedded" Version="$(MicrosoftExtensionsFileProvidersEmbeddedVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientVersion)" />
     <PackageVersion Update="System.IO.Hashing" Version="11.0.0" />
-    <!-- Npgsql 11 RC3 requires the exact EF Core RC3 versions. Keep this pin and the
-         HealthChecks EF Core VersionOverrides in the Npgsql EF Core projects aligned until the GA provider is published. -->
-    <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.3" />
+    <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0" />
+    <PackageVersion Update="Npgsql.OpenTelemetry" Version="11.0.0" />
   </ItemGroup>
 
   <!-- The template engine uses the .NET 11 SDK dependency line. Keep these pins scoped to
