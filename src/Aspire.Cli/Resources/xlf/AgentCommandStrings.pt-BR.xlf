@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="translated">Registrar a telemetria de uso das habilidades e ferramentas do agente de IA. É invocado pelos scripts do gancho de telemetria do agente do Aspire e não deve ser executado diretamente.</target>
+        <source>Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly.</source>
+        <target state="needs-review-translation">Registrar a telemetria de uso das habilidades e ferramentas do agente de IA. É invocado pelos scripts do gancho de telemetria do agente do Aspire e não deve ser executado diretamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
-        <source>The opaque AI agent session identifier</source>
-        <target state="translated">O identificador opaco da sessão do agente de IA</target>
+        <source>The AI agent session identifier, which must be a GUID</source>
+        <target state="needs-review-translation">O identificador opaco da sessão do agente de IA</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
@@ -440,11 +440,6 @@
         <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
         <target state="translated">Configuração concluída com erros. Corrija os problemas relatados e execute novamente o comando.</target>
         <note />
-      </trans-unit>
-      <trans-unit id="TelemetryHookScriptUpdateFailed">
-        <source>Could not update the telemetry hook script '{0}': {1}</source>
-        <target state="translated">Não foi possível atualizar o script de gancho de telemetria '{0}': {1}</target>
-        <note>{0} is the hook script path. {1} is the underlying error message.</note>
       </trans-unit>
     </body>
   </file>

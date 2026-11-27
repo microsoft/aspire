@@ -569,6 +569,21 @@ The legacy file continues to work — this is a non-blocking warning.</source>
         <target state="translated">在 {0} 偵測到舊版 .aspire/settings.json</target>
         <note>{0} is the full path to the legacy settings file.</note>
       </trans-unit>
+      <trans-unit id="LegacyTelemetryHookFixFormat">
+        <source>Run 'aspire agent init --agents {0} --skills none --mcp=false' to update the hook to use the Aspire CLI directly.</source>
+        <target state="new">Run 'aspire agent init --agents {0} --skills none --mcp=false' to update the hook to use the Aspire CLI directly.</target>
+        <note>{0} is the non-localizable agent client ID, for example "copilot" or "claude".</note>
+      </trans-unit>
+      <trans-unit id="LegacyTelemetryHookMessageFormat">
+        <source>The {0} telemetry hook is out of date and still runs a legacy script.</source>
+        <target state="new">The {0} telemetry hook is out of date and still runs a legacy script.</target>
+        <note>{0} is the agent client display name, for example "GitHub Copilot" or "Claude Code".</note>
+      </trans-unit>
+      <trans-unit id="LegacyTelemetryHookSymlinkFixFormat">
+        <source>'{0}' is a symbolic link, which 'aspire agent init' does not modify. Replace the legacy hook in the linked file manually, or replace the link with a regular file and run 'aspire agent init --agents {1} --skills none --mcp=false'.</source>
+        <target state="new">'{0}' is a symbolic link, which 'aspire agent init' does not modify. Replace the legacy hook in the linked file manually, or replace the link with a regular file and run 'aspire agent init --agents {1} --skills none --mcp=false'.</target>
+        <note>{0} is the path of the agent settings file. {1} is the non-localizable agent client ID, for example "copilot" or "claude".</note>
+      </trans-unit>
       <trans-unit id="LegacyTypeScriptAppHostMessageFormat">
         <source>Legacy 'apphost.ts' layout detected at {0}</source>
         <target state="translated">在 {0} 偵測到舊版 'apphost.ts' 版面配置</target>

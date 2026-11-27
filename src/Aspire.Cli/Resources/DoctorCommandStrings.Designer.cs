@@ -1076,6 +1076,33 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LegacySettingsDetectedMessageFormat", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run &apos;aspire agent init --agents {0} --skills none --mcp=false&apos; to update the hook to use the Aspire CLI directly..
+        /// </summary>
+        internal static string LegacyTelemetryHookFixFormat {
+            get {
+                return ResourceManager.GetString("LegacyTelemetryHookFixFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The {0} telemetry hook is out of date and still runs a legacy script..
+        /// </summary>
+        internal static string LegacyTelemetryHookMessageFormat {
+            get {
+                return ResourceManager.GetString("LegacyTelemetryHookMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to &apos;{0}&apos; is a symbolic link, which &apos;aspire agent init&apos; does not modify. Replace the legacy hook in the linked file manually, or replace the link with a regular file and run &apos;aspire agent init --agents {1} --skills none --mcp=false&apos;..
+        /// </summary>
+        internal static string LegacyTelemetryHookSymlinkFixFormat {
+            get {
+                return ResourceManager.GetString("LegacyTelemetryHookSymlinkFixFormat", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Legacy &apos;apphost.ts&apos; layout detected at {0}.

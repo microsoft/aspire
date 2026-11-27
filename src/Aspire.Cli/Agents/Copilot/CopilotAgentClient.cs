@@ -136,6 +136,18 @@ internal sealed class CopilotAgentClient(
     // https://code.visualstudio.com/docs/agent-customization/hooks#_choose-a-hook-source
     public bool SupportsTelemetryHooks => true;
 
+    // Aspire 13.5 and 13.6 wrote each postToolUse entry as a hook, and ConfigureTelemetryHookAsync
+    // replaces the whole file without parsing it, so a repeated property name never blocks the refresh.
+    // Copilot CLI's hook loader uses the last occurrence of a repeated property, so detection does the same.
+    public async Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
+    {
+        var path = GetTelemetryHookConfigPath();
+        return await new LegacyTelemetryHook(context, environment).IsRegisteredAsync(path, "postToolUse", nestedHooks: false, allowDuplicateProperties: true, cancellationToken) ? path : null;
+    }
+
+    private string GetTelemetryHookConfigPath()
+        => Path.Combine(GetSettingsDirectory(), "hooks", "aspire-telemetry.json");
+
     public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
         try
@@ -144,9 +156,8 @@ internal sealed class CopilotAgentClient(
             // duplicate Claude's user hook. Direct exec avoids a shell launch, and the matcher keeps
             // Copilot from launching the CLI for tool calls the classifier would discard.
             // https://docs.github.com/en/copilot/reference/hooks-reference#command-hooks
-            var hooksDirectory = Path.Combine(GetSettingsDirectory(), "hooks");
-            Directory.CreateDirectory(hooksDirectory);
-            var filePath = Path.Combine(hooksDirectory, "aspire-telemetry.json");
+            var filePath = GetTelemetryHookConfigPath();
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
             var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
             var config = new JsonObject
             {

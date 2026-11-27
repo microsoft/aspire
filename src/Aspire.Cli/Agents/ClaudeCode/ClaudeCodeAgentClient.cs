@@ -107,12 +107,23 @@ internal sealed class ClaudeCodeAgentClient(
 
     public bool SupportsTelemetryHooks => true;
 
+    // ConfigureTelemetryHookAsync replaces only hooks nested in PostToolUse groups. Detection parses as strictly
+    // as that writer, so `aspire doctor` does not report a registration `aspire agent init` would skip as malformed.
+    public async Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
+    {
+        var path = GetTelemetryHookConfigPath();
+        return await new LegacyTelemetryHook(context, environment).IsRegisteredAsync(path, "PostToolUse", nestedHooks: true, allowDuplicateProperties: false, cancellationToken) ? path : null;
+    }
+
+    private string GetTelemetryHookConfigPath()
+        => Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
+
     public override string ToString() => Id;
 
     public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
-        var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(context, environment);
-        var settingsPath = Path.Combine(claudeDirectory, "settings.json");
+        var settingsPath = GetTelemetryHookConfigPath();
+        var claudeDirectory = Path.GetDirectoryName(settingsPath)!;
         var edit = new AgentConfiguration();
         byte[]? bytes;
         try
@@ -133,7 +144,7 @@ internal sealed class ClaudeCodeAgentClient(
             JsonNode? parsed;
             try
             {
-                parsed = JsonNode.Parse(content);
+                parsed = JsonNode.Parse(content, documentOptions: TelemetryHookJson.ParseOptions);
             }
             catch (JsonException ex)
             {
@@ -189,7 +200,7 @@ internal sealed class ClaudeCodeAgentClient(
             hooks["PostToolUse"] = postToolUse;
         }
 
-        RemoveExistingAspireHooks(postToolUse);
+        RemoveExistingAspireHooks(postToolUse, new LegacyTelemetryHook(context, environment));
         // Run directly, without a shell, and only for tools or skill file reads the classifier can
         // track so Claude does not launch the CLI on every tool call or read.
         // https://docs.claude.com/en/docs/claude-code/hooks
@@ -232,7 +243,7 @@ internal sealed class ClaudeCodeAgentClient(
         };
     }
 
-    private static void RemoveExistingAspireHooks(JsonArray postToolUse)
+    private static void RemoveExistingAspireHooks(JsonArray postToolUse, LegacyTelemetryHook legacyHook)
     {
         // Remove individual Aspire hooks, preserving user hooks that share the same matcher group.
         for (var groupIndex = postToolUse.Count - 1; groupIndex >= 0; groupIndex--)
@@ -244,7 +255,7 @@ internal sealed class ClaudeCodeAgentClient(
             }
             for (var hookIndex = hooks.Count - 1; hookIndex >= 0; hookIndex--)
             {
-                if (IsAspireHook(hooks[hookIndex]))
+                if (IsAspireHook(hooks[hookIndex], legacyHook))
                 {
                     hooks.RemoveAt(hookIndex);
                 }
@@ -256,16 +267,14 @@ internal sealed class ClaudeCodeAgentClient(
         }
     }
 
-    private static bool IsAspireHook(JsonNode? node)
+    private static bool IsAspireHook(JsonNode? node, LegacyTelemetryHook legacyHook)
     {
         // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands.
         if (node is not JsonObject hook)
         {
             return false;
         }
-        if (hook["command"] is JsonValue commandValue
-            && commandValue.TryGetValue<string>(out var command)
-            && ReferencesTelemetryScript(command))
+        if (legacyHook.IsMatch(hook))
         {
             return true;
         }
@@ -284,16 +293,11 @@ internal sealed class ClaudeCodeAgentClient(
                 && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
                 && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
 
-            return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);
+            return isDirectAspireInvocation || isManagedAspireInvocation;
         }
 
         return false;
     }
-
-    private static bool ReferencesTelemetryScript(string? value)
-        => value is not null
-            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
-                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     private string ManagedSettingsDirectory
         => AgentPath.GetManagedSettingsDirectory(context, environment, "ClaudeCode", "claude-code");

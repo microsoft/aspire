@@ -254,7 +254,7 @@ internal static class TelemetryConstants
         public const string ErrorType = "error.type";
 
         /// <summary>
-        /// Tag for the AI agent telemetry event type forwarded by the hook scripts.
+        /// Tag for the AI agent telemetry event type forwarded by agent telemetry hooks.
         /// One of <c>skill_invocation</c>, <c>tool_invocation</c>, or <c>reference_file_read</c>.
         /// </summary>
         public const string AgentEventType = "aspire.cli.agent.event_type";
@@ -316,7 +316,7 @@ internal static class TelemetryConstants
 
         /// <summary>
         /// Activity name for an AI agent skill/tool/reference telemetry event forwarded by the
-        /// agent telemetry hook scripts.
+        /// agent telemetry hooks.
         /// </summary>
         public const string AgentTelemetry = "aspire/cli/agent_telemetry";
 

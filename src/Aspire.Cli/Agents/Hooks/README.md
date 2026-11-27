@@ -1,17 +1,40 @@
 # Telemetry hooks
 
-The Aspire CLI owns telemetry classification, delivery, and the embedded
-`track-telemetry.sh` and `track-telemetry.ps1` compatibility scripts. Plugins
-provide skills and references; they do not register telemetry hooks.
+The Aspire CLI owns telemetry classification and delivery. Agent clients
+registered by `aspire agent init` invoke `aspire agent telemetry --hook`
+directly. Plugins provide skills and references; they do not register
+telemetry hooks.
 
-The release-driven
-[Aspire skills update workflow](https://github.com/microsoft/aspire-skills/blob/dev/.github/workflows/update-aspire.md)
-reviews released skills source and proposes telemetry code, script, and test
-changes in this repository. Updates ship through normal Aspire pull requests
-and CLI releases, without relying on Aspire-skills bundles or caches.
+`aspire doctor` warns about user-level hooks that still invoke legacy telemetry
+scripts and recommends
+`aspire agent init --agents <client> --skills none --mcp=false` to refresh them
+without changing skills or MCP configuration.
 
-Keep the managed classifier and both scripts behaviorally aligned, with focused
-tests for recognized skills, references, and first-party MCP tools.
+The skills and references that may be reported are listed in
+[`telemetry-catalog.json`](telemetry-catalog.json), which is embedded in the
+CLI and read by `AgentTelemetryCatalog`:
+
+```json
+{
+  "skills": [ "aspire", "aspire-init" ],
+  "references": [ "aspire-init/references/templates.md" ]
+}
+```
+
+Each property is required exactly once and must be a non-empty, ordinally
+sorted array of unique strings. References are skill-relative paths under a
+listed skill's `references/` directory. Both the hook classifier and
+`aspire agent telemetry` check values against the catalog, so legacy hook
+scripts installed by older CLIs cannot report unlisted values.
+`AgentTelemetryCatalogTests` validate parsing, and `AgentTelemetryHookTests`
+exercise the embedded catalog.
+
+First-party MCP tool names come from the CLI's
+[`KnownMcpTools.All`](../../Mcp/KnownMcpTools.cs), not the catalog file.
+The [aspire-skills](https://github.com/microsoft/aspire-skills) release workflow
+regenerates this file from `skills/*` and `skills/*/references` and proposes
+the update through an Aspire pull request.
 
 See [Agent usage telemetry](../../../../docs/specs/aspire-product-telemetry.md#agent-usage-telemetry)
-for registration, classification, privacy, and delivery behavior.
+for registration, legacy hook handling, classification, privacy, and delivery
+behavior.

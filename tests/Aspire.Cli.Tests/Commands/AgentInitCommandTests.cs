@@ -811,8 +811,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_DoesNotFail_WhenTelemetryHookConfigurationThrows()
     {
-        // Hook installation is best-effort transparency tooling. A non-IO failure such as a missing
-        // embedded hook script (InvalidOperationException from the installer) must not abort `agent init`.
+        // Hook installation is best-effort transparency tooling, so even non-IO failures must not abort `agent init`.
         const string failureMessage = "simulated hook configuration failure";
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");

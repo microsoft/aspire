@@ -5,7 +5,7 @@ namespace Aspire.Cli.Telemetry;
 
 /// <summary>
 /// Detects coding agents for CLI process telemetry from known environment variables,
-/// independently of the agent hook scripts' client-name classification.
+/// independently of the agent telemetry hook's client-name classification.
 /// </summary>
 internal sealed class CodingAgentDetector(IEnvironment environment) : ICodingAgentDetector
 {

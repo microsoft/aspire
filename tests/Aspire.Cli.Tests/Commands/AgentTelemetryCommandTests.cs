@@ -233,12 +233,9 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
             Assert.Equal(CliExitCodes.Success, exitCode);
-
-            var activity = Assert.Single(capturedActivities);
-            var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
-            // An overlong file reference is dropped (not truncated) so oversized values never reach the backend.
-            Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentFileReference));
-            Assert.Equal("reference_file_read", tags[TelemetryConstants.Tags.AgentEventType]);
+            // An overlong file reference is dropped (not truncated), which leaves the event without the
+            // file it describes, so nothing is emitted.
+            Assert.Empty(capturedActivities);
         }
     }
 
@@ -265,15 +262,12 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
             Assert.Equal(CliExitCodes.Success, exitCode);
-
-            var activity = Assert.Single(capturedActivities);
-            var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
-            Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentFileReference));
+            Assert.Empty(capturedActivities);
         }
     }
 
     [Fact]
-    public async Task AgentTelemetry_DropsUnknownEventType()
+    public async Task AgentTelemetry_EmitsNoActivity_ForUnknownEventType()
     {
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
@@ -291,10 +285,39 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
             Assert.Equal(CliExitCodes.Success, exitCode);
+            // A known skill name without a recognized event type cannot be attributed to an event.
+            Assert.Empty(capturedActivities);
+        }
+    }
+
+    [Theory]
+    [InlineData("ExamplePrivateValue")]
+    [InlineData(" 7f0f3ad1-7a8c-4b52-9b0f-3b6a7c2f9d10 ")]
+    public async Task AgentTelemetry_DropsNonGuidSessionId(string sessionId)
+    {
+        // The Aspire 13.5 bash hook script can extract a nested "sessionId" string from the client payload,
+        // so the command must reject values that are not opaque session GUIDs.
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse(["agent", "telemetry", "--event-type", "skill_invocation", "--skill-name", "aspire", "--session-id", sessionId]);
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
 
             var activity = Assert.Single(capturedActivities);
             var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
-            Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentEventType));
+            Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentSessionId));
+            Assert.Equal("skill_invocation", tags[TelemetryConstants.Tags.AgentEventType]);
             Assert.Equal("aspire", tags[TelemetryConstants.Tags.AgentSkillName]);
         }
     }
@@ -332,7 +355,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        // A newer hook script may pass a flag this CLI version does not understand; it must not fail.
+        // A hook registered by a newer CLI may pass a flag this CLI version does not understand; it must not fail.
         var result = command.Parse("agent telemetry --event-type skill_invocation --some-future-flag value");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
@@ -380,7 +403,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             using var provider = services.BuildServiceProvider();
 
             var command = provider.GetRequiredService<RootCommand>();
-            var result = command.Parse("agent telemetry --event-type reference_file_read --file-reference aspire/references/deploy.md");
+            var result = command.Parse("agent telemetry --event-type reference_file_read --file-reference aspire-init/references/templates.md");
 
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -388,7 +411,41 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
 
             var activity = Assert.Single(capturedActivities);
             var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
-            Assert.Equal("aspire/references/deploy.md", tags[TelemetryConstants.Tags.AgentFileReference]);
+            Assert.Equal("aspire-init/references/templates.md", tags[TelemetryConstants.Tags.AgentFileReference]);
+        }
+    }
+
+    [Theory]
+    [InlineData("skill_invocation", "--skill-name aspire-private-skill")]
+    [InlineData("tool_invocation", "--tool-name aspire-unknown_tool")]
+    [InlineData("tool_invocation", "--tool-name list_resources")]
+    [InlineData("reference_file_read", "--file-reference aspire/private-notes.md")]
+    [InlineData("reference_file_read", "--file-reference aspire-init/references/private-notes.md")]
+    [InlineData("skill_invocation", "--tool-name aspire-list_resources")]
+    [InlineData("tool_invocation", "--skill-name aspire")]
+    public async Task AgentTelemetry_DropsEventsWithoutMatchingCatalogValue(string eventType, string option)
+    {
+        // Hook scripts installed by Aspire 13.5 forward any path under a skill directory and any
+        // Aspire-prefixed tool name, so the command must apply the catalog itself. An event is kept only
+        // when the value that identifies its event type survives; a catalog value for another event type
+        // does not count.
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse($"agent telemetry --event-type {eventType} --client-name claude-code {option}");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Empty(capturedActivities);
         }
     }
 
