@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Windows coordinated builds work with Blazor WebAssembly",
+  "mergedAt": "2026-11-22T09:46:51Z",
+  "number": 22526,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "included",
+  "title": "Avoid unsupported WebAssembly task hosting in Windows coordinated builds"
+}

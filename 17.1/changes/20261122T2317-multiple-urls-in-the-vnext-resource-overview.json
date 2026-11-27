@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@thimok"
+  ],
+  "description": "The new dashboard shows as many resource URLs as fit in the column, with a +N button for the rest.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-11-22T23:17:59Z",
+  "lastMergedAt": "2026-11-22T23:17:59Z",
+  "name": "Multiple URLs in the vNext resource overview",
+  "owner": "JamesNK",
+  "prs": [
+    22541
+  ]
+}

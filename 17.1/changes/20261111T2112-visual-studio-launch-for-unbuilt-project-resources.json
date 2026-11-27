@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Launching an AppHost from Visual Studio now builds path-based project resources first, avoiding 500 errors on clean launches.",
-  "docsPrs": [],
+  "docsPrs": [
+    2122
+  ],
   "docsRequired": false,
   "emoji": "🪟",
   "firstMergedAt": "2026-11-11T21:12:12Z",

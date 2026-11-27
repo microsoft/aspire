@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Agentic workflow maintenance",
+  "mergedAt": "2026-11-20T21:26:21Z",
+  "number": 22494,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "excluded",
+  "title": "Upgrade gh-aw to v1.2.2 and recompile agentic workflows"
+}

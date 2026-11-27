@@ -1,0 +1,19 @@
+{
+  "area": "Other",
+  "areaEmoji": "📦",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The tray action is labeled \"Quit\" on Windows, macOS and Linux.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-11-20T20:31:27Z",
+  "lastMergedAt": "2026-11-20T20:31:27Z",
+  "name": "Consistent tray quit label",
+  "owner": "IEvangelist",
+  "prs": [
+    22295
+  ]
+}

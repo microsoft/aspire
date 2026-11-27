@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The telemetry API now selects only the latest requested items in SQLite instead of loading all matching telemetry, speeding up CLI and MCP telemetry queries.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚀",
+  "firstMergedAt": "2026-11-22T10:47:35Z",
+  "lastMergedAt": "2026-11-22T10:47:35Z",
+  "name": "Faster /api/telemetry reads",
+  "owner": "IEvangelist",
+  "prs": [
+    22529
+  ]
+}

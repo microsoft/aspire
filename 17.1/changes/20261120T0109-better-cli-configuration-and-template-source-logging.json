@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Structured debug logging now explains how the CLI selects, skips, refreshes and reuses configuration and template sources.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔎",
+  "firstMergedAt": "2026-11-20T01:09:25Z",
+  "lastMergedAt": "2026-11-20T01:09:25Z",
+  "name": "Better CLI configuration and template source logging",
+  "owner": "JamesNK",
+  "prs": [
+    22305
+  ]
+}

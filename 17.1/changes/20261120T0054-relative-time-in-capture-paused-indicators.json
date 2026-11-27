@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@MuhammadBilal64"
+  ],
+  "description": "The paused-capture indicator now shows a live relative age (for example \"5 minutes ago\") on logs, traces and metrics pages, with the absolute time in the tooltip.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-11-20T00:54:58Z",
+  "lastMergedAt": "2026-11-20T00:54:58Z",
+  "name": "Relative time in capture-paused indicators",
+  "owner": "JamesNK",
+  "prs": [
+    22399
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "MTP test projects run correctly with the AppHost package",
+  "mergedAt": "2026-11-19T22:45:46Z",
+  "number": 22381,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "included",
+  "title": "Suppress AppHost CLI run hook for MTP tests"
+}

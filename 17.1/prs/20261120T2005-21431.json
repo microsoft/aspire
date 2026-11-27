@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Resource selection preserved in telemetry pages and metric charts",
+  "mergedAt": "2026-11-20T20:05:41Z",
+  "number": 21431,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "included",
+  "title": "Dashboard: preserve resource selection in telemetry pages and metric charts"
+}

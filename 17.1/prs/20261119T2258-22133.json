@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Design-time build fix for repo native/playground projects",
+  "mergedAt": "2026-11-19T22:58:53Z",
+  "number": 22133,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "excluded",
+  "title": "Fix native code generation during design-time builds"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-16T12:47:27Z",
+  "number": 2163,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "excluded",
+  "title": "Serve the E2E tests with StaticHost and install Playwright in the background"
+}

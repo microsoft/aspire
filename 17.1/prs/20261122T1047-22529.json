@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Faster /api/telemetry reads",
+  "mergedAt": "2026-11-22T10:47:35Z",
+  "number": 22529,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "included",
+  "title": "Select the latest telemetry in SQLite for /api/telemetry reads"
+}

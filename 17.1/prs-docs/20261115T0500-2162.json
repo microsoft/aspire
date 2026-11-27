@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-15T05:00:37Z",
+  "number": 2162,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "excluded",
+  "title": "Fix three flaky E2E tests and the reduced-motion reveal offset behind one of them"
+}

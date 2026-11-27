@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-16T19:26:16Z",
+  "number": 2059,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Document aspire secret set --envvar and interactive input"
+}

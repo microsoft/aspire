@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Contributor skill documentation only",
+  "mergedAt": "2026-11-20T19:51:08Z",
+  "number": 22155,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "excluded",
+  "title": "Document Npgsql EF major-version dependency transitions"
+}

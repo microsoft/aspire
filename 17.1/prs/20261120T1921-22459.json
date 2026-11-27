@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only fix",
+  "mergedAt": "2026-11-20T19:21:49Z",
+  "number": 22459,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "excluded",
+  "title": "[automated] Reacquire the CLI path rejection notification before clicking"
+}

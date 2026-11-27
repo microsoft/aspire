@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "The Go starter template now includes a React frontend alongside the Go AppHost.",
-  "docsPrs": [],
+  "docsPrs": [
+    2106
+  ],
   "docsRequired": true,
   "emoji": "⚛️",
   "firstMergedAt": "2026-11-10T21:04:38Z",

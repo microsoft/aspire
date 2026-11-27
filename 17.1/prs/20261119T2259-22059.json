@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Comment-only clarification; no behavior change",
+  "mergedAt": "2026-11-19T22:59:10Z",
+  "number": 22059,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "excluded",
+  "title": "Clarify CLI source validation intent"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "With TLS enabled, the primary Redis endpoint now targets container port 6380 and the secondary non-TLS endpoint targets 6379, following the common convention.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-11-20T00:13:33Z",
+  "lastMergedAt": "2026-11-20T00:13:33Z",
+  "name": "Conventional Redis TLS and non-TLS ports",
+  "owner": "danegsta",
+  "prs": [
+    22350
+  ]
+}

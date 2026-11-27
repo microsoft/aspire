@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Aspire-generated builds on Windows pass -mt:false so AppHosts with Blazor WebAssembly resources no longer fail before the browser debugger starts.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧱",
+  "firstMergedAt": "2026-11-22T09:46:51Z",
+  "lastMergedAt": "2026-11-22T09:46:51Z",
+  "name": "Windows coordinated builds work with Blazor WebAssembly",
+  "owner": "radical",
+  "prs": [
+    22526
+  ]
+}

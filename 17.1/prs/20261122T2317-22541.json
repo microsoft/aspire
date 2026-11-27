@@ -1,0 +1,9 @@
+{
+  "author": "thimok",
+  "comment": "Multiple URLs in the vNext resource overview",
+  "mergedAt": "2026-11-22T23:17:59Z",
+  "number": 22541,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "included",
+  "title": "Dashboard vNext: Allow resource to show multiple URLs if it fits the column"
+}

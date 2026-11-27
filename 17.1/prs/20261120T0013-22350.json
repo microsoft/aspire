@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Conventional Redis TLS and non-TLS ports",
+  "mergedAt": "2026-11-20T00:13:33Z",
+  "number": 22350,
+  "runDate": "2026-11-27T00:10:00Z",
+  "status": "included",
+  "title": "Use conventional Redis TLS and non-TLS target ports"
+}

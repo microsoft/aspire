@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Both dashboard experiences move to FluentUI 5.1 with upstream fixes for grids, tabs, splitters, dialogs and accessibility, and freeform comboboxes keep custom text.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎛️",
+  "firstMergedAt": "2026-11-19T23:06:51Z",
+  "lastMergedAt": "2026-11-19T23:06:51Z",
+  "name": "Dashboard updated to FluentUI 5.1",
+  "owner": "sebastienros",
+  "prs": [
+    22397
+  ]
+}

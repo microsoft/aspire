@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The resource graph draws labeled, color-coded boundaries around tagged resources, highlights a group on hover, and shares a tag actions menu with the sidebar.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-11-20T04:40:07Z",
+  "lastMergedAt": "2026-11-20T04:40:07Z",
+  "name": "Tag grouping in the resource graph",
+  "owner": "JamesNK",
+  "prs": [
+    22420
+  ]
+}
