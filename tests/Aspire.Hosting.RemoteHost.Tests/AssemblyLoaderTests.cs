@@ -13,6 +13,28 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class AssemblyLoaderTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetAssemblyNamesToLoad_IncludesBundledCoreWithoutLooseAssembly(bool configuredCore)
+    {
+        using var applicationBase = new TemporaryDirectory();
+        var settings = new Dictionary<string, string?>
+        {
+            ["AtsAssemblies:0"] = "Aspire.Hosting.CodeGeneration.Go"
+        };
+        if (configuredCore)
+        {
+            settings["AtsAssemblies:1"] = "Aspire.Hosting";
+        }
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+
+        var assemblyNames = AssemblyLoader.GetAssemblyNamesToLoad(
+            configuration, integrationLibsPath: null, applicationBase.Path);
+
+        Assert.Equal(["Aspire.Hosting.CodeGeneration.Go", "Aspire.Hosting"], assemblyNames);
+    }
+
     [Fact]
     public void DiscoverAspireHostingAssemblies_FindsAssembliesInProbeDirectories()
     {
@@ -111,6 +133,7 @@ public class AssemblyLoaderTests
         Assert.Equal(
         [
             "Aspire.Hosting.Azure.AppService",
+            "Aspire.Hosting",
             "Aspire.Hosting.Azure.OperationalInsights"
         ],
         assemblyNames);
@@ -147,6 +170,7 @@ public class AssemblyLoaderTests
 
         Assert.Equal(
         [
+            "Aspire.Hosting",
             "Aspire.Hosting.PackageIntegration",
             "Aspire.Hosting.ProjectIntegration"
         ],

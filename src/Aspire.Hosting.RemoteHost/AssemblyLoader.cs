@@ -193,6 +193,13 @@ internal sealed class AssemblyLoader
             }
         }
 
+        // The managed bundle embeds Aspire.Hosting, so it may have no loose DLL or
+        // restored package asset to discover. Its core APIs must always be scanned.
+        if (seen.Add("Aspire.Hosting"))
+        {
+            assemblyNames.Add("Aspire.Hosting");
+        }
+
         foreach (var name in DiscoverAspireHostingAssemblies([integrationLibsPath, applicationBasePath], packageProbeManifest?.RuntimeAssemblyNames))
         {
             if (seen.Add(name))
