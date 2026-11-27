@@ -87,6 +87,9 @@ internal sealed class WslcContainerRuntime : ContainerRuntimeBase<WslcContainerR
         }
         arguments.AddRange(BuildSecrets(buildSecrets, useCsv: true));
         arguments.AddRange(BuildStage(stage));
+        // Caller-supplied tokens such as BuildKit --cache-from/--cache-to stay individual
+        // arguments. Joining them would split values that contain spaces.
+        arguments.AddRange(BuildAdditionalArguments(options?.AdditionalArguments));
         arguments.Add(normalizedContextPath);
 
         var environmentVariables = new Dictionary<string, string>();
