@@ -61,20 +61,20 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Commit {0}.
-        /// </summary>
-        internal static string AdmireCommitFormat {
-            get {
-                return ResourceManager.GetString("AdmireCommitFormat", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Display the Aspire logo.
         /// </summary>
         internal static string AdmireDescription {
             get {
                 return ResourceManager.GetString("AdmireDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Your admiration of Aspire {0} is noted..
+        /// </summary>
+        internal static string AdmireFallbackMessageFormat {
+            get {
+                return ResourceManager.GetString("AdmireFallbackMessageFormat", resourceCulture);
             }
         }
         

@@ -168,8 +168,8 @@ Read more about Aspire CLI telemetry: {0}</value>
   <data name="AdmireDescription" xml:space="preserve">
     <value>Display the Aspire logo</value>
   </data>
-  <data name="AdmireCommitFormat" xml:space="preserve">
-    <value>Commit {0}</value>
+  <data name="AdmireFallbackMessageFormat" xml:space="preserve">
+    <value>Your admiration of Aspire {0} is noted.</value>
   </data>
   <data name="CompletionScriptDescription" xml:space="preserve">
     <value>Write a shell completion script to standard output</value>

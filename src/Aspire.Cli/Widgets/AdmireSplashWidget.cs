@@ -3,15 +3,37 @@
 
 using System.Diagnostics;
 using Hex1b;
-using Hex1b.Input;
 using Hex1b.Surfaces;
 using Hex1b.Theming;
-using Hex1b.Tokens;
 using Hex1b.Widgets;
 
-namespace Aspire.Cli.Tui;
+namespace Aspire.Cli.Widgets;
 
-internal sealed class AdmireSplashApp
+internal static class AdmireSplashWidget
+{
+    internal static Hex1bWidget Build(RootContext ctx, AdmireSplashState state)
+    {
+        var elapsedMs = state.ElapsedMs;
+        var widget = ctx.Surface(layers =>
+        {
+            state.MoveMouse(layers.MouseX, layers.MouseY);
+            return [layers.Layer(surface => state.Render(surface, elapsedMs))];
+        }).Fill();
+
+        if (elapsedMs >= AdmireSplashState.TotalDurationMs)
+        {
+            state.Complete();
+        }
+        else
+        {
+            widget = widget.RedrawAfter(16);
+        }
+
+        return widget;
+    }
+}
+
+internal sealed class AdmireSplashState
 {
     internal const int FormationDurationMs = 4200;
     internal const int CaptionFadeDurationMs = 800;
@@ -25,53 +47,30 @@ internal sealed class AdmireSplashApp
     private readonly BrailleDot[] _dots;
     private readonly Particle[] _particles;
     private MousePosition? _mousePosition;
+    private readonly long _start = Stopwatch.GetTimestamp();
+    private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public AdmireSplashApp(string version)
+    public AdmireSplashState(string version)
     {
         _version = version;
         _dots = CreateDots();
         _particles = _dots.Select(_ => new Particle()).ToArray();
     }
 
-    internal void MoveMouse(int x, int y) => Volatile.Write(ref _mousePosition, new MousePosition(x, y));
+    internal double ElapsedMs => Stopwatch.GetElapsedTime(_start).TotalMilliseconds;
 
-    public async Task RunAsync(Hex1bTerminalBuilder builder, CancellationToken cancellationToken)
+    internal Task Completion => _completion.Task;
+
+    internal void Complete() => _completion.TrySetResult();
+
+    internal void MoveMouse(int x, int y)
     {
-        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        await using var terminal = builder.WithMouse().AddPresentationFilter(new MouseTrackingFilter(this)).WithHex1bFlow(async flow =>
+        // Surface coordinates are -1 until the pointer is over the widget.
+        // Keep the last known position when it leaves the viewport.
+        if (x >= 0 && y >= 0)
         {
-            using var flowStopping = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token, flow.CancellationToken);
-            var start = Stopwatch.GetTimestamp();
-            var step = flow.Step(ctx => Build(ctx, Stopwatch.GetElapsedTime(start).TotalMilliseconds)
-                .InputBindings(bindings => bindings.Ctrl().Key(Hex1bKey.C).Action(_ => stopping.Cancel())),
-                options => options.EnableMouse = true);
-
-            while (Stopwatch.GetElapsedTime(start).TotalMilliseconds < TotalDurationMs)
-            {
-                await Task.Delay(16, flowStopping.Token);
-                step.Invalidate();
-            }
-
-            // The particles have returned to the mouse. Freeze the empty viewport,
-            // reserving one row for the shell prompt in the normal buffer.
-            await step.CompleteAsync(ctx => ctx.VStack(_ =>
-                [Build(ctx, TotalDurationMs).FixedWidth(flow.TerminalWidth)
-                    .FixedHeight(Math.Max(1, flow.TerminalHeight - 1))]), flowStopping.Token);
-        }, options =>
-        {
-            options.UseSoftWrapTombstones = true;
-            // The builder queries the initial cursor before entering raw mode.
-            // A second Console.GetCursorPosition query at flow startup can deadlock
-            // with the terminal input pump on Unix, which shares stdin.
-            options.CursorRowProvider = () => null;
-        }).Build();
-
-        await terminal.RunAsync(stopping.Token);
-    }
-
-    private Hex1bWidget Build(RootContext ctx, double elapsedMs)
-    {
-        return ctx.Surface(layers => [layers.Layer(surface => Render(surface, elapsedMs))]).Fill();
+            Volatile.Write(ref _mousePosition, new MousePosition(x, y));
+        }
     }
 
     internal void Render(Surface surface, double elapsedMs)
@@ -208,31 +207,6 @@ internal sealed class AdmireSplashApp
         public float Y;
         public float ExitProgress;
         public bool Spawned;
-    }
-
-    internal sealed class MouseTrackingFilter(AdmireSplashApp app) : IHex1bTerminalPresentationFilter
-    {
-        public ValueTask OnInputAsync(IReadOnlyList<AnsiToken> tokens, TimeSpan elapsed, CancellationToken ct = default)
-        {
-            // SGR motion arrives as ESC[<35;column;rowM. Hex1b decodes the
-            // one-based wire coordinates into zero-based terminal coordinates.
-            // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Mouse-Tracking
-            foreach (var token in tokens)
-            {
-                if (token is SgrMouseToken mouse)
-                {
-                    app.MoveMouse(mouse.X, mouse.Y);
-                }
-            }
-
-            return ValueTask.CompletedTask;
-        }
-
-        public ValueTask OnSessionStartAsync(int width, int height, DateTimeOffset timestamp, CancellationToken ct = default) => ValueTask.CompletedTask;
-        public ValueTask OnResizeAsync(int width, int height, TimeSpan elapsed, CancellationToken ct = default) => ValueTask.CompletedTask;
-        public ValueTask OnSessionEndAsync(TimeSpan elapsed, CancellationToken ct = default) => ValueTask.CompletedTask;
-        public ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(IReadOnlyList<AppliedToken> tokens, TimeSpan elapsed, CancellationToken ct = default)
-            => ValueTask.FromResult<IReadOnlyList<AnsiToken>>(tokens.Select(token => token.Token).ToArray());
     }
 
     // RGB logo pixels recovered from the Aspire monitor splash:
