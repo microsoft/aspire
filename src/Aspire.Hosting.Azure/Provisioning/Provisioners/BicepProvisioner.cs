@@ -1286,8 +1286,10 @@ internal sealed class BicepProvisioner(
     {
         return scopeValue switch
         {
-            string value => value,
-            IValueProvider valueProvider => await valueProvider.GetValueAsync(cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("The Azure resource scope value cannot be null."),
+            string { Length: > 0 } value => value,
+            IValueProvider valueProvider when
+                await valueProvider.GetValueAsync(cancellationToken).ConfigureAwait(false) is { Length: > 0 } value => value,
+            string or IValueProvider => throw new InvalidOperationException("The Azure resource scope value cannot be null or empty."),
             _ => throw new NotSupportedException($"The scope value type {scopeValue.GetType()} is not supported.")
         };
     }

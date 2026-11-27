@@ -307,6 +307,55 @@ public class AzureBicepProvisionerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
+    [InlineData(DistributedApplicationOperation.Run, true, false, "")]
+    [InlineData(DistributedApplicationOperation.Run, true, true, "")]
+    [InlineData(DistributedApplicationOperation.Run, true, true, null)]
+    [InlineData(DistributedApplicationOperation.Run, false, false, "")]
+    [InlineData(DistributedApplicationOperation.Run, false, true, "")]
+    [InlineData(DistributedApplicationOperation.Run, false, true, null)]
+    [InlineData(DistributedApplicationOperation.Publish, true, false, "")]
+    [InlineData(DistributedApplicationOperation.Publish, true, true, "")]
+    [InlineData(DistributedApplicationOperation.Publish, true, true, null)]
+    [InlineData(DistributedApplicationOperation.Publish, false, false, "")]
+    [InlineData(DistributedApplicationOperation.Publish, false, true, "")]
+    [InlineData(DistributedApplicationOperation.Publish, false, true, null)]
+    public async Task GetOrCreateResourceAsync_RejectsNullOrEmptyScopeValues(
+        DistributedApplicationOperation operation,
+        bool subscriptionScope,
+        bool parameterBacked,
+        string? value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        object scopeValue = parameterBacked ? new ParameterResource("scope", _ => value!) : value!;
+        var resource = new AzureBicepResource("scoped", templateString: "output result string = 'ok'");
+        resource.Scope = subscriptionScope
+            ? AzureBicepResourceScope.CreateForSubscription(scopeValue)
+            : new AzureBicepResourceScope(scopeValue);
+
+        var subscription = new TestSubscriptionResource([]);
+        var resourceGroup = new TestResourceGroupResource("deploy-rg");
+        var tenant = new TestTenantResource([]);
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: new TestArmClient(subscription, tenant),
+            subscription: subscription,
+            resourceGroup: resourceGroup,
+            tenant: tenant,
+            executionContext: new DistributedApplicationExecutionContext(operation));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateProvisioner(services, operation).GetOrCreateResourceAsync(resource, context, TestContext.Current.CancellationToken));
+
+        Assert.Equal("The Azure resource scope value cannot be null or empty.", exception.Message);
+        Assert.Null(subscription.ResourceGroups.LastRequestedResourceGroupName);
+        Assert.False(subscription.Deployments.WasCreateOrUpdateCalled);
+        Assert.False(resourceGroup.Deployments.WasCreateOrUpdateCalled);
+        Assert.False(tenant.Deployments.WasCreateOrUpdateCalled);
+    }
+
+    [Theory]
     [InlineData(DistributedApplicationOperation.Publish, "aks")]
     [InlineData(DistributedApplicationOperation.Publish, "akss")]
     [InlineData(DistributedApplicationOperation.Publish, "production")]
