@@ -11,6 +11,7 @@ import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvid
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import type { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { CommandInvocationEvent, onDidInvokeCommand } from '../utils/telemetry';
 import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
@@ -75,7 +76,7 @@ suite('registerCliCommands', () => {
             tryExecutePublishAppHost: tryExecutePublishAppHostStub,
         } as unknown as AspireEditorCommandProvider;
 
-        registerCliCommands(terminalProvider, editorCommandProvider, new ConfigInfoProvider(terminalProvider));
+        registerCliCommands(terminalProvider, editorCommandProvider, {} as AppHostDiscoveryService, new ConfigInfoProvider(terminalProvider));
     });
 
     teardown(() => {
