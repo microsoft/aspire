@@ -1,0 +1,28 @@
+{
+  "id": "extension-e2e-resource-debug-tools-control-command-failed",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E resource debug tool test fails applying E2E control revision",
+  "error_pattern": "Failed to apply E2E control revision: E2E control command failed.",
+  "occurrences": [
+    {
+      "run_id": 45948634649,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45948634649",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "observed_at": "2026-11-27T06:47:58Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire resource debug language model tool E2E attaches packaged .NET and Go debuggers, hits breakpoints, detaches, and tears down",
+          "job_id": 140349394413,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+          "error": "Failed to apply E2E control revision 1795761056130: E2E control command failed.",
+          "stack_trace": "Error: Failed to apply E2E control revision 1795761056130: E2E control command failed.\n    at applyE2eControl (out\\test-e2e\\test-e2e\\helpers\\assertions.js:389:15)\n    at async executeE2eControlCommand (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:170:12)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\resourceDebugTools.e2e.test.js:293:28)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}

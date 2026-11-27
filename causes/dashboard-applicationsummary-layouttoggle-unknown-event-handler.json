@@ -1,0 +1,29 @@
+{
+  "id": "dashboard-applicationsummary-layouttoggle-unknown-event-handler",
+  "type": "flaky-test",
+  "title": "Flaky: ApplicationSummaryTests.Render_LayoutToggleChangesViewsWithMissingParameters bUnit UnknownEventHandlerIdException",
+  "error_pattern": "Bunit.Rendering.UnknownEventHandlerIdException : There is no event handler with ID '25' associated with the 'onclick' event in the current render tree.",
+  "occurrences": [
+    {
+      "run_id": 45948634649,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45948634649",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+      "observed_at": "2026-11-27T06:47:58Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Render_LayoutToggleChangesViewsWithMissingParameters(isDesktop: True, missingParameters: True)",
+          "job_id": 140345086673,
+          "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (ubuntu-latest)",
+          "error": "Bunit.Rendering.UnknownEventHandlerIdException : There is no event handler with ID '25' associated with the 'onclick' event in the current render tree.\n\nThis can happen, for example, when using `cut.FindAll()`, and calling event trigger methods on the found elements after a re-render of the render tree. The workaround is to use re-issue the `cut.FindAll()` call after each render of a component, this ensures you have the latest version of the render tree and DOM tree available in your test code.\n\nThis can happen with code like this, `cut.Find(\"button\").Click()`, where the buttons event handler can be removed between the time button is found with the Find method and the Click method is triggered. The workaround is to use wrap the Find and Click method calls in InvokeAsync, i.e. `cut.InvokeAsync(() => cut.Find(\"button\").Click());`. This ensures that there are no changes to the DOM between Find method and the Click method calls.\n---- System.ArgumentException : There is no event handler ass",
+          "stack_trace": "   at Bunit.Rendering.BunitRenderer.AssertNoUnhandledExceptions() in /_/src/bunit/Rendering/BunitRenderer.cs:line 751\n   at Bunit.Rendering.BunitRenderer.DispatchEventAsync(UInt64 eventHandlerId, EventFieldInfo fieldInfo, EventArgs eventArgs, Boolean ignoreUnknownEventHandlers) in /_/src/bunit/Rendering/BunitRenderer.cs:line 249\n   at Bunit.TriggerEventDispatchExtensions.GetDispatchEventTasks(BunitRenderer renderer, IElement element, String eventName, EventArgs eventArgs) in /_/src/bunit/EventDispatchExtensions/TriggerEventDispatchExtensions.cs:line 135\n   at Bunit.TriggerEventDispatchExtensions.TriggerBubblingEventAsync(BunitRenderer renderer, IElement element, String eventName, EventArgs eventArgs) in /_/src/bunit/EventDispatchExtensions/TriggerEventDispatchExtensions.cs:line 110\n   at Bunit.TriggerEventDispatchExtensions.TriggerEventsAsync(BunitRenderer renderer, IElement element, String eventName, EventArgs eventArgs) in /_/src/bunit/EventDispatchExtensions/TriggerEventDispatchExtensions.cs:line 86\n   at Bunit.TriggerEventDispatchExtensions.<>c__DisplayClass3_0.<TriggerEventAsync>b__0() in /_/src/bunit/EventDispatchExtensions/TriggerEventDispatchExtensions.cs:line 73\n   at Bunit.TriggerEventDispatchExtensions.TriggerEventAsync(IElement element, String eventName, EventArgs eventArgs) in /_/src/bunit/EventDispatchExtensions/TriggerEventDispatchExtensions.cs:line 72\n   at Bunit.EventHandlerDispatchExtensions.ClickAsync(IElement element, MouseEventArgs eventArgs) in /_/src/bunit/obj/Release/net11.0/bunit.generators.internal/Bunit.Blazor.EventDispatcherExtensionGenerator/EventHandlerDispatchExtensions.g.cs:line 1209\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.<>c__DisplayClass15_0.<Render_LayoutToggleChangesViewsWithMissingParameters>b__2() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 567\n   at Microsoft.AspNetCore.Components.Rendering.RendererSynchronizationContext.<>c.<<InvokeAsync>b__10_0>d.Mov",
+          "standard_output": "Temporary workspace created at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/zisaqfcs.53s\nDisposing temporary workspace at: /tmp/Aspire.Dashboard.Components.Tests/Workspace/zisaqfcs.53s\n",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "fbd7c92e-0625-43f3-8ae5-56a8c0b64ef4"
+        }
+      ]
+    }
+  ]
+}
