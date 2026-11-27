@@ -6,7 +6,9 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -22,6 +24,51 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class PsCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task PsCommand_RetainsLogFileOnlyWhenOrphansAreCollected(bool stopSucceeds, bool expectedExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var socketPath = Path.Combine(workspace.WorkspaceRoot.FullName, "orphan.sock");
+        File.WriteAllText(socketPath, string.Empty);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection(socketPath, new TestAppHostAuxiliaryBackchannel
+        {
+            SocketPath = socketPath,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 4242,
+                CliProcessId = Environment.ProcessId,
+                // A mismatched stable start time marks the launching CLI as gone, so the AppHost is orphaned.
+                CliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(1)
+            }
+        });
+        var stopper = new TestAppHostStopper { DefaultResult = stopSucceeds };
+        var logFilePath = ManagedLogFiles.GenerateLogFilePath(Path.Combine(workspace.WorkspaceRoot.FullName, "logs"), TimeProvider.System);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = new TestOutputTextWriter(outputHelper);
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        services.AddSingleton<IAppHostStopper>(stopper);
+        services.AddSingleton(_ => new FileLoggerProvider(logFilePath, logsDirectory: null, new TestStartupErrorWriter(), isManagedLog: true));
+
+        using (var provider = services.BuildServiceProvider())
+        {
+            var exitCode = await provider.GetRequiredService<RootCommand>().Parse("ps --format json").InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Single(stopper.StopRequests);
+            provider.GetRequiredService<FileLoggerProvider>().DiscardLogFileOnDisposeUnlessRetained(CancellationToken.None);
+        }
+
+        Assert.Equal(expectedExists, File.Exists(logFilePath));
+    }
+
     [Theory]
     [InlineData(AppHostDisplayStatus.Running, "[green]running[/]")]
     [InlineData(AppHostDisplayStatus.Stopped, "[red]stopped[/]")]

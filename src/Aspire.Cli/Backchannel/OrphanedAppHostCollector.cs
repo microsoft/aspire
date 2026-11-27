@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Processes;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +14,7 @@ namespace Aspire.Cli.Backchannel;
 internal sealed class OrphanedAppHostCollector(
     IAuxiliaryBackchannelMonitor backchannelMonitor,
     IAppHostStopper processShutdownService,
+    FileLoggerProvider fileLoggerProvider,
     ILogger<OrphanedAppHostCollector> logger)
 {
     /// <summary>
@@ -62,6 +64,9 @@ internal sealed class OrphanedAppHostCollector(
                     // commands rediscover a dead AppHost.
                     connection.Socket.TryDelete();
                     collected++;
+                    // Stopping a process is a side effect worth diagnosing later even when the command
+                    // succeeds, but it is logged only at Debug, so keep this run's log file.
+                    fileLoggerProvider.RetainLogFile();
                     logger.LogDebug(
                         "Collected orphaned AppHost {AppHostPath} (PID {AppHostPid}); its launching CLI {CliPid} is no longer running.",
                         appHostInfo?.AppHostPath,

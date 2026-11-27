@@ -367,6 +367,27 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ParseLoggingOptions_AutomaticLogFile_IsManaged()
+    {
+        var loggingOptions = Program.ParseLoggingOptions([]);
+
+        Assert.True(loggingOptions.IsManagedLogFile);
+        Assert.EndsWith("_managed.log", loggingOptions.LogFilePath);
+    }
+
+    [Fact]
+    public void ParseLoggingOptions_ExplicitLogFile_IsNotManaged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "custom.log");
+
+        var loggingOptions = Program.ParseLoggingOptions(["ps", "--log-file", logFilePath]);
+
+        Assert.False(loggingOptions.IsManagedLogFile);
+        Assert.Equal(logFilePath, loggingOptions.LogFilePath);
+    }
+
+    [Fact]
     public void BuildCliExecutionContext_PrInstall_UsesInstallPrefixForStateDirectoriesAndKeepsIdentityChannel()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

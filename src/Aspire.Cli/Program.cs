@@ -76,7 +76,8 @@ public class Program
     /// <param name="DebugMode">Whether --debug or -d was specified.</param>
     /// <param name="LogsDirectory">The directory where log files are stored.</param>
     /// <param name="LogFilePath">The full path to the current session's log file.</param>
-    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath);
+    /// <param name="IsManagedLogFile">Whether the CLI owns the file and may prune it later.</param>
+    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath, bool IsManagedLogFile);
 
     /// <summary>
     /// Holds the objects created during early CLI startup, before DI is available.
@@ -135,9 +136,10 @@ public class Program
         }
 
         var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
-        var logFilePath = ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+        var explicitLogFilePath = ParseLogFileOption(args);
+        var logFilePath = explicitLogFilePath ?? ManagedLogFiles.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
-        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
+        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath, IsManagedLogFile: explicitLogFilePath is null);
     }
 
     /// <summary>
@@ -166,6 +168,36 @@ public class Program
 
         return null;
     }
+
+    /// <summary>
+    /// Determines whether a successful one-shot command's automatic log can be deleted at exit.
+    /// Commands opt in through <see cref="BaseCommand.DiscardsLogOnSuccess"/>. <c>--version</c> runs on the root
+    /// command, which is not a <see cref="BaseCommand"/>, so its action is matched directly because tools such as
+    /// the VS Code extension poll it. Logs are kept when the user
+    /// asked for diagnostics (<c>--debug</c>, <c>--log-level</c>, <c>--log-file</c>, or <c>--capture-profile</c>),
+    /// when the command does not opt in, such as follow modes, or when the run was cancelled. Cancellation is
+    /// checked separately so a cancelled run that still reports success keeps its log.
+    /// </summary>
+    /// <remarks>
+    /// The diagnostic options are checked in the parse result rather than the raw-argument pre-parse in
+    /// <see cref="ParseLoggingOptions"/>, which only recognizes the space-separated form, so inline forms
+    /// such as <c>--log-level=Debug</c> also keep the log. Only explicitly passed options count, and their
+    /// values are never read. Help and version actions clear parse errors and return success, so an invalid
+    /// value such as <c>--log-level bogus</c>, a bare <c>--log-file</c>, or a repeated <c>--follow</c> can
+    /// reach this check, where reading the value would throw. A parse result with errors therefore keeps the
+    /// log before any command reads its options. Implicit results are skipped because System.CommandLine
+    /// creates one for options with a default value, such as <c>--debug</c>.
+    /// </remarks>
+    internal static bool ShouldDiscardLogOnSuccess(int exitCode, bool cancellationRequested, ParseResult parseResult)
+        => exitCode == CliExitCodes.Success
+            && !cancellationRequested
+            && parseResult.Errors.Count == 0
+            && parseResult.GetResult(RootCommand.DebugOption) is not { Implicit: false }
+            && parseResult.GetResult(RootCommand.DebugLevelOption) is not { Implicit: false }
+            && parseResult.GetResult(RootCommand.s_logFileOption) is not { Implicit: false }
+            && parseResult.GetResult(RootCommand.CaptureProfileOption) is not { Implicit: false }
+            && (parseResult.Action is IdentityVersionAction
+                || (parseResult.CommandResult.Command is BaseCommand command && command.DiscardsLogOnSuccess(parseResult)));
 
     private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {
@@ -246,7 +278,7 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
+        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter, loggingOptions.IsManagedLogFile);
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -1192,6 +1224,15 @@ public class Program
             : null;
 
         var loggingOptions = ParseLoggingOptions(args);
+        // A detached child receives an explicit path from its parent, but that path is still
+        // CLI-managed. Consume the handoff so AppHost descendants do not inherit it.
+        var managedLogPath = Environment.GetEnvironmentVariable(AppHostLauncher.ManagedLogFileEnvironmentVariable);
+        Environment.SetEnvironmentVariable(AppHostLauncher.ManagedLogFileEnvironmentVariable, null);
+        if (managedLogPath is not null && string.Equals(managedLogPath, loggingOptions.LogFilePath,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+        {
+            loggingOptions = loggingOptions with { IsManagedLogFile = true };
+        }
         var errorWriter = new StartupErrorWriter(loggingOptions.LogFilePath);
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter, logBufferContext);
@@ -1285,6 +1326,7 @@ public class Program
             : StartMainActivity(telemetry, app.Services.GetRequiredService<InstallSourceDetector>());
         ProfileCaptureService.ProfileCaptureSession? profileCaptureSession = null;
         var exitCode = CliExitCodes.Success;
+        var discardLogOnSuccess = false;
 
         try
         {
@@ -1386,6 +1428,8 @@ public class Program
                 }
             }
 
+            discardLogOnSuccess = ShouldDiscardLogOnSuccess(exitCode, cancellationManager.Token.IsCancellationRequested, parseResult);
+
             return exitCode;
         }
         finally
@@ -1413,6 +1457,14 @@ public class Program
                 {
                     await shutdownTelemetryTask.ConfigureAwait(false);
                 }
+            }
+
+            // Arm deletion only after shutdown completes, so a shutdown failure that throws without
+            // logging a warning still keeps the log. The provider deletes the file when it is disposed
+            // and keeps it if anything is retained or cancellation is requested before then.
+            if (discardLogOnSuccess)
+            {
+                startupContext.FileLoggerProvider.DiscardLogFileOnDisposeUnlessRetained(cancellationManager.Token);
             }
         }
     }

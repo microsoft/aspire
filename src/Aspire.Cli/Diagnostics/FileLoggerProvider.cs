@@ -25,7 +25,15 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     private readonly StreamWriter? _writer;
     private readonly Channel<string>? _channel;
     private readonly Task? _writerTask;
+
+    // True only when this instance created a new managed log file. Only that file may be discarded
+    // on dispose; custom --log-file targets and files this instance failed to create are never deleted.
+    private readonly bool _ownsManagedLogFile;
     private bool _disposed;
+
+    // Set once anything worth keeping is recorded. It is never cleared.
+    private volatile bool _retainLogFile;
+    private CancellationToken? _discardOnDisposeUnlessCanceled;
 
     private FileLoggerProvider(string logFilePath)
     {
@@ -41,29 +49,13 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     public string LogFilePath => _logFilePath;
 
     /// <summary>
-    /// Generates a unique, chronologically-sortable log file name.
-    /// </summary>
-    /// <param name="logsDirectory">The directory where log files will be written.</param>
-    /// <param name="timeProvider">The time provider for timestamp generation.</param>
-    /// <param name="suffix">An optional suffix appended before the extension (e.g. "detach-child").</param>
-    internal static string GenerateLogFilePath(string logsDirectory, TimeProvider timeProvider, string? suffix = null)
-    {
-        var timestamp = timeProvider.GetUtcNow().ToString("yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture);
-        var id = Guid.NewGuid().ToString("N")[..8];
-        var name = suffix is null
-            ? $"cli_{timestamp}_{id}.log"
-            : $"cli_{timestamp}_{id}_{suffix}.log";
-        return Path.Combine(logsDirectory, name);
-    }
-
-    /// <summary>
     /// Creates a new FileLoggerProvider that writes to the specified directory.
     /// </summary>
     /// <param name="logsDirectory">The directory where log files will be written.</param>
     /// <param name="timeProvider">The time provider for timestamp generation.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     public FileLoggerProvider(string logsDirectory, TimeProvider timeProvider, IStartupErrorWriter errorWriter)
-        : this(GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter)
+        : this(ManagedLogFiles.GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter, isManagedLog: true)
     {
     }
 
@@ -73,14 +65,15 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     /// <param name="logFilePath">The full path to the log file.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     internal FileLoggerProvider(string logFilePath, IStartupErrorWriter errorWriter)
-        : this(logFilePath, logsDirectory: null, errorWriter)
+        : this(logFilePath, logsDirectory: null, errorWriter, isManagedLog: false)
     {
     }
 
     /// <summary>
-    /// Creates a file logger and repairs permissions when its parent is the dedicated logs directory.
+    /// Creates a file logger. When its parent is the dedicated logs directory, repairs the directory's
+    /// permissions and prunes old log files.
     /// </summary>
-    internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter)
+    internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter, bool isManagedLog)
     {
         _logFilePath = logFilePath;
 
@@ -94,6 +87,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
                 if (logsDirectory is not null && Path.GetRelativePath(logsDirectory, directory) == ".")
                 {
                     DirectoryHelper.CreateWithOwnerOnlyPermissions(directory);
+                    ManagedLogFiles.Prune(directory, reserveSlot: isManagedLog);
                 }
                 else if (OperatingSystem.IsWindows())
                 {
@@ -105,7 +99,22 @@ internal sealed class FileLoggerProvider : ILoggerProvider
                 }
             }
 
-            _writer = CreateWriter(logFilePath);
+            var writer = CreateWriter(logFilePath, isManagedLog);
+            try
+            {
+                if (isManagedLog)
+                {
+                    ManagedLogFiles.WriteHeader(writer, logFilePath);
+                }
+            }
+            catch
+            {
+                writer.Dispose();
+                throw;
+            }
+
+            _writer = writer;
+            _ownsManagedLogFile = isManagedLog;
 
             _channel = CreateChannel();
             _writerTask = Task.Run(ProcessLogQueueAsync);
@@ -118,11 +127,11 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         }
     }
 
-    private static StreamWriter CreateWriter(string logFilePath)
+    private static StreamWriter CreateWriter(string logFilePath, bool isManagedLog)
     {
         var options = new FileStreamOptions
         {
-            Mode = OperatingSystem.IsWindows() ? FileMode.Create : FileMode.OpenOrCreate,
+            Mode = isManagedLog ? FileMode.CreateNew : OperatingSystem.IsWindows() ? FileMode.Create : FileMode.OpenOrCreate,
             Access = FileAccess.Write,
             Share = FileShare.Read
         };
@@ -238,6 +247,13 @@ internal sealed class FileLoggerProvider : ILoggerProvider
 
     internal void WriteLog(DateTimeOffset timestamp, LogLevel level, string category, string message, Exception? exception = null)
     {
+        // Best-effort operations often log handled exceptions at Debug, so an exception at any level
+        // is kept along with warnings and errors.
+        if ((level >= LogLevel.Warning && level != LogLevel.None) || exception is not null)
+        {
+            _retainLogFile = true;
+        }
+
         var ts = timestamp.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
         var lvl = GetLogLevelString(level);
 
@@ -272,6 +288,46 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         _writerTask?.GetAwaiter().GetResult();
 
         _writer?.Dispose();
+
+        // Deciding after the writer drains means late warnings and cancellation, such as a Ctrl+C
+        // during host or telemetry shutdown, still keep the log.
+        if (_ownsManagedLogFile && _discardOnDisposeUnlessCanceled is { IsCancellationRequested: false } && !_retainLogFile)
+        {
+            try
+            {
+                File.Delete(_logFilePath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The startup prune removes the file later.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Deletes the managed log file on dispose unless it is retained or cancellation was requested.
+    /// </summary>
+    /// <param name="cancellationToken">The run's cancellation token. It is checked at dispose time, so
+    /// cancellation that arrives during shutdown keeps the log.</param>
+    /// <remarks>
+    /// Tools such as the VS Code extension run one-shot query commands like <c>aspire ps</c> repeatedly.
+    /// Their logs are still written as the command runs, so a hang, crash, or kill leaves a log behind.
+    /// Only a clean run's log is discarded. The log is retained when a warning, error, or exception is
+    /// logged, or when <see cref="RetainLogFile"/> is called. Has no effect on a custom <c>--log-file</c>
+    /// or on a file this provider did not create.
+    /// </remarks>
+    internal void DiscardLogFileOnDisposeUnlessRetained(CancellationToken cancellationToken)
+    {
+        _discardOnDisposeUnlessCanceled = cancellationToken;
+    }
+
+    /// <summary>
+    /// Keeps the log file even if it is later marked for discard, for runs that record a side effect
+    /// worth diagnosing, such as stopping processes, without logging a warning.
+    /// </summary>
+    internal void RetainLogFile()
+    {
+        _retainLogFile = true;
     }
 }
 

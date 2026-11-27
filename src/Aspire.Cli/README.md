@@ -800,9 +800,13 @@ Prefix a path with `firefox=` or `chromium=` to apply the trust settings expecte
 
 The `certificates.nssDbPaths` setting takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable. When the Aspire setting has no value, the CLI preserves the upstream behavior.
 
-## Diagnostic log privacy
+## Diagnostic log policy
 
 On Unix, CLI diagnostic log files use owner-only read/write permissions (`0600`), including when an existing log file is reused. The dedicated Aspire logs directory uses owner-only access (`0700`), repairing permissions if it already exists. Newly created custom log directories also use `0700`; existing custom parent directories and Windows file permission behavior are unchanged.
+
+The dedicated Aspire logs directory is `logs` under the Aspire home directory. For script, local-hive, and PR installations, that is the installation prefix, even when `ASPIRE_HOME` is set. Otherwise it is `ASPIRE_HOME` when set, or `~/.aspire`. The directory keeps the 100 most recent tracked automatic log files (`cli_<timestamp>_*_managed.log`). Older tracked files are deleted when the CLI starts with a log file in that directory, up to 100 per run, skipping files a running CLI process still holds open where the platform enforces file locks. Custom `--log-file` files and older untracked logs are not pruned, even when their names resemble automatic log files. Older untracked logs can be removed manually.
+
+Successful one-shot query runs delete their automatic log on exit: `aspire ps`, `aspire describe`, `aspire ls`, `aspire --version`, and the tooling commands `aspire config info` and `aspire extension get-apphosts`. The log is kept when the command fails or is cancelled, logs a warning or error, runs in `--follow` mode, or is run with `--debug`, `--log-level`, `--log-file`, or `--capture-profile`.
 
 Diagnostic logs can contain sensitive data, including dashboard login URLs captured from AppHost output. Review logs before sharing them.
 
