@@ -129,7 +129,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -549,7 +549,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -635,7 +635,7 @@ jobs:
         run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.29.11 --rootless
       - name: Generate GitHub App token
         id: github-mcp-app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -1441,7 +1441,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -1455,7 +1455,7 @@ jobs:
           GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Generate GitHub App token
         id: safe-outputs-app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -1797,7 +1797,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -2150,7 +2150,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -2232,7 +2232,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -2271,7 +2271,7 @@ jobs:
           path: /tmp/gh-aw/
       - name: Generate GitHub App token
         id: safe-outputs-app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}

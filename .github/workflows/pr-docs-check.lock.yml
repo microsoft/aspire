@@ -137,7 +137,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -565,7 +565,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -597,7 +597,7 @@ jobs:
         run: bash "${RUNNER_TEMP}/gh-aw/actions/check_otlp_default_credentials.sh"
       - name: Generate GitHub App token for checkout (0)
         id: checkout-app-token-0
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -668,7 +668,7 @@ jobs:
         run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.29.11 --rootless
       - name: Generate GitHub App token
         id: github-mcp-app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -722,7 +722,7 @@ jobs:
           sparse-checkout-cone-mode: false
       - id: resolve-target-app-token
         name: Mint app token for target-branch resolver
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           owner: microsoft
@@ -1554,7 +1554,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -1569,7 +1569,7 @@ jobs:
           GH_AW_SETUP_AW_CONTEXT: ${{ inputs.aw_context }}
       - name: Generate GitHub App token
         id: safe-outputs-app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -1913,7 +1913,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -2305,7 +2305,7 @@ jobs:
       - name: Mint aspire-bot token (microsoft/aspire.dev)
         id: aspire-dev-token
         if: needs.safe_outputs.outputs.created_pr_url != ''
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
           GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
@@ -2352,7 +2352,7 @@ jobs:
           GH_AW_JOB_CHECK_RUN_ID: ${{ job.check_run_id }}
       - name: Mint aspire-bot token (microsoft/aspire)
         id: aspire-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
           GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
@@ -2584,7 +2584,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -2666,7 +2666,7 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
+        uses: github/gh-aw-actions/setup@dfe97a19c8249d41e2adfc95f92db2b8facea58f # v1.3.1
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
@@ -2706,7 +2706,7 @@ jobs:
           path: /tmp/gh-aw/
       - name: Generate GitHub App token
         id: safe-outputs-app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -2722,7 +2722,7 @@ jobs:
       - name: Generate GitHub App token for checkout (0)
         if: (!cancelled()) && needs.agent.result != 'skipped' && contains(needs.agent.outputs.output_types, 'create_pull_request')
         id: checkout-app-token-0
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -2866,14 +2866,14 @@ jobs:
             .github/workflows/pr-docs-check/validate_outcome.py
           sparse-checkout-cone-mode: false
       - name: Download agent output
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: agent
           path: /tmp/gh-aw/
       - name: Mint aspire-bot token (microsoft/aspire.dev)
         id: aspire-dev-token
         if: needs.safe_outputs.outputs.created_pr_url != ''
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           owner: microsoft
