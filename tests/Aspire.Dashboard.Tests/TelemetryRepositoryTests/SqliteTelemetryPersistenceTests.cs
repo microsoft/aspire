@@ -463,6 +463,36 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
+    public async Task Metrics_ReopenAndAddWithChangedResourceAttributes()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var startTime = new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc);
+        ResourceMetrics CreateMetrics(string version) => new()
+        {
+            Resource = CreateResource(attributes: [KeyValuePair.Create("service.version", version)]),
+            ScopeMetrics =
+            {
+                new ScopeMetrics { Scope = CreateScope("TestScope"), Metrics = { CreateSumMetric("requests", startTime) } }
+            }
+        };
+
+        {
+            using var repositoryContext = await CreateRepositoryAsync(workspace.Path);
+            await repositoryContext.Repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics> { CreateMetrics("1") });
+        }
+
+        // The resource comes back from the database on the write path, before the cache was populated. Its instrument
+        // still points to the view of version 1, which the export of version 2 doesn't bring along.
+        using var reopenedContext = await CreateRepositoryAsync(workspace.Path);
+        var context = new AddContext();
+        await reopenedContext.Repository.AddMetricsAsync(context, new RepeatedField<ResourceMetrics> { CreateMetrics("2") });
+
+        Assert.Equal(0, context.FailureCount);
+        var resource = Assert.Single(reopenedContext.Repository.GetResources());
+        Assert.Single(reopenedContext.Repository.GetInstrumentSummaries(resource.ResourceKey));
+    }
+
+    [Fact]
     public async Task Logs_ReopenFromNormalizedRowsWithStableIds()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
