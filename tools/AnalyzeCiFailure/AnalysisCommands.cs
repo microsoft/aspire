@@ -30,6 +30,7 @@ internal static class AnalysisCommands
         repositoryOption.Required = true;
 
         var observedAtOption = CreateSingleUseStringOption("--observed-at", "Observation timestamp. Defaults to the current UTC time.");
+        var adoptIssueOption = CreateSingleUseStringOption("--adopt-issue", "Explicitly adopt an open issue number for exactly one validated recurring cause.");
 
         var collectCommand = new CliCommand("collect", "Fetch CI failure evidence from GitHub and generate analysis views.");
         var replayCommand = new CliCommand("replay", "Regenerate analysis views from captured evidence without contacting GitHub.");
@@ -61,6 +62,7 @@ internal static class AnalysisCommands
         publishCommand.Options.Add(historyDirectoryOption);
         publishCommand.Options.Add(repositoryOption);
         publishCommand.Options.Add(observedAtOption);
+        publishCommand.Options.Add(adoptIssueOption);
 
         collectCommand.SetAction((parseResult, ct) => ExecuteAsync(
             parseResult.GetValue(workingDirectoryOption),
@@ -162,7 +164,7 @@ internal static class AnalysisCommands
                         DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture),
                     progress.Diagnostics,
                     github)
-                    .PublishAsync(analysis, ct);
+                    .PublishAsync(analysis, ct, parseResult.GetValue(adoptIssueOption));
                 await invocation.WriteDiagnosticsAsync("published");
             }
             catch (Exception error)

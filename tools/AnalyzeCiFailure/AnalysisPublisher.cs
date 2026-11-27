@@ -68,12 +68,23 @@ internal sealed partial class AnalysisPublisher
         _github = new AnalysisGitHubClient(github, CancellationToken.None);
     }
 
-    public async Task PublishAsync(ValidatedAnalysis analysis, CancellationToken cancellationToken)
+    public Task PublishAsync(ValidatedAnalysis analysis, CancellationToken cancellationToken)
+        => PublishAsync(analysis, cancellationToken, adoptIssue: null);
+
+    public async Task PublishAsync(ValidatedAnalysis analysis, CancellationToken cancellationToken, string? adoptIssue)
     {
         _overflowIssueUrl = null;
         cancellationToken.ThrowIfCancellationRequested();
         _command = new AnalyzerCommandExecutor(_workingDirectory, cancellationToken: cancellationToken);
         _github = new AnalysisGitHubClient(_githubApi, cancellationToken);
+        if (adoptIssue is not null)
+        {
+            _ = TransientJson.ParseId(adoptIssue);
+            if (analysis.Report.Verdict == AnalysisVerdict.CodeIssue || analysis.Causes.Length != 1)
+            {
+                throw new ValidationException("--adopt-issue requires exactly one validated recurring cause; code issues and aggregate publication cannot adopt an issue.");
+            }
+        }
         Directory.CreateDirectory(_requestDirectory);
 
         // Deterministic PR failures produce a comment, not recurring cause-history records.
@@ -108,17 +119,105 @@ internal sealed partial class AnalysisPublisher
             await PublishCommentAsync(analysis);
             return;
         }
-        var destinations = await ResolveDestinationsAsync(prepared);
+        var destinations = adoptIssue is null
+            ? await ResolveDestinationsAsync(prepared)
+            : await ResolveAdoptionAsync(prepared.Single(), history, adoptIssue);
         var evidence = analysis.CapturedPublication;
+        CauseIssueRenderer.IssueDraft? adoptionDraft = null;
+        if (adoptIssue is not null)
+        {
+            var item = prepared.Single();
+            var issue = destinations[item.Cause.Id]!;
+            var unmanaged = !HasIssueIdentity(issue, item.Cause);
+            adoptionDraft = BuildIssueUpdate(analysis, evidence, item.Cause, item.History, unmanaged ? null : issue, runId, item.Replayed);
+            if (unmanaged && adoptionDraft.Body is not null)
+            {
+                adoptionDraft = adoptionDraft with
+                {
+                    Body = CauseIssueRenderer.AdoptBody(adoptionDraft.Body!, Text(issue["body"]) ?? "")
+                };
+            }
+            if (adoptionDraft.Body is null || System.Text.Encoding.UTF8.GetByteCount(adoptionDraft.Body) > MaximumCommentBytes)
+            {
+                throw new ValidationException("Adoption target has unsupported managed sections or exceeds the publication budget; no history or issue was updated.");
+            }
+            // Reserve the explicitly validated destination with the occurrence.
+            // If either issue effect fails, retries must not create another issue
+            // or let a later adoption redirect this cause elsewhere.
+            item.History["issue_url"] = $"https://github.com/{_repository}/issues/{adoptIssue}";
+        }
 
         // Persist occurrences before issue effects so retries can recover from partial publication.
         cancellationToken.ThrowIfCancellationRequested();
         await PersistOccurrencesAsync(analysis, evidence, runId, prepared, history);
-        await PublishIssuesAsync(analysis, evidence, runId, prepared, destinations);
+        await PublishIssuesAsync(analysis, evidence, runId, prepared, destinations, adoptionDraft);
 
         // Save resolved issue links, then update the subject PR's analysis comment.
         await history.CommitAndPushAsync(GetValueText(runId), prepared.Select(p => p.Path));
         await PublishCommentAsync(analysis);
+    }
+
+    private async Task<Dictionary<string, JsonObject?>> ResolveAdoptionAsync(PreparedCause item, CauseHistoryStore store, string number)
+    {
+        var cause = item.Cause;
+        var url = $"https://github.com/{_repository}/issues/{number}";
+        if (Text(item.History["issue_url"]) is { } linked && linked != url)
+        {
+            throw new ValidationException("Adoption conflicts with the cause's existing issue linkage.");
+        }
+        foreach (var path in store.EnumerateCauseFiles().Where(path => path != item.Path))
+        {
+            var stored = Read(path) as JsonObject ?? throw new ValidationException("Cannot check adoption against unreadable cause history.");
+            if (Text(stored["issue_url"]) == url)
+            {
+                throw new ValidationException("Adoption target is already linked to a different cause in history.");
+            }
+        }
+        var issue = await _github.GetAsync($"repos/{_repository}/issues/{number}") as JsonObject;
+        if (issue is null || GetValueText(issue["number"]) != number || Text(issue["html_url"]) != url ||
+            issue["pull_request"] is not null || Text(issue["state"]) != "open" || !IsFalse(issue["locked"]) ||
+            issue["body"] is { } rawBody && (rawBody is not JsonValue value || !value.TryGetValue<string>(out _)))
+        {
+            throw new ValidationException("Adoption target must be an open, unlocked ordinary issue in the publication repository.");
+        }
+        var body = Text(issue["body"]) ?? "";
+        var lines = body.ReplaceLineEndings("\n").Split('\n');
+        var identity = HasIssueIdentity(issue, cause);
+        // Whole-line markers own analyzer sections; legacy CIF fingerprints and
+        // ordinary human text are retained verbatim, not interpreted as authority.
+        var markers = lines.Where(line => line.StartsWith("<!-- ci-failure-", StringComparison.Ordinal)).ToArray();
+        if (identity)
+        {
+            if (markers.Count(line => line.StartsWith("<!-- ci-failure-cause:", StringComparison.Ordinal)) != 1 ||
+                markers.Count(line => line.StartsWith("<!-- ci-failure-cause-type:", StringComparison.Ordinal)) > 1 ||
+                markers.Any(line => line.StartsWith("<!-- ci-failure-cause-type:", StringComparison.Ordinal) &&
+                    line != $"<!-- ci-failure-cause-type:{EnumText(cause.Type)} -->") ||
+                markers.Any(line => line.StartsWith("<!-- ci-failure-overflow", StringComparison.Ordinal)) ||
+                lines.Any(line => line.StartsWith("**Type**: ", StringComparison.Ordinal) && line != $"**Type**: {EnumText(cause.Type)}"))
+            {
+                throw new ValidationException("Adoption target has conflicting analyzer identity or type markers.");
+            }
+            CauseIssueRenderer.ValidateManagedSections(body);
+            if (lines[1] != $"<!-- ci-failure-cause-type:{EnumText(cause.Type)} -->")
+            {
+                var firstLineEnd = body.IndexOf('\n') + 1;
+                issue["body"] = body[..firstLineEnd] + $"<!-- ci-failure-cause-type:{EnumText(cause.Type)} -->\n" + body[firstLineEnd..];
+            }
+        }
+        else if (markers.Length > 0 || lines.Any(line => line.StartsWith("**Type**: ", StringComparison.Ordinal)))
+        {
+            throw new ValidationException("Adoption target has conflicting analyzer identity, type or managed sections.");
+        }
+        var inventory = await LoadIssueInventoryAsync();
+        if (inventory.OfType<JsonObject>().Any(candidate =>
+            GetValueText(candidate["number"]) != number &&
+            (Text(candidate["body"]) ?? "").ReplaceLineEndings("\n").Split('\n')
+                .Contains($"<!-- ci-failure-cause:{cause.Id} -->", StringComparer.Ordinal)))
+        {
+            throw new ValidationException("A different managed issue already owns this cause; adoption cannot redirect it.");
+        }
+
+        return new Dictionary<string, JsonObject?>(StringComparer.Ordinal) { [cause.Id] = issue };
     }
 
     private List<PreparedCause> PrepareCauses(ValidatedAnalysis analysis, JsonNode runId, CauseHistoryStore store)
@@ -180,7 +279,9 @@ internal sealed partial class AnalysisPublisher
                 issue = await _github.GetAsync($"repos/{_repository}/issues/{linked.Split('/')[^1]}") as JsonObject;
                 if (!(issue is not null && GetValueText(issue["number"]) == linked.Split('/')[^1] && MatchesIssue(issue, cause)))
                 {
-                    throw new ValidationException("Linked cause issue detail does not match the cause; review its destination before retrying");
+                    throw new ValidationException(
+                        "Linked cause issue detail does not match the cause; review its destination before retrying. " +
+                        $"For an interrupted explicit adoption, retry publish --adopt-issue {linked.Split('/')[^1]} for this same destination.");
                 }
             }
             if (issue is null)
@@ -246,12 +347,13 @@ internal sealed partial class AnalysisPublisher
         PublicationEvidence evidence,
         JsonNode runId,
         List<PreparedCause> prepared,
-        Dictionary<string, JsonObject?> destinations)
+        Dictionary<string, JsonObject?> destinations,
+        CauseIssueRenderer.IssueDraft? adoptionDraft)
     {
         foreach (var (cause, history, path, replayed) in prepared)
         {
             var issue = destinations[cause.Id];
-            var (body, title, labels) = BuildIssueUpdate(analysis, evidence, cause, history, issue, runId, replayed);
+            var (body, title, labels) = adoptionDraft ?? BuildIssueUpdate(analysis, evidence, cause, history, issue, runId, replayed);
             if (body is null)
             {
                 _diagnostics.Receipt("issue-body", "skipped", new { cause = cause.Id, reason = "unsupported-section-or-budget" });
@@ -294,7 +396,7 @@ internal sealed partial class AnalysisPublisher
                         request,
                         HttpStatusCode.OK);
                 }
-                if (main)
+                if (main || adoptionDraft is not null)
                 {
                     // PATCH labels replaces the complete set. The additive endpoint
                     // preserves operator-owned labels when updating a recurring cause.
@@ -472,10 +574,13 @@ internal sealed partial class AnalysisPublisher
     }
 
     private static bool MatchesIssue(JsonObject issue, FailureCause cause)
+        => HasIssueIdentity(issue, cause) && issue["labels"] is JsonArray labels &&
+            labels.Any(l => Text(Field(l, "name")) == "ci-failure-cause");
+
+    private static bool HasIssueIdentity(JsonObject issue, FailureCause cause)
     {
         var lines = (Text(issue["body"]) ?? "").ReplaceLineEndings("\n").Split('\n');
-        return issue["pull_request"] is null && issue["labels"] is JsonArray labels &&
-            labels.Any(l => Text(Field(l, "name")) == "ci-failure-cause") &&
+        return issue["pull_request"] is null &&
             lines.Length > 1 && lines[0] == $"<!-- ci-failure-cause:{cause.Id} -->" &&
             (lines[1] == $"<!-- ci-failure-cause-type:{EnumText(cause.Type)} -->" ||
                 lines.Where(l => l.StartsWith("**Type**: ", StringComparison.Ordinal)).SequenceEqual([$"**Type**: {EnumText(cause.Type)}"]));

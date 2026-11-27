@@ -879,7 +879,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         JsonObject? history = null,
         string? body = null,
         string state = "open",
-        bool useTypedProposal = false)
+        bool useTypedProposal = false,
+        string? adoptIssue = null)
     {
         await RunProcessAsync("git", ["--no-pager", "init", "--bare", "remote.git"]);
         await RunProcessAsync("git", ["--no-pager", "clone", "remote.git", "memory-repo"]);
@@ -984,11 +985,20 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                 jq -n --rawfile body issue-body.md \
                   '[{number:77,state:"open",locked:false,html_url:"https://github.com/microsoft/aspire/issues/77",body:$body,labels:[{name:"ci-failure-cause"}],user:{login:"github-actions[bot]"}}]' > issue.json
               fi
+              if [ -f persist-issue-effects ] && [ -f issue-body.md ]; then
+                jq --rawfile body issue-body.md '.body = $body' issue-details.json > issue-details.updated.json
+                mv issue-details.updated.json issue-details.json
+              fi
               printf 'https://github.com/microsoft/aspire/issues/77\n'
             else
               exit 1
             fi
             """);
+        if (adoptIssue is not null)
+        {
+            AnalyzeCiFailureFixtures.Write(_workspace.Path);
+            return await RunTypedPublicationCommandAsync(fakeGh, "2026-10-21T01:00:00Z", ["--adopt-issue", adoptIssue]);
+        }
         return useTypedProposal ? await RunTypedPublicationCommandAsync(fakeGh, "2026-10-21T01:00:00Z") : await RunPublicationCommandAsync(fakeGh);
     }
 
@@ -1001,7 +1011,10 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         return RunTypedPublicationCommandAsync(fakeGh, observedAt);
     }
 
-    private async Task<CommandResult> RunTypedPublicationCommandAsync(string fakeGh, string observedAt)
+    private Task<CommandResult> RunTypedPublicationCommandAsync(string fakeGh, string observedAt)
+        => RunTypedPublicationCommandAsync(fakeGh, observedAt, []);
+
+    private async Task<CommandResult> RunTypedPublicationCommandAsync(string fakeGh, string observedAt, string[] arguments)
     {
         await PrepareFreshPublicationCheckoutAsync();
         _publicationHistoryBefore = await RunProcessAsync(
@@ -1014,7 +1027,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                 typeof(AnalyzeCiFailure.Program).Assembly.Location, "publish", "--working-dir", _workspace.Path,
                 "--evidence-dir", EvidenceDirectory, "--analysis-dir", Path.Combine(_workspace.Path, "ci-analysis-output"),
                 "--history-dir", Path.Combine(_workspace.Path, "memory-repo"), "--repo", "microsoft/aspire",
-                "--observed-at", observedAt],
+                "--observed-at", observedAt, .. arguments],
             new Dictionary<string, string>
             {
                 ["PATH"] = $"{Path.GetDirectoryName(fakeGh)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",

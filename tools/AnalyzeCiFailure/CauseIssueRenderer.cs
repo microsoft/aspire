@@ -20,6 +20,28 @@ internal static partial class CauseIssueRenderer
     /// <summary>Carries a rendered cause issue body, title and labels, including an unavailable body when rendering is unsafe.</summary>
     internal sealed record IssueDraft(string? Body, string Title, string Labels);
 
+    internal static string AdoptBody(string canonical, string original)
+        => canonical + "\n## Original issue notes\n\n<!-- ci-failure-adoption-notes:start -->\n" +
+            original + "\n<!-- ci-failure-adoption-notes:end -->\n";
+
+    internal static void ValidateManagedSections(string body)
+    {
+        var parts = OccurrenceParts(body);
+        _ = OccurrenceRows(parts.Section, parts.Legacy);
+        var start = Markers(body, TestsStart);
+        var end = Markers(body, TestsEnd);
+        if (!(start.Count == 0 && end.Count == 0 ||
+            start.Count == 1 && end.Count == 1 && end[0].Index > start[0].Index))
+        {
+            throw new ValidationException("Adoption target has ambiguous managed test sections.");
+        }
+        if (start.Count == 1 && start[0].Index < body.Length - parts.Suffix.Length &&
+            end[0].Index >= parts.Prefix.Length)
+        {
+            throw new ValidationException("Adoption target has overlapping managed test and occurrence sections.");
+        }
+    }
+
     internal static string JobNames(IEnumerable<string> names, string format)
     {
         var safe = names.Select(name => DiagnosticTextSanitizer.Sanitize(name, limit: 500)).ToArray();
