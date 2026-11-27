@@ -16,6 +16,7 @@ using Aspire.Cli.Npm;
 using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared;
 using Aspire.TestUtilities;
@@ -42,10 +43,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_fixedChannels = ["stable", "staging", "daily", "local"];
 
-    // Startup migrates and normalizes global and workspace settings, so always root both the
-    // working directory and Aspire home in the fixture. CreateForCli writes .aspire/settings.json,
-    // which stops settings discovery from walking above the fixture.
-    private static async Task<IHost> BuildHostAsync(TemporaryWorkspace workspace, string? aspireHome = null, Dictionary<string, string?>? configurationValues = null)
+    private static async Task<IHost> BuildHostAsync(Dictionary<string, string?>? configurationValues = null)
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
@@ -53,12 +51,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
         var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
-        return await Program.BuildApplicationAsync(
-            [],
-            startupContext,
-            configurationValues,
-            workingDirectoryOverride: workspace.Path,
-            aspireHomeDirectoryOverride: aspireHome ?? Path.Combine(workspace.Path, "aspire-home"));
+        return await Program.BuildApplicationAsync([], startupContext, configurationValues);
     }
 
     private static string GetBakedEntryAssemblyChannel()
@@ -79,12 +72,12 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = Path.Combine(workspace.Path, ".aspire");
         var configuredHome = Path.Combine(workspace.Path, "workspace-config-home");
-        using var host = await BuildHostAsync(workspace, home, new Dictionary<string, string?> { ["ASPIRE_HOME"] = configuredHome });
+        using var homeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, home);
+        using var host = await BuildHostAsync(new Dictionary<string, string?> { ["ASPIRE_HOME"] = configuredHome });
         var context = host.Services.GetRequiredService<CliExecutionContext>();
         var storage = host.Services.GetRequiredService<ITemporaryStorage>();
         Assert.IsType<PrivateTemporaryStorage>(storage);
         Assert.Equal(home, context.AspireHomeDirectory.FullName);
-        Assert.Equal(workspace.Path, context.WorkingDirectory.FullName);
         Assert.StartsWith(Path.Combine(context.AspireHomeDirectory.FullName, "tmp") + Path.DirectorySeparatorChar, storage.GetTempPath());
         Assert.False(Directory.Exists(configuredHome));
         Assert.NotNull(host.Services.GetRequiredService<IDcpConnectionChecker>());
@@ -111,8 +104,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         // Program.BuildApplicationAsync registers IIdentityChannelReader as a singleton,
         // backed by the default IdentityChannelReader (which reads from
         // typeof(Aspire.Cli.Program).Assembly).
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var host = await BuildHostAsync(workspace);
+        using var host = await BuildHostAsync();
 
         var reader = host.Services.GetRequiredService<IIdentityChannelReader>();
 
@@ -127,8 +119,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         // IIdentityChannelReader.ReadChannel() rather than the constructor default.
         // Without this wiring, the entire reseed chain would write "daily" for every
         // CLI build regardless of the baked AspireCliChannel.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var host = await BuildHostAsync(workspace);
+        using var host = await BuildHostAsync();
 
         var reader = host.Services.GetRequiredService<IIdentityChannelReader>();
         var context = host.Services.GetRequiredService<CliExecutionContext>();
@@ -142,7 +133,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var aspireHome = workspace.CreateDirectory("aspire-home");
-        using var host = await BuildHostAsync(workspace, aspireHome.FullName);
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+        using var host = await BuildHostAsync();
         var verifier = host.Services.GetRequiredService<SigstoreVerifier>();
         var trustRootProvider = host.Services.GetRequiredService<ITrustRootProvider>();
 
@@ -168,8 +160,9 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var aspireHome = workspace.CreateDirectory("aspire-home");
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
         TufTrustRootProvider provider;
-        using (var host = await BuildHostAsync(workspace, aspireHome.FullName))
+        using (var host = await BuildHostAsync())
         {
             var context = host.Services.GetRequiredService<CliExecutionContext>();
             Assert.Equal(Path.Combine(aspireHome.FullName, "cache"), context.CacheDirectory.FullName);
@@ -218,7 +211,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         try
         {
-            using var host = await BuildHostAsync(workspace, aspireHome.FullName);
+            using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+            using var host = await BuildHostAsync();
 
             Assert.NotNull(host.Services.GetRequiredService<RootCommand>());
             Assert.IsType<TufTrustRootProvider>(host.Services.GetRequiredService<ITrustRootProvider>());
@@ -236,7 +230,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var aspireHome = workspace.CreateDirectory("aspire-home");
-        using var host = await BuildHostAsync(workspace, aspireHome.FullName);
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+        using var host = await BuildHostAsync();
         using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 120_000);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
         var cancellationToken = timeout.Token;
@@ -306,8 +301,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         // (so this test is also correct on /p:AspireCliChannel=stable or pr-<N> CI builds).
         var bakedChannel = GetBakedEntryAssemblyChannel();
 
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var host = await BuildHostAsync(workspace);
+        using var host = await BuildHostAsync();
 
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
@@ -330,7 +324,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         });
         File.WriteAllText(Path.Combine(aspireHome.FullName, AspireConfigFile.FileName), globalConfig);
 
-        using var host = await BuildHostAsync(workspace, aspireHome.FullName, configurationValues: new Dictionary<string, string?>
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+        using var host = await BuildHostAsync(new Dictionary<string, string?>
         {
             [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={configuredNssDbDirectory.FullName}"
         });
@@ -347,7 +342,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nssDbDirectory = workspace.CreateDirectory("nssdb");
-        using var host = await BuildHostAsync(workspace, configurationValues: new Dictionary<string, string?>
+        using var host = await BuildHostAsync(new Dictionary<string, string?>
         {
             [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={nssDbDirectory.FullName}"
         });
