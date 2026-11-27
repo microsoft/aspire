@@ -27,11 +27,11 @@ on:
     - cron: "*/5 * * * *"
 
   # Allow dispatching the workflow via the Actions UI, specifying ranges of numbers
-  # If no pull request numbers are provided, it behaves as a polling event
+  # If no pull request numbers are provided, all open pull requests that need labels are processed
   workflow_dispatch:
     inputs:
       pulls:
-        description: "Pull Request Numbers (comma-separated list of ranges). Leave empty to poll."
+        description: "Pull Request Numbers (comma-separated list of ranges). Leave empty to process all open pull requests that need labels."
         required: false
       cache_key:
         description: "The cache key suffix to use for restoring the model. Defaults to 'ACTIVE'."
@@ -39,8 +39,8 @@ on:
         default: "ACTIVE"
 
 env:
-  # Do not allow failure for jobs triggered automatically (this can block PR merge)
-  ALLOW_FAILURE: ${{ github.event_name == 'workflow_dispatch' }}
+  # Suppress failures on PR events to avoid blocking merges. Scheduled runs must fail so the poll cursor doesn't advance past missed PRs.
+  ALLOW_FAILURE: ${{ github.event_name == 'pull_request_target' }}
 
   LABEL_PREFIX: "area-"
   THRESHOLD: 0.40
@@ -75,8 +75,8 @@ jobs:
             await require('./.github/workflows/labeler-predict-pulls.js')({ github, context });
 
   poll-pull-requests:
-    # Run on schedule trigger or workflow_dispatch without PR numbers, within the 'dotnet' org
-    if: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pulls == '')) && github.repository_owner == 'dotnet' }}
+    # Poll on schedule within the 'microsoft' org, or on manual dispatch without pull request numbers
+    if: ${{ (github.event_name == 'schedule' && github.repository_owner == 'microsoft') || (github.event_name == 'workflow_dispatch' && inputs.pulls == '') }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -87,78 +87,56 @@ jobs:
       - name: "Get open pull requests needing labels"
         id: get-pulls
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.workflow }}
         run: |
-          # Get the last successful schedule run's timestamp (minus 5 minutes for overlap)
-          last_run=$(gh run list --repo ${{ github.repository }} --workflow "${{ github.workflow }}" --event schedule --status success --limit 1 --json updatedAt --jq '.[0].updatedAt // empty')
-
-          if [ -n "$last_run" ]; then
-            # Subtract 5 minutes from the last run timestamp for overlap
-            since=$(date -u -d "$last_run - 5 minutes" +"%Y-%m-%dT%H:%M:%SZ")
-            echo "Filtering PRs updated since: $since (last run: $last_run)"
-            pulls=$(gh pr list --repo ${{ github.repository }} --state open --json number,labels,updatedAt --limit 1000 --search "updated:>=$since")
-          else
-            # No previous run found; get all open pull requests
-            echo "No previous schedule run found. Getting all open pull requests."
-            pulls=$(gh pr list --repo ${{ github.repository }} --state open --json number,labels --limit 1000)
+          # Scheduled runs use the last successful run's start, with 5 minutes of overlap.
+          # Manual runs and the first scheduled run look at all open pull requests.
+          search=""
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            last_run=$(gh run list --workflow "$WORKFLOW" --event schedule --status success --limit 1 --json createdAt --jq '.[0].createdAt // empty')
+            if [ -n "$last_run" ]; then
+              search="updated:>=$(date -u -d "$last_run - 5 minutes" +"%Y-%m-%dT%H:%M:%SZ")"
+            fi
           fi
 
-          # Filter to PRs that don't have a label starting with LABEL_PREFIX
-          needs_label=$(echo "$pulls" | jq -r --arg prefix "${{ env.LABEL_PREFIX }}" '
-            [.[] | select(
-              (.labels | map(.name) | any(startswith($prefix)) | not)
-            ) | .number] | join(",")
-          ')
+          echo "Searching open pull requests: ${search:-all}"
+          pulls=$(gh pr list --state open --limit 1000 --search "$search" --json number,labels \
+            --jq '[.[] | select(.labels | map(.name) | any(startswith(env.LABEL_PREFIX)) | not) | .number] | join(",")')
 
-          echo "Pull requests needing labels: $needs_label"
-          echo "pulls=$needs_label" >> $GITHUB_OUTPUT
+          echo "Pull requests needing labels: $pulls"
+          echo "pulls=$pulls" >> "$GITHUB_OUTPUT"
 
   predict-pull-label:
-    # The 'if' uses always() so this job runs even when poll-pull-requests is skipped
-    # Do not automatically run the workflow on forks outside the 'dotnet' org
-    if: ${{ always() && (github.event_name != 'pull_request_target' || github.event.action == 'opened') && (github.event_name == 'workflow_dispatch' || github.repository_owner == 'microsoft') }}
+    # Run even when polling is skipped, but only when there are pull requests to label
+    # Do not automatically run the workflow on forks outside the 'microsoft' org
+    if: ${{ !cancelled() && (github.event_name != 'pull_request_target' || github.event.action == 'opened') && (github.event_name == 'workflow_dispatch' || github.repository_owner == 'microsoft') && (inputs.pulls || needs.poll-pull-requests.outputs.pulls || github.event.number) }}
     needs: [poll-pull-requests]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
-      - name: "Determine pull requests to process"
-        id: determine-pulls
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_PULLS: ${{ inputs.pulls }}
-          POLLED_PULLS: ${{ needs.poll-pull-requests.outputs.pulls }}
-          EVENT_NUMBER: ${{ github.event.number }}
-        run: |
-          if [ "$EVENT_NAME" == "workflow_dispatch" ] && [ -n "$INPUT_PULLS" ]; then
-            pulls="$INPUT_PULLS"
-          elif [ "$EVENT_NAME" == "workflow_dispatch" ] || [ "$EVENT_NAME" == "schedule" ]; then
-            pulls="$POLLED_PULLS"
-          else
-            pulls="$EVENT_NUMBER"
-          fi
-          echo "pulls=$pulls" >> $GITHUB_OUTPUT
-          echo "Processing pull requests: $pulls"
-
       - name: "Restore pulls model from cache"
         id: restore-model
-        if: ${{ steps.determine-pulls.outputs.pulls != '' }}
         uses: dotnet/issue-labeler/restore@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: pulls
-          fail-on-cache-miss: ${{ env.ALLOW_FAILURE }}
-          quiet: true
+          fail-on-cache-miss: ${{ !fromJSON(env.ALLOW_FAILURE) }}
+          # v2.2.0 only enforces fail-on-cache-miss when quiet is false.
+          quiet: ${{ fromJSON(env.ALLOW_FAILURE) }}
+          cache_key: ${{ inputs.cache_key || 'ACTIVE' }}
 
       - name: "Predict pull labels"
         id: prediction
-        if: ${{ steps.determine-pulls.outputs.pulls != '' && steps.restore-model.outputs.cache-hit == 'true' }}
+        if: ${{ steps.restore-model.outputs.cache-hit == 'true' }}
         uses: dotnet/issue-labeler/predict@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
-          pulls: ${{ steps.determine-pulls.outputs.pulls }}
+          pulls: ${{ inputs.pulls || needs.poll-pull-requests.outputs.pulls || github.event.number }}
           label_prefix: ${{ env.LABEL_PREFIX }}
           threshold: ${{ env.THRESHOLD }}
           default_label: ${{ env.DEFAULT_LABEL }}
           excluded_authors: ${{ env.EXCLUDED_AUTHORS }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        continue-on-error: ${{ !env.ALLOW_FAILURE }}
+        continue-on-error: ${{ fromJSON(env.ALLOW_FAILURE) }}
