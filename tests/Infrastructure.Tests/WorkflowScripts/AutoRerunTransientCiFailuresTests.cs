@@ -527,7 +527,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                     @event = "pull_request",
                     status = "completed",
                     conclusion = "failure",
-                    run_attempt = 3,
+                    run_attempt = 2,
                     head_branch = "feature",
                     html_url = "https://github.com/microsoft/aspire/actions/runs/123",
                     pull_requests = new[] { new { number = 15110 } }
@@ -540,7 +540,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                     @event = "pull_request",
                     status = "completed",
                     conclusion = "failure",
-                    run_attempt = 4,
+                    run_attempt = 3,
                     head_branch = "feature"
                 }
             });
@@ -552,11 +552,11 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Contains(
             result.GetProperty("events").EnumerateArray(),
             e => e.GetProperty("type").GetString() == "raw" &&
-                e.GetProperty("text").GetString()?.Contains("advanced from attempt 3 to attempt 4", StringComparison.Ordinal) is true);
+                e.GetProperty("text").GetString()?.Contains("advanced from attempt 2 to attempt 3", StringComparison.Ordinal) is true);
         Assert.Contains(
             result.GetProperty("messages").EnumerateArray(),
             message => message.GetString()?.Contains(
-                "advanced from attempt 3 to attempt 4",
+                "advanced from attempt 2 to attempt 3",
                 StringComparison.Ordinal) is true);
     }
 
@@ -1945,7 +1945,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         int pullRequestMaxRunAttempt = await InvokeHarnessAsync<int>("getDefaultMaxRunAttempt", new { });
         int mainMaxRunAttempt = await InvokeHarnessAsync<int>("getMainMaxRunAttempt", new { });
 
-        Assert.Equal(3, pullRequestMaxRunAttempt);
+        Assert.Equal(2, pullRequestMaxRunAttempt);
         Assert.Equal(1, mainMaxRunAttempt);
     }
 
