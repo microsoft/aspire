@@ -169,6 +169,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Manually update &apos;mcp start&apos; to &apos;agent mcp&apos; in &apos;{0}&apos;, preserving your custom command, arguments, and settings.
+        /// </summary>
+        internal static string DeprecatedConfigManualFix {
+            get {
+                return ResourceManager.GetString("DeprecatedConfigManualFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Update {0} config to use new &apos;agent mcp&apos; command.
         /// </summary>
         internal static string DeprecatedConfigUpdate_Description {
