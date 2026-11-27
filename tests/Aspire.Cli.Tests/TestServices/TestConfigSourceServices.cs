@@ -11,6 +11,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
 using Aspire.Shared.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -29,12 +30,12 @@ internal static class TestConfigSourceServices
 
     public static ConfigSourceService Create(CliExecutionContext context, IGitClient? git = null,
         TimeProvider? clock = null, IEnvironment? environment = null, TestConfigSourceDetector? detector = null,
-        IInteractionService? interaction = null, bool interactive = false)
+        IInteractionService? interaction = null, bool interactive = false, ILogger<ConfigSourceService>? logger = null)
     {
         return new ConfigSourceService(context, environment ?? new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), detector ?? new TestConfigSourceDetector(),
             git ?? new TestConfigSourceRepository(), clock ?? TimeProvider.System, interaction ?? new TestInteractionService(),
             interactive ? TestHelpers.CreateInteractiveHostEnvironment() : TestHelpers.CreateNonInteractiveHostEnvironment(),
-            new TestFeatures(), NullLogger<ConfigSourceService>.Instance);
+            new TestFeatures(), logger ?? NullLogger<ConfigSourceService>.Instance);
     }
 
     public static async Task<(string Commit, string Version, JsonObject Configuration)> AcquireAsync(

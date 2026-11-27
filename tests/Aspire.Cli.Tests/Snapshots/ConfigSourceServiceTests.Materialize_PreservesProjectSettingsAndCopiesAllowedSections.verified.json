@@ -15,7 +15,7 @@
     "custom": "local"
   },
   "custom": "local",
-  "skillSources": {
+  "agentPlugins": {
     "team": {
       "repository": "example/team",
       "custom": "copied"

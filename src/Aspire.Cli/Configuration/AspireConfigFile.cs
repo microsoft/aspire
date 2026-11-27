@@ -119,9 +119,17 @@ internal sealed class AspireConfigFile
     [Description("Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.")]
     public AspireConfigDocs? Docs { get; set; }
 
-    [JsonPropertyName(SkillSource.SectionName)]
-    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
-    public Dictionary<string, SkillSource>? SkillSources { get; set; }
+    [JsonPropertyName(AgentPluginSource.SectionName)]
+    [Description("Named agent plugin sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
+    public Dictionary<string, AgentPluginSource>? AgentPlugins { get; set; }
+
+    // Released CLIs wrote agent plugin sources under "skillSources". Keep it as raw JSON so
+    // typed load/save cycles and legacy settings.json migration don't drop existing sources.
+    // TODO: Stop preserving the legacy key once support is removed. https://github.com/microsoft/aspire/issues/22412
+    [JsonPropertyName(AgentPluginSource.LegacySectionName)]
+    [Description("Deprecated. Use agentPlugins instead. Legacy OpenCode catalog properties are ignored.")]
+    [ConfigurationDeprecation("skillSources is deprecated. Rename it to agentPlugins.")]
+    public Dictionary<string, JsonElement>? LegacySkillSources { get; set; }
 
     [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
     [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers. " + SourceNameValidator.Description)]
@@ -483,7 +491,8 @@ internal sealed class AspireConfigFile
 
             config.Channel = settings.Channel;
             config.Features = settings.Features;
-            config.SkillSources = settings.SkillSources;
+            config.AgentPlugins = settings.AgentPlugins;
+            config.LegacySkillSources = settings.LegacySkillSources;
             config.IntegrationSources = settings.IntegrationSources;
 
             // Legacy settings.json stored packages as Dictionary<string,string> with an

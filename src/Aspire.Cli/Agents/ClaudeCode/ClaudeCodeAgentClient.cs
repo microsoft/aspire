@@ -61,7 +61,7 @@ internal sealed class ClaudeCodeAgentClient(
             : ClaudeCodePaths.GetConfigDirectory(context, environment), "skills");
 
     public bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<AgentPluginSource> sources)
         => AspireSkillsRemoteConfiguration.HasPluginRegistration(
             GetSettingsFiles(workspaceRoot, scope,
                 AgentConfiguration.EnumerateJsonFiles(Path.Combine(ManagedSettingsDirectory, "managed-settings.d"))), sources);
@@ -77,7 +77,7 @@ internal sealed class ClaudeCodeAgentClient(
 
     public Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
+        AgentConfiguration edit, IReadOnlyList<AgentPluginSource> sources, CancellationToken cancellationToken)
         => AspireSkillsRemoteConfiguration.ApplyPluginAsync(config,
             GetSettingsFiles(workspaceRoot, scope,
                 edit.GetJsonFilesForEdit(Path.Combine(ManagedSettingsDirectory, "managed-settings.d"))),

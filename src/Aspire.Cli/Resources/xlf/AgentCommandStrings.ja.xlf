@@ -87,9 +87,21 @@
         <target state="translated">OpenCode</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AgentPluginSources">
+        <source>Agent plugin sources:
+{0}</source>
+        <target state="new">Agent plugin sources:
+{0}</target>
+        <note>{0} lists the configured agent plugin source repository URLs for the selected agent clients, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_AgentPluginSourcesExplanation">
+        <source>One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</source>
+        <target state="new">One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from configured skill sources</source>
-        <target state="translated">構成済みのスキル ソースからのエージェント アセット</target>
+        <source>Agent plugins from configured agent plugin sources</source>
+        <target state="needs-review-translation">構成済みのスキル ソースからのエージェント アセット</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
@@ -298,18 +310,6 @@
         <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
         <target state="translated">共有できるリンク フォルダーを介してアクセスされます。不要になった場合は、手動で削除します。</target>
         <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillSources">
-        <source>Skill sources:
-{0}</source>
-        <target state="translated">スキル ソース:
-{0}</target>
-        <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillSourcesExplanation">
-        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
-        <target state="translated">1 つ以上のスキル ソースが構成されています。スキル ソースを使用すると、組織はスキルを共有して開発エクスペリエンスをカスタマイズできます。</target>
-        <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>

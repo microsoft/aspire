@@ -512,18 +512,18 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("skillSources.team.plugins[0]", false)]
-    [InlineData("skillSources.team.plugins.0", false)]
-    [InlineData("skillSources:team:plugins:0", false)]
-    [InlineData("skillSources.team.plugins[0]", true)]
-    [InlineData("skillSources.team.plugins.0", true)]
-    [InlineData("skillSources:team:plugins:0", true)]
+    [InlineData("agentPlugins.team.plugins[0]", false)]
+    [InlineData("agentPlugins.team.plugins.0", false)]
+    [InlineData("agentPlugins:team:plugins:0", false)]
+    [InlineData("agentPlugins.team.plugins[0]", true)]
+    [InlineData("agentPlugins.team.plugins.0", true)]
+    [InlineData("agentPlugins:team:plugins:0", true)]
     public async Task SetConfigurationAsync_EditsArrayAndPreservesOtherEntries(string key, bool isGlobal)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string original = """
             {
-              "skillSources": {
+              "agentPlugins": {
                 "team": {
                   "repository": "example/team",
                   "plugins": ["aspire", "other"]
@@ -543,8 +543,8 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
 
         await Verify(await File.ReadAllTextAsync(settingsPath), "json").UseParameters(key, isGlobal);
         var loaded = AspireConfigFile.Load(Path.GetDirectoryName(settingsPath)!);
-        Assert.NotNull(loaded?.SkillSources);
-        var plugins = loaded.SkillSources["team"].Plugins;
+        Assert.NotNull(loaded?.AgentPlugins);
+        var plugins = loaded.AgentPlugins["team"].Plugins;
         Assert.NotNull(plugins);
         Assert.Equal(["deployment", "other"], plugins);
     }

@@ -152,6 +152,11 @@
         <target state="translated">没有可用的配置源。将 {0} 设置为 Git 存储库地址。</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
+      <trans-unit id="OutdatedSetting">
+        <source>The configuration source uses the outdated '{0}' setting, which was applied as '{1}'. Ask the configuration source maintainers to rename '{0}' to '{1}'.</source>
+        <target state="new">The configuration source uses the outdated '{0}' setting, which was applied as '{1}'. Ask the configuration source maintainers to rename '{0}' to '{1}'.</target>
+        <note>{0} is the outdated setting name, "skillSources". {1} is the current setting name, "agentPlugins". Do not translate the setting names.</note>
+      </trans-unit>
       <trans-unit id="ReadmeLink">
         <source>Read more about this configuration source</source>
         <target state="translated">详细了解此配置源</target>

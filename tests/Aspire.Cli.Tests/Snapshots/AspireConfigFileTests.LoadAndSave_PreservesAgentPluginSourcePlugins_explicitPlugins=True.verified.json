@@ -1,6 +1,6 @@
 ﻿{
   "channel": "daily",
-  "skillSources": {
+  "agentPlugins": {
     "default": {
       "enabled": false
     },

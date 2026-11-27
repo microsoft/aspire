@@ -139,6 +139,7 @@ function normalizeSettingsSchema(settingsSchema, propertyName) {
 function normalizePropertyInfo(property) {
     const subProperties = property.SubProperties ?? property.subProperties;
     const additionalPropertiesType = property.AdditionalPropertiesType ?? property.additionalPropertiesType;
+    const deprecationMessage = property.DeprecationMessage ?? property.deprecationMessage;
 
     return {
         Name: readString(property.Name ?? property.name, 'properties[].name'),
@@ -147,6 +148,7 @@ function normalizePropertyInfo(property) {
         Required: readBoolean(property.Required ?? property.required, 'properties[].required'),
         ...(subProperties === undefined ? {} : { SubProperties: readArray(subProperties, 'properties[].subProperties').map(normalizePropertyInfo) }),
         ...(additionalPropertiesType === undefined ? {} : { AdditionalPropertiesType: readString(additionalPropertiesType, 'properties[].additionalPropertiesType') }),
+        ...(deprecationMessage === undefined ? {} : { DeprecationMessage: readString(deprecationMessage, 'properties[].deprecationMessage') }),
     };
 }
 
@@ -184,7 +186,8 @@ function readBoolean(value, propertyName) {
  */
 function createPropertySchema(prop, configInfo) {
     const schema = {
-        description: prop.Description
+        description: prop.Description,
+        ...(prop.DeprecationMessage === undefined ? {} : { deprecationMessage: prop.DeprecationMessage })
     };
 
     const lowerType = prop.Type.toLowerCase();

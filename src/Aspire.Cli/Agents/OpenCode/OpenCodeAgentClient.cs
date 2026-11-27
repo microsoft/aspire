@@ -161,18 +161,18 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             : OpenCodePaths.GetGlobalMcpConfigPath(context, environment);
 
     public bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<AgentPluginSource> sources)
     {
         // Inline settings can activate skills, but are not a writable registration target.
         if (environment.GetEnvironmentVariable(OpenCodePaths.ConfigContentEnvironmentVariable) is { Length: > 0 } inline &&
-            AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(AgentConfiguration.ParseObject(inline), sources))
+            AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(AgentConfiguration.ParseObject(inline)))
         {
             return true;
         }
 
         foreach (var path in scope is AgentConfigurationScope.Project ? CatalogSettings(workspaceRoot) : GlobalCatalogSettings())
         {
-            if (AgentConfiguration.ReadObject(path) is { } config && AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(config, sources))
+            if (AgentConfiguration.ReadObject(path) is { } config && AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(config))
             {
                 return true;
             }
@@ -183,9 +183,10 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
 
     public async Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
+        AgentConfiguration edit, IReadOnlyList<AgentPluginSource> sources, CancellationToken cancellationToken)
     {
-        if (sources.Count == 0)
+        // OpenCode only supports the built-in Aspire catalog, which follows the default source.
+        if (!sources.Any(static source => source.IsDefault))
         {
             return;
         }
@@ -201,7 +202,7 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             }
         }
 
-        AspireSkillsRemoteConfiguration.ApplyOpenCodeCatalog(config, configs.Append(config), sources);
+        AspireSkillsRemoteConfiguration.ApplyOpenCodeCatalog(config, configs.Append(config));
     }
 
     private IEnumerable<string> CatalogSettings(DirectoryInfo workspaceRoot)

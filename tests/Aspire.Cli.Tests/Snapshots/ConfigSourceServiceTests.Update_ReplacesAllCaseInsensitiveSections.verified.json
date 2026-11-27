@@ -4,15 +4,15 @@
     "path": "teams/platform.json",
     "appliedVersion": "version-2"
   },
-  "SKILLSOURCES": {
+  "AGENTPLUGINS": {
     "first": {
       "repository": "example/updated"
     }
   },
-  "skillSources": {
+  "agentPlugins": {
     "second": {
       "repository": "example/second",
-      "openCodeV1Catalog": null,
+      "ref": null,
       "custom": "remote"
     }
   }

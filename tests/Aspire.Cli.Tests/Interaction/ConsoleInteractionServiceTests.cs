@@ -1543,7 +1543,7 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DisplayMessage_SkillSourcesAlignEachUrlWithHeading()
+    public async Task DisplayMessage_AgentPluginSourcesAlignEachUrlWithHeading()
     {
         var output = new StringBuilder();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
@@ -1555,7 +1555,7 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         });
         console.Profile.Width = 100;
         var interactionService = CreateInteractionService(console);
-        var message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillSources,
+        var message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_AgentPluginSources,
             string.Join(Environment.NewLine, "https://example.com/skills-a", "https://example.com/skills-b"));
 
         interactionService.DisplayMessage(KnownEmojis.Information, message);

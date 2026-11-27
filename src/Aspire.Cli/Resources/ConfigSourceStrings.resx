@@ -165,6 +165,10 @@
   <data name="Updated" xml:space="preserve">
     <value>Configuration updated to the latest version from its source.</value>
   </data>
+  <data name="OutdatedSetting" xml:space="preserve">
+    <value>The configuration source uses the outdated '{0}' setting, which was applied as '{1}'. Ask the configuration source maintainers to rename '{0}' to '{1}'.</value>
+    <comment>{0} is the outdated setting name, "skillSources". {1} is the current setting name, "agentPlugins". Do not translate the setting names.</comment>
+  </data>
   <data name="AlreadyUpToDate" xml:space="preserve">
     <value>Configuration is already up to date with its source.</value>
   </data>

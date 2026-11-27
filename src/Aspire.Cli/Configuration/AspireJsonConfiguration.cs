@@ -77,9 +77,17 @@ internal sealed class AspireJsonConfiguration
     [Description("Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).")]
     public Dictionary<string, bool>? Features { get; set; }
 
-    [JsonPropertyName(SkillSource.SectionName)]
-    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
-    public Dictionary<string, SkillSource>? SkillSources { get; set; }
+    [JsonPropertyName(AgentPluginSource.SectionName)]
+    [Description("Named agent plugin sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
+    public Dictionary<string, AgentPluginSource>? AgentPlugins { get; set; }
+
+    // Released CLIs wrote agent plugin sources under "skillSources". Keep it as raw JSON so
+    // typed load/save cycles and migration to aspire.config.json don't drop existing sources.
+    // TODO: Remove this legacy binding once support is removed. https://github.com/microsoft/aspire/issues/22412
+    [JsonPropertyName(AgentPluginSource.LegacySectionName)]
+    [Description("Deprecated. Use agentPlugins instead. Legacy OpenCode catalog properties are ignored.")]
+    [ConfigurationDeprecation("skillSources is deprecated. Rename it to agentPlugins.")]
+    public Dictionary<string, JsonElement>? LegacySkillSources { get; set; }
 
     [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
     [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers. " + SourceNameValidator.Description)]

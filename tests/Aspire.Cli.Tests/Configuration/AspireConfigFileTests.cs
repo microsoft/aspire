@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
@@ -11,17 +12,31 @@ namespace Aspire.Cli.Tests.Configuration;
 public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public void FromLegacy_PreservesNamedSkillSources()
+    public void FromLegacy_PreservesNamedAgentPluginSources()
     {
-        var sources = new Dictionary<string, SkillSource>
+        var sources = new Dictionary<string, AgentPluginSource>
         {
             ["default"] = new() { Enabled = false },
             ["team"] = new() { Repository = "example/team" }
         };
 
-        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { SkillSources = sources }, profiles: null);
+        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { AgentPlugins = sources }, profiles: null);
 
-        Assert.Same(sources, config.SkillSources);
+        Assert.Same(sources, config.AgentPlugins);
+    }
+
+    [Fact]
+    public void FromLegacy_PreservesLegacySkillSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string skillSources = """{"team":{"repository":"example/team","openCodeV2Catalog":"https://example.com/v2/"}}""";
+        var settings = JsonSerializer.Deserialize($$"""{"skillSources":{{skillSources}}}""",
+            JsonSourceGenerationContext.Default.AspireJsonConfiguration);
+
+        AspireConfigFile.FromLegacy(settings, profiles: null).Save(workspace.WorkspaceRoot.FullName);
+
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)))!;
+        Assert.Equal(skillSources, saved["skillSources"]!.ToJsonString());
     }
 
     [Fact]
@@ -90,14 +105,14 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task LoadAndSave_PreservesSkillSourcePlugins(bool explicitPlugins)
+    public async Task LoadAndSave_PreservesAgentPluginSourcePlugins(bool explicitPlugins)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var globalSettingsFile = new FileInfo(Path.Combine(workspace.Path, "globalsettings.json"));
         await File.WriteAllTextAsync(globalSettingsFile.FullName, """
             {
-              "skillSources": {
+              "agentPlugins": {
                 "team": {
                   "repository": "example/global",
                   "plugins": ["deployment", "operations"]
@@ -108,7 +123,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var plugins = explicitPlugins ? """, "plugins": ["local", "release"]""" : string.Empty;
         await File.WriteAllTextAsync(path, $$"""
             {
-              "skillSources": {
+              "agentPlugins": {
                 "default": { "enabled": false },
                 "team": { "repository": "example/local"{{plugins}} }
               }
@@ -117,14 +132,14 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         string[] expectedPlugins = explicitPlugins
             ? ["local@team", "release@team"]
             : ["deployment@team", "operations@team"];
-        Assert.Equal(expectedPlugins, Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile)).GetPluginNames());
+        Assert.Equal(expectedPlugins, Assert.Single(AgentPluginSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile)).GetPluginNames());
 
         var config = AspireConfigFile.Load(workspace.Path);
         Assert.NotNull(config);
         config.Channel = "daily";
         config.Save(workspace.Path);
 
-        var source = Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile));
+        var source = Assert.Single(AgentPluginSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile));
         Assert.Equal("example/local", source.Repository);
         Assert.Equal(expectedPlugins, source.GetPluginNames());
         await Verify(await File.ReadAllTextAsync(path), "json").UseParameters(explicitPlugins);

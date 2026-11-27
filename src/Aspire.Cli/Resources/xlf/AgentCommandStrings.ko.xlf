@@ -87,9 +87,21 @@
         <target state="translated">OpenCode</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AgentPluginSources">
+        <source>Agent plugin sources:
+{0}</source>
+        <target state="new">Agent plugin sources:
+{0}</target>
+        <note>{0} lists the configured agent plugin source repository URLs for the selected agent clients, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_AgentPluginSourcesExplanation">
+        <source>One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</source>
+        <target state="new">One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from configured skill sources</source>
-        <target state="translated">구성된 기술 원본의 에이전트 자산</target>
+        <source>Agent plugins from configured agent plugin sources</source>
+        <target state="needs-review-translation">구성된 기술 원본의 에이전트 자산</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
@@ -298,18 +310,6 @@
         <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
         <target state="translated">공유할 수 있는 연결된 폴더를 통해 도달합니다. 더 이상 필요하지 않은 경우 수동으로 제거하세요.</target>
         <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillSources">
-        <source>Skill sources:
-{0}</source>
-        <target state="translated">기술 소스:
-{0}</target>
-        <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillSourcesExplanation">
-        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
-        <target state="translated">하나 이상의 기술 원본이 구성되어 있습니다. 기술 원본을 사용하면 조직에서 기술을 공유하여 사용자의 개발 환경을 사용자 지정할 수 있습니다.</target>
-        <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>

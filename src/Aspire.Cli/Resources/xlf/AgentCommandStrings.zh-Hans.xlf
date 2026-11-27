@@ -87,9 +87,21 @@
         <target state="translated">OpenCode</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AgentPluginSources">
+        <source>Agent plugin sources:
+{0}</source>
+        <target state="new">Agent plugin sources:
+{0}</target>
+        <note>{0} lists the configured agent plugin source repository URLs for the selected agent clients, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_AgentPluginSourcesExplanation">
+        <source>One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</source>
+        <target state="new">One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from configured skill sources</source>
-        <target state="translated">来自已配置技能源的智能体资产</target>
+        <source>Agent plugins from configured agent plugin sources</source>
+        <target state="needs-review-translation">来自已配置技能源的智能体资产</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
@@ -298,18 +310,6 @@
         <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
         <target state="translated">可通过可共享的链接文件夹访问它。如果不再需要，请手动移除它。</target>
         <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillSources">
-        <source>Skill sources:
-{0}</source>
-        <target state="translated">技能源:
-{0}</target>
-        <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillSourcesExplanation">
-        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
-        <target state="translated">已配置一个或多个技能源。技能源允许组织共享技能，以便定制你的开发体验。</target>
-        <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>

@@ -152,6 +152,11 @@
         <target state="translated">Es ist keine Konfigurationsquelle verfügbar. Legen Sie {0} auf eine Git-Repositoryadresse fest.</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
+      <trans-unit id="OutdatedSetting">
+        <source>The configuration source uses the outdated '{0}' setting, which was applied as '{1}'. Ask the configuration source maintainers to rename '{0}' to '{1}'.</source>
+        <target state="new">The configuration source uses the outdated '{0}' setting, which was applied as '{1}'. Ask the configuration source maintainers to rename '{0}' to '{1}'.</target>
+        <note>{0} is the outdated setting name, "skillSources". {1} is the current setting name, "agentPlugins". Do not translate the setting names.</note>
+      </trans-unit>
       <trans-unit id="ReadmeLink">
         <source>Read more about this configuration source</source>
         <target state="translated">Weitere Informationen zu dieser Konfigurationsquelle</target>

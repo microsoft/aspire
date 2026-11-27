@@ -49,7 +49,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public TestEnvironment Environment { get; }
     public CliExecutionContext ExecutionContext { get; }
     public ConfigurationManager Configuration { get; } = new();
-    public IReadOnlyList<SkillSource> Sources => SkillSource.Resolve(Configuration);
+    public IReadOnlyList<AgentPluginSource> Sources => AgentPluginSource.Resolve(Configuration);
     public IReadOnlyList<IAgentClient> Clients { get; }
     public IAgentClient Copilot { get; }
     public IAgentClient ClaudeCode { get; }

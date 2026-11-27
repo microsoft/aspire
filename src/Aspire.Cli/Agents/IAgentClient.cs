@@ -19,13 +19,13 @@ internal interface IAgentClient
     string GetSkillBaseDirectory(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 
     bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources);
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<AgentPluginSource> sources);
 
     string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 
     Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken);
+        AgentConfiguration edit, IReadOnlyList<AgentPluginSource> sources, CancellationToken cancellationToken);
 
     string GetMcpConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 

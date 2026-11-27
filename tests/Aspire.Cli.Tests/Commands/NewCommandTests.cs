@@ -2487,7 +2487,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [Path.Combine(outputDir, ".github", "copilot", "settings.json")], [SkillSource.BuiltIn]));
+            [Path.Combine(outputDir, ".github", "copilot", "settings.json")], [AgentPluginSource.BuiltIn]));
         Assert.False(Directory.Exists(Path.Combine(outputDir, ".agents", "skills")));
     }
 
@@ -2661,7 +2661,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(capturedOutputPath, ".github", "copilot", "settings.json")],
-            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
+            [new AgentPluginSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(capturedOutputPath, ".agents", "skills")));
     }
 
@@ -3463,7 +3463,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")],
-            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
+            [new AgentPluginSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
@@ -3518,7 +3518,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")],
-            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
+            [new AgentPluginSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
@@ -3547,7 +3547,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")],
-            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
+            [new AgentPluginSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
@@ -3570,7 +3570,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         var configurationPath = Path.Combine(homeDirectory.FullName, ".claude", "settings.json");
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [configurationPath], [SkillSource.BuiltIn]));
+            [configurationPath], [AgentPluginSource.BuiltIn]));
         Assert.Equal([configurationPath], Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
         Assert.Equal([ClaudeCodeAgentClient.ClientId], hooks.SelectedClientIds);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
