@@ -257,9 +257,12 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
                 ? ["Aspire.Cli.EndToEnd.Tests", "Aspire.Tray.Tests", "Infrastructure.Tests"]
                 : new[] { "Aspire.Tray.Tests", "Infrastructure.Tests" },
             result.TestProjects.Order(StringComparer.Ordinal));
-        Assert.Equal(bundled
-                ? ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"]
-                : Array.Empty<string>(),
+        Assert.Equal(project switch
+            {
+                "Aspire.Tray.Linux" => ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:nix-package", "job:winget-installer"],
+                _ when bundled => ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"],
+                _ => Array.Empty<string>()
+            },
             result.Jobs.Order(StringComparer.Ordinal));
     }
 

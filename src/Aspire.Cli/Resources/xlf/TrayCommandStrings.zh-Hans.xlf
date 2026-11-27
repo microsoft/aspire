@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
-        <target state="translated">Aspire 托盘需要已申领租约且带版本号的 CLI 捆绑包。找不到可用的捆绑包。安装包含桌面托盘配套程序的 Aspire 捆绑包。</target>
+        <source>The Aspire tray requires a CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <target state="needs-review-translation">Aspire 托盘需要已申领租约且带版本号的 CLI 捆绑包。找不到可用的捆绑包。安装包含桌面托盘配套程序的 Aspire 捆绑包。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">

@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
-        <target state="translated">A bandeja do Aspire requer um pacote da CLI sob concessão e com controle de versão. Nenhum pacote utilizável foi encontrado. Instale um pacote do Aspire que inclua o aplicativo complementar de bandeja para seu ambiente de área de trabalho.</target>
+        <source>The Aspire tray requires a CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <target state="needs-review-translation">A bandeja do Aspire requer um pacote da CLI sob concessão e com controle de versão. Nenhum pacote utilizável foi encontrado. Instale um pacote do Aspire que inclua o aplicativo complementar de bandeja para seu ambiente de área de trabalho.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">

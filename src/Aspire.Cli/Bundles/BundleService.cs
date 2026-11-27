@@ -221,7 +221,7 @@ internal sealed class BundleService(
         var extractDir = GetDefaultExtractDir(processPath);
         if (string.IsNullOrEmpty(extractDir))
         {
-            logger.LogDebug("Could not determine extraction directory from {ProcessPath}, skipping.", processPath);
+            logger.LogDebug("No runtime bundle extraction directory for {ProcessPath}, skipping.", processPath);
             return null;
         }
 
@@ -474,6 +474,9 @@ internal sealed class BundleService(
 
         return source switch
         {
+            // Nix expands and patches the payload while building the package. Re-extracting
+            // would discard those patches; the immutable store also cannot host locks or leases.
+            InstallSourceExtensions.NixWire => null,
             InstallSourceExtensions.WingetWire
                 or InstallSourceExtensions.BrewWire
                 or InstallSourceExtensions.DotnetToolWire => binaryDir,
