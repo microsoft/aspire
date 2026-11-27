@@ -43225,6 +43225,27 @@ type ResourceTestingContext interface {
 	// release.
 	CancellationToken() (*CancellationToken, error)
 
+	// CaptureOutputAsync captures the completed executable's raw standard output
+	// and standard error into this resource's output directory.
+	//
+	// Waits for authoritative process completion, including nonzero exits, then
+	// replays DCP's durable, timestamp-free stdout and stderr separately into
+	// stdout.log and stderr.log. Creates output.complete only after both streams
+	// drain. Partial files remain on errors or cancellation. Files are exclusively
+	// created with private permissions (0600 on Unix) in the run's private
+	// directory. Supports exactly one native executable invocation, without
+	// terminals, replicas, restarts, or retries. Integrations must prevent restarts
+	// before launch. Concurrent/repeated calls share the same task, including a
+	// faulted task; capture never reopens or overwrites the owned files. No
+	// dashboard backlog limits, timestamp formatting, or stdout/stderr merging
+	// apply.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	CaptureOutputAsync() error
+
 	// OutputPath gets the absolute host path to this resource's private output
 	// directory.
 	//
@@ -43326,6 +43347,20 @@ func (s *resourceTestingContext) CancellationToken() (*CancellationToken, error)
 		return zero, err
 	}
 	return decodeAs[*CancellationToken](result)
+}
+
+// CaptureOutputAsync captures the completed executable's raw standard output
+// and standard error into this resource's output directory.
+func (s *resourceTestingContext) CaptureOutputAsync() error {
+	if err := s.Err(); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/captureOutputAsync", reqArgs)
+	return err
 }
 
 // OutputPath gets the absolute host path to this resource's private output

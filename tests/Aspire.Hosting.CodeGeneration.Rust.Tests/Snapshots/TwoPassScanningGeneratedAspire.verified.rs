@@ -17857,6 +17857,14 @@ impl ResourceTestingContext {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Captures the completed executable's raw standard output and standard error into this resource's output directory.
+    pub fn capture_output_async(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/captureOutputAsync", args)?;
+        Ok(())
+    }
+
     /// Publishes an observed test result for this resource.
     pub fn publish_result(&self, result: TestResult) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();

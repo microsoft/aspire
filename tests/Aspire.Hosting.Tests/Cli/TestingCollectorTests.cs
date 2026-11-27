@@ -580,7 +580,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         var timeProvider = new FakeTimeProvider();
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = new TestRunCoordinator(new DistributedApplicationModel(builder.Resources), notifications,
-            timeProvider, NullLogger<TestRunCoordinator>.Instance);
+            timeProvider, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         var events = new ConcurrentQueue<TestRunEvent>();
         var collected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stream = ReadAsync(coordinator, events, item =>
@@ -638,7 +638,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         var timeProvider = new FakeTimeProvider();
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = new TestRunCoordinator(new DistributedApplicationModel(builder.Resources), notifications,
-            timeProvider, NullLogger<TestRunCoordinator>.Instance);
+            timeProvider, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         var events = new ConcurrentQueue<TestRunEvent>();
         var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stream = ReadAsync(coordinator, events, item =>
@@ -1046,7 +1046,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     }
 
     private static TestRunCoordinator CreateCoordinator(IDistributedApplicationTestingBuilder builder, ResourceNotificationService notifications) =>
-        new(new DistributedApplicationModel(builder.Resources), notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+        new(new DistributedApplicationModel(builder.Resources), notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
 
     private static async Task ReadAsync(TestRunCoordinator coordinator, ConcurrentQueue<TestRunEvent> events, Action<TestRunEvent>? observed = null)
     {
