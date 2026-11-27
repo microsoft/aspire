@@ -35,6 +35,26 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void AddAzureContainerRegistry_AsExisting_AddsResourceInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
+        var registryName = builder.AddParameter("registryName", "existingRegistry");
+        var registryResourceGroup = builder.AddParameter("registryResourceGroup", "existingResourceGroup");
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .AsExisting(registryName, registryResourceGroup);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Same(registry.Resource, Assert.Single(model.Resources.OfType<AzureContainerRegistryResource>()));
+        Assert.True(registry.Resource.TryGetLastAnnotation<ResourceIconAnnotation>(out var icon));
+        Assert.Equal("Archive", icon.IconName);
+        Assert.True(registry.Resource.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaultRoles));
+        Assert.Empty(defaultRoles.Roles);
+    }
+
+    [Fact]
     public async Task WithRegistry_AttachesContainerRegistryReferenceAnnotation()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
