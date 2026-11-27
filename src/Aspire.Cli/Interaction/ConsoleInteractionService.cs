@@ -532,7 +532,7 @@ internal class ConsoleInteractionService : IInteractionService
         var errorMessage = InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading;
         string? updateCommand = null;
 
-        if (SemVersion.TryParse(appHostHostingVersion, SemVersionStyles.Any, out var hostingVersion) &&
+        if (AppHostHelper.TryParseAspireHostingVersion(appHostHostingVersion, out var hostingVersion) &&
             SemVersion.TryParse(cliInformationalVersion, SemVersionStyles.Any, out var cliVersion))
         {
             var comparison = SemVersion.ComparePrecedence(hostingVersion, cliVersion);

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -166,5 +167,62 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
         Assert.True(File.Exists(updatedAppBicepPath), $"Expected updated Bicep at '{updatedAppBicepPath}'.");
         var updatedAppBicep = File.ReadAllText(updatedAppBicepPath);
         Assert.Contains(updatedImage, updatedAppBicep);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task PublishWithWildcardAppHostPackageVersion_RestoresAndUsesResolvedVersion()
+    {
+        const string projectName = "WildcardPublishApp";
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
+
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, $"{projectName}.AppHost");
+        await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
+        await auto.TypeAsync("aspire add Aspire.Hosting.Radius");
+        await auto.EnterAsync();
+        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+        // Float the template's existing reference instead of adding a second one, which NuGet
+        // would reject as a duplicate (NU1504). Keep the template's major version and include
+        // prereleases so the range restores from the same feed as the concrete version, including
+        // prerelease-only CI hives, e.g. "13.6.0-preview.1.25520.1" -> "13.*-*".
+        var projectFile = Directory.EnumerateFiles(appHostDirectory, "*.csproj").Single();
+        var project = XDocument.Load(projectFile);
+        var appHostReference = project.Descendants("PackageReference")
+            .Single(e => string.Equals((string?)e.Attribute("Include"), "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase));
+        var templateVersion = (string?)appHostReference.Attribute("Version");
+        Assert.False(string.IsNullOrEmpty(templateVersion));
+        var floatingVersion = $"{templateVersion.Split('.')[0]}.*-*";
+        appHostReference.SetAttributeValue("Version", floatingVersion);
+        project.Save(projectFile);
+
+        // Replace the template's top-level AppHost.cs rather than adding another entry point. The
+        // Radius publisher rejects project resources without images, so model only a container.
+        await File.WriteAllTextAsync(Path.Combine(appHostDirectory, "AppHost.cs"), """
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.AddRadiusEnvironment("radius");
+            builder.AddContainer("web", "nginx:1.27.0");
+            builder.Build().Run();
+            """);
+
+        // Remove the template/add restore output so the first publish exercises a clean floating
+        // reference. The second publish uses the now-restored graph and the AppHost-info disk cache.
+        await auto.RunCommandAsync("rm -rf obj bin", counter);
+        await auto.RunCommandAsync("unset ASPIRE_PLAYGROUND", counter);
+        await auto.RunCommandAsync("aspire publish -o wildcard-clean --non-interactive", counter, TimeSpan.FromMinutes(5));
+        Assert.True(File.Exists(Path.Combine(appHostDirectory, "wildcard-clean", "app.bicep")));
+
+        await auto.RunCommandAsync("aspire publish -o wildcard-restored --non-interactive", counter, TimeSpan.FromMinutes(5));
+        Assert.True(File.Exists(Path.Combine(appHostDirectory, "wildcard-restored", "app.bicep")));
     }
 }

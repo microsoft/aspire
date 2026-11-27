@@ -554,6 +554,8 @@ internal abstract class PipelineCommandBase : BaseCommand
         if (string.IsNullOrWhiteSpace(aspireHostingVersion) ||
             !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out var version))
         {
+            // Floating declarations are not the resolved AppHost version. Let publish build and
+            // restore the project, then validate any concrete version exposed by the AppHost.
             return false;
         }
 

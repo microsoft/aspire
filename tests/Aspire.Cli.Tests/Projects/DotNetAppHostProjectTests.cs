@@ -513,6 +513,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [InlineData("13.6.0", false, false, false)]
     [InlineData("17.0.0-preview.1", true, true, true)]
     [InlineData("17.0.0", true, true, true)]
+    [InlineData("17.*", true, true, true)]
     public async Task RunAsync_ProjectAppHostUsingCliBundlePassesBundleEnvironmentToRunner(string hostingVersion, bool nativeExists, bool useNativeDashboard, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();
@@ -573,6 +574,64 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             AppHostFile = appHostFile,
             NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_NoBuildSelectsLaunchContractsFromBuiltHostingVersion()
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        var bundleRoot = CreateCliBundle(out var layout);
+
+        // The declared "13.*" range alone selects the compatibility contracts. The build output
+        // reused by --no-build contains a newer Aspire.Hosting, so its version must win.
+        var outputDirectory = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, "bin", "Debug", "net10.0"));
+        File.Copy(typeof(DotNetAppHostProject).Assembly.Location, Path.Combine(outputDirectory.FullName, "Aspire.Hosting.dll"));
+        var builtVersion = AppHostHelper.TryGetBuiltAspireHostingVersion(Path.Combine(outputDirectory.FullName, "App.dll"));
+        Assert.True(AppHostHelper.TryParseAspireHostingVersion(builtVersion, out var parsedBuiltVersion));
+        Assert.True(DashboardLaunchHelper.SupportsNativeDashboard(parsedBuiltVersion));
+        Assert.True(TerminalHostLaunchHelper.SupportsDirectLaunch(parsedBuiltVersion));
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("--no-build must not build the AppHost."),
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireUseCliBundle = "true",
+                        TargetPath = Path.Combine(outputDirectory.FullName, "App.dll"),
+                    },
+                    Items = new
+                    {
+                        PackageReference = new[] { new { Identity = "Aspire.Hosting.AppHost", Version = "13.*" } }
+                    }
+                }))
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (_, _, noBuild, _, _, env, _, _, _) =>
+        {
+            Assert.True(noBuild);
+            Assert.Equal(bundleRoot.FullName, env!["AspireCliBundlePath"]);
+            Assert.Equal(layout.GetDashboardPath(), env[BundleDiscovery.DashboardPathEnvVar]);
+            Assert.Equal(layout.GetTerminalHostPath(), env[BundleDiscovery.TerminalHostPathEnvVar]);
+            Assert.Equal(string.Empty, env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = true,
             NoRestore = false,
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>()
