@@ -101,6 +101,33 @@ F#/VB support covers SDK-style project files, not scripts or old project systems
 service/AppHost watcher is not implemented. Rebuild and non-watch debugging do not imply
 `aspire run --watch` support.
 
+### Disabling multithreaded builds
+
+Set `Aspire:Dotnet:DisableMultithreadedBuild` to `true` in the AppHost's configuration to disable
+MSBuild's multithreaded mode for Aspire-managed coordinated builds and Rebuild commands. For one
+run, set the environment variable before starting the AppHost:
+
+```bash
+Aspire__Dotnet__DisableMultithreadedBuild=true aspire run
+```
+
+Alternatively, add it to the AppHost's `appsettings.json`:
+
+```json
+{
+  "Aspire": {
+    "Dotnet": {
+      "DisableMultithreadedBuild": true
+    }
+  }
+}
+```
+
+The setting defaults to `false` and is read when build arguments are evaluated. When enabled,
+Aspire passes `-mt:false` for SDKs that support the switch; older or unsupported SDKs do not receive
+the switch. This selects MSBuild's non-multithreaded mode, but does not disable all build
+parallelism. It does not affect the initial AppHost compilation, publishing, or IDE-owned builds.
+
 ### Restoring projects individually
 
 Coordinated project builds restore all projects in a compatible group together, without introducing
@@ -172,6 +199,28 @@ It does not change the shared `ProjectResourceOptions` handle used by the legacy
 `addProject` and `addCSharpApp` APIs.
 
 ### Configure the build environment
+
+Use `WithDotnetBuildEnvironment` on the distributed application builder to pass an app-wide
+environment variable and matching MSBuild global property to coordinated run-mode SDK-style
+.NET project builds. Project-specific `WithBuildEnvironment` values override an app-wide value
+with the same name. These values are not added to launched project environments; configure the
+same variable with `WithEnvironment` separately when it is needed at runtime.
+
+```csharp
+builder.WithDotnetBuildEnvironment("SkipAssets", "true");
+builder.AddDotnetProject("worker", "../worker/worker.csproj");
+```
+
+**TypeScript**
+
+```typescript
+await builder.withDotnetBuildEnvironment("SkipAssets", "true");
+await builder.addDotnetProject("worker", "../worker/worker.csproj");
+```
+
+IDE debugging requires a launcher that advertises `project-with-external-build.v1`. Aspire rejects
+this API when the active IDE session supports only the legacy project launch contract because that
+launcher cannot reliably locate output produced with app-wide build settings.
 
 Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation for an SDK-style
 `.csproj`, `.fsproj`, or `.vbproj` resource. File-based `.cs` apps do not support build-only environment variables and are rejected when

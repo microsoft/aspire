@@ -108,6 +108,32 @@ public class DotnetProjectPublicApiTests
         Assert.Equal(nameof(name), exception.ParamName);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void WithDotnetBuildEnvironmentShouldThrowWhenNameIsNullOrEmpty(string? name)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var action = () => builder.WithDotnetBuildEnvironment(name!, "value");
+
+        var exception = name is null
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithDotnetBuildEnvironmentShouldThrowWhenValueIsNull()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var action = () => builder.WithDotnetBuildEnvironment("BUILD_FLAVOR", null!);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal("value", exception.ParamName);
+    }
+
     [Fact]
     public void WithBuildEnvironmentOverloadsShouldRejectFileBasedAppsImmediately()
     {

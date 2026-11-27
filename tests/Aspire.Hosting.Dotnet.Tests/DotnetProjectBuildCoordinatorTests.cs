@@ -129,6 +129,140 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(".csproj", false, "11.0.100-rc.1", true)]
+    [InlineData(".csproj", true, "11.0.100-rc.1", true)]
+    [InlineData(".csproj", false, "10.0.999", false)]
+    [InlineData(".csproj", false, null, false)]
+    [InlineData(".cs", false, "11.0.100-rtm.26473.104", true)]
+    [InlineData(".cs", false, "11.0.100-rc.1", false)]
+    public async Task DisablingMultithreadedBuildAppliesToBuildAndRebuild(
+        string extension,
+        bool customizedBuild,
+        string? sdkVersion,
+        bool supportsSwitch)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["Aspire:Dotnet:DisableMultithreadedBuild"] = "true";
+        UseDotnetSdkVersion(builder, sdkVersion);
+        var path = extension == ".cs"
+            ? Path.Combine(workspace.Path, "worker.cs")
+            : CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        if (extension == ".cs")
+        {
+            File.WriteAllText(path, "System.Console.WriteLine(\"Hello\");");
+        }
+
+        var project = builder.AddDotnetProject("worker", path, options => options.ExcludeLaunchProfile = true);
+        if (customizedBuild)
+        {
+            project.WithBuildEnvironment("BUILD_FLAVOR", "custom");
+        }
+
+        await using var app = builder.Build();
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(app, TestContext.Current.CancellationToken);
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var buildArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var expectedBuildArgs = new List<string> { "build", buildArgs[1] };
+        if (supportsSwitch)
+        {
+            expectedBuildArgs.Add("-mt:false");
+        }
+        AddExpectedConfiguration(builder, expectedBuildArgs);
+        Assert.Equal(expectedBuildArgs, buildArgs.Where(argument => !argument.StartsWith('@')));
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+        var expectedRebuildArgs = new List<string> { "build", NormalizeProjectPath(path) };
+        if (supportsSwitch)
+        {
+            expectedRebuildArgs.Add("-mt:false");
+        }
+        AddExpectedConfiguration(builder, expectedRebuildArgs);
+        Assert.Equal(expectedRebuildArgs, rebuildArgs.Where(argument => !argument.StartsWith('@')));
+    }
+
+    [Fact]
+    public async Task MultithreadedBuildSettingIsReevaluatedOnRestart()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, "11.0.100-rc.1");
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        builder.Configuration["Aspire:Dotnet:DisableMultithreadedBuild"] = "true";
+        await using var app = builder.Build();
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(app, TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var firstArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var firstExpected = new List<string> { "build", firstArgs[1], "-mt:false" };
+        AddExpectedConfiguration(builder, firstExpected);
+        Assert.Equal(firstExpected, firstArgs);
+
+        builder.Configuration["Aspire:Dotnet:DisableMultithreadedBuild"] = "false";
+        ForgetCachedCallbackResults(buildResource);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var secondArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var secondExpected = new List<string> { "build", secondArgs[1], CoordinatedProjectBuildMode };
+        AddExpectedConfiguration(builder, secondExpected);
+        Assert.Equal(secondExpected, secondArgs);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("invalid")]
+    [InlineData("1")]
+    public async Task InvalidMultithreadedBuildSettingFailsArgumentEvaluation(string value)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, "11.0.100-rc.1");
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        builder.Configuration["Aspire:Dotnet:DisableMultithreadedBuild"] = value;
+        await using var app = builder.Build();
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(app, TestContext.Current.CancellationToken);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services));
+        Assert.Contains("Aspire:Dotnet:DisableMultithreadedBuild", exception.Message, StringComparison.Ordinal);
+
+        builder.Configuration["Aspire:Dotnet:DisableMultithreadedBuild"] = "true";
+        ForgetCachedCallbackResults(buildResource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var expected = new List<string> { "build", args[1], "-mt:false" };
+        AddExpectedConfiguration(builder, expected);
+        Assert.Equal(expected, args);
+    }
+
+    [Theory]
     [InlineData("11.0.100-rc.1", "10.0.999", true, false)]
     [InlineData("10.0.999", "11.0.100-rc.1", false, true)]
     public async Task CoordinatedBuildReevaluatesMultiThreadedSwitchWhenGlobalJsonChanges(
@@ -377,6 +511,85 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             $"'{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}', run the application outside this IDE, or " +
             "remove the build customization.",
             exception.Message);
+    }
+
+    [Fact]
+    public async Task LegacyIdeWithAppWideBuildEnvironmentFailsBeforeBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.WithDotnetBuildEnvironment("BUILD_FLAVOR", "custom");
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            $"The AppHost uses WithDotnetBuildEnvironment, but Aspire can use only the legacy " +
+            $"'{KnownLaunchConfigurationTypes.Project}' launch contract for the active IDE session and cannot " +
+            "reliably launch output produced with app-wide build settings. Use an IDE that advertises " +
+            $"'{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}', run the application outside this IDE, or " +
+            "remove the build customization.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AppWideBuildEnvironmentAppliesToTraversalAndProjectBuilds()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.WithDotnetBuildEnvironment("BUILD_FLAVOR", "global");
+        var apiPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var workerPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var api = builder.AddDotnetProject("api", apiPath, options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", workerPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment("BUILD_FLAVOR", "resource");
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResources = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        Assert.Collection(
+            buildResources,
+            traversalBuild => Assert.Equal([NormalizeProjectPath(apiPath)], traversalBuild.ProjectPaths),
+            directBuild => Assert.Equal([NormalizeProjectPath(workerPath)], directBuild.ProjectPaths));
+
+        var traversalEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            buildResources[0],
+            serviceProvider: app.Services);
+        var traversalArguments = await ArgumentEvaluator.GetArgumentListAsync(buildResources[0], app.Services);
+        var traversalResponseFile = Assert.Single(traversalArguments, argument => argument.StartsWith('@'));
+        var traversalResponseFileContents = File.ReadAllLines(traversalResponseFile[1..]);
+
+        var directEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            buildResources[1],
+            serviceProvider: app.Services);
+        var directArguments = await ArgumentEvaluator.GetArgumentListAsync(buildResources[1], app.Services);
+        var directResponseFile = Assert.Single(directArguments, argument => argument.StartsWith('@'));
+        var directResponseFileContents = File.ReadAllLines(directResponseFile[1..]);
+
+        Assert.Equal("global", traversalEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal(["\"--property:BUILD_FLAVOR=global\""], traversalResponseFileContents);
+        Assert.Equal("resource", directEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal(["\"--property:BUILD_FLAVOR=resource\""], directResponseFileContents);
+        Assert.Equal(
+            "global",
+            api.Resource.Annotations.OfType<DotnetProjectMetadata>().Single().BuildEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal(
+            "resource",
+            builder.Resources
+                .OfType<DotnetProjectResource>()
+                .Single(resource => resource.Name == "worker")
+                .Annotations.OfType<DotnetProjectMetadata>()
+                .Single()
+                .BuildEnvironment["BUILD_FLAVOR"]);
     }
 
     [Fact]

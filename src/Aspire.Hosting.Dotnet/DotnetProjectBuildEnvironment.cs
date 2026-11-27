@@ -15,6 +15,8 @@ internal sealed class DotnetProjectBuildEnvironmentCallbackAnnotation(
         callback ?? throw new ArgumentNullException(nameof(callback));
 }
 
+internal sealed record DotnetProjectBuildEnvironmentEntry(string Name, string Value);
+
 internal static class DotnetProjectBuildEnvironment
 {
     public static Task<MsBuildResponseFile?> CreateResponseFileAsync(
