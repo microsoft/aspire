@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
+using System.Collections.Concurrent;
 using System.Data;
 using System.Net;
 using Aspire.TestUtilities;
@@ -68,6 +69,80 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         await pendingStart.DefaultTimeout(TestConstants.LongTimeoutTimeSpan); // Startup should now complete.
 
         // ... but we'll shut everything down immediately because we are done.
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public async Task FreshVolume_CreatesAllDatabasesWithoutErrors()
+    {
+        // Covers https://github.com/microsoft/aspire/issues/18540.
+        // On a fresh data volume the Postgres image runs initdb on a temporary server and then restarts
+        // to the real listener. The temporary server has TCP disabled (listen_addresses=''), so the
+        // server health check, and with it native database creation, can only succeed against the
+        // final server. Creation must not log errors, and WaitFor dependents must be released.
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        // No data volume => a fresh PGDATA (and therefore an initdb restart) on every start.
+        var postgres = builder.AddPostgres("pg");
+        var db1 = postgres.AddDatabase("db1");
+        var db2 = postgres.AddDatabase("db2");
+        var db3 = postgres.AddDatabase("db3");
+
+        // A dependent that must be released once db1 is healthy.
+        var dependent = builder.AddPostgres("dependent").WaitFor(db1);
+
+        using var app = builder.Build();
+
+        // Collect the server's resource log so database creation errors fail the test directly instead
+        // of only surfacing as a database that never becomes healthy.
+        var serverLogLines = new ConcurrentQueue<LogLine>();
+        using var logWatchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        var logWatchTask = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var batch in app.Services.GetRequiredService<ResourceLoggerService>().WatchAsync(postgres.Resource.Name).WithCancellation(logWatchCts.Token))
+                {
+                    foreach (var line in batch)
+                    {
+                        serverLogLines.Enqueue(line);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (logWatchCts.IsCancellationRequested)
+            {
+            }
+        });
+
+        await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        // Every declared database must be created and become healthy: proof creation survived the restart.
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(db1.Resource.Name, cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(db2.Resource.Name, cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(db3.Resource.Name, cts.Token);
+
+        await app.ResourceNotifications.WaitForResourceAsync(dependent.Resource.Name, KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        logWatchCts.Cancel();
+        await logWatchTask.DefaultTimeout();
+
+        var creationErrors = serverLogLines.Where(l => l.Content.Contains("Failed to create", StringComparison.Ordinal)).Select(l => l.Content).ToList();
+        Assert.Empty(creationErrors);
+
+        // Once dependents are released the server is past the initdb restart, so each database must
+        // accept a connection on the first attempt. No retry here: a retry would hide a restart.
+        foreach (var db in new[] { db1, db2, db3 })
+        {
+            var connectionString = await db.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+
+            using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync(cts.Token);
+            Assert.Equal(ConnectionState.Open, connection.State);
+        }
+
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
