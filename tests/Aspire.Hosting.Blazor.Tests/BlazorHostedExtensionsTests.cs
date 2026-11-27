@@ -198,13 +198,14 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             command => Assert.Equal("stop-browser-debug", command));
     }
 
-    [Fact]
-    public async Task ProxyService_WithWasmClient_UsesResolvedClientProjectAsWebRoot()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ProxyService_WithUnrestoredWasmClient_UsesResolvedClientProjectAsWebRoot(bool useDotnetHost)
     {
         using var fileSystemService = new TestFileSystemService();
         using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
         var (serverProjectPath, clientProjectPath) = CreateBlazorHostedProjects(tempDirectory);
-        await RestoreProjectAsync(serverProjectPath);
 
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ConfigureBrowserDebugging(builder);
@@ -212,10 +213,14 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         builder.Services.AddSingleton<IDotnetSdkVersionProvider>(sdkVersionProvider);
 
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
-        var host = builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
+        IResourceBuilder<IResourceWithEndpoints> host = useDotnetHost
+            ? builder.AddDotnetProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
+                .ProxyBlazorService(weatherApi)
+            : builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
+                .ProxyBlazorService(weatherApi);
+        host
             .WithHttpsEndpoint()
-            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7443), createIfNotExists: false)
-            .ProxyBlazorService(weatherApi);
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7443), createIfNotExists: false);
 
         using var app = builder.Build();
         await PublishBeforeStartEventAsync(builder, app);
@@ -279,7 +284,6 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         using var fileSystemService = new TestFileSystemService();
         using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
         var serverProjectPath = CreateBlazorHostedServerWithoutClient(tempDirectory);
-        await RestoreProjectAsync(serverProjectPath);
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ConfigureBrowserDebugging(builder);
 
@@ -618,22 +622,9 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             """{"protocols_supported":["2024-03-03"],"supported_launch_configurations":["browser"]}""";
     }
 
-    private static async Task RestoreProjectAsync(string projectPath)
-    {
-        var result = await BlazorDotNetCliRunner.RunAsync(
-            projectPath,
-            "restore",
-            ["--ignore-failed-sources", "-nologo"],
-            machineReadableOutput: false,
-            CancellationToken.None);
-
-        Assert.True(
-            result.Started && result.ExitCode == 0,
-            $"Failed to restore '{projectPath}'.{Environment.NewLine}{result.StandardOutput}{Environment.NewLine}{result.StandardError}");
-    }
-
     private static (string ServerProjectPath, string ClientProjectPath) CreateBlazorHostedProjects(TempDirectory tempDirectory)
     {
+        ConfigureFixtureRestore(tempDirectory);
         var serverDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Server"));
         var clientDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Client"));
         var serverProjectPath = Path.Combine(serverDirectory.FullName, "Server.csproj");
@@ -658,6 +649,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
     private static string CreateBlazorHostedServerWithoutClient(TempDirectory tempDirectory)
     {
+        ConfigureFixtureRestore(tempDirectory);
         var serverProjectPath = Path.Combine(tempDirectory.Path, "Server.csproj");
         File.WriteAllText(serverProjectPath, """
             <Project Sdk="Microsoft.NET.Sdk.Web">
@@ -665,6 +657,19 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             </Project>
             """);
         return serverProjectPath;
+    }
+
+    private static void ConfigureFixtureRestore(TempDirectory tempDirectory)
+    {
+        // These projects are outside the repository, so they don't inherit its package sources.
+        File.WriteAllText(Path.Combine(tempDirectory.Path, "Directory.Build.props"), """
+            <Project>
+              <PropertyGroup>
+                <RestoreSources>https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json</RestoreSources>
+                <NuGetAudit>false</NuGetAudit>
+              </PropertyGroup>
+            </Project>
+            """);
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata
