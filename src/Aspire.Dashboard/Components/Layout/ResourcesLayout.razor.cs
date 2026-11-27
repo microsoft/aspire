@@ -1384,23 +1384,23 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </remarks>
     private void FollowRenamedTelemetryOnlyResources(List<TelemetryOnlyResource> previousTelemetryOnlyResources)
     {
-        if (!_hasLocation || _selectedResourceNames.Count == 0 || previousTelemetryOnlyResources.Count == 0)
+        if (!_hasLocation || previousTelemetryOnlyResources.Count == 0)
         {
             return;
         }
 
+        // Collect every renamed source, not only the selected ones: a metrics chart opened from the view of all
+        // sources names its source in "chartResource" while nothing is selected.
+        var currentNames = _telemetryOnlyResources.ToDictionary(r => r.Resource.ResourceKey, r => r.Name);
         Dictionary<string, string>? renames = null;
-        foreach (var name in _selectedResourceNames)
+        foreach (var previous in previousTelemetryOnlyResources)
         {
-            if (IsKnownResourceName(name) ||
-                previousTelemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName)) is not { } previous ||
-                _telemetryOnlyResources.FirstOrDefault(r => r.Resource.ResourceKey == previous.Resource.ResourceKey) is not { } current ||
-                string.Equals(current.Name, name, StringComparisons.ResourceName))
+            if (currentNames.TryGetValue(previous.Resource.ResourceKey, out var currentName) &&
+                !string.Equals(currentName, previous.Name, StringComparisons.ResourceName) &&
+                !IsKnownResourceName(previous.Name))
             {
-                continue;
+                (renames ??= new(StringComparers.ResourceName))[previous.Name] = currentName;
             }
-
-            (renames ??= new(StringComparers.ResourceName))[name] = current.Name;
         }
 
         if (renames is null)
@@ -1431,9 +1431,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     /// <summary>
     /// Renames resources in a dashboard URL, keeping everything else in it as it is, such as the open chart on the
-    /// metrics page or the pane. Resources are named in the path and in the selection query, for example:
+    /// metrics page or the pane. Resources are named in the path, in the selection query and in the metrics page's chart
+    /// query, for example:
     /// <code>
     ///   /metrics/resource/ext?meter=app&amp;instrument=requests&amp;pane=telemetry
+    ///   /metrics?resource=ext&amp;resource=api&amp;meter=app&amp;instrument=requests&amp;chartResource=ext
     ///   /structuredlogs?resource=ext&amp;resource=api&amp;filters=...
     ///   /resources/ext
     /// </code>
@@ -1473,26 +1475,33 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             segments[resourceSegment] = Uri.EscapeDataString(renamedSegment);
         }
 
-        // Rewrite the selection parameters one by one rather than rebuilding the query, so the order and encoding of
-        // the other parameters don't change. Keys and values are decoded and keys compared ignoring case, as
-        // QueryHelpers.ParseQuery does when ParseLocation reads the selection: "?Resource=ext" selects "ext" too, and
-        // leaving it would restore the old name from the query. Form encoding writes spaces as "+", which
+        // Rewrite the selection and chart parameters one by one rather than rebuilding the query, so the order and
+        // encoding of the other parameters don't change. Keys and values are decoded and keys compared ignoring case,
+        // as QueryHelpers.ParseQuery does when ParseLocation reads the selection and as [SupplyParameterFromQuery] does
+        // for the metrics page's "chartResource": "?Resource=ext" selects "ext" too, and leaving it would restore the
+        // old name from the query. A multi-source metrics chart names its source in "chartResource" (only the metrics
+        // page reads it), and a stale name there closes the chart. Form encoding writes spaces as "+", which
         // UnescapeDataString keeps.
         var parameters = query.Length > 0 ? query.Split('&') : [];
         for (var i = 0; i < parameters.Length; i++)
         {
             var separator = parameters[i].IndexOf('=');
             if (separator > 0 &&
-                string.Equals(DecodeQueryComponent(parameters[i][..separator]), DashboardUrls.ResourceSelectionQueryName, StringComparison.OrdinalIgnoreCase) &&
+                GetResourceQueryName(DecodeQueryComponent(parameters[i][..separator])) is { } queryName &&
                 renames.TryGetValue(DecodeQueryComponent(parameters[i][(separator + 1)..]), out var renamedParameter))
             {
-                parameters[i] = $"{DashboardUrls.ResourceSelectionQueryName}={Uri.EscapeDataString(renamedParameter)}";
+                parameters[i] = $"{queryName}={Uri.EscapeDataString(renamedParameter)}";
             }
         }
 
         return string.Join('/', segments) + (queryIndex >= 0 ? "?" + string.Join('&', parameters) : string.Empty) + fragment;
 
         static string DecodeQueryComponent(string value) => Uri.UnescapeDataString(value.Replace('+', ' '));
+
+        static string? GetResourceQueryName(string key) =>
+            string.Equals(key, DashboardUrls.ResourceSelectionQueryName, StringComparison.OrdinalIgnoreCase) ? DashboardUrls.ResourceSelectionQueryName
+            : string.Equals(key, DashboardUrls.MetricsChartResourceQueryName, StringComparison.OrdinalIgnoreCase) ? DashboardUrls.MetricsChartResourceQueryName
+            : null;
     }
 
     private IEnumerable<TelemetryOnlyResource> GetVisibleTelemetryResources() =>

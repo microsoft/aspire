@@ -1595,6 +1595,46 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task AppHost_MetricsChartSourceFollowsRenameInBothDirections()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: () => channel));
+        await AddTelemetryAsync("ext", instanceId: "one");
+        var navigation = Assert.IsType<BunitNavigationManager>(Services.GetRequiredService<NavigationManager>());
+        // A chart opened from the metrics of all sources names its source only in "chartResource": nothing is selected.
+        navigation.NavigateTo("/metrics?meter=app&instrument=requests&chartResource=ext&pane=telemetry");
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Equal(["ext"], cut.FindAll(".resource-row-kind-telemetry .resource-row-link").Select(link => link.GetAttribute("aria-label")));
+        });
+
+        await AddTelemetryAsync("ext", instanceId: "two");
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["ext-one", "ext-two"], cut.FindAll(".resource-row-kind-telemetry .resource-row-link").Select(link => link.GetAttribute("aria-label")));
+            Assert.Equal("/metrics?meter=app&instrument=requests&chartResource=ext-one&pane=telemetry", "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        });
+        Assert.True(navigation.History.First().Options.ReplaceHistoryEntry);
+
+        // Removing the other instance makes the name unique again, so the source goes back to its service name.
+        await Services.GetRequiredService<SqliteTelemetryRepository>().ClearSelectedSignalsAsync(new() { ["ext-two"] = [AspireDataType.Resource] });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["ext"], cut.FindAll(".resource-row-kind-telemetry .resource-row-link").Select(link => link.GetAttribute("aria-label")));
+            Assert.Equal("/metrics?meter=app&instrument=requests&chartResource=ext&pane=telemetry", "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        });
+        Assert.True(navigation.History.First().Options.ReplaceHistoryEntry);
+    }
+
+    [Fact]
     public async Task AppHost_CountsResourcesAndParametersSeparately()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
