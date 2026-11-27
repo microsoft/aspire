@@ -4564,6 +4564,50 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CaptureAppHostLogsAsync_RelaysConsoleFormatToExtension()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(capability == KnownCapabilities.AppHostLogOutput)
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var forwarded = new List<ExtensionAppHostLogEntry>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteAppHostLogEntryCallback = forwarded.Add
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+        }
+
+        // The extension reads camelCase names, and an AppHost that predates the field sends nothing.
+        Assert.Collection(forwarded,
+            entry => Assert.Equal(
+                """{"timestampFormat":"HH:mm:ss ","singleLine":true,"includeScopes":true}""",
+                JsonSerializer.Serialize(entry.ConsoleFormat, BackchannelJsonSerializerContext.Default.BackchannelConsoleFormat)),
+            entry => Assert.Null(entry.ConsoleFormat));
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            var entry = CreateEntry(1, LogLevel.Warning, "Formatted");
+            entry.ConsoleFormat = new BackchannelConsoleFormat { TimestampFormat = "HH:mm:ss ", SingleLine = true, IncludeScopes = true };
+            yield return entry;
+            yield return CreateEntry(2, LogLevel.Warning, "Older AppHost");
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
     public async Task CaptureAppHostLogsAsync_SuppressesRepeatedPositiveSequencesWithinEachGenerationOnly()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
