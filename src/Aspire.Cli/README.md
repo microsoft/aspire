@@ -248,6 +248,7 @@ permissions do not configure files written by test frameworks.
 | `doctor` | Diagnose Aspire environment issues and verify setup. |
 | `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
+| `admire` | Animate the Aspire logo and display the CLI version. |
 
 ### Setting secrets
 

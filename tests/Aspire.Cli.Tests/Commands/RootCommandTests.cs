@@ -471,6 +471,25 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("Telemetry", errorOutput);
     }
 
+    [Theory]
+    [InlineData("admire", false)]
+    [InlineData("--banner admire", true)]
+    public async Task Banner_AdmireOnlyDisplaysExplicitStartupBanner(string arguments, bool expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var bannerService = new TestBannerService();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.FirstTimeUseNoticeSentinelFactory = _ => new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
+            options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        }).BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, arguments.Split(' '));
+
+        Assert.Equal(expected, bannerService.WasBannerDisplayed);
+    }
+
     [Fact]
     public async Task Banner_CanBeInvokedMultipleTimes()
     {
