@@ -1579,6 +1579,8 @@ CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
 CommandResultFormat = typing.Literal["Text", "Json", "Markdown"]
 
+ConnectCommandLocation = typing.Literal["Container", "Host"]
+
 ContainerImageDestination = typing.Literal["Registry", "Archive"]
 
 ContainerImageFormat = typing.Literal["Docker", "Oci"]
@@ -1629,6 +1631,14 @@ WaitBehavior = typing.Literal["WaitOnResourceUnavailable", "StopOnResourceUnavai
 # ============================================================================
 # Method Parameters
 # ============================================================================
+
+
+class ConnectCommandParameters(typing.TypedDict, total=False):
+    tool: typing.Required[str]
+    location: typing.Required[ConnectCommandLocation]
+    command: typing.Required[ReferenceExpression]
+    append: str
+    note: str
 
 
 class DockerfileBaseImageParameters(typing.TypedDict, total=False):
@@ -7697,6 +7707,10 @@ class AbstractResource(abc.ABC):
     """Abstract base class for AbstractResource interface."""
 
     @abc.abstractmethod
+    def with_connect_command(self, tool: str, location: ConnectCommandLocation, command: ReferenceExpression, *, append: str | None = None, note: str | None = None) -> typing.Self:
+        """Describes the command that reaches the resource with its own client. Repeated calls replace the command."""
+
+    @abc.abstractmethod
     def with_container_registry(self, registry: AbstractResource) -> typing.Self:
         """Configures the resource to use the specified container registry for container image operations."""
 
@@ -8216,6 +8230,7 @@ class AbstractTestVaultResource(AbstractResource):
 class _BaseResourceKwargs(typing.TypedDict, total=False):
     """Base resource options."""
 
+    connect_command: tuple[str, ConnectCommandLocation, ReferenceExpression] | ConnectCommandParameters
     container_registry: AbstractResource
     dockerfile_base_image: DockerfileBaseImageParameters | typing.Literal[True]
     required_command: str | tuple[str, str]
@@ -8286,6 +8301,23 @@ class _BaseResource(AbstractResource):
     def handle(self) -> Handle:
         """The underlying object reference handle."""
         return self._handle
+
+    def with_connect_command(self, tool: str, location: ConnectCommandLocation, command: ReferenceExpression, *, append: str | None = None, note: str | None = None) -> typing.Self:
+        """Describes the command that reaches the resource with its own client. Repeated calls replace the command."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['tool'] = tool
+        rpc_args['location'] = location
+        rpc_args['command'] = command
+        if append is not None:
+            rpc_args['append'] = append
+        if note is not None:
+            rpc_args['note'] = note
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withConnectCommand',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
 
     def with_container_registry(self, registry: AbstractResource) -> typing.Self:
         """Configures the resource to use the specified container registry for container image operations."""
@@ -9021,6 +9053,23 @@ class _BaseResource(AbstractResource):
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[_BaseResourceKwargs]) -> None:
+        if (_connect_command := kwargs.pop("connect_command", None)) is not None:
+            if _validate_tuple_types(_connect_command, (str, ConnectCommandLocation, ReferenceExpression)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["tool"] = typing.cast(tuple[str, ConnectCommandLocation, ReferenceExpression], _connect_command)[0]
+                rpc_args["location"] = typing.cast(tuple[str, ConnectCommandLocation, ReferenceExpression], _connect_command)[1]
+                rpc_args["command"] = typing.cast(tuple[str, ConnectCommandLocation, ReferenceExpression], _connect_command)[2]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withConnectCommand', rpc_args))
+            elif _validate_dict_types(_connect_command, ConnectCommandParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["tool"] = typing.cast(ConnectCommandParameters, _connect_command)["tool"]
+                rpc_args["location"] = typing.cast(ConnectCommandParameters, _connect_command)["location"]
+                rpc_args["command"] = typing.cast(ConnectCommandParameters, _connect_command)["command"]
+                rpc_args["append"] = typing.cast(ConnectCommandParameters, _connect_command).get("append")
+                rpc_args["note"] = typing.cast(ConnectCommandParameters, _connect_command).get("note")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withConnectCommand', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'connect_command'. Expected: (str, ConnectCommandLocation, ReferenceExpression) or ConnectCommandParameters")
         if (_container_registry := kwargs.pop("container_registry", None)) is not None:
             if _validate_type(_container_registry, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

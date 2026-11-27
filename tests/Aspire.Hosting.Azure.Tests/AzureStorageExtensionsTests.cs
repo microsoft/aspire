@@ -10,10 +10,52 @@ using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureStorageExtensionsTests(ITestOutputHelper output)
 {
+    [Fact]
+    public async Task AzureStorageEmulatorDeclaresHostAzureCliConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage").RunAsEmulator(emulator => emulator
+            .WithEndpoint("blob", e => e.AllocatedEndpoint = new(e, "localhost", 10000))
+            .WithEndpoint("queue", e => e.AllocatedEndpoint = new(e, "localhost", 10001))
+            .WithEndpoint("table", e => e.AllocatedEndpoint = new(e, "localhost", 10002)));
+
+        var connect = Assert.Single(storage.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("az", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Host, connect.Location);
+        Assert.Equal(
+            "env AZURE_STORAGE_CONNECTION_STRING='DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;" +
+            "BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;' az storage",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<command group and options>, for example container list", connect.Append);
+        Assert.Equal("Requires the Azure CLI on the host. The account key is Azurite's well-known development key.", connect.Note);
+    }
+
+    [Fact]
+    public void AzureStorageWithoutEmulatorDoesNotDeclareConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+
+        Assert.Empty(storage.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+    }
+
+    [Fact]
+    public void AzureStorageEmulatorKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage")
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"))
+            .RunAsEmulator();
+
+        Assert.Equal("my-client", Assert.Single(storage.Resource.Annotations.OfType<ConnectCommandAnnotation>()).Tool);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(true)]

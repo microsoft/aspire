@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECT001 // The integration declares how to reach its server with valkey-cli.
+
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Valkey;
@@ -184,7 +186,15 @@ public static class ValkeyBuilderExtensions
                 context.Args.Add(string.Join(' ', valkeyCommand));
 
                 return Task.CompletedTask;
-            });
+            })
+            // valkey-cli runs in the container over loopback and reads the password from the container's
+            // VALKEY_PASSWORD variable, so only the variable name is shown by tooling. VALKEYCLI_AUTH is exported only
+            // when a password is configured, so a password-less server is not sent AUTH.
+            .WithConnectCommand(
+                "valkey-cli",
+                ConnectCommandLocation.Container,
+                ReferenceExpression.Create($"""[ -n "$VALKEY_PASSWORD" ] && export VALKEYCLI_AUTH="$VALKEY_PASSWORD"; exec valkey-cli -h 127.0.0.1 -p {valkey.PrimaryEndpoint.Property(EndpointProperty.TargetPort)}"""),
+                append: "<command>, for example INFO");
     }
 
     /// <summary>

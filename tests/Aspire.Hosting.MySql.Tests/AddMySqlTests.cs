@@ -9,10 +9,26 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.MySql.Tests;
 
 public class AddMySqlTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task AddMySqlDeclaresMySqlConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var mysql = builder.AddMySql("mysql", port: 13306);
+
+        var connect = Assert.Single(mysql.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("mysql", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Container, connect.Location);
+        Assert.Equal("""MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --no-defaults --no-login-paths --user=root --host=127.0.0.1 --port=3306""",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<mysql options>, for example -e 'SELECT 1'", connect.Append);
+    }
+
     [Fact]
     public void AddMySqlAddsGeneratedPasswordParameterWithUserSecretsParameterDefaultInRunMode()
     {

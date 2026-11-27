@@ -127,6 +127,45 @@ internal sealed class ResourceJson
     /// Dictionary key is the command name.
     /// </summary>
     public Dictionary<string, ResourceCommandJson>? Commands { get; set; }
+
+    /// <summary>
+    /// The command that reaches the resource with its own client, when the resource declares one.
+    /// </summary>
+    public ResourceConnectJson? Connect { get; set; }
+}
+
+/// <summary>
+/// Represents the command that reaches a resource with its own client, in JSON format.
+/// </summary>
+internal sealed class ResourceConnectJson
+{
+    /// <summary>
+    /// The command, ending where the client's own arguments go. Credentials are referenced by
+    /// environment variable name inside the container, never by value.
+    /// </summary>
+    public string? Command { get; set; }
+
+    /// <summary>
+    /// Where the client runs: <c>container</c> or <c>host</c>.
+    /// </summary>
+    public string? Runs { get; set; }
+
+    /// <summary>
+    /// The name of the client tool, such as <c>psql</c>.
+    /// </summary>
+    public string? Tool { get; set; }
+
+    /// <summary>
+    /// A description of what to append to the command.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Append { get; set; }
+
+    /// <summary>
+    /// An optional note about using the command.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Note { get; set; }
 }
 
 /// <summary>

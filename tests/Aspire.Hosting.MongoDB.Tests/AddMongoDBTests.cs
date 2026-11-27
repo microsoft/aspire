@@ -13,10 +13,60 @@ using MongoDB.Driver;
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREMONGODB001
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.MongoDB.Tests;
 
 public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task AddMongoDBDeclaresMongoshConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo = builder.AddMongoDB("mongo", port: 17017).WithoutHttpsCertificate();
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        var connect = Assert.Single(mongo.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("mongosh", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Container, connect.Location);
+        Assert.Equal("""[ $# -gt 0 ] || set -- --shell; exec mongosh --quiet --nodb --eval 'void (db = new Mongo("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@localhost:27017/admin?directConnection=true&authSource=admin").getDB("admin"))'""",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<mongosh options>, for example --eval 'db.runCommand({ ping: 1 })'", connect.Append);
+    }
+
+    [Fact]
+    public async Task MongoDBWithCertificateConnectCommandUsesTls()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var certificate = CreateTestCertificate();
+        var mongo = builder.AddMongoDB("mongo").WithHttpsCertificate(certificate);
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        Assert.True(mongo.Resource.TlsEnabled);
+        var connect = Assert.Single(mongo.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("""[ $# -gt 0 ] || set -- --shell; exec mongosh --quiet --nodb --eval 'void (db = new Mongo("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@localhost:27017/admin?directConnection=true&authSource=admin" + "&tls=true" + (process.env.ASPIRE_MONGODB_REPL_CA_FILE ? "&tlsCAFile=" + encodeURIComponent(process.env.ASPIRE_MONGODB_REPL_CA_FILE) : "")).getDB("admin"))'""",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task MongoDBWithCertificateKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var certificate = CreateTestCertificate();
+        var mongo = builder.AddMongoDB("mongo").WithHttpsCertificate(certificate)
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"));
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        Assert.True(mongo.Resource.TlsEnabled);
+        Assert.Equal("my-client", Assert.Single(mongo.Resource.Annotations.OfType<ConnectCommandAnnotation>()).Tool);
+    }
+
     [Fact]
     public void AddMongoDBAddsHealthCheckAnnotationToResource()
     {

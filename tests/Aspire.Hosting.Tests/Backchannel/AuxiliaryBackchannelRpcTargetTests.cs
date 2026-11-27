@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
@@ -161,6 +162,205 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Contains(result, r => r.Name == "myresource-abc123");
         Assert.Contains(result, r => r.Name == "myresource-def456");
         Assert.All(result.Where(r => r.Name.StartsWith("myresource-")), r => Assert.Equal("myresource", r.DisplayName));
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_IncludesResolvedConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        var resource = builder.AddResource(new CustomResource("tool"))
+            .WithConnectCommand("tool-cli", ConnectCommandLocation.Host, ReferenceExpression.Create($"tool-cli --local"), append: "<command>", note: "Install tool-cli.");
+#pragma warning restore ASPIRECONNECT001
+        builder.AddResource(new CustomResource("other"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var connect = Assert.Single(result, r => r.Name == "tool").Connect;
+        Assert.NotNull(connect);
+        Assert.Equal("tool-cli --local", connect.Command);
+        Assert.Equal("host", connect.Runs);
+        Assert.Equal("tool-cli", connect.Tool);
+        Assert.Equal("<command>", connect.Append);
+        Assert.Equal("Install tool-cli.", connect.Note);
+        Assert.Null(Assert.Single(result, r => r.Name == "other").Connect);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_OmitsConnectCommandContainingSecretParameterValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddParameter("toolpassword", "s3cr3t-value", secret: true);
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        builder.AddResource(new CustomResource("in-command"))
+            .WithConnectCommand("tool-cli", ConnectCommandLocation.Host, ReferenceExpression.Create($"tool-cli --password s3cr3t-value"));
+        builder.AddResource(new CustomResource("in-note"))
+            .WithConnectCommand("tool-cli", ConnectCommandLocation.Host, ReferenceExpression.Create($"tool-cli --local"), note: "Sign in with s3cr3t-value.");
+        builder.AddResource(new CustomResource("public"))
+            .WithConnectCommand("tool-cli", ConnectCommandLocation.Host, ReferenceExpression.Create($"tool-cli --local"));
+#pragma warning restore ASPIRECONNECT001
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        Assert.Null(Assert.Single(result, r => r.Name == "in-command").Connect);
+        Assert.Null(Assert.Single(result, r => r.Name == "in-note").Connect);
+        Assert.Equal("tool-cli --local", Assert.Single(result, r => r.Name == "public").Connect?.Command);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_OmitsContainerConnectCommandContainingShellEscapedSecretParameterValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "docker"));
+
+        builder.AddParameter("dbpassword", "s3'cret-value", secret: true);
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        var secretContainer = builder.AddContainer("db", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client --password s3'cret-value"));
+        var publicContainer = builder.AddContainer("public", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client --local"));
+#pragma warning restore ASPIRECONNECT001
+
+        // The app is not started because starting would run the containers. Published state is enough to build snapshots.
+        using var app = builder.Build();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(secretContainer.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+        await notificationService.PublishUpdateAsync(publicContainer.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        Assert.Null(Assert.Single(result, r => r.Name == "db").Connect);
+        Assert.Equal("docker exec -i public sh -c 'exec client --local \"$@\"' sh", Assert.Single(result, r => r.Name == "public").Connect?.Command);
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_OmitsConnectCommandContainingSecretAssignedDuringContainerRuntimeDetection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var resolveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseResolve = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runtime = new FakeContainerRuntime(name: "docker");
+        runtime.ResolveAsyncCallback = async cancellationToken =>
+        {
+            resolveStarted.TrySetResult();
+            await releaseResolve.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return runtime;
+        };
+        builder.Services.AddFakeContainerRuntime(runtime);
+
+        var secret = builder.AddParameter("dbpassword", secret: true);
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        var container = builder.AddContainer("db", "image")
+            .WithConnectCommand("client", ConnectCommandLocation.Container, ReferenceExpression.Create($"exec client --password late-s3cret"));
+#pragma warning restore ASPIRECONNECT001
+
+        // The app is not started because starting would run the container. Published state is enough to build snapshots.
+        using var app = builder.Build();
+
+        // The secret is unresolved while the snapshot's environment values are redacted.
+        secret.Resource.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(container.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var snapshotsTask = target.GetResourceSnapshotsAsync();
+
+        // Resolve the secret while the connect command waits for container runtime detection.
+        await resolveStarted.Task.DefaultTimeout();
+        secret.Resource.WaitForValueTcs.SetResult("late-s3cret");
+        releaseResolve.SetResult();
+
+        var result = await snapshotsTask.DefaultTimeout();
+
+        Assert.Null(Assert.Single(result, r => r.Name == "db").Connect);
+    }
+
+    [Fact]
+    public async Task WatchResourceSnapshotsAsync_RefreshesConnectCommandWhenOwnEndpointIsReallocated()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var resource = builder.AddResource(new CustomResourceWithEndpoints("tool"))
+            .WithEndpoint(targetPort: 4222, name: "tcp");
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+        resource.WithConnectCommand(
+            "tool-cli",
+            ConnectCommandLocation.Host,
+            ReferenceExpression.Create($"tool-cli --port {resource.GetEndpoint("tcp").Property(EndpointProperty.Port)}"));
+#pragma warning restore ASPIRECONNECT001
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        using var cts = new CancellationTokenSource();
+        var enumerator = target.WatchResourceSnapshotsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        try
+        {
+            // The orchestrator allocates the endpoint asynchronously after StartAsync returns, so wait for it
+            // rather than reading AllocatedEndpoint directly; the command uses that port.
+            var endpoint = resource.Resource.Annotations.OfType<EndpointAnnotation>().Single();
+            var allocatedPort = (await endpoint.AllAllocatedEndpoints.GetAllocatedEndpointAsync(KnownNetworkIdentifiers.LocalhostNetwork).DefaultTimeout()).Port;
+            await notificationService.PublishUpdateAsync(resource.Resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+            var allocated = await ReadSnapshotAsync(enumerator, s => s.Name == "tool" && s.State == "Running").DefaultTimeout();
+            Assert.Equal($"tool-cli --port {allocatedPort}", allocated.Connect?.Command);
+
+            endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.LocalhostNetwork, new AllocatedEndpoint(endpoint, "localhost", allocatedPort + 1));
+            await notificationService.PublishUpdateAsync(resource.Resource, s => s with { State = new ResourceStateSnapshot("Restarted", null) }).DefaultTimeout();
+            var reallocated = await ReadSnapshotAsync(enumerator, s => s.Name == "tool" && s.State == "Restarted").DefaultTimeout();
+            Assert.Equal($"tool-cli --port {allocatedPort + 1}", reallocated.Connect?.Command);
+        }
+        finally
+        {
+            cts.Cancel();
+            await enumerator.DisposeAsync();
+        }
 
         await app.StopAsync().DefaultTimeout();
     }

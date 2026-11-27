@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECT001 // The integration declares how to reach its server with redis-cli.
+
 using System.Globalization;
 using System.Text;
 using Aspire.Hosting;
@@ -188,7 +190,8 @@ public static class RedisBuilderExtensions
                 }
 
                 return Task.CompletedTask;
-            });
+            })
+            .WithRedisConnectCommand(RedisResource.PrimaryEndpointName);
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -210,7 +213,9 @@ public static class RedisBuilderExtensions
                         argsCtx.Args.Add(redis.GetEndpoint(RedisResource.PrimaryEndpointName).Property(EndpointProperty.TargetPort));
                         argsCtx.Args.Add("--port");
                         argsCtx.Args.Add(redis.GetEndpoint(RedisResource.SecondaryEndpointName).Property(EndpointProperty.TargetPort));
-                    });
+                    })
+                    // The primary endpoint now requires TLS, so point redis-cli at the plain-protocol port.
+                    .WithRedisConnectCommand(RedisResource.SecondaryEndpointName);
             });
         }
 
@@ -239,6 +244,19 @@ public static class RedisBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    private static IResourceBuilder<RedisResource> WithRedisConnectCommand(this IResourceBuilder<RedisResource> builder, string plainEndpointName)
+    {
+        // redis-cli runs in the container over loopback and reads the password from the container's REDIS_PASSWORD
+        // variable, so only the variable name is shown by tooling. REDISCLI_AUTH is exported only when a password is
+        // configured, so a password-less server (WithPassword(null)) is not sent AUTH.
+        var port = builder.Resource.GetEndpoint(plainEndpointName).Property(EndpointProperty.TargetPort);
+        return builder.WithDefaultConnectCommand(
+            "redis-cli",
+            ConnectCommandLocation.Container,
+            ReferenceExpression.Create($"""[ -n "$REDIS_PASSWORD" ] && export REDISCLI_AUTH="$REDIS_PASSWORD"; exec redis-cli -h 127.0.0.1 -p {port}"""),
+            append: "<command>, for example INFO");
     }
 
     internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(RedisResource resource, CancellationToken cancellationToken)

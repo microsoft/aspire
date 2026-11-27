@@ -554,6 +554,14 @@ export enum CommandResultFormat {
     Markdown = "Markdown",
 }
 
+/** Specifies where the command described by a `ConnectCommandAnnotation` runs. */
+export enum ConnectCommandLocation {
+    /** The client runs inside the resource's container. The command is a shell script that the container's `sh` interprets, so it can read credentials from the container's own environment variables. */
+    Container = "Container",
+    /** The client runs on the host, for example because the container image has no client. The command is a host command line that typically reaches the resource through its published endpoint. */
+    Host = "Host",
+}
+
 /** Specifies the destination for container images. */
 export enum ContainerImageDestination {
     /** Image will be pushed to a container registry. */
@@ -1834,6 +1842,13 @@ export interface WithCertificateTrustEnvironmentOptions {
 export interface WithCommandOptions {
     /** Optional configuration for the command. */
     commandOptions?: CommandOptions;
+}
+
+export interface WithConnectCommandOptions {
+    /** A description of what to append to the command, such as `-c '<sql>'`. It is displayed by tooling, so it must not contain secrets. */
+    append?: string;
+    /** An optional note about using the command. It is displayed by tooling, so it must not contain secrets. */
+    note?: string;
 }
 
 export interface WithContainerCertificatePathsOptions {
@@ -13447,6 +13462,22 @@ const UserSecretsManagerPromiseImpl = $aspireCreateFluentPromiseClass<UserSecret
 export interface ContainerRegistryResource {
     toJSON(): MarshalledHandle;
     /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ContainerRegistryResourcePromise;
+    /**
      * Configures the resource to use the specified container registry for container image operations.
      *
      * This method adds a `ContainerRegistryReferenceAnnotation` to the resource,
@@ -13848,6 +13879,22 @@ export interface ContainerRegistryResource {
 }
 
 export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerRegistryResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ContainerRegistryResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -14256,6 +14303,39 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
 class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistryResourceHandle> implements ContainerRegistryResource {
     constructor(handle: ContainerRegistryResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ContainerRegistryResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new ContainerRegistryResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -15724,6 +15804,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
 
 /** @internal */
 const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRegistryResource, ContainerRegistryResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => ContainerRegistryResourcePromiseImpl,
     ["withContainerRegistry"]: () => ContainerRegistryResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommand"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15799,6 +15880,22 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
 /** A resource that represents a specified container. */
 export interface ContainerResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ContainerResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -16700,6 +16797,22 @@ export interface ContainerResource {
 }
 
 export interface ContainerResourcePromise extends PromiseLike<ContainerResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ContainerResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -17608,6 +17721,39 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
 class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle> implements ContainerResource {
     constructor(handle: ContainerResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ContainerResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new ContainerResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -20573,6 +20719,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
 /** @internal */
 const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerResource, ContainerResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => ContainerResourcePromiseImpl,
     ["withContainerRegistry"]: () => ContainerResourcePromiseImpl,
     ["withBindMount"]: () => ContainerResourcePromiseImpl,
     ["withEntrypoint"]: () => ContainerResourcePromiseImpl,
@@ -20707,6 +20854,22 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
 
 export interface CSharpAppResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): CSharpAppResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -21448,6 +21611,22 @@ export interface CSharpAppResource {
 }
 
 export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): CSharpAppResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -22195,6 +22374,39 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
 class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle> implements CSharpAppResource {
     constructor(handle: CSharpAppResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): CSharpAppResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new CSharpAppResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -24760,6 +24972,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
 /** @internal */
 const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppResource, CSharpAppResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => CSharpAppResourcePromiseImpl,
     ["withContainerRegistry"]: () => CSharpAppResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => CSharpAppResourcePromiseImpl,
     ["withMcpServer"]: () => CSharpAppResourcePromiseImpl,
@@ -24878,6 +25091,22 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
 
 export interface DotnetToolResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): DotnetToolResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -25655,6 +25884,22 @@ export interface DotnetToolResource {
 }
 
 export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): DotnetToolResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -26438,6 +26683,39 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
 class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandle> implements DotnetToolResource {
     constructor(handle: DotnetToolResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): DotnetToolResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new DotnetToolResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -29105,6 +29383,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
 /** @internal */
 const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetToolResource, DotnetToolResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => DotnetToolResourcePromiseImpl,
     ["withContainerRegistry"]: () => DotnetToolResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => DotnetToolResourcePromiseImpl,
     ["withToolPackage"]: () => DotnetToolResourcePromiseImpl,
@@ -29235,6 +29514,22 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
  */
 export interface ExecutableResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ExecutableResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -29973,6 +30268,22 @@ export interface ExecutableResource {
 }
 
 export interface ExecutableResourcePromise extends PromiseLike<ExecutableResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ExecutableResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -30724,6 +31035,39 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
 class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandle> implements ExecutableResource {
     constructor(handle: ExecutableResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ExecutableResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new ExecutableResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -33274,6 +33618,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
 /** @internal */
 const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<ExecutableResource, ExecutableResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => ExecutableResourcePromiseImpl,
     ["withContainerRegistry"]: () => ExecutableResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ExecutableResourcePromiseImpl,
     ["publishAsDockerFile"]: () => ExecutableResourcePromiseImpl,
@@ -33391,6 +33736,22 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
 
 export interface ExternalServiceResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ExternalServiceResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -33798,6 +34159,22 @@ export interface ExternalServiceResource {
 }
 
 export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServiceResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ExternalServiceResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -34211,6 +34588,39 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
 class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceResourceHandle> implements ExternalServiceResource {
     constructor(handle: ExternalServiceResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ExternalServiceResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new ExternalServiceResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -35703,6 +36113,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
 
 /** @internal */
 const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<ExternalServiceResource, ExternalServiceResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => ExternalServiceResourcePromiseImpl,
     ["withContainerRegistry"]: () => ExternalServiceResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ExternalServiceResourcePromiseImpl,
     ["withHttpHealthCheck"]: () => ExternalServiceResourcePromiseImpl,
@@ -35779,6 +36190,22 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
 /** Represents a parameter resource. */
 export interface ParameterResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ParameterResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -36229,6 +36656,22 @@ export interface ParameterResource {
 }
 
 export interface ParameterResourcePromise extends PromiseLike<ParameterResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ParameterResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -36686,6 +37129,39 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
 class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle> implements ParameterResource {
     constructor(handle: ParameterResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ParameterResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new ParameterResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -38274,6 +38750,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
 
 /** @internal */
 const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterResource, ParameterResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => ParameterResourcePromiseImpl,
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
@@ -38355,6 +38832,22 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
 /** A resource that represents a specified .NET project. */
 export interface ProjectResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ProjectResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -39096,6 +39589,22 @@ export interface ProjectResource {
 }
 
 export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ProjectResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -39844,6 +40353,39 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
 class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> implements ProjectResource {
     constructor(handle: ProjectResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ProjectResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new ProjectResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -42409,6 +42951,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
 /** @internal */
 const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResource, ProjectResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => ProjectResourcePromiseImpl,
     ["withContainerRegistry"]: () => ProjectResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ProjectResourcePromiseImpl,
     ["withMcpServer"]: () => ProjectResourcePromiseImpl,
@@ -42527,6 +43070,22 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
 
 export interface TestDatabaseResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestDatabaseResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -43428,6 +43987,22 @@ export interface TestDatabaseResource {
 }
 
 export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestDatabaseResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -44335,6 +44910,39 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
 class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceHandle> implements TestDatabaseResource {
     constructor(handle: TestDatabaseResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestDatabaseResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new TestDatabaseResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -47300,6 +47908,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
 /** @internal */
 const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestDatabaseResource, TestDatabaseResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => TestDatabaseResourcePromiseImpl,
     ["withContainerRegistry"]: () => TestDatabaseResourcePromiseImpl,
     ["withBindMount"]: () => TestDatabaseResourcePromiseImpl,
     ["withEntrypoint"]: () => TestDatabaseResourcePromiseImpl,
@@ -47434,6 +48043,22 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
 
 export interface TestRedisResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestRedisResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -48419,6 +49044,22 @@ export interface TestRedisResource {
 }
 
 export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestRedisResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -49410,6 +50051,39 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
 class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle> implements TestRedisResource {
     constructor(handle: TestRedisResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestRedisResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new TestRedisResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -52686,6 +53360,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
 /** @internal */
 const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisResource, TestRedisResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => TestRedisResourcePromiseImpl,
     ["withContainerRegistry"]: () => TestRedisResourcePromiseImpl,
     ["withBindMount"]: () => TestRedisResourcePromiseImpl,
     ["withEntrypoint"]: () => TestRedisResourcePromiseImpl,
@@ -52838,6 +53513,22 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
 
 export interface TestVaultResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestVaultResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -53741,6 +54432,22 @@ export interface TestVaultResource {
 }
 
 export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestVaultResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -54650,6 +55357,39 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
 class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle> implements TestVaultResource {
     constructor(handle: TestVaultResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): TestVaultResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new TestVaultResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -57630,6 +58370,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
 /** @internal */
 const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => TestVaultResourcePromiseImpl,
     ["withContainerRegistry"]: () => TestVaultResourcePromiseImpl,
     ["withBindMount"]: () => TestVaultResourcePromiseImpl,
     ["withEntrypoint"]: () => TestVaultResourcePromiseImpl,
@@ -58050,6 +58791,22 @@ const ContainerFilesDestinationResourcePromiseImpl = $aspireCreateFluentPromiseC
 export interface Resource {
     toJSON(): MarshalledHandle;
     /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ResourcePromise;
+    /**
      * Configures the resource to use the specified container registry for container image operations.
      *
      * This method adds a `ContainerRegistryReferenceAnnotation` to the resource,
@@ -58451,6 +59208,22 @@ export interface Resource {
 }
 
 export interface ResourcePromise extends PromiseLike<Resource> {
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ResourcePromise;
     /**
      * Configures the resource to use the specified container registry for container image operations.
      *
@@ -58860,6 +59633,39 @@ export interface ResourcePromise extends PromiseLike<Resource> {
 class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resource {
     constructor(handle: IResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withConnectCommandInternal(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, append?: string, note?: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, tool, location, command };
+        if (append !== undefined) rpcArgs.append = append;
+        if (note !== undefined) rpcArgs.note = note;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withConnectCommand',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+     *
+     * The resolved command appears as the `connect` entry of the resource in `aspire describe --format json`
+     * and in the Aspire MCP server's resource listing. A container command runs with `sh -c` in the resource's
+     * container through the configured container runtime, and arguments appended by the caller are forwarded to it.
+     * The command, append, and note are shown verbatim, so treat them as public. As a safeguard, the command is not shown
+     * when any of them contains the value of a resolved secret parameter.
+     * @param tool The name of the client tool the command runs, such as `psql`.
+     * @param location Where the command runs. For `Container`, `command` is a shell script that runs in the resource's container. For `Host`, it is a host command line.
+     * @param command The command, ending where the client's own arguments go. It is displayed by tooling, so it can reference only literal text and the resource's own endpoint values, never secrets. Read credentials from the container's environment variables instead.
+     * @param options Additional options.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withConnectCommand(tool: string, location: ConnectCommandLocation, command: ReferenceExpression, options?: WithConnectCommandOptions): ResourcePromise {
+        const append = options?.append;
+        const note = options?.note;
+        return new ResourcePromiseImpl(this._withConnectCommandInternal(tool, location, command, append, note), this._client);
     }
 
     /** @internal */
@@ -60328,6 +61134,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 
 /** @internal */
 const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectCommand"]: () => ResourcePromiseImpl,
     ["withContainerRegistry"]: () => ResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ResourcePromiseImpl,
     ["withRequiredCommand"]: () => ResourcePromiseImpl,

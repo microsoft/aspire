@@ -258,6 +258,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     endpoint_host = endpoint.property("Host")
     endpoint_port = endpoint.property("Port")
     endpoint_url = ReferenceExpression.format_string("http://%s:%s", endpoint_host, endpoint_port)
+    # withConnectCommand — host client with the published port, and an in-container client
+    docker_container.with_connect_command("curl", "Host", ReferenceExpression.format_string("curl -sS http://localhost:%s/", endpoint_port), append="<curl options>, for example -i", note="Requires curl on the host.")
+    container.with_connect_command("nginx", "Container", ReferenceExpression.format_string("exec nginx"))
     built_connection_string = builder.add_connection_string("connection-string", env_var_name_or_expression=expr)
     env_connection_string = builder.add_connection_string("env-connection-string")
     expression_connection_string = builder.add_connection_string("expression-connection-string", env_var_name_or_expression=expr)

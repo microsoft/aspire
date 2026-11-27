@@ -39,6 +39,25 @@ impl std::fmt::Display for ContainerMountType {
     }
 }
 
+/// ConnectCommandLocation
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConnectCommandLocation {
+    #[default]
+    #[serde(rename = "Container")]
+    Container,
+    #[serde(rename = "Host")]
+    Host,
+}
+
+impl std::fmt::Display for ConnectCommandLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Container => write!(f, "Container"),
+            Self::Host => write!(f, "Host"),
+        }
+    }
+}
+
 /// ContainerLifetime
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContainerLifetime {
@@ -2387,6 +2406,24 @@ impl CSharpAppResource {
         &self.client
     }
 
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -4478,6 +4515,24 @@ impl ContainerRegistryResource {
         &self.client
     }
 
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5250,6 +5305,24 @@ impl ContainerResource {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Configures the resource to use the specified container registry for container image operations.
@@ -7409,6 +7482,24 @@ impl DotnetToolResource {
         &self.client
     }
 
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9468,6 +9559,24 @@ impl ExecutableResource {
         &self.client
     }
 
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10890,6 +10999,24 @@ impl ExternalServiceResource {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Configures the resource to use the specified container registry for container image operations.
@@ -14540,6 +14667,24 @@ impl ParameterResource {
         &self.client
     }
 
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15875,6 +16020,24 @@ impl ProjectResource {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Configures the resource to use the specified container registry for container image operations.
@@ -18144,6 +18307,24 @@ impl TestDatabaseResource {
         &self.client
     }
 
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -19835,6 +20016,24 @@ impl TestRedisResource {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Configures the resource to use the specified container registry for container image operations.
@@ -21788,6 +21987,24 @@ impl TestVaultResource {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Describes the command that reaches the resource with its own client. Repeated calls replace the command.
+    pub fn with_connect_command(&self, tool: &str, location: ConnectCommandLocation, command: ReferenceExpression, append: Option<&str>, note: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tool".to_string(), serde_json::to_value(&tool).unwrap_or(Value::Null));
+        args.insert("location".to_string(), serde_json::to_value(&location).unwrap_or(Value::Null));
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        if let Some(ref v) = append {
+            args.insert("append".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = note {
+            args.insert("note".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withConnectCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Configures the resource to use the specified container registry for container image operations.

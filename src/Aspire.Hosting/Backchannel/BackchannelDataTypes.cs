@@ -1281,6 +1281,55 @@ internal sealed class ResourceSnapshot
     /// Gets the commands available for this resource.
     /// </summary>
     public ResourceSnapshotCommand[] Commands { get; init; } = [];
+
+    /// <summary>
+    /// Gets the command that reaches this resource with its own client, or <see langword="null"/> when the resource
+    /// does not declare one or the command cannot be resolved yet.
+    /// </summary>
+    public ResourceSnapshotConnect? Connect { get; init; }
+}
+
+/// <summary>
+/// Represents the resolved command that reaches a resource with its own client.
+/// </summary>
+[DebuggerDisplay("Tool = {Tool}, Runs = {Runs}")]
+internal sealed class ResourceSnapshotConnect
+{
+    /// <summary>
+    /// The value of <see cref="Runs"/> when the client runs inside the resource's container.
+    /// </summary>
+    public const string RunsInContainer = "container";
+
+    /// <summary>
+    /// The value of <see cref="Runs"/> when the client runs on the host.
+    /// </summary>
+    public const string RunsOnHost = "host";
+
+    /// <summary>
+    /// Gets the command, ending where the client's own arguments go. The whole entry is omitted when any field contains
+    /// a known resolved secret value.
+    /// </summary>
+    public required string Command { get; init; }
+
+    /// <summary>
+    /// Gets where the client runs: <c>container</c> or <c>host</c>.
+    /// </summary>
+    public required string Runs { get; init; }
+
+    /// <summary>
+    /// Gets the name of the client tool, such as <c>psql</c>.
+    /// </summary>
+    public required string Tool { get; init; }
+
+    /// <summary>
+    /// Gets a description of what to append to the command.
+    /// </summary>
+    public string? Append { get; init; }
+
+    /// <summary>
+    /// Gets an optional note about using the command.
+    /// </summary>
+    public string? Note { get; init; }
 }
 
 /// <summary>

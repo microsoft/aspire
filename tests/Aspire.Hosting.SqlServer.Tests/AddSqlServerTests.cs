@@ -11,10 +11,44 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using System.Net.Sockets;
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.SqlServer.Tests;
 
 public class AddSqlServerTests
 {
+    [Theory]
+    [InlineData(null, "/opt/mssql-tools18/bin/sqlcmd")]
+    [InlineData(SqlServerReplCommand.Version17, "/opt/mssql-tools/bin/sqlcmd")]
+    [InlineData("/opt/my tools/sqlcmd", "'/opt/my tools/sqlcmd'")]
+    public async Task AddSqlServerDeclaresSqlcmdConnectCommandMatchingReplClient(string? replCommand, string expectedExecutable)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var sqlServer = builder.AddSqlServer("sql", port: 11433);
+        if (replCommand is not null)
+        {
+            sqlServer.WithRepl(options => options.Command = replCommand);
+        }
+
+        var connect = Assert.Single(sqlServer.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("sqlcmd", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Container, connect.Location);
+        Assert.Equal($"""SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec {expectedExecutable} -S 127.0.0.1,1433 -U sa -C""",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<sqlcmd options>, for example -Q 'SELECT @@VERSION'", connect.Append);
+    }
+
+    [Fact]
+    public void WithReplKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var sqlServer = builder.AddSqlServer("sql")
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"))
+            .WithRepl(options => options.Command = SqlServerReplCommand.Version17);
+
+        Assert.Equal("my-client", Assert.Single(sqlServer.Resource.Annotations.OfType<ConnectCommandAnnotation>()).Tool);
+    }
+
     [Fact]
     public void AddSqlServerAddsGeneratedPasswordParameterWithUserSecretsParameterDefaultInRunMode()
     {

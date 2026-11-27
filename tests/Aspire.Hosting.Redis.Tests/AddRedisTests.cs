@@ -18,10 +18,65 @@ using Microsoft.Extensions.Logging.Abstractions;
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREPERSISTENCE001
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.Redis.Tests;
 
 public class AddRedisTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task AddRedisDeclaresRedisCliConnectCommandOnPlainPort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var redis = builder.AddRedis("redis", port: 16379);
+
+        var connect = Assert.Single(redis.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("redis-cli", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Container, connect.Location);
+        Assert.Equal("""[ -n "$REDIS_PASSWORD" ] && export REDISCLI_AUTH="$REDIS_PASSWORD"; exec redis-cli -h 127.0.0.1 -p 6379""",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<command>, for example INFO", connect.Append);
+        Assert.Equal(RedisResource.PrimaryEndpointName, GetConnectEndpointName(connect));
+    }
+
+    [Fact]
+    public async Task RedisWithCertificateConnectCommandUsesNonTlsPort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var cert = CreateTestCertificate();
+        var redis = builder.AddRedis("redis").WithHttpsCertificate(cert);
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        // The primary endpoint now requires TLS on 6380, so redis-cli must use the secondary plain-protocol endpoint.
+        Assert.True(redis.Resource.TlsEnabled);
+        var connect = Assert.Single(redis.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal(RedisResource.SecondaryEndpointName, GetConnectEndpointName(connect));
+        Assert.Equal("""[ -n "$REDIS_PASSWORD" ] && export REDISCLI_AUTH="$REDIS_PASSWORD"; exec redis-cli -h 127.0.0.1 -p 6379""",
+            await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RedisWithCertificateKeepsAppDeclaredConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var cert = CreateTestCertificate();
+        var redis = builder.AddRedis("redis").WithHttpsCertificate(cert)
+            .WithConnectCommand("my-client", ConnectCommandLocation.Host, ReferenceExpression.Create($"my-client"));
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        Assert.True(redis.Resource.TlsEnabled);
+        var connect = Assert.Single(redis.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("my-client", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Host, connect.Location);
+    }
+
+    private static string GetConnectEndpointName(ConnectCommandAnnotation connect)
+        => Assert.IsType<EndpointReferenceExpression>(Assert.Single(connect.Command.ValueProviders)).Endpoint.EndpointName;
+
     [Fact]
     public void AddRedisAddsHealthCheckAnnotationToResource()
     {

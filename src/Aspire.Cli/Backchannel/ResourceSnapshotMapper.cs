@@ -166,8 +166,23 @@ internal static class ResourceSnapshotMapper
             HealthReports = healthReports,
             Properties = properties,
             Relationships = relationships.ToArray(),
-            Commands = commands
+            Commands = commands,
+            Connect = MapConnect(snapshot.Connect)
         };
+    }
+
+    internal static ResourceConnectJson? MapConnect(ResourceSnapshotConnect? connect)
+    {
+        return connect is null
+            ? null
+            : new ResourceConnectJson
+            {
+                Command = connect.Command,
+                Runs = connect.Runs,
+                Tool = connect.Tool,
+                Append = connect.Append,
+                Note = connect.Note
+            };
     }
 
     private static string[]? GetResolvedWaitingForDependencies(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allSnapshots)

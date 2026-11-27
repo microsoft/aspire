@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRETERMINAL001
+#pragma warning disable ASPIRECONNECT001 // The integration declares how to reach its server with psql.
 
 using System.Globalization;
 using System.Text;
@@ -122,7 +123,14 @@ public static class PostgresBuilderExtensions
                           context.EnvironmentVariables[UserEnvVarName] = postgresServer.UserNameReference;
                           context.EnvironmentVariables[PasswordEnvVarName] = postgresServer.PasswordParameter;
                       })
-                      .WithHealthCheck(healthCheckKey);
+                      .WithHealthCheck(healthCheckKey)
+                      // psql runs in the container over loopback, reading the credentials from the container's own
+                      // environment so that only variable names are shown by tooling.
+                      .WithConnectCommand(
+                          "psql",
+                          ConnectCommandLocation.Container,
+                          ReferenceExpression.Create($"""PGPASSWORD="$POSTGRES_PASSWORD" exec psql -w -h 127.0.0.1 -p {postgresServer.PrimaryEndpoint.Property(EndpointProperty.TargetPort)} -U "$POSTGRES_USER" -d postgres"""),
+                          append: "<psql options>, for example -c 'SELECT 1'");
     }
 
     /// <summary>

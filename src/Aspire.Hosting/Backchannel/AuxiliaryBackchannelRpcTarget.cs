@@ -11,6 +11,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Orchestrator;
+using Aspire.Hosting.Publishing;
 using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +23,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
 #pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
+#pragma warning disable ASPIRECONTAINERRUNTIME001 // The connect command uses the configured container runtime.
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -1238,6 +1240,27 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             })
             .ToArray();
 
+        var connect = await ConnectCommandResolver.ResolveAsync(
+            resource,
+            resourceEvent.ResourceId,
+            async ct =>
+            {
+                var runtime = await serviceProvider.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(ct).ConfigureAwait(false);
+                return runtime.Name.ToLowerInvariant();
+            },
+            logger,
+            cancellationToken).ConfigureAwait(false);
+
+        if (connect is not null)
+        {
+            // Connect resolution can await container runtime detection, during which a secret can be assigned or
+            // replaced. Re-read the add-only redaction history after that await so the filter sees every secret
+            // value known by the time the command is published, not only those known when environment values were
+            // redacted above.
+            var connectSecretValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
+            connect = OmitConnectContainingSecretValue(connect, resourceEvent.ResourceId, connectSecretValues);
+        }
+
         return new ResourceSnapshot
         {
             Name = resourceEvent.ResourceId,
@@ -1261,7 +1284,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             EnvironmentVariables = environmentVariables,
             Properties = properties,
             McpServer = mcpServer,
-            Commands = commands
+            Commands = commands,
+            Connect = connect
         };
     }
 
@@ -1280,6 +1304,45 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </remarks>
     private static string? RedactIfSecretValue(string? value, HashSet<string> secretParameterValues)
         => value is not null && secretParameterValues.Contains(value) ? null : value;
+
+    /// <summary>
+    /// Omits a connect command when any of its displayed fields contains a known resolved secret value.
+    /// </summary>
+    /// <remarks>
+    /// Connect commands can reference only literal text and endpoint values, but an AppHost can still embed a secret in
+    /// that literal text. Unlike environment values, a secret here is typically embedded in a longer command line, so
+    /// this uses substring matching rather than <see cref="RedactIfSecretValue"/>'s exact match. The whole entry is
+    /// dropped rather than masked because a command with a masked argument would no longer run. A short secret value
+    /// that happens to occur in an unrelated command only hides that command, which fails safe.
+    /// </remarks>
+    private ResourceSnapshotConnect? OmitConnectContainingSecretValue(ResourceSnapshotConnect connect, string resourceName, HashSet<string> secretParameterValues)
+    {
+        foreach (var secretValue in secretParameterValues)
+        {
+            // An empty value would match every string; it cannot leak anything.
+            if (secretValue.Length == 0)
+            {
+                continue;
+            }
+
+            // A container command wraps its script in a single-quoted `sh -c` string, which writes each embedded
+            // quote as '\'' (see ConnectCommandResolver.FormatContainerCommand). A secret containing a quote then
+            // appears only in escaped form, yet running the command still reconstructs the original value.
+            var escapedSecretValue = ConnectCommandResolver.EscapeForSingleQuotedShellString(secretValue);
+
+            if (connect.Command.Contains(secretValue, StringComparison.Ordinal) ||
+                connect.Command.Contains(escapedSecretValue, StringComparison.Ordinal) ||
+                connect.Tool.Contains(secretValue, StringComparison.Ordinal) ||
+                connect.Append?.Contains(secretValue, StringComparison.Ordinal) == true ||
+                connect.Note?.Contains(secretValue, StringComparison.Ordinal) == true)
+            {
+                logger.LogDebug("Omitting the connect command for resource '{ResourceName}' because it contains a secret parameter value.", resourceName);
+                return null;
+            }
+        }
+
+        return connect;
+    }
 
     /// <summary>
     /// Collects the resolved values of secret parameters reachable from the application model so they can be

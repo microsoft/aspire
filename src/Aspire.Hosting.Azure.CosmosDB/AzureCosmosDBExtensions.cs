@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // HTTPS certificate APIs are experimental
+#pragma warning disable ASPIRECONNECT001 // The emulator declares how to reach its gateway from the host.
 
 using System.Globalization;
 using Aspire.Hosting;
@@ -216,6 +217,19 @@ public static class AzureCosmosExtensions
                     ep.UriScheme = "https";
                 });
             });
+
+            // The emulator image has no client. Its gateway serves HTTPS on the documented HTTP port once Aspire
+            // provides a certificate, so the command uses the endpoint URL, which reflects the current scheme. curl
+            // verifies that certificate against the host's trust store, not the trust configured in the container. The
+            // command keeps verification on rather than passing -k; the note tells users how to supply a certificate
+            // the host does not trust, such as a custom self-signed one from WithHttpsCertificate. Keep the note within
+            // 256 characters: the MCP resource listing truncates longer descriptive text.
+            builder.WithDefaultConnectCommand(
+                "curl",
+                ConnectCommandLocation.Host,
+                ReferenceExpression.Create($"curl -sS {builder.Resource.GetEndpoint("emulator")}/"),
+                append: "<curl options>, for example -i",
+                note: "Reaches the emulator gateway. If the host does not trust its HTTPS certificate, such as a custom self-signed one, append --cacert <certificate file>. Data requests need signed authorization headers, so use an SDK or the Data Explorer to query data.");
         }
         else
         {

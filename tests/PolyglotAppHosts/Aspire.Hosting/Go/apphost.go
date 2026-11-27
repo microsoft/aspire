@@ -269,6 +269,11 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	endpointPort := endpoint.Property(aspire.EndpointPropertyPort)
 	endpointURL := aspire.RefExpr("http://%v:%v", endpointHost, endpointPort)
 
+	// WithConnectCommand — host client with the published port, and an in-container client
+	dockerContainer.WithConnectCommand("curl", aspire.ConnectCommandLocationHost, aspire.RefExpr("curl -sS http://localhost:%v/", endpointPort),
+		&aspire.WithConnectCommandOptions{Append: aspire.StringPtr("<curl options>, for example -i"), Note: aspire.StringPtr("Requires curl on the host.")})
+	container.WithConnectCommand("nginx", aspire.ConnectCommandLocationContainer, aspire.RefExpr("exec nginx"))
+
 	_ = builder.AddConnectionString("customcs",
 		&aspire.AddConnectionStringOptions{EnvironmentVariableNameOrExpression: expr})
 

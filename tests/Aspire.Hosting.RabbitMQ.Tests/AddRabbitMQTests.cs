@@ -6,10 +6,25 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Sockets;
 
+#pragma warning disable ASPIRECONNECT001 // Connect command APIs are experimental.
+
 namespace Aspire.Hosting.RabbitMQ.Tests;
 
 public class AddRabbitMQTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task AddRabbitMQDeclaresRabbitmqctlConnectCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var rabbitmq = builder.AddRabbitMQ("rabbit");
+
+        var connect = Assert.Single(rabbitmq.Resource.Annotations.OfType<ConnectCommandAnnotation>());
+        Assert.Equal("rabbitmqctl", connect.Tool);
+        Assert.Equal(ConnectCommandLocation.Container, connect.Location);
+        Assert.Equal("exec rabbitmqctl", await connect.Command.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("<command>, for example list_queues", connect.Append);
+    }
+
     [Fact]
     public void AddRabbitMQAddsGeneratedPasswordParameterWithUserSecretsParameterDefaultInRunMode()
     {

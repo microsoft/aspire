@@ -69,6 +69,7 @@ internal sealed class McpResourceJson
     public McpResourceUrlJson[] Urls { get; init; } = [];
     public McpResourceRelationshipJson[] Relationships { get; init; } = [];
     public Dictionary<string, McpResourceCommandJson> Commands { get; init; } = [];
+    public ResourceConnectJson? Connect { get; init; }
 }
 
 [JsonSerializable(typeof(McpResourceJson[]))]
@@ -106,6 +107,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
     private const int MaxRelationshipsPerResource = 32;
     private const int MaxWaitingForPerResource = 32;
     private const int MaxTextLength = 256;
+    private const int MaxConnectCommandLength = 2048;
 
     private static readonly JsonElement s_inputSchema = JsonDocument.Parse(
         $$"""
@@ -133,7 +135,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
 
     public override string Name => KnownMcpTools.ListResources;
 
-    public override string Description => "List the application resources for the selected AppHost. Includes runtime information such as resource type, state, source, endpoints, health status, relationships, and API-visible command metadata without current or default argument values. Returns up to 64 resources ordered by runtime name; use offset and limit to page through all visible resources.";
+    public override string Description => "List the application resources for the selected AppHost. Includes runtime information such as resource type, state, source, endpoints, health status, relationships, API-visible command metadata without current or default argument values, and, when declared, a connect command that reaches the resource with its own client. Returns up to 64 resources ordered by runtime name; use offset and limit to page through all visible resources.";
 
     public override JsonElement GetInputSchema()
     {
@@ -221,7 +223,8 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                     IsInternal = url.IsInternal
                 }).ToArray(),
                 Relationships = GetBoundedRelationships(snapshot, relationshipTargets),
-                Commands = GetCommandMetadata(snapshot)
+                Commands = GetCommandMetadata(snapshot),
+                Connect = GetBoundedConnect(snapshot.Connect)
             }).ToArray();
             var resourceGraphData = JsonSerializer.Serialize(boundedResources, ListResourcesToolJsonContext.RelaxedEscaping.McpResourceJsonArray);
             int? nextOffset = offset < visibleSnapshots.Count - boundedResources.Length
@@ -235,6 +238,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
             resource_name is the identifier of resources.
             Console logs for a resource can provide more information about why a resource is not in a running state.
             Command names and argument names can be passed to execute_resource_command. Current and default argument values are never included.
+            When a resource has connect, run connect.command with the client's own arguments appended (see connect.append) to query it directly. connect.command is a POSIX sh command line; on Windows, run it from a POSIX shell such as Git Bash or WSL. Connect commands reference credentials by variable name rather than value; container commands read them from the container's environment.
             Use next_offset with the same limit to retrieve the next page. An absent next_offset means there are no more resources.
             Each page reads current state; restart from offset 0 if resource membership changes while paging.
 
@@ -296,6 +300,25 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
         }
 
         return (offset, limit);
+    }
+
+    private static ResourceConnectJson? GetBoundedConnect(ResourceSnapshotConnect? connect)
+    {
+        // A truncated command would run something other than what the integration declared, so drop
+        // the entry instead of shortening it. Descriptive fields can be shortened safely.
+        if (connect is null || connect.Command.Length > MaxConnectCommandLength)
+        {
+            return null;
+        }
+
+        return new ResourceConnectJson
+        {
+            Command = connect.Command,
+            Runs = GetBoundedText(connect.Runs),
+            Tool = GetBoundedText(connect.Tool),
+            Append = GetBoundedText(connect.Append),
+            Note = GetBoundedText(connect.Note)
+        };
     }
 
     private static Dictionary<string, McpResourceCommandJson> GetCommandMetadata(ResourceSnapshot snapshot)
