@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "A new default-on features.configSourceEnabled flag temporarily turns off Git-backed CLI configuration sources without editing project bindings or undoing applied settings.",
+  "docsPrs": [
+    2102
+  ],
+  "docsRequired": true,
+  "emoji": "🚦",
+  "firstMergedAt": "2026-11-26T01:08:23Z",
+  "lastMergedAt": "2026-11-26T01:08:23Z",
+  "name": "CLI feature flag to disable config sources",
+  "owner": "JamesNK",
+  "prs": [
+    22647
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@bart-vmware"
+  ],
+  "description": "The Pomelo MySQL EF Core integration is replaced by Aspire.Microting.EntityFrameworkCore.MySql, which uses the maintained Microting fork targeting EF Core 10. The package and its APIs are renamed.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐬",
+  "firstMergedAt": "2026-11-25T21:42:15Z",
+  "lastMergedAt": "2026-11-25T21:42:15Z",
+  "name": "MySQL EF Core integration moves to the Microting provider",
+  "owner": "eerhardt",
+  "prs": [
+    22362
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Grouped into aspire doctor DCP cleanup entry",
+  "mergedAt": "2026-11-26T05:09:02Z",
+  "number": 22709,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "included",
+  "title": "fix(cli): avoid unnecessary DCP controllers in Doctor probe"
+}

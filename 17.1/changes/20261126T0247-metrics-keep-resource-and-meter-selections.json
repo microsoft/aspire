@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Switching resources on the Metrics page keeps the selected meter, pinned view, or open chart when available, and opening a chart no longer changes the sidebar selection.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📈",
+  "firstMergedAt": "2026-11-26T02:47:04Z",
+  "lastMergedAt": "2026-11-26T02:47:04Z",
+  "name": "Metrics keep resource and meter selections",
+  "owner": "JamesNK",
+  "prs": [
+    22646
+  ]
+}

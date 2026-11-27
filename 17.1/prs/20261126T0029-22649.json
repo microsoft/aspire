@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only flaky test fix",
+  "mergedAt": "2026-11-26T00:29:09Z",
+  "number": 22649,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "excluded",
+  "title": "Fix flaky dashboard terminal window test"
+}

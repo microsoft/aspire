@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Grouped into aspire doctor DCP cleanup entry",
+  "mergedAt": "2026-11-25T21:34:44Z",
+  "number": 21837,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "included",
+  "title": "Prevent aspire doctor from orphaning DCP processes"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI enumeration fix for playground",
+  "mergedAt": "2026-11-26T22:29:57Z",
+  "number": 22722,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "excluded",
+  "title": "Fix CI enumeration for the MSTest playground"
+}

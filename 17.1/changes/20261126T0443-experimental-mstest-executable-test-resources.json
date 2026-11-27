@@ -1,0 +1,19 @@
+{
+  "area": "Testing",
+  "areaEmoji": "🧪",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Experimental MSTest executable test resources can be added to the app model, with TRX results collected from the run.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📋",
+  "firstMergedAt": "2026-11-26T04:43:56Z",
+  "lastMergedAt": "2026-11-26T04:43:56Z",
+  "name": "Experimental MSTest executable test resources",
+  "owner": "mitchdenny",
+  "prs": [
+    21559
+  ]
+}

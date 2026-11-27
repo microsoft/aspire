@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Resource-bound aspire test with live collectors",
+  "mergedAt": "2026-11-26T02:33:10Z",
+  "number": 21527,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "included",
+  "title": "Add resource-bound aspire test with experimental live collectors"
+}

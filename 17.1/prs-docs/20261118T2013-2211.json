@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-18T20:13:07Z",
+  "number": 2211,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "excluded",
+  "title": "Keep StaticHost running when Redis times out"
+}

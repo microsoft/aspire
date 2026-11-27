@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Expanding a resource terminal now opens a dedicated page with a title bar, pop-out action, and full sizing and palette controls, while the overview keeps a compact preview.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖥️",
+  "firstMergedAt": "2026-11-26T04:27:43Z",
+  "lastMergedAt": "2026-11-26T04:27:43Z",
+  "name": "Dedicated dashboard page for resource terminals",
+  "owner": "JamesNK",
+  "prs": [
+    22675
+  ]
+}

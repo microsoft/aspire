@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only stabilization",
+  "mergedAt": "2026-11-26T18:19:27Z",
+  "number": 22728,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "excluded",
+  "title": "[automated] Stabilize the dashboard canvas visibility cadence test"
+}

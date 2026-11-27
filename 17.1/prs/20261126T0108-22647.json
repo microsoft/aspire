@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI feature flag to disable config sources",
+  "mergedAt": "2026-11-26T01:08:23Z",
+  "number": 22647,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "included",
+  "title": "Add a CLI feature flag to disable config sources"
+}

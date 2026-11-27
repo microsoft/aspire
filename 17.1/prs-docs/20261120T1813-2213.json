@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-20T18:13:41Z",
+  "number": 2213,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "excluded",
+  "title": "Load API reference sidebar trees once per package or module"
+}

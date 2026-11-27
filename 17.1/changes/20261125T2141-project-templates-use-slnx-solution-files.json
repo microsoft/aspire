@@ -1,0 +1,19 @@
+{
+  "area": "Templates",
+  "areaEmoji": "📄",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The aspire, aspire-starter, and aspire-ts-cs-starter templates now generate a .slnx solution file instead of a .sln.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🗂️",
+  "firstMergedAt": "2026-11-25T21:41:21Z",
+  "lastMergedAt": "2026-11-25T21:41:21Z",
+  "name": "Project templates use .slnx solution files",
+  "owner": "eerhardt",
+  "prs": [
+    22492
+  ]
+}

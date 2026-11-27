@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Layered .NET container archives match SDK output",
+  "mergedAt": "2026-11-25T21:36:53Z",
+  "number": 22666,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "included",
+  "title": "Make layered .NET container archives match SDK archive output"
+}

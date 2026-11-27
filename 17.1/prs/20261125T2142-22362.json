@@ -1,0 +1,9 @@
+{
+  "author": "bart-vmware",
+  "comment": "MySQL EF Core integration moves to the Microting provider",
+  "mergedAt": "2026-11-25T21:42:15Z",
+  "number": 22362,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "included",
+  "title": "Replace Pomelo MySQL EF Core provider with Microting fork"
+}

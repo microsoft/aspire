@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Metrics keep resource and meter selections",
+  "mergedAt": "2026-11-26T02:47:04Z",
+  "number": 22646,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "included",
+  "title": "Preserve resource and metric selections in the Metrics dashboard"
+}

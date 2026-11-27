@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Dependency version bump",
+  "mergedAt": "2026-11-26T00:23:31Z",
+  "number": 22501,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "excluded",
+  "title": "Update System.CommandLine to 3.0.0"
+}

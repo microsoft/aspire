@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal product telemetry detail, not user-facing",
+  "mergedAt": "2026-11-26T04:21:06Z",
+  "number": 22705,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "excluded",
+  "title": "Include exception details in dashboard product telemetry"
+}

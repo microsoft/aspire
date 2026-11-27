@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Experimental MSTest executable test resources",
+  "mergedAt": "2026-11-26T04:43:56Z",
+  "number": 21559,
+  "runDate": "2026-11-27T18:10:00Z",
+  "status": "included",
+  "title": "Add experimental MSTest executable test resources and TRX collection"
+}

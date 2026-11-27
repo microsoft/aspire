@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Layered .NET container archives now match the output produced by the .NET SDK, with updated path and SDK-argument handling and new warnings. This is a breaking change for consumers relying on the previous archive layout.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📦",
+  "firstMergedAt": "2026-11-25T21:36:53Z",
+  "lastMergedAt": "2026-11-25T21:36:53Z",
+  "name": "Layered .NET container archives match SDK output",
+  "owner": "eerhardt",
+  "prs": [
+    22666
+  ]
+}
