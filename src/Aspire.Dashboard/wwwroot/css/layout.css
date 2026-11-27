@@ -463,11 +463,6 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
     width: min(250px, 100%);
 }
 
-.mobile-filter-toolbar fluent-field.toolbar-search {
-    flex: none;
-    width: min(274px, 100%);
-}
-
 .mobile-filter-toolbar fluent-field.toolbar-search > label {
     margin-bottom: 14px;
 }
@@ -735,11 +730,11 @@ fluent-dialog-body .fluent-message-box {
     display: none;
 }
 
-.filter-toolbar .toolbar-search {
-    flex: 0 1 15rem;
-    width: 15rem;
-    min-width: 10rem;
-    max-width: 15rem;
+.toolbar-search {
+    /* Let the header size to the search's preferred width before capping it in narrow layouts. */
+    width: 240px;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .main-toolbar .resource-list {

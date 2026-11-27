@@ -5,6 +5,8 @@ const customElementsDefine = customElements.define.bind(customElements);
 const fluentDropdownStyleSheet = new CSSStyleSheet();
 fluentDropdownStyleSheet.replaceSync(`
     .control {
+        align-content: center;
+        align-items: center;
         background-color: var(--colorNeutralBackground1);
         border: 1px solid var(--colorNeutralStroke1);
         box-shadow: none !important;
@@ -40,7 +42,7 @@ customElements.define = function (name, constructor, options) {
             connectedCallback.call(this);
 
             // Fluent v5 doesn't expose the dropdown control as a CSS part, so add the
-            // application's border recipe directly to the component's shadow root.
+            // application's border and alignment styles directly to the component's shadow root.
             if (!this.shadowRoot.adoptedStyleSheets.includes(fluentDropdownStyleSheet)) {
                 this.shadowRoot.adoptedStyleSheets.push(fluentDropdownStyleSheet);
             }

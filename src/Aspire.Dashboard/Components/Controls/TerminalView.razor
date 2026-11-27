@@ -85,12 +85,6 @@
                 @if (ShowDimensionsPicker)
                 {
                     <div class="terminal-size-controls">
-                        <FluentButton Class="terminal-fit toolbar-button aspire-icon-button" Appearance="ButtonAppearance.Transparent" IconOnly="true" Disabled="@(!_state.FitEnabled || ReadOnly)"
-                                      data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
-                                      aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
-                                      OnClick="FitToContainerAsync">
-                            <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Width="16px" Color="Color.Primary" />
-                        </FluentButton>
                         <label class="terminal-select-label" for="@_sizeSelectId">@Loc[nameof(Resources.TerminalStrings.TerminalSizeLabel)]</label>
                         <FluentSelect TOption="TerminalSizePreset" TValue="string" Id="@_sizeSelectId" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
                                       OptionValue="@(p => p.Value)"
@@ -98,6 +92,12 @@
                                       Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"
                                       AriaLabel="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)]"
                                       Disabled="@(!_state.SizeSelectEnabled || ReadOnly)" />
+                        <FluentButton Class="terminal-fit toolbar-button aspire-icon-button" Appearance="ButtonAppearance.Transparent" IconOnly="true" Disabled="@(!_state.FitEnabled || ReadOnly)"
+                                      data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
+                                      aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
+                                      OnClick="FitToContainerAsync">
+                            <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Width="16px" Color="Color.Primary" />
+                        </FluentButton>
                     </div>
                 }
                 <div class="terminal-palette-controls">

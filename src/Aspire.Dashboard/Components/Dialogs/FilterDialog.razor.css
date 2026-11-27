@@ -50,6 +50,8 @@
 }
 
 .filter-input-container ::deep fluent-dropdown fluent-option {
+    /* The count badge replaces Fluent's second description row with a column. */
+    grid-template-areas: "indicator start content description";
     grid-template-columns: 0 0 minmax(0, 1fr) auto;
     column-gap: 2px;
     overflow: hidden;

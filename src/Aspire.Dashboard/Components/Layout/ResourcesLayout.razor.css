@@ -1408,12 +1408,6 @@
     padding: 0;
 }
 
-.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-search {
-    flex-basis: 9rem;
-    width: 9rem;
-    min-width: 7rem;
-}
-
 /* The span type options are short ("Messaging" is the longest), so this dropdown is narrower than Fluent's 160px default. */
 .resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact,
 .resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact > fluent-dropdown {
