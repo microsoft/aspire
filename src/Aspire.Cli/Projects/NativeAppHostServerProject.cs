@@ -120,7 +120,7 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
             {
                 throw new InvalidOperationException("AppHost Server v2 provider SDK generation requires the matching Aspire bundle tooling and ATS contract.");
             }
-            _directory ??= _temporaryStorage.CreateTempSubdirectory("aspire-apphost-server-");
+            _directory ??= _temporaryStorage.CreateTempSubdirectory("server-");
             var generatedSdkDirectory = Path.Combine(_directory.FullName, $"sdk-{++_preparationCount}");
             var requestPath = Path.Combine(_directory.FullName, "codegen-request.json");
             await File.WriteAllTextAsync(requestPath, new JsonObject

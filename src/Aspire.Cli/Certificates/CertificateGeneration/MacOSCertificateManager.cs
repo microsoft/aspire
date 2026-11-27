@@ -113,7 +113,21 @@ internal sealed class MacOSCertificateManager : CertificateManager
             {
                 Log.MacOSTrustCommandStart($"{MacOSTrustCertificateCommandLine} {s_macOSTrustCertificateCommandLineArguments}{tmpFile}");
             }
-            var exitStatus = Process.Run(new ProcessStartInfo(MacOSTrustCertificateCommandLine, s_macOSTrustCertificateCommandLineArguments + tmpFile));
+            var startInfo = new ProcessStartInfo(MacOSTrustCertificateCommandLine)
+            {
+                ArgumentList =
+                {
+                    "add-trusted-cert",
+                    "-p",
+                    "basic",
+                    "-p",
+                    "ssl",
+                    "-k",
+                    s_macOSUserKeychain,
+                    tmpFile
+                }
+            };
+            var exitStatus = Process.Run(startInfo);
             if (exitStatus.ExitCode != 0)
             {
                 Log.MacOSTrustCommandError(exitStatus.ExitCode);

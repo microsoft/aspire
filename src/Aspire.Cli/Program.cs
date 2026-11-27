@@ -398,7 +398,9 @@ public class Program
         // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
         builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
-        builder.Services.AddSingleton<Aspire.Shared.ITemporaryStorage, Aspire.Shared.TemporaryStorage>();
+        builder.Services.AddSingleton<Aspire.Shared.ITemporaryStorage>(sp => new Aspire.Shared.PrivateTemporaryStorage(
+            sp.GetRequiredService<CliExecutionContext>().AspireHomeDirectory.FullName,
+            sp.GetRequiredService<IConfiguration>()));
         builder.Services.AddSingleton<IWindowsRegistryReader>(sp =>
         {
             var environment = sp.GetRequiredService<IEnvironment>();

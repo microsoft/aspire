@@ -1130,7 +1130,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     internal async Task<bool> InstallIntegrationHostPackageAsync(string name, string npmPath, string hostDir, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var resultDirectory = _temporaryStorage.CreateTempSubdirectory("aspire-integration-install-");
+        var resultDirectory = _temporaryStorage.CreateTempSubdirectory("int-");
         try
         {
             var exitCodePath = Path.Combine(resultDirectory.FullName, "exit-code");

@@ -962,7 +962,7 @@ internal sealed class UpdateCommand : BaseCommand
 
         var exeName = _environment.IsWindows() ? "aspire.exe" : "aspire";
         var targetExePath = Path.Combine(installDir, exeName);
-        var tempExtractDir = _temporaryStorage.CreateTempSubdirectory("aspire-cli-extract").FullName;
+        var tempExtractDir = _temporaryStorage.CreateTempSubdirectory("extract-").FullName;
 
         try
         {

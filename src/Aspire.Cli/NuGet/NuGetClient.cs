@@ -1510,7 +1510,7 @@ internal sealed class NuGetClient(
         private static void InitializeFromEmbeddedResources(INuGetLogger diagnosticLogger, ITemporaryStorage temporaryStorage)
         {
             var previousSdkRoot = AppContext.GetData("Microsoft.DotNet.Sdk.Root");
-            var rootDirectory = temporaryStorage.CreateTempSubdirectory("aspire-nuget-trust-");
+            var rootDirectory = temporaryStorage.CreateTempSubdirectory("trust-");
             try
             {
                 var trustedRootsDirectory = Directory.CreateDirectory(

@@ -17,6 +17,8 @@ using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Shared;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
@@ -62,6 +64,23 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
             .Value;
         Assert.False(string.IsNullOrEmpty(bakedChannel));
         return bakedChannel!;
+    }
+
+    [Fact]
+    public async Task BuildApplication_UsesPrivateTemporaryStorageUnderExecutionContextHome()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = Path.Combine(workspace.Path, ".aspire");
+        var configuredHome = Path.Combine(workspace.Path, "workspace-config-home");
+        using var homeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, home);
+        using var host = await BuildHostAsync(new Dictionary<string, string?> { ["ASPIRE_HOME"] = configuredHome });
+        var context = host.Services.GetRequiredService<CliExecutionContext>();
+        var storage = host.Services.GetRequiredService<ITemporaryStorage>();
+        Assert.IsType<PrivateTemporaryStorage>(storage);
+        Assert.Equal(home, context.AspireHomeDirectory.FullName);
+        Assert.StartsWith(Path.Combine(context.AspireHomeDirectory.FullName, "tmp") + Path.DirectorySeparatorChar, storage.GetTempPath());
+        Assert.False(Directory.Exists(configuredHome));
+        Assert.NotNull(host.Services.GetRequiredService<IDcpConnectionChecker>());
     }
 
     [Fact]
