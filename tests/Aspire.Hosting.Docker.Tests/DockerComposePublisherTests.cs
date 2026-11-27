@@ -493,7 +493,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
             {
                 Name = "custom-network",
                 External = true,
-                ExternalName = "shared-network"
+                NetworkName = "shared-network"
             }));
 
         builder.AddContainer("service", "nginx")

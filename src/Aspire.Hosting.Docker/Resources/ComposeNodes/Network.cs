@@ -44,12 +44,14 @@ public sealed class Network : NamedComposeMember
     public bool? External { get; set; }
 
     /// <summary>
-    /// Defines the name of an external network that is external or managed by Docker outside of the
-    /// application stack. This property should be used in conjunction with the External property to specify the name of the pre-existing network.
-    /// https://docs.docker.com/compose/how-tos/networking/#use-an-existing-external-network
+    /// Gets or sets the actual Docker network name, emitted as the Compose <c>name</c> field.
+    /// For external networks, this identifies the pre-existing network to use; for Compose-managed
+    /// networks, it overrides the generated, project-scoped network name. This is distinct from
+    /// <see cref="NamedComposeMember.Name"/>, which is the key used in the Compose <c>networks</c> section.
+    /// See https://docs.docker.com/reference/compose-file/networks/#name.
     /// </summary>
     [YamlMember(Alias = "name")]
-    public string? ExternalName { get; set; }
+    public string? NetworkName { get; set; }
 
     /// <summary>
     /// Represents a collection of metadata labels applied to the network configuration.
