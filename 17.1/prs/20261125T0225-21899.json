@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal/test/CI/docs-only or engineering change with no user-facing impact",
+  "mergedAt": "2026-11-25T02:25:07Z",
+  "number": 21899,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "Prioritize urgent PRs in the Team App review queue"
+}

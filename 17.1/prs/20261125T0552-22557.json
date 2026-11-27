@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal/test/CI/docs-only or engineering change with no user-facing impact",
+  "mergedAt": "2026-11-25T05:52:16Z",
+  "number": 22557,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "[automated] Await the dashboard message bar close callback independently"
+}

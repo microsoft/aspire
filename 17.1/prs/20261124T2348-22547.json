@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Included in: Header resource tabs are real links",
+  "mergedAt": "2026-11-24T23:48:57Z",
+  "number": 22547,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "included",
+  "title": "Dashboard: render header resource tabs as links and move narrow tabs into the nav menu"
+}

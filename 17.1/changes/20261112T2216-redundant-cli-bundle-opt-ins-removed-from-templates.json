@@ -1,14 +1,16 @@
 {
   "area": "Templates",
-  "areaEmoji": "📄",
+  "areaEmoji": "\ud83d\udcc4",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Project and single-file AppHost templates and `aspire init` no longer emit the redundant CLI bundle opt-in, since current C# AppHost SDKs enable it by default.",
-  "docsPrs": [],
+  "docsPrs": [
+    2137
+  ],
   "docsRequired": false,
-  "emoji": "🧹",
+  "emoji": "\ud83e\uddf9",
   "firstMergedAt": "2026-11-12T22:16:05Z",
   "lastMergedAt": "2026-11-12T22:16:05Z",
   "name": "Redundant CLI bundle opt-ins removed from templates",

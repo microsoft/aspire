@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-17T04:20:08Z",
+  "number": 1835,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Document hidden-by-default terminal hosts, remove ShowTerminalHost"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The new `--wait` option on `aspire stop` returns only after the AppHost's containers, executables, and networks are torn down, with `--timeout` to control the wait. It reports timeouts and unconfirmed teardown clearly.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\u23f3",
+  "firstMergedAt": "2026-11-25T00:48:18Z",
+  "lastMergedAt": "2026-11-25T00:48:18Z",
+  "name": "aspire stop --wait",
+  "owner": "sebastienros",
+  "prs": [
+    22583
+  ]
+}

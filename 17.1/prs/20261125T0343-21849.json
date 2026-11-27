@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal/test/CI/docs-only or engineering change with no user-facing impact",
+  "mergedAt": "2026-11-25T03:43:12Z",
+  "number": 21849,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "Bound primary apt mirror builds before CLI E2E fallback"
+}

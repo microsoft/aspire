@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal/test/CI/docs-only or engineering change with no user-facing impact",
+  "mergedAt": "2026-11-25T01:45:26Z",
+  "number": 22470,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "Update milestone changelog for 17.1"
+}

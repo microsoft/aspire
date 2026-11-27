@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Sticky App Service slot settings defined by users in a `SlotConfigNames` resource are now merged with Aspire's generated settings instead of producing a duplicate declaration that failed deployment.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udfaf",
+  "firstMergedAt": "2026-11-25T02:18:38Z",
+  "lastMergedAt": "2026-11-25T02:18:38Z",
+  "name": "User-defined App Service sticky slot settings supported",
+  "owner": "davidfowl",
+  "prs": [
+    21457
+  ]
+}

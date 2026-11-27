@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-17T19:13:56Z",
+  "number": 2035,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Pipeline steps can depend on deployment-target steps"
+}

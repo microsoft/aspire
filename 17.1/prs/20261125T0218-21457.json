@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included in: User-defined App Service sticky slot settings supported",
+  "mergedAt": "2026-11-25T02:18:38Z",
+  "number": 21457,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "included",
+  "title": "Merge App Service sticky slot settings into user-defined SlotConfigNames"
+}

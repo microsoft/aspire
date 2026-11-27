@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When stdout is redirected, piped, or non-interactive, `aspire describe` and `aspire otel traces` render borderless tables and omit per-row dashboard links. JSON output is unchanged.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\udeb6",
+  "firstMergedAt": "2026-11-25T01:46:41Z",
+  "lastMergedAt": "2026-11-25T01:46:41Z",
+  "name": "Compact CLI output when not a terminal",
+  "owner": "sebastienros",
+  "prs": [
+    22581
+  ]
+}

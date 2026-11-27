@@ -1,0 +1,20 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire doctor` now waits for cancelled checks to clean up DCP before exiting and stops its DCP probe gracefully instead of killing it.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\ude7a",
+  "firstMergedAt": "2026-11-25T02:08:41Z",
+  "lastMergedAt": "2026-11-25T02:09:02Z",
+  "name": "aspire doctor cleans up DCP when cancelled",
+  "owner": "davidfowl",
+  "prs": [
+    21917,
+    21919
+  ]
+}

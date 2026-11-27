@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Included in: aspire stop --wait",
+  "mergedAt": "2026-11-25T00:48:18Z",
+  "number": 22583,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "included",
+  "title": "Add aspire stop --wait to wait for resource teardown"
+}

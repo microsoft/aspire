@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`ContainerResource.ShellExecution` is no longer experimental, so consumers no longer need to suppress `ASPIRECONTAINERSHELLEXECUTION001`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udc1a",
+  "firstMergedAt": "2026-11-25T04:38:21Z",
+  "lastMergedAt": "2026-11-25T04:38:21Z",
+  "name": "Container shell execution is stable",
+  "owner": "maddymontaquila",
+  "prs": [
+    22168
+  ]
+}

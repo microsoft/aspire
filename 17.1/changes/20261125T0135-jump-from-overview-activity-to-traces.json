@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Clicking a column in the Overview activity chart opens Traces for that 30-second interval, and the y-axis maximum is now labeled in requests. Time filters in Traces and Structured Logs also use SQLite indexes for faster queries.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u23f1\ufe0f",
+  "firstMergedAt": "2026-11-25T01:35:44Z",
+  "lastMergedAt": "2026-11-25T01:35:44Z",
+  "name": "Jump from Overview activity to traces",
+  "owner": "JamesNK",
+  "prs": [
+    22551
+  ]
+}

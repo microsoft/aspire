@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Included in: Stable resource ordering with protected customizations",
+  "mergedAt": "2026-11-24T23:48:08Z",
+  "number": 22471,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "included",
+  "title": "Keep dashboard resource ordering stable and protect saved customizations"
+}

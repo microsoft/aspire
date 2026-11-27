@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included in: aspire doctor cleans up DCP when cancelled",
+  "mergedAt": "2026-11-25T02:08:41Z",
+  "number": 21917,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "included",
+  "title": "Wait for cancelled aspire doctor checks to clean up DCP before exiting"
+}

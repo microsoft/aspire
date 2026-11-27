@@ -7,7 +7,8 @@
   "communityContributors": [],
   "description": "`aspire agent init` registers telemetry hooks only for the selected agent clients, names each client clearly, and removes stale static Aspire skill copies replaced by configured skill sources.",
   "docsPrs": [
-    2063
+    2063,
+    2146
   ],
   "docsRequired": false,
   "emoji": "\ud83e\udd16",

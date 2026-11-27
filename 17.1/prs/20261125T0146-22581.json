@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Included in: Compact CLI output when not a terminal",
+  "mergedAt": "2026-11-25T01:46:41Z",
+  "number": 22581,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "included",
+  "title": "CLI: drop table borders and row dashboard links when stdout is not a terminal"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Late-discovered resources and groups now enter their default sort order instead of being appended, and the dashboard saves only explicit moves. Resource and group moves, user-added tags, and metric pins use protected browser local storage.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd00",
+  "firstMergedAt": "2026-11-24T23:48:08Z",
+  "lastMergedAt": "2026-11-24T23:48:08Z",
+  "name": "Stable resource ordering with protected customizations",
+  "owner": "JamesNK",
+  "prs": [
+    22471
+  ]
+}

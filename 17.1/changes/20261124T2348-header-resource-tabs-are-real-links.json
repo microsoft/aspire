@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource view tabs in the dashboard header are now links that support middle-click and Ctrl+click to open in a new tab. On narrow screens the tabs move into the navigation menu.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd17",
+  "firstMergedAt": "2026-11-24T23:48:57Z",
+  "lastMergedAt": "2026-11-24T23:48:57Z",
+  "name": "Header resource tabs are real links",
+  "owner": "JamesNK",
+  "prs": [
+    22547
+  ]
+}

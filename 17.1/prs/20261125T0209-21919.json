@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included in: aspire doctor cleans up DCP when cancelled",
+  "mergedAt": "2026-11-25T02:09:02Z",
+  "number": 21919,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "included",
+  "title": "Stop the aspire doctor DCP probe gracefully instead of killing it"
+}

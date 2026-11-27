@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal/test/CI/docs-only or engineering change with no user-facing impact",
+  "mergedAt": "2026-11-25T02:09:39Z",
+  "number": 21887,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "[automated] fix(ci): Stop persisting lint and TypeScript checkout credentials"
+}

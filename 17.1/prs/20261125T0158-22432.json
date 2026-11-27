@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal/test/CI/docs-only or engineering change with no user-facing impact",
+  "mergedAt": "2026-11-25T01:58:16Z",
+  "number": 22432,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "Split automated dependency updates into OpenTelemetry, Azure, and other PRs"
+}

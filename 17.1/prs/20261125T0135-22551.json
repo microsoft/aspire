@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Included in: Jump from Overview activity to traces",
+  "mergedAt": "2026-11-25T01:35:44Z",
+  "number": 22551,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "included",
+  "title": "Link Overview activity to traces and speed up telemetry time filters"
+}

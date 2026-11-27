@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Internal/test/CI/docs-only or engineering change with no user-facing impact",
+  "mergedAt": "2026-11-25T01:36:20Z",
+  "number": 22553,
+  "runDate": "2026-11-27T12:10:00Z",
+  "status": "excluded",
+  "title": "Centralize temporary storage allocation behind an internal helper"
+}
