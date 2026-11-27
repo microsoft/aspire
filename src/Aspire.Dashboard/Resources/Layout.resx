@@ -331,9 +331,6 @@
   <data name="ResourcePaneTelemetryOnlyGroup" xml:space="preserve">
     <value>Telemetry sources</value>
   </data>
-  <data name="ResourcePaneTelemetryOnly" xml:space="preserve">
-    <value>Telemetry sources</value>
-  </data>
   <data name="ResourcePaneCountSingular" xml:space="preserve">
     <value>{0} resource</value>
   </data>

@@ -10,15 +10,15 @@ using Microsoft.Extensions.Localization;
 namespace Aspire.Dashboard.Components.Controls.Overview;
 
 /// <summary>
-/// Summarizes a telemetry source: the resource attributes it reports and the telemetry it has sent. The resource
-/// overview loads the telemetry, like it does for a resource of the app model, and passes it in.
+/// Summarizes a telemetry source: the resource attributes it reports and the telemetry it has sent.
 /// </summary>
-public sealed partial class TelemetrySourceOverview : ComponentBase
+public sealed partial class TelemetrySourceOverview : ComponentBase, IDisposable
 {
     private const int AttributesPreviewCount = 10;
 
     private bool _attributesExpanded;
     private ResourceKey? _renderedSourceKey;
+    private OverviewTelemetryLoader _telemetryLoader = default!;
 
     /// <summary>
     /// Gets or sets the name the source is displayed and selected by.
@@ -30,16 +30,23 @@ public sealed partial class TelemetrySourceOverview : ComponentBase
     public required OtlpResource Source { get; set; }
 
     [Parameter]
-    public OverviewTelemetry? Telemetry { get; set; }
-
-    [Parameter]
-    public bool TelemetryLoaded { get; set; }
-
-    [Parameter]
     public bool HideEmptyPanels { get; set; }
 
     [Inject]
+    public required DashboardDataSource DataSource { get; init; }
+
+    [Inject]
+    public required ILogger<TelemetrySourceOverview> Logger { get; init; }
+
+    [Inject]
     public required IStringLocalizer<Dashboard.Resources.Resources> Loc { get; init; }
+
+    internal Task TelemetryRefreshTask => _telemetryLoader.RefreshTask;
+
+    protected override void OnInitialized()
+    {
+        _telemetryLoader = new OverviewTelemetryLoader(DataSource.TelemetryRepository, Logger, InvokeAsync, StateHasChanged, Task.Delay);
+    }
 
     protected override void OnParametersSet()
     {
@@ -50,6 +57,8 @@ public sealed partial class TelemetrySourceOverview : ComponentBase
             _renderedSourceKey = Source.ResourceKey;
             _attributesExpanded = false;
         }
+
+        _telemetryLoader.SetKey(Source.ResourceKey);
     }
 
     private void ToggleAttributesExpanded() => _attributesExpanded = !_attributesExpanded;
@@ -57,9 +66,11 @@ public sealed partial class TelemetrySourceOverview : ComponentBase
     private ViewState GetView()
     {
         var attributes = GetAttributeItems(Source);
-        var showLogs = !TelemetryLoaded || Telemetry is { LogCount: > 0 };
-        var showTraces = !TelemetryLoaded || Telemetry is { TraceCount: > 0 };
-        var showMetrics = !TelemetryLoaded || Telemetry is { Instruments.Count: > 0 };
+        var loaded = _telemetryLoader.IsLoaded;
+        var telemetry = _telemetryLoader.Telemetry;
+        var showLogs = !loaded || telemetry is { LogCount: > 0 };
+        var showTraces = !loaded || telemetry is { TraceCount: > 0 };
+        var showMetrics = !loaded || telemetry is { Instruments.Count: > 0 };
 
         // Keep loading panels so their space is reserved. Hidden cards stay mounted, but only visible cards participate
         // in grid packing. The spans match the resource overview's cards, with the attributes in the properties' place.
@@ -88,6 +99,11 @@ public sealed partial class TelemetrySourceOverview : ComponentBase
                 Key = attribute
             })
             .ToList();
+
+    public void Dispose()
+    {
+        _telemetryLoader?.Dispose();
+    }
 
     private sealed record ViewState(
         List<TelemetryPropertyViewModel> Attributes,

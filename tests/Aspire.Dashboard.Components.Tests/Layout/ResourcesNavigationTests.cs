@@ -8,7 +8,6 @@ using Aspire.Dashboard.Utils;
 using Xunit;
 using NavSection = Aspire.Dashboard.Components.Layout.DesktopNavMenu.NavSection;
 using ResourceTab = Aspire.Dashboard.Components.Layout.ResourceTab;
-using ResourcesPage = Aspire.Dashboard.Components.Pages.Resources;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
@@ -164,17 +163,6 @@ public class ResourcesNavigationTests
     public void TryGetLegacyRedirectUrl_MapsLegacyResourcesQuery(string? resourceName, string? viewKind, string? expectedUrl)
     {
         Assert.Equal(expectedUrl, Home.TryGetLegacyRedirectUrl(resourceName, viewKind));
-    }
-
-    [Theory]
-    [InlineData("graph", ResourcesPage.ResourceViewKind.Graph)]
-    [InlineData("graph?hiddenTypes=Container", ResourcesPage.ResourceViewKind.Graph)]
-    [InlineData("parameters", ResourcesPage.ResourceViewKind.Parameters)]
-    [InlineData("parameters#top", ResourcesPage.ResourceViewKind.Parameters)]
-    [InlineData("", ResourcesPage.ResourceViewKind.Table)]
-    public void GetViewKindFromPath_ReturnsRouteViewKind(string path, ResourcesPage.ResourceViewKind expectedViewKind)
-    {
-        Assert.Equal(expectedViewKind, ResourcesPage.GetViewKindFromPath(path));
     }
 
     [Fact]

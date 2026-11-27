@@ -1,8 +1,9 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Overview;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
@@ -815,8 +816,8 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     private IRenderedComponent<ResourcesLayout> RenderOverview(ViewportInformation viewport, string? resourceName = "test") =>
         Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
-            builder.OpenComponent<ResourceOverview>(0);
-            builder.AddAttribute(1, nameof(ResourceOverview.ResourceName), resourceName);
+            builder.OpenComponent<Overview>(0);
+            builder.AddAttribute(1, nameof(Overview.ResourceName), resourceName);
             builder.CloseComponent();
         }));
 

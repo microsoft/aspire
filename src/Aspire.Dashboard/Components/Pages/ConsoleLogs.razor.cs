@@ -97,6 +97,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required IStringLocalizer<Dashboard.Resources.Resources> ResourcesLoc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
+
+    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
 
     [Inject]
@@ -454,6 +457,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     }
 
     private bool IsMissingResourceSelected() => _missingResource is not null && PageViewModel.SelectedResource == _missingResource;
+
+    private bool IsTelemetryOnlySourceSelected => ResourcesLayout?.SelectedTelemetryOnlyResource is not null;
 
     private void SetStatus(ConsoleLogsViewModel viewModel, string statusName)
     {

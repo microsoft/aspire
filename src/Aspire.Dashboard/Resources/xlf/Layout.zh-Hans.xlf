@@ -592,11 +592,6 @@
         <target state="translated">展开或折叠 {0}</target>
         <note>{0} is the group name</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneTelemetryOnly">
-        <source>Telemetry sources</source>
-        <target state="translated">遥测源</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneTelemetryOnlyGroup">
         <source>Telemetry sources</source>
         <target state="translated">遥测源</target>

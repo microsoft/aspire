@@ -1,0 +1,82 @@
+@page "/resources"
+@page "/resources/{ResourceName}"
+@layout ResourcesLayout
+@using Aspire.Dashboard.Components.Controls.Overview
+@using Aspire.Dashboard.Components.Layout
+
+<PageTitle><ApplicationName AdditionalText="@(Resource is { } r ? GetResourceName(r) : TelemetrySource?.Name)" ResourceName="@nameof(Dashboard.Resources.Resources.ResourceOverviewPageTitle)" Loc="@Loc" /></PageTitle>
+
+@if (ResourceName is not null && ResourcesLayout is { IsMultiSelection: false } && (Resource is { IsParameter: false } || TelemetrySource is not null))
+{
+    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.HeaderActionsSectionName">
+        <div class="overview-panel-selector">
+            <IconToggleGroup TValue="bool"
+                             Label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewPanelsLabel)]"
+                             Options="@PanelOptions"
+                             Value="@_hideEmptyPanels"
+                             ValueChanged="@SetHideEmptyPanelsAsync"
+                             ShowLabel="false"
+                             ShowCurrentLabel="false" />
+        </div>
+    </StableSectionContent>
+}
+
+<div class="resource-overview" tabindex="-1" data-resource-name="@Resource?.Name">
+    @if (ResourcesLayout is null || !ResourcesLayout.IsLoaded)
+    {
+        <div class="overview-message">
+            <FluentSpinner Size="SpinnerSize.Small" />
+        </div>
+    }
+    else if ((ResourcesLayout.IsMultiSelection || ResourceName is null) &&
+             ResourcesLayout.SelectedResources.ToList() is { Count: > 0 } selectedResources &&
+             selectedResources.All(resource => resource.IsParameter))
+    {
+        @* Parameters selected in the query string, for example /resources?resource=a&resource=b. A single parameter
+           selected this way gets the same panel as several, rather than the summary of all resources. *@
+        <MissingParametersPanel Parameters="selectedResources"
+                                OnExecuteCommandAsync="ExecuteResourceCommandAsync"
+                                OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
+                                IsCommandExecuting="@IsCommandExecuting" />
+    }
+    else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
+    {
+        var resourceNames = ResourcesLayout.SelectedResourceNames;
+        <ApplicationSummary ResourceNames="@(resourceNames.Count > 0 ? resourceNames : null)"
+                            TelemetryResourceKeys="@ResourcesLayout.GetSelectionTelemetryKeys(resourceNames)"
+                            IsTelemetrySourceSummary="@(!DashboardClient.IsEnabled)" />
+    }
+    else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
+    {
+        <MissingParametersPanel Parameters="@([parameter])"
+                                OnExecuteCommandAsync="ExecuteResourceCommandAsync"
+                                OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
+                                IsCommandExecuting="@IsCommandExecuting" />
+    }
+    else if (Resource is { IsParameter: true } resolvedParameter)
+    {
+        @* Parameters share the tags card of every other resource, so the tag UX is identical. *@
+        <div class="overview-grid overview-parameter-tags">
+            <OverviewTagsCard Resource="resolvedParameter" AvailableTags="@ResourcesLayout.AvailableResourceTags" />
+        </div>
+        <ParameterOverview Resource="resolvedParameter"
+                           OnExecuteCommandAsync="ExecuteResourceCommandAsync"
+                           OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
+                           IsCommandExecuting="@IsCommandExecuting" />
+    }
+    else if (TelemetrySource is { } source)
+    {
+        <TelemetrySourceOverview Name="@source.Name" Source="@source.Resource" HideEmptyPanels="@_hideEmptyPanels" />
+    }
+    else if (Resource is { } resource)
+    {
+        <ResourceOverview Resource="resource" HideEmptyPanels="@_hideEmptyPanels" />
+    }
+    else
+    {
+        <div class="overview-message">
+            <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Default" />
+            <span>@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNotFound)], ResourceName)</span>
+        </div>
+    }
+</div>

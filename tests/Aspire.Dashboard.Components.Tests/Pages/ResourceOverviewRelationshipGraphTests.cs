@@ -38,8 +38,8 @@ public class ResourceOverviewRelationshipGraphTests : DashboardTestContext
 
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
-            builder.OpenComponent<ResourceOverview>(0);
-            builder.AddAttribute(1, nameof(ResourceOverview.ResourceName), "catalogservice-production");
+            builder.OpenComponent<Overview>(0);
+            builder.AddAttribute(1, nameof(Overview.ResourceName), "catalogservice-production");
             builder.CloseComponent();
         }));
 

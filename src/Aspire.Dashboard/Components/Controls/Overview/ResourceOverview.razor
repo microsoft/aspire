@@ -1,0 +1,472 @@
+@using Aspire.Dashboard.Extensions
+@using Aspire.Dashboard.Components.Layout
+@using Aspire.Dashboard.Otlp.Model
+@using Aspire.Dashboard.Resources
+@using Humanizer
+
+@{
+    var resource = Resource;
+    var resourceName = GetResourceName(resource);
+    // Internal URLs are listed after the URLs a user can browse to.
+    var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: true, includeNonEndpointUrls: true).OrderBy(u => u.IsInternal).ToList();
+    var relatedResources = GetRelatedResources(resource).ToList();
+    var hasTelemetry = _telemetryLoader.Key is not null;
+    var isInstrumented = hasTelemetry && TelemetryRepository.GetResource(_telemetryLoader.Key!.Value) is { UninstrumentedPeer: false };
+    // The telemetry cards show their content only when the resource sends that telemetry. While the first query
+    // is in flight they show a loading skeleton; otherwise they show an empty card of the same size.
+    var showLogs = isInstrumented && (!_telemetryLoader.IsLoaded || _telemetryLoader.Telemetry is { LogCount: > 0 });
+    var showTraces = hasTelemetry && (!_telemetryLoader.IsLoaded || _telemetryLoader.Telemetry is { TraceCount: > 0 });
+    var showMetrics = isInstrumented && (!_telemetryLoader.IsLoaded || _telemetryLoader.Telemetry is { Instruments.Count: > 0 });
+    var consoleLines = GetConsoleLines();
+    var showEndpoints = urls.Count > 0;
+    var showTerminal = CanShowTerminal(resource);
+    var showConsole = !showTerminal;
+    var showOverviewTerminal = showTerminal && !TerminalDockState.IsResourceOpen(resource.Name);
+    var properties = GetVisibleProperties();
+    var environmentVariables = GetVisibleEnvironmentVariables(resource);
+    var healthReports = GetHealthReports(resource);
+    var showHealth = healthReports.Count > 0;
+    var hasVolumes = resource.Volumes.Length > 0;
+    // Keep loading panels and panels with filtered content so their controls remain reachable.
+    // Hidden cards stay mounted, but only visible cards participate in grid packing.
+    List<(OverviewCard Card, int Span, bool HasContent)> cardSpans =
+    [
+        (OverviewCard.Status, 3, true),
+        (OverviewCard.Endpoints, 4, showEndpoints),
+        (OverviewCard.Metrics, 5, showMetrics),
+        (OverviewCard.Console, 7, showTerminal || !_consoleLogsLoaded || _hasConsoleLogs || ConsolePauseText is not null),
+        (OverviewCard.Logs, 5, showLogs),
+        (OverviewCard.Traces, 6, showTraces),
+        (OverviewCard.Relationships, 6, relatedResources.Count > 0),
+        (OverviewCard.Properties, 6, _properties.Count > 0),
+        (OverviewCard.Environment, 6, resource.Environment.Length > 0),
+        (OverviewCard.Volumes, 6, hasVolumes),
+        (OverviewCard.Health, 6, showHealth)
+    ];
+    var hiddenCards = cardSpans.Where(c => HideEmptyPanels && !c.HasContent).Select(c => c.Card).ToHashSet();
+    // A terminal owned by the dock has no overview card, even when showing all panels.
+    var cardLayout = OverviewCardLayout.Create(cardSpans
+        .Where(c => !hiddenCards.Contains(c.Card) && (c.Card != OverviewCard.Console || showConsole || showOverviewTerminal))
+        .Select(c => (c.Card, c.Span)).ToList());
+}
+
+<div class="overview-grid" data-resource-subscription="@_subscribedResourceName">
+    <OverviewTagsCard Resource="resource" AvailableTags="@(ResourcesLayout?.AvailableResourceTags ?? [])" />
+
+    <OverviewStatusCard Resource="resource" HideCommandButtons="false" Style="@cardLayout.Style(OverviewCard.Status)" />
+
+    @if (showEndpoints)
+    {
+    var endpointGroups = GroupEndpoints(urls);
+    <section class="overview-card" style="@cardLayout.Style(OverviewCard.Endpoints)" aria-labelledby="overview-endpoints-title">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.Link())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-endpoints-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointsTitle)]</h2>
+            @if (endpointGroups.Count > 0)
+            {
+                <span class="aspire-count-badge overview-card-count">@endpointGroups.Count</span>
+            }
+        </div>
+        <ul class="overview-list overview-endpoints">
+            @foreach (var group in endpointGroups)
+            {
+                var url = group.Primary;
+                var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
+                var maskedUrl = DashboardUIHelpers.MaskUrlForDisplay(url.OriginalUrlString);
+                // The endpoint's other address (usually its localhost one) is in the tooltip rather than on a line
+                // of its own, so each endpoint is listed once. Tooltips also show on keyboard focus.
+                var addressTooltip = group.Secondary is { } secondary
+                    ? Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointAlsoAt), maskedUrl, DashboardUIHelpers.MaskUrlForDisplay(secondary.OriginalUrlString)].Value
+                    : maskedUrl;
+                <li class="overview-endpoint">
+                    @if (url.Url is not null && url.DisplayName is not null && url.DisplayName == label)
+                    {
+                        <a class="overview-list-label" href="@url.Url" data-tooltip="@label" target="_blank" rel="noreferrer noopener">@label</a>
+                    }
+                    else
+                    {
+                        <span class="overview-list-label" data-tooltip="@label">@label</span>
+                    }
+                    <div class="overview-endpoint-value">
+                        <div class="overview-endpoint-addresses">
+                            @if (url.DisplayName is { } friendlyName && friendlyName != label)
+                            {
+                                @if (url.Url is not null)
+                                {
+                                    <a class="overview-endpoint-name" href="@url.Url" data-tooltip="@addressTooltip" target="_blank" rel="noreferrer noopener">@friendlyName</a>
+                                }
+                                else
+                                {
+                                    <span class="overview-endpoint-name">@friendlyName</span>
+                                }
+                            }
+                            @if (url.Url is not null)
+                            {
+                                <a class="overview-endpoint-address overview-mono" href="@url.Url" data-tooltip="@addressTooltip" target="_blank" rel="noreferrer noopener">@maskedUrl</a>
+                            }
+                            else
+                            {
+                                <span class="overview-endpoint-address overview-mono" data-tooltip="@addressTooltip" tabindex="0">@maskedUrl</span>
+                            }
+                        </div>
+                        @if (url.IsInternal)
+                        {
+                            <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    </section>
+    }
+    else
+    {
+        <OverviewEmptyCard Card="OverviewCard.Endpoints" Layout="cardLayout" TitleId="overview-endpoints-title" Icon="@(new Icons.Regular.Size16.Link())" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointsTitle)]" Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoEndpoints)]" Hidden="@HideEmptyPanels" />
+    }
+
+    <OverviewMetricsCard ResourceName="@resourceName"
+                     ResourceKey="@_telemetryLoader.Key"
+                     Layout="@cardLayout" HasContent="@showMetrics" IsLoaded="@_telemetryLoader.IsLoaded"
+                     Telemetry="@_telemetryLoader.Telemetry" HideEmptyPanels="@HideEmptyPanels" />
+
+    @if (showOverviewTerminal)
+    {
+    <section class="overview-card overview-terminal-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-terminal-title">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-terminal-title">@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalTitle)]</h2>
+            <div class="overview-card-actions">
+                <a class="aspire-icon-button overview-card-action"
+                   href="https://aka.ms/aspire/dashboard-terminal"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   data-tooltip="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]"
+                   aria-label="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Book())" Color="Color.Primary" />
+                </a>
+                <TerminalWindowButton Class="overview-card-action"
+                                      IconColor="Color.Primary"
+                                      Label="@TerminalLoc[nameof(TerminalStrings.TerminalToolbarOpenInWindow)]"
+                                      TerminalKey="@($"resource:{resourceName}")"
+                                      Url="@($"terminal-window/resource/{Uri.EscapeDataString(resourceName)}")"
+                                      FontSize="@_terminalFontSize" />
+                @{ var expandTerminal = TerminalLoc[nameof(TerminalStrings.TerminalExpand)]; }
+                <a class="aspire-icon-button overview-card-action"
+                   href="@GetTerminalPageUrl(resourceName)"
+                   data-tooltip="@expandTerminal"
+                   aria-label="@expandTerminal">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowExpand())" Color="Color.Primary" />
+                </a>
+            </div>
+        </div>
+        <div class="overview-terminal">
+            <TerminalView ResourceName="@resource.Name"
+                          Chromeless="true"
+                          Embedded="true"
+                          ShowDimensionsPicker="false"
+                          AutoFit="true"
+                          OnToolbarStateChanged="@_terminalToolbarStateChanged"
+                          SizeMemoryKey="@($"overview:{resource.Name}")" />
+        </div>
+    </section>
+    }
+    else if (showConsole)
+    {
+    <section class="overview-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-console-title" hidden="@hiddenCards.Contains(OverviewCard.Console)">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.SlideText())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-console-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)]</h2>
+            @{
+                var consolePauseTitle = PauseManager.ConsoleLogsPaused
+                    ? ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.ResumeButtonTitle)]
+                    : ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.PauseButtonTitle)];
+            }
+            <div class="overview-card-actions">
+                @CardActionButton(
+                    consolePauseTitle,
+                    PauseManager.ConsoleLogsPaused ? new Icons.Regular.Size16.Play() : new Icons.Regular.Size16.Pause(),
+                    () => OnConsolePausedChanged(!PauseManager.ConsoleLogsPaused))
+                @CardActionButton(
+                    Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewOpenConsole)],
+                    new Icons.Regular.Size16.ArrowExpand(),
+                    () => NavigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resourceName)))
+            </div>
+        </div>
+        @{
+            var consolePauseText = ConsolePauseText;
+        }
+        @if (consoleLines.Count == 0)
+        {
+            <div class="overview-empty">
+                @if (!_consoleLogsLoaded)
+                {
+                    <FluentSpinner Size="SpinnerSize.ExtraSmall" />
+                }
+                else
+                {
+                    @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoConsoleLogs)]
+                }
+            </div>
+        }
+        else
+        {
+            <div class="overview-console" role="log" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)]">
+                @foreach (var line in consoleLines)
+                {
+                    <div class="overview-console-line @(line.IsError ? "error" : string.Empty)" @key="line.LineNumber">
+                        @if (line.Timestamp is { } timestamp)
+                        {
+                            <span class="overview-console-time">@FormatHelpers.FormatTime(TimeProvider, timestamp.UtcDateTime)</span>
+                        }
+                        <span>@line.Content</span>
+                    </div>
+                }
+            </div>
+        }
+        @if (consolePauseText is not null)
+        {
+            <div class="overview-console-paused" role="status">
+                <FluentIcon Value="@(new Icons.Regular.Size16.Pause())" Color="Color.Warning" Width="14px" />
+                <span>@consolePauseText</span>
+            </div>
+        }
+    </section>
+    }
+
+    <OverviewLogsCard ResourceName="@resourceName"
+                     Layout="@cardLayout" HasContent="@showLogs" IsLoaded="@_telemetryLoader.IsLoaded"
+                     Telemetry="@_telemetryLoader.Telemetry" HideEmptyPanels="@HideEmptyPanels" />
+
+    <OverviewTracesCard ResourceName="@resourceName"
+                     Layout="@cardLayout" HasContent="@showTraces" IsLoaded="@_telemetryLoader.IsLoaded"
+                     Telemetry="@_telemetryLoader.Telemetry" HideEmptyPanels="@HideEmptyPanels" />
+
+    <section class="overview-card overview-relationships-card" style="@cardLayout.Style(OverviewCard.Relationships)" aria-labelledby="overview-relationships-title" hidden="@hiddenCards.Contains(OverviewCard.Relationships)">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.BranchFork())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-relationships-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipsTitle)]</h2>
+            @if (relatedResources.Count > 0)
+            {
+                <span class="aspire-count-badge overview-card-count">@relatedResources.Count</span>
+            }
+        </div>
+        @if (relatedResources.Count == 0)
+        {
+            <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoRelationships)]</div>
+        }
+        else
+        {
+            <ResourceRelationshipGraph Resource="@GetGraphNode(resource, resource.ResourceTypeDisplayName, isCenter: true)"
+                                       Incoming="@GetGraphNodes(relatedResources, incoming: true)"
+                                       Outgoing="@GetGraphNodes(relatedResources, incoming: false)" />
+        }
+    </section>
+
+    <section class="overview-card" style="@cardLayout.Style(OverviewCard.Properties)" aria-labelledby="overview-properties-title" hidden="@hiddenCards.Contains(OverviewCard.Properties)">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListSquare())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-properties-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewPropertiesTitle)]</h2>
+            <OverviewCardCount Shown="@Math.Min(properties.Count, _propertiesExpanded ? properties.Count : DetailsPreviewCount)" Total="@properties.Count" />
+            <div class="overview-card-actions">
+                @if (HasNonCoreProperties)
+                {
+                    @CardActionButton(
+                        _showAllProperties ? ControlsStringsLoc[nameof(ControlsStrings.EnvironmentVariablesFilterToggleShowSpecOnly)] : ControlsStringsLoc[nameof(ControlsStrings.EnvironmentVariablesFilterToggleShowAll)],
+                        _showAllProperties ? new Icons.Regular.Size16.DocumentHeader() : new Icons.Regular.Size16.DocumentOnePage(),
+                        ToggleShowAllProperties)
+                }
+                @if (HasSensitiveProperties)
+                {
+                    @CardActionButton(
+                        _propertiesMask.IsAllMasked ? ControlsStringsLoc[nameof(ControlsStrings.EnvironmentVariablesShowVariableValues)] : ControlsStringsLoc[nameof(ControlsStrings.EnvironmentVariablesHideVariableValues)],
+                        _propertiesMask.IsAllMasked ? new Icons.Regular.Size16.Eye() : new Icons.Regular.Size16.EyeOff(),
+                        TogglePropertiesMasked)
+                }
+            </div>
+        </div>
+        @if (properties.Count == 0)
+        {
+            <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoProperties)]</div>
+        }
+        else
+        {
+            <PropertyGrid TItem="DisplayedResourcePropertyViewModel"
+                          Items="@(_propertiesExpanded ? properties : properties.Take(DetailsPreviewCount))"
+                          IsValueMaskedChanged="@OnPropertyMaskedChanged"
+                          GridTemplateColumns="1fr 2fr"
+                          GenerateHeader="DataGridGeneratedHeaderType.None"
+                          RowSize="DataGridRowSize.Small"
+                          ValueComponents="@_propertyValueComponents"
+                          Class="overview-property-grid" />
+            <OverviewShowMoreButton Total="@properties.Count" PreviewCount="DetailsPreviewCount" Expanded="@_propertiesExpanded" OnClick="@TogglePropertiesExpanded" />
+        }
+    </section>
+
+    <section class="overview-card" style="@cardLayout.Style(OverviewCard.Environment)" aria-labelledby="overview-environment-title" hidden="@hiddenCards.Contains(OverviewCard.Environment)">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.Braces())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-environment-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]</h2>
+            <OverviewCardCount Shown="@Math.Min(environmentVariables.Count, _environmentExpanded ? environmentVariables.Count : DetailsPreviewCount)" Total="@environmentVariables.Count" />
+            @if (resource.Environment.Length > 0)
+            {
+                <div class="overview-card-actions">
+                    <FluentTextInput TextInputType="TextInputType.Search"
+                                     Size="TextInputSize.Small"
+                                     Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                                     aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFilterEnvironmentVariables)]"
+                                     Immediate="true"
+                                     AutoComplete="off"
+                                     Class="overview-card-filter"
+                                     @bind-Value="_environmentFilter">
+                        <StartTemplate>
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                        </StartTemplate>
+                    </FluentTextInput>
+                    @if (resource.Environment.Any(e => !e.FromSpec))
+                    {
+                        @CardActionButton(
+                            _showAllEnvironmentVariables ? Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowAppModelEnvironmentVariables)] : Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowAllEnvironmentVariables)],
+                            _showAllEnvironmentVariables ? new Icons.Regular.Size16.DocumentHeader() : new Icons.Regular.Size16.DocumentOnePage(),
+                            ToggleShowAllEnvironmentVariables)
+                    }
+                    @CardActionButton(
+                        _environmentMask.IsAllMasked ? ControlsStringsLoc[nameof(ControlsStrings.EnvironmentVariablesShowVariableValues)] : ControlsStringsLoc[nameof(ControlsStrings.EnvironmentVariablesHideVariableValues)],
+                        _environmentMask.IsAllMasked ? new Icons.Regular.Size16.Eye() : new Icons.Regular.Size16.EyeOff(),
+                        () => ToggleEnvironmentMasked(resource))
+                </div>
+            }
+        </div>
+        @if (resource.Environment.Length == 0)
+        {
+            <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoEnvironmentVariables)]</div>
+        }
+        else if (environmentVariables.Count == 0)
+        {
+            <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoMatchingEnvironmentVariables)]</div>
+        }
+        else
+        {
+            <PropertyGrid TItem="EnvironmentVariableViewModel"
+                          Items="@(_environmentExpanded ? environmentVariables : environmentVariables.Take(DetailsPreviewCount))"
+                          IsValueMaskedChanged="@(variable => OnEnvironmentVariableMaskedChanged(resource, variable))"
+                          HighlightText="@_environmentFilter"
+                          GridTemplateColumns="1fr 2fr"
+                          GenerateHeader="DataGridGeneratedHeaderType.None"
+                          RowSize="DataGridRowSize.Small"
+                          Class="overview-property-grid env-var-properties" />
+            <OverviewShowMoreButton Total="@environmentVariables.Count" PreviewCount="DetailsPreviewCount" Expanded="@_environmentExpanded" OnClick="@ToggleEnvironmentExpanded" />
+        }
+    </section>
+
+    @if (hasVolumes)
+    {
+        var volumes = GetVolumes(resource);
+        <section class="overview-card" style="@cardLayout.Style(OverviewCard.Volumes)" aria-labelledby="overview-volumes-title">
+            <div class="overview-card-header">
+                <span class="card-header-icon" aria-hidden="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Storage())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                </span>
+                <h2 id="overview-volumes-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]</h2>
+                <span class="aspire-count-badge overview-card-count">@volumes.Count</span>
+            </div>
+            <ul class="overview-list">
+                @foreach (var volume in volumes)
+                {
+                    <li>
+                        <span class="overview-list-label overview-mono" data-tooltip="@volume.Source">@(string.IsNullOrEmpty(volume.Source) ? "-" : volume.Source)</span>
+                        @if (!string.IsNullOrEmpty(volume.Source))
+                        {
+                            <FluentButton Appearance="ButtonAppearance.Transparent"
+                                          IconOnly="true"
+                                          Class="aspire-icon-button overview-volume-action"
+                                          data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                          @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(volume.Source, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Copy())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                            </FluentButton>
+                            @if (volume.IsBindMount)
+                            {
+                                <FluentButton Appearance="ButtonAppearance.Transparent"
+                                              IconOnly="true"
+                                              Class="aspire-icon-button overview-volume-action"
+                                              data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.VolumeRevealInFileExplorer)]" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.VolumeRevealInFileExplorer)]"
+                                              OnClick="@(() => RevealVolumeSourceAsync(volume))">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.FolderOpen())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                                </FluentButton>
+                            }
+                        }
+                        <FluentIcon Value="@(new Icons.Regular.Size12.ArrowRight())" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                        <span class="overview-list-value overview-mono" data-tooltip="@volume.Target">@volume.Target</span>
+                        <span class="overview-badge overview-volume-type">
+                            @if (volume.IsReadOnly)
+                            {
+                                <FluentIcon Value="@(new Icons.Regular.Size12.LockClosed())" Color="Color.Custom" CustomColor="currentColor" data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.VolumeMountTypeReadOnlyTitle)]" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.VolumeMountTypeReadOnlyTitle)]" />
+                            }
+                            @volume.MountType.Humanize()
+                        </span>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+    else
+    {
+        <OverviewEmptyCard Card="OverviewCard.Volumes" Layout="cardLayout" TitleId="overview-volumes-title" Icon="@(new Icons.Regular.Size16.Storage())" Title="@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoVolumes)]" Hidden="@HideEmptyPanels" />
+    }
+
+    @if (showHealth)
+    {
+        <section class="overview-card" style="@cardLayout.Style(OverviewCard.Health)" aria-labelledby="overview-health-title">
+            <div class="overview-card-header">
+                <span class="card-header-icon" aria-hidden="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Heart())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                </span>
+                <h2 id="overview-health-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]</h2>
+                <span class="aspire-count-badge overview-card-count">@healthReports.Count</span>
+            </div>
+            <PropertyGrid TItem="HealthCheckProperty"
+                          Items="@healthReports"
+                          GridTemplateColumns="minmax(0, 1fr) minmax(0, 2fr)"
+                          GenerateHeader="DataGridGeneratedHeaderType.None"
+                          RowSize="DataGridRowSize.Small"
+                          Class="overview-property-grid">
+                <ContentBeforeName Context="check">
+                    @{ var (healthIcon, healthColor) = ResourceIconHelpers.GetHealthStatusIcon(check.Report.HealthStatus); }
+                    <FluentIcon Value="@healthIcon" Color="@healthColor" Width="16px" Class="severity-icon" />
+                </ContentBeforeName>
+                <ContentInButtonArea Context="check">
+                    <ExceptionDetails ExceptionText="@check.Report.ExceptionText" />
+                </ContentInButtonArea>
+            </PropertyGrid>
+        </section>
+    }
+    else
+    {
+        <OverviewEmptyCard Card="OverviewCard.Health" Layout="cardLayout" TitleId="overview-health-title" Icon="@(new Icons.Regular.Size16.Heart())" Title="@ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoHealthChecks)]" Hidden="@HideEmptyPanels" />
+    }
+</div>
+
+@code {
+    private RenderFragment CardActionButton(string title, Icon icon, Action onClick) => __builder =>
+    {
+        <FluentButton Appearance="ButtonAppearance.Transparent"
+                      IconOnly="true"
+                      Class="aspire-icon-button overview-card-action"
+                      data-tooltip="@title"
+                      aria-label="@title"
+                      OnClick="@onClick">
+            <FluentIcon Value="@icon" Color="Color.Primary" />
+        </FluentButton>
+    };
+}

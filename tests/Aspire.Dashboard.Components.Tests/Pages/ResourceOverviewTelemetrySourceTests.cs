@@ -157,8 +157,8 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
     private IRenderedComponent<ResourcesLayout> RenderOverview(string? resourceName) =>
         Render<ResourcesLayout>(p => p.AddCascadingValue(s_viewport).Add(p => p.Body, builder =>
         {
-            builder.OpenComponent<ResourceOverview>(0);
-            builder.AddAttribute(1, nameof(ResourceOverview.ResourceName), resourceName);
+            builder.OpenComponent<Overview>(0);
+            builder.AddAttribute(1, nameof(Overview.ResourceName), resourceName);
             builder.CloseComponent();
         }));
 

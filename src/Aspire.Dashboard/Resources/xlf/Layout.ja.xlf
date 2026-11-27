@@ -592,11 +592,6 @@
         <target state="translated">{0} の展開/折りたたみ</target>
         <note>{0} is the group name</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneTelemetryOnly">
-        <source>Telemetry sources</source>
-        <target state="translated">テレメトリ ソース</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneTelemetryOnlyGroup">
         <source>Telemetry sources</source>
         <target state="translated">テレメトリ ソース</target>

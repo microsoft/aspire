@@ -362,11 +362,6 @@
         <target state="translated">Todos os valores estão definidos</target>
         <note />
       </trans-unit>
-      <trans-unit id="ParametersPageTitle">
-        <source>Parameters</source>
-        <target state="translated">Parâmetros</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceActionCommandsText">
         <source>Commands</source>
         <target state="translated">Comandos</target>

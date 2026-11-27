@@ -362,11 +362,6 @@
         <target state="translated">すべての値が設定されています</target>
         <note />
       </trans-unit>
-      <trans-unit id="ParametersPageTitle">
-        <source>Parameters</source>
-        <target state="translated">パラメーター</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceActionCommandsText">
         <source>Commands</source>
         <target state="translated">コマンド</target>

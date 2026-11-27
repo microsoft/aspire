@@ -3502,6 +3502,33 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Standalone_AllSourcesMetricsTab_KeepsAllSourcesScope()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        foreach (var name in new[] { "api", "worker" })
+        {
+            var resource = CreateResource(name);
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            await repository.AddMetricsAsync(new(),
+            [
+                new ResourceMetrics
+                {
+                    Resource = resource,
+                    ScopeMetrics = { new ScopeMetrics { Scope = CreateScope(), Metrics = { CreateSumMetric("requests", DateTime.UnixEpoch) } } }
+                }
+            ]);
+        }
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourcesUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-row-kind-telemetry .resource-row-sub").Count(subtitle => subtitle.TextContent.Contains("Metrics"))));
+
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Equal("/metrics", cut.Instance.GetTabUrl(ResourceTab.Metrics));
+    }
+
+    [Fact]
     public async Task ModifierClickAfterSelectAll_DoesNotAddHiddenTelemetrySources()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

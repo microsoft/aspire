@@ -6,29 +6,29 @@
     var cardLayout = view.Layout;
 }
 
-<div class="overview-grid telemetry-source-overview">
+<div class="overview-grid telemetry-source-overview" data-resource-subscription="@Name">
     <OverviewStatusCard TelemetrySourceName="@Name" HideCommandButtons="false" Style="@cardLayout.Style(OverviewCard.Status)" />
 
     <OverviewMetricsCard ResourceName="@Name"
                          ResourceKey="@Source.ResourceKey"
                          Layout="@cardLayout"
                          HasContent="@view.ShowMetrics"
-                         IsLoaded="@TelemetryLoaded"
-                         Telemetry="@Telemetry"
+                         IsLoaded="@_telemetryLoader.IsLoaded"
+                         Telemetry="@_telemetryLoader.Telemetry"
                          HideEmptyPanels="@HideEmptyPanels" />
 
     <OverviewLogsCard ResourceName="@Name"
                       Layout="@cardLayout"
                       HasContent="@view.ShowLogs"
-                      IsLoaded="@TelemetryLoaded"
-                      Telemetry="@Telemetry"
+                      IsLoaded="@_telemetryLoader.IsLoaded"
+                      Telemetry="@_telemetryLoader.Telemetry"
                       HideEmptyPanels="@HideEmptyPanels" />
 
     <OverviewTracesCard ResourceName="@Name"
                         Layout="@cardLayout"
                         HasContent="@view.ShowTraces"
-                        IsLoaded="@TelemetryLoaded"
-                        Telemetry="@Telemetry"
+                        IsLoaded="@_telemetryLoader.IsLoaded"
+                        Telemetry="@_telemetryLoader.Telemetry"
                         HideEmptyPanels="@HideEmptyPanels" />
 
     <section class="overview-card" style="@cardLayout.Style(OverviewCard.Attributes)" aria-labelledby="overview-attributes-title">

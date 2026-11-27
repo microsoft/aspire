@@ -159,7 +159,14 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
 
             var targetLocation = standaloneTarget ?? context.TargetLocation;
             var relativePath = NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(targetLocation).ToString());
-            if (LegacyNavUrls.ShouldRewriteToLegacy(relativePath))
+            if (!DashboardClient.IsEnabled &&
+                relativePath.StartsWith($"{DashboardUrls.ResourceOverviewBasePath}/", StringComparisons.UrlPath))
+            {
+                // The legacy experience has no named Overview page, so standalone navigation falls back to logs.
+                context.PreventNavigation();
+                NavigationManager.NavigateTo(TargetLocationInterceptor.LegacyStructuredLogsPath);
+            }
+            else if (LegacyNavUrls.ShouldRewriteToLegacy(relativePath))
             {
                 context.PreventNavigation();
                 NavigationManager.NavigateTo($"/legacy/{relativePath.TrimStart('/')}");

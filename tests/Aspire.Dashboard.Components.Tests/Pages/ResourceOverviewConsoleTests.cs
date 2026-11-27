@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Aspire.Dashboard.Components.Controls.Overview;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
@@ -25,6 +27,145 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public class ResourceOverviewConsoleTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData("api", null, false)]
+    [InlineData("api", "TestId", false)]
+    [InlineData("api-TestId", "TestId", true)]
+    public async Task TelemetrySource_BecomesResource_UpdatesConsoleSubscription(
+        string resourceName, string? instanceId, bool multipleInstances)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var console = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var subscriptions = new ConcurrentQueue<string>();
+        var disposed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = new TestDashboardClient(isEnabled: true,
+            initialResources: [],
+            resourceChannelProvider: () => resources,
+            consoleLogsChannelProvider: name =>
+            {
+                subscriptions.Enqueue(name);
+                return console;
+            });
+        client.OnConsoleSubscriptionDisposed = name => disposed.TrySetResult(name);
+        ResourceSetupHelpers.SetupResourceOverview(this, viewport, client);
+
+        var requestTime = DateTime.UtcNow.AddSeconds(-1);
+        await AddSpanAsync("api", requestTime, "first", instanceId);
+        if (multipleInstances)
+        {
+            await AddSpanAsync("api", requestTime, "second", "AnotherId");
+        }
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo($"/resources/{resourceName}");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Overview>(0);
+            builder.AddAttribute(1, nameof(Overview.ResourceName), resourceName);
+            builder.CloseComponent();
+        }));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Equal(resourceName, cut.FindComponent<TelemetrySourceOverview>().Instance.Name);
+            Assert.Equal(new ResourceKey("api", instanceId), cut.Instance.SelectedTelemetryOnlyResource?.Resource.ResourceKey);
+            Assert.Equal(resourceName, cut.Find("[data-resource-subscription]").GetAttribute("data-resource-subscription"));
+        });
+        Assert.Empty(subscriptions);
+
+        var resource = ModelTestHelpers.CreateResource(resourceName);
+        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, resource)]);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Same(resource, cut.Instance.SelectedResource);
+            Assert.Equal([resourceName], subscriptions.ToArray());
+        });
+        await console.Writer.WriteAsync([new ResourceLogLine(1, "first output", false)]);
+        cut.WaitForAssertion(() => Assert.Equal(["first output"],
+            cut.FindAll(".overview-console-line").Select(line => line.TextContent.Trim())));
+
+        var updatedResource = ModelTestHelpers.CreateResource(resourceName, state: KnownResourceState.Running);
+        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, updatedResource)]);
+        cut.WaitForAssertion(() => Assert.Same(updatedResource, cut.Instance.SelectedResource));
+        Assert.Equal([resourceName], subscriptions.ToArray());
+        Assert.False(disposed.Task.IsCompleted);
+
+        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Delete, updatedResource)]);
+        Assert.Equal(resourceName, await disposed.Task.WaitAsync(DefaultWaitTimeout));
+        cut.WaitForAssertion(() => Assert.Equal(resourceName, cut.FindComponent<TelemetrySourceOverview>().Instance.Name));
+        Assert.Empty(cut.FindAll(".overview-console-line"));
+
+        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, resource)]);
+        cut.WaitForAssertion(() => Assert.Equal([resourceName, resourceName], subscriptions.ToArray()));
+        await console.Writer.WriteAsync([new ResourceLogLine(2, "new output", false)]);
+        cut.WaitForAssertion(() => Assert.Equal(["new output"],
+            cut.FindAll(".overview-console-line").Select(line => line.TextContent.Trim())));
+    }
+
+    [Fact]
+    public async Task TelemetrySource_BecomesResource_DoesNotLosePendingTelemetryRefresh()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var console = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var readStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readCount = 0;
+        var initialRefresh = Task.CompletedTask;
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [],
+            resourceChannelProvider: () => resources, consoleLogsChannelProvider: _ => console);
+        ResourceSetupHelpers.SetupResourceOverview(this, viewport, client, configureServices: services =>
+            services.AddSingleton<ITelemetryRepository>(provider =>
+            {
+                var inner = provider.GetRequiredService<SqliteTelemetryRepository>();
+                return new TestTelemetryRepository(inner)
+                {
+                    GetOverviewLogsAsyncHandler = async (keys, count, errorsOnly, cancellationToken) =>
+                    {
+                        if (Interlocked.Increment(ref readCount) == 1)
+                        {
+                            readStarted.TrySetResult();
+                            await releaseRead.Task;
+                        }
+                        return await inner.GetOverviewLogsAsync(keys, count, errorsOnly, cancellationToken);
+                    }
+                };
+            }));
+
+        try
+        {
+            await AddSpanAsync("api", DateTime.UtcNow.AddSeconds(-1), "first", instanceId: null);
+            Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api");
+            var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+            {
+                builder.OpenComponent<Overview>(0);
+                builder.AddAttribute(1, nameof(Overview.ResourceName), "api");
+                builder.CloseComponent();
+            }));
+            await readStarted.Task.WaitAsync(DefaultWaitTimeout);
+            cut.WaitForAssertion(() => Assert.Equal("api", cut.FindComponent<TelemetrySourceOverview>().Instance.Name));
+            await cut.InvokeAsync(() =>
+            {
+                initialRefresh = cut.FindComponent<TelemetrySourceOverview>().Instance.TelemetryRefreshTask;
+            });
+
+            var resource = ModelTestHelpers.CreateResource("api");
+            await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, resource)]);
+            cut.WaitForAssertion(() =>
+            {
+                Assert.Same(resource, cut.Instance.SelectedResource);
+                Assert.Equal("1", cut.Find("[aria-labelledby='overview-traces-title'] .overview-stat-value").TextContent);
+            });
+            Assert.False(initialRefresh.IsCompleted);
+        }
+        finally
+        {
+            releaseRead.TrySetResult();
+            await initialRefresh.WaitAsync(DefaultWaitTimeout);
+        }
+    }
+
     [Fact]
     public async Task Selection_DiscardsAlreadyDeliveredBatchFromCanceledResource()
     {
@@ -60,8 +201,8 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
         navigation.NavigateTo("/resources/api");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
-            builder.OpenComponent<ResourceOverview>(0);
-            builder.AddAttribute(1, nameof(ResourceOverview.ResourceName), "api");
+            builder.OpenComponent<Overview>(0);
+            builder.AddAttribute(1, nameof(Overview.ResourceName), "api");
             builder.CloseComponent();
         }));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
@@ -81,7 +222,7 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
 
             Assert.Equal(["current cache output"],
                 cut.FindAll(".overview-console-line").Select(line => line.TextContent.Trim()));
-            Assert.Equal("cache", cut.Find(".resource-overview").GetAttribute("data-resource-subscription"));
+            Assert.Equal("cache", cut.Find("[data-resource-subscription]").GetAttribute("data-resource-subscription"));
         }
         finally
         {
@@ -109,7 +250,7 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
         {
             var (cut, navigation) = await RenderOverviewWithTelemetryAsync();
             cut.WaitForAssertion(() => AssertTelemetryLoaded(cut), DefaultWaitTimeout);
-            await AddSpanAsync("api", DateTime.UtcNow, "held");
+            await AddSpanAsync("api", DateTime.UtcNow, "held", "TestId");
             await holding.Task.WaitAsync(DefaultWaitTimeout);
 
             // The old resource's refresh remains blocked in its delay, even after cancellation.
@@ -118,7 +259,7 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
 
             cut.WaitForAssertion(() =>
             {
-                Assert.Equal("cache-TestId", cut.Find(".resource-overview").GetAttribute("data-resource-subscription"));
+                Assert.Equal("cache-TestId", cut.Find("[data-resource-subscription]").GetAttribute("data-resource-subscription"));
                 AssertTelemetryLoaded(cut);
             }, DefaultWaitTimeout);
         }
@@ -192,7 +333,7 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
 
         static void AssertCacheTelemetry(IRenderedComponent<ResourcesLayout> cut)
         {
-            Assert.Equal("cache-TestId", cut.Find(".resource-overview").GetAttribute("data-resource-subscription"));
+            Assert.Equal("cache-TestId", cut.Find("[data-resource-subscription]").GetAttribute("data-resource-subscription"));
             var logs = cut.Find("[aria-labelledby='overview-logs-title']");
             Assert.Equal(["1", "0", "0"], logs.QuerySelectorAll(".overview-stat-value").Select(stat => stat.TextContent));
             Assert.Equal("current cache log", Assert.Single(logs.QuerySelectorAll(".overview-list-value")).TextContent);
@@ -225,15 +366,15 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
             consoleLogsChannelProvider: _ => Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>());
         ResourceSetupHelpers.SetupResourceOverview(this, viewport, client, configureServices: configureServices);
         var requestTime = DateTime.UtcNow.AddSeconds(-1);
-        await AddSpanAsync("api", requestTime, "first");
-        await AddSpanAsync("cache", requestTime, "first");
+        await AddSpanAsync("api", requestTime, "first", "TestId");
+        await AddSpanAsync("cache", requestTime, "first", "TestId");
 
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/resources/api-TestId");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
-            builder.OpenComponent<ResourceOverview>(0);
-            builder.AddAttribute(1, nameof(ResourceOverview.ResourceName), "api-TestId");
+            builder.OpenComponent<Overview>(0);
+            builder.AddAttribute(1, nameof(Overview.ResourceName), "api-TestId");
             builder.CloseComponent();
         }));
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".resource-overview")), DefaultWaitTimeout);
@@ -241,12 +382,19 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
         return (cut, navigation);
     }
 
-    private Task AddSpanAsync(string resourceName, DateTime startTime, string spanId) =>
-        Services.GetRequiredService<SqliteTelemetryRepository>().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+    private Task AddSpanAsync(string resourceName, DateTime startTime, string spanId, string? instanceId)
+    {
+        var resource = TelemetryTestHelpers.CreateResource(resourceName, instanceId);
+        if (instanceId is null)
+        {
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        }
+
+        return Services.GetRequiredService<SqliteTelemetryRepository>().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
-                Resource = TelemetryTestHelpers.CreateResource(resourceName),
+                Resource = resource,
                 ScopeSpans =
                 {
                     new ScopeSpans
@@ -260,4 +408,5 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
                 }
             }
         });
+    }
 }

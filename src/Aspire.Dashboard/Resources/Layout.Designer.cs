@@ -1125,15 +1125,6 @@ namespace Aspire.Dashboard.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Telemetry sources.
         /// </summary>
-        public static string ResourcePaneTelemetryOnly {
-            get {
-                return ResourceManager.GetString("ResourcePaneTelemetryOnly", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Telemetry sources.
-        /// </summary>
         public static string ResourcePaneTelemetryOnlyGroup {
             get {
                 return ResourceManager.GetString("ResourcePaneTelemetryOnlyGroup", resourceCulture);

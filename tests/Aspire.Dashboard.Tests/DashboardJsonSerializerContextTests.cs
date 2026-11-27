@@ -82,7 +82,6 @@ public class DashboardJsonSerializerContextTests
     [Theory]
     [InlineData(typeof(ConsoleLogs.ConsoleLogsPageState))]
     [InlineData(typeof(Metrics.MetricsPageState))]
-    [InlineData(typeof(global::Aspire.Dashboard.Components.Pages.Resources.ResourcesPageState))]
     [InlineData(typeof(StructuredLogs.StructuredLogsPageState))]
     [InlineData(typeof(Traces.TracesPageState))]
     public void PageStateType_UsesGeneratedMetadata(Type pageStateType)

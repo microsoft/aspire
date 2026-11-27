@@ -927,12 +927,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return WithCurrentResourceViewState(GetTabUrl(tab, _selectedResourceNames, RouteResourceName));
         }
 
-        if (tab == ResourceTab.Metrics && _selectedResourceNames.Count == 0 && !DashboardClient.IsEnabled &&
-            _telemetryOnlyResources.FirstOrDefault(resource => resource.Resource.HasMetrics) is { } metricsResource)
-        {
-            return GetTabUrl(tab, [metricsResource.Name], metricsResource.Name);
-        }
-
         return GetTabUrl(tab, _selectedResourceNames, RouteResourceName);
     }
 

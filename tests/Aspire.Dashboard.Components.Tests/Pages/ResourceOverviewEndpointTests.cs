@@ -43,8 +43,8 @@ public class ResourceOverviewEndpointTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/catalog");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
-            builder.OpenComponent<ResourceOverview>(0);
-            builder.AddAttribute(1, nameof(ResourceOverview.ResourceName), "catalog");
+            builder.OpenComponent<Overview>(0);
+            builder.AddAttribute(1, nameof(Overview.ResourceName), "catalog");
             builder.CloseComponent();
         }));
 

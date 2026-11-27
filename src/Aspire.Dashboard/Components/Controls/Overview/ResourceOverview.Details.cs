@@ -2,13 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Extensions;
 using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
 
-namespace Aspire.Dashboard.Components.Pages;
+namespace Aspire.Dashboard.Components.Controls.Overview;
 
 // Properties, health checks, volumes and environment variables cards of the resource overview.
 public sealed partial class ResourceOverview
@@ -63,7 +62,7 @@ public sealed partial class ResourceOverview
             return;
         }
 
-        if (!string.Equals(resource?.Name, _detailsResource?.Name, StringComparisons.ResourceName))
+        if (!string.Equals(resource.Name, _detailsResource?.Name, StringComparisons.ResourceName))
         {
             _propertiesMask.Reset();
             _environmentMask.Reset();
@@ -75,11 +74,6 @@ public sealed partial class ResourceOverview
         _detailsResource = resource;
         _properties.Clear();
         _propertyValueComponents = null;
-
-        if (resource is null)
-        {
-            return;
-        }
 
         foreach (var property in resource.Properties.Values)
         {

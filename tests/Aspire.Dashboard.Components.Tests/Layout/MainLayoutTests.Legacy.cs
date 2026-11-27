@@ -38,6 +38,9 @@ public partial class MainLayoutTests
     [InlineData("/graph")]
     [InlineData("/legacy")]
     [InlineData("/legacy/resources")]
+    [InlineData("/resources")]
+    [InlineData("/resources/api")]
+    [InlineData("/RESOURCES/frontend%20web?pane=telemetry#details")]
     public void LegacyStandalone_ResourcePagesNavigateToLegacyStructuredLogs(string url)
     {
         SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: false));
@@ -48,5 +51,20 @@ public partial class MainLayoutTests
         navigationManager.NavigateTo(url);
 
         Assert.Equal(navigationManager.ToAbsoluteUri(TargetLocationInterceptor.LegacyStructuredLogsPath).AbsoluteUri, navigationManager.Uri);
+    }
+
+    [Theory]
+    [InlineData("/structuredlogs/resource/api?logLevel=error", "/legacy/structuredlogs/resource/api?logLevel=error")]
+    [InlineData("/metrics/resource/api?duration=5", "/legacy/metrics/resource/api?duration=5")]
+    public void LegacyStandalone_TelemetryPagesKeepResourceAndQuery(string url, string expectedUrl)
+    {
+        SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: false));
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        Render<LegacyMainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        navigationManager.NavigateTo(url);
+
+        Assert.Equal(navigationManager.ToAbsoluteUri(expectedUrl).AbsoluteUri, navigationManager.Uri);
     }
 }

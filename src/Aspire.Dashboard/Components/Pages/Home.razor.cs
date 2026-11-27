@@ -53,14 +53,19 @@ public sealed partial class Home : ComponentBase
         NavigationManager.NavigateTo(url, new NavigationOptions { ReplaceHistoryEntry = true });
     }
 
+    // Older links select the view with "?view=Graph" or "?view=Parameters". Any other value, such as "Table", is the
+    // resource table.
+    private const string LegacyGraphViewKind = "Graph";
+    private const string LegacyParametersViewKind = "Parameters";
+
     internal static string? TryGetLegacyRedirectUrl(string? resourceName, string? viewKind)
     {
-        if (string.Equals(viewKind, nameof(Resources.ResourceViewKind.Graph), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(viewKind, LegacyGraphViewKind, StringComparison.OrdinalIgnoreCase))
         {
             return DashboardUrls.GraphUrl();
         }
 
-        if (string.Equals(viewKind, nameof(Resources.ResourceViewKind.Parameters), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(viewKind, LegacyParametersViewKind, StringComparison.OrdinalIgnoreCase))
         {
             return DashboardUrls.ResourceListUrl();
         }

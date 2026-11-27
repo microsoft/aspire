@@ -59,15 +59,24 @@
             </FluentLabel>
         </MobilePageTitleToolbarSection>
         <MainSection>
-            <LogViewer @ref="_logViewerRef"
-                       LogEntries="@_logEntries"
-                       FilterText="@_logFilter"
-                       ShowTimestamp="@_showTimestamp"
-                       IsTimestampUtc="@_isTimestampUtc"
-                       NoWrapLogs="@_noWrapLogs"
-                       ShowNoLogsMessage="@_showNoLogsMessage"
-                       NoLogsMessage="@GetNoLogsMessage()"
-                       ShowResourcePrefix="@_isSubscribedToAll"/>
+            @if (IsTelemetryOnlySourceSelected)
+            {
+                <div class="aspire-empty-content aspire-page-empty-content" role="status">
+                    @LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetrySourceNoConsoleLogs)]
+                </div>
+            }
+            else
+            {
+                <LogViewer @ref="_logViewerRef"
+                           LogEntries="@_logEntries"
+                           FilterText="@_logFilter"
+                           ShowTimestamp="@_showTimestamp"
+                           IsTimestampUtc="@_isTimestampUtc"
+                           NoWrapLogs="@_noWrapLogs"
+                           ShowNoLogsMessage="@_showNoLogsMessage"
+                           NoLogsMessage="@GetNoLogsMessage()"
+                           ShowResourcePrefix="@_isSubscribedToAll"/>
+            }
         </MainSection>
         <FooterSection>
             @if (!ViewportInformation.IsDesktop || ResourcesLayout is null)

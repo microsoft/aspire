@@ -362,11 +362,6 @@
         <target state="translated">Se establecen todos los valores</target>
         <note />
       </trans-unit>
-      <trans-unit id="ParametersPageTitle">
-        <source>Parameters</source>
-        <target state="translated">Parámetros</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceActionCommandsText">
         <source>Commands</source>
         <target state="translated">Comandos</target>

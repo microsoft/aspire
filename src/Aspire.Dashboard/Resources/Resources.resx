@@ -521,9 +521,6 @@
   <data name="HomeNoRecentErrors" xml:space="preserve">
     <value>No errors logged</value>
   </data>
-  <data name="ParametersPageTitle" xml:space="preserve">
-    <value>Parameters</value>
-  </data>
   <data name="GraphPageTitle" xml:space="preserve">
     <value>Graph</value>
   </data>
