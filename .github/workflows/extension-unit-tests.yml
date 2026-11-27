@@ -95,4 +95,5 @@ jobs:
             Start-Sleep -Seconds $delay
           }
       - name: Run tests
-        run: corepack yarn test
+        # Investigation-only: compare the throwing case in isolation with its full-suite failures.
+        run: corepack yarn test --grep 'CLI process termination rejects when signaling a PID-less child throws$'
