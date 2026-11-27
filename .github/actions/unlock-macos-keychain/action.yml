@@ -26,15 +26,19 @@ runs:
     - name: Unlock keychain
       if: runner.os == 'macOS'
       shell: bash
+      env:
+        KEYCHAIN_NAME: ${{ inputs.keychain-name }}
+        KEYCHAIN_PASSWORD: ${{ inputs.keychain-password }}
+        KEYCHAIN_TIMEOUT: ${{ inputs.timeout }}
       run: |
-        KEYCHAIN_PATH="$HOME/Library/Keychains/${{ inputs.keychain-name }}"
+        KEYCHAIN_PATH="$HOME/Library/Keychains/$KEYCHAIN_NAME"
 
         echo "Unlocking keychain: $KEYCHAIN_PATH"
-        security unlock-keychain -p "${{ inputs.keychain-password }}" "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-        if [ "${{ inputs.timeout }}" != "0" ]; then
-          echo "Setting keychain timeout to ${{ inputs.timeout }} seconds"
-          security set-keychain-settings -lut ${{ inputs.timeout }} "$KEYCHAIN_PATH"
+        if [ "$KEYCHAIN_TIMEOUT" != "0" ]; then
+          echo "Setting keychain timeout to $KEYCHAIN_TIMEOUT seconds"
+          security set-keychain-settings -lut "$KEYCHAIN_TIMEOUT" "$KEYCHAIN_PATH"
         else
           echo "Disabling keychain timeout"
           security set-keychain-settings "$KEYCHAIN_PATH"
@@ -48,8 +52,10 @@ runs:
     - name: Verify keychain is unlocked
       if: runner.os == 'macOS'
       shell: bash
+      env:
+        KEYCHAIN_NAME: ${{ inputs.keychain-name }}
       run: |
-        KEYCHAIN_PATH="$HOME/Library/Keychains/${{ inputs.keychain-name }}"
+        KEYCHAIN_PATH="$HOME/Library/Keychains/$KEYCHAIN_NAME"
 
         # Try to access the keychain without password prompt
         if security show-keychain-info "$KEYCHAIN_PATH" 2>&1 | grep -q "no-timeout"; then

@@ -71,10 +71,10 @@ jobs:
     steps:
       - name: Authorize
         env:
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          ACTOR="${{ github.actor }}"
-          ACTOR_ID="${{ github.actor_id }}"
           echo "Checking if $ACTOR (id=$ACTOR_ID) is authorized to update the Nix flake..."
 
           if [[ "$ACTOR" == "aspire-repo-bot[bot]" ]]; then
@@ -140,8 +140,10 @@ jobs:
 
       - name: Dry Run - Show Nix update details
         if: inputs.dry_run == true
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          VERSION="${{ inputs.release_version }}"
+          VERSION="${RELEASE_VERSION}"
           echo "[DRY RUN] Would update the Nix flake manifest:"
           echo "   Version: $VERSION"
           echo "   Manifest: eng/nix/versions.json"
@@ -154,8 +156,10 @@ jobs:
 
       - name: Checkout baseline update branch
         if: inputs.dry_run != true
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          VERSION="${{ inputs.release_version }}"
+          VERSION="${RELEASE_VERSION}"
           BRANCH_NAME="update-baseline-$VERSION"
 
           if ! git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null; then
@@ -173,13 +177,14 @@ jobs:
           # Passed through env (not string-interpolated into the run body) so the
           # digest values can't break the shell quoting. Empty when the caller
           # didn't supply build-provided checksums (manual/post-publish runs).
+          RELEASE_VERSION: ${{ inputs.release_version }}
           SHA512_OSX_ARM64: ${{ inputs.sha512_osx_arm64 }}
           SHA512_OSX_X64: ${{ inputs.sha512_osx_x64 }}
           SHA512_LINUX_ARM64: ${{ inputs.sha512_linux_arm64 }}
           SHA512_LINUX_X64: ${{ inputs.sha512_linux_x64 }}
         run: |
           set -euo pipefail
-          args=(--version "${{ inputs.release_version }}")
+          args=(--version "${RELEASE_VERSION}")
 
           # If any build-provided digest is present, run the updater in offline
           # mode (no GitHub release read). Require all four so the manifest is
@@ -202,9 +207,11 @@ jobs:
 
       - name: Show Nix manifest diff
         if: inputs.dry_run != true
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           if git diff --quiet -- eng/nix/versions.json; then
-            echo "No Nix manifest changes are needed; eng/nix/versions.json already points at v${{ inputs.release_version }}."
+            echo "No Nix manifest changes are needed; eng/nix/versions.json already points at v${RELEASE_VERSION}."
           else
             git diff -- eng/nix/versions.json
           fi

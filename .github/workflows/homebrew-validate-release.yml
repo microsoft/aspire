@@ -104,9 +104,11 @@ jobs:
 
       - name: Generate cask file for released version
         id: cask
+        env:
+          RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
         run: |
           set -euo pipefail
-          version="${{ steps.resolve.outputs.version }}"
+          version="$RELEASE_VERSION"
           out_dir="$RUNNER_TEMP/homebrew-cask"
           mkdir -p "$out_dir"
 
@@ -136,9 +138,11 @@ jobs:
           echo "cask_file=$out_dir/aspire.rb" >> "$GITHUB_OUTPUT"
 
       - name: Validate cask against live GitHub release
+        env:
+          CASK_FILE: ${{ steps.cask.outputs.cask_file }}
         run: |
           set -euo pipefail
           eng/homebrew/validate-cask-artifact.sh \
-            --cask-file "${{ steps.cask.outputs.cask_file }}" \
+            --cask-file "$CASK_FILE" \
             --channel stable \
             --validation-mode LiveRelease

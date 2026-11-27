@@ -106,9 +106,11 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
       - name: Display test matrix
+        env:
+          TEST_MATRIX: ${{ steps.filter.outputs.matrix }}
         run: |
           echo "Deployment test matrix:"
-          echo '${{ steps.filter.outputs.matrix }}' | jq .
+          printf '%s\n' "$TEST_MATRIX" | jq .
 
   # Build solution and CLI once, share via artifacts
   build:
@@ -584,7 +586,14 @@ jobs:
           Azure__SubscriptionId: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
           Azure__Location: westus3
           GH_TOKEN: ${{ github.token }}
+          TEST_SHORT_NAME: ${{ matrix.shortname }}
+          EXTRA_TEST_ARGS: ${{ matrix.extraTestArgs }}
         run: |
+          args_file=$(mktemp)
+          trap 'rm -f "$args_file"' EXIT
+          python3 .github/workflows/parse-command-line.py --format nul EXTRA_TEST_ARGS > "$args_file"
+          test_args=()
+          while IFS= read -r -d '' arg; do test_args+=("$arg"); done < "$args_file"
           # MTP returns exit code 8 ("zero tests ran") when the single matrix test is dynamically
           # skipped — e.g. the opt-in Connector Namespace scenario
           # (ASPIRE_DEPLOYMENT_TEST_ENABLE_CONNECTOR_NAMESPACE=false) or a transient Azure
@@ -594,8 +603,8 @@ jobs:
           # aggregated run and still reports 8. So the exit code is classified explicitly instead.
           bash .github/workflows/run-deployment-test.sh \
             "${{ github.workspace }}/testresults" \
-            "${{ matrix.shortname }}" \
-            ${{ matrix.extraTestArgs }}
+            "$TEST_SHORT_NAME" \
+            "${test_args[@]}"
 
       - name: Collect Aspire CLI logs
         if: always()
@@ -630,8 +639,10 @@ jobs:
 
       - name: Check for test failures
         if: steps.run_tests.outputs.test_failed == 'true'
+        env:
+          TEST_SHORT_NAME: ${{ matrix.shortname }}
         run: |
-          echo "::error::Deployment test ${{ matrix.shortname }} failed. Check the test results artifact for details."
+          echo "::error::Deployment test $TEST_SHORT_NAME failed. Check the test results artifact for details."
           exit 1
 
   # File/append a single deduplicated issue on a scheduled-run failure. One issue
