@@ -218,26 +218,6 @@ Para saber mais sobre como usar os agentes de IA com o painel, incluindo como co
         <target state="translated">Seus comentários</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptIgnore">
-        <source>Don't ask again</source>
-        <target state="translated">Não perguntar novamente</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptMessage">
-        <source>We'd love your feedback on the new experience.</source>
-        <target state="translated">Adoraríamos receber seus comentários sobre a nova experiência.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptShare">
-        <source>Share feedback</source>
-        <target state="translated">Compartilhar comentários</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptTitle">
-        <source>Welcome to the new Aspire dashboard!</source>
-        <target state="translated">Bem-vindo ao novo painel do Aspire!</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
         <target state="translated">Não consegui encontrar as URLs do meu aplicativo</target>

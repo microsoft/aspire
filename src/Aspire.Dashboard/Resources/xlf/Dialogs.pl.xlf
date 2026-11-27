@@ -218,26 +218,6 @@ Więcej informacji o używaniu agentów AI z pulpitem nawigacyjnym, w tym o konf
         <target state="translated">Twoja opinia</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptIgnore">
-        <source>Don't ask again</source>
-        <target state="translated">Nie pytaj ponownie</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptMessage">
-        <source>We'd love your feedback on the new experience.</source>
-        <target state="translated">Chcemy poznać Twoją opinię na temat nowego środowiska.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptShare">
-        <source>Share feedback</source>
-        <target state="translated">Podziel się opinią</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardFeedbackPromptTitle">
-        <source>Welcome to the new Aspire dashboard!</source>
-        <target state="translated">Witamy w nowym pulpicie nawigacyjnym Aspire!</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
         <target state="translated">Nie udało mi się znaleźć adresów URL aplikacji</target>
