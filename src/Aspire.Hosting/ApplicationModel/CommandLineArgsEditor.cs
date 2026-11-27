@@ -36,6 +36,10 @@ internal sealed class CommandLineArgsEditor(IList<object> args)
         object value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        _args.Add(value);
+
+        // Polyglot AppHosts can only pass a resource builder handle. Store the resource itself, as a
+        // C# AppHost does with parameter.Resource, so every consumer of the arguments (publishers
+        // included) sees a value it knows how to resolve.
+        _args.Add(value is IResourceBuilder<IResource> resourceBuilder ? resourceBuilder.Resource : value);
     }
 }
