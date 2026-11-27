@@ -7,6 +7,41 @@
         <target state="translated">Non configurare l'ambiente dell'agente IA dopo la creazione del progetto</target>
         <note />
       </trans-unit>
+      <trans-unit id="AgentInstructionsFileAppended">
+        <source>Added an Aspire section with the start flow of this AppHost to the existing {0}. The rest of the file was not changed.</source>
+        <target state="new">Added an Aspire section with the start flow of this AppHost to the existing {0}. The rest of the file was not changed.</target>
+        <note>{0} is the path of the AGENTS.md file.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileCreated">
+        <source>Created {0} with the start flow of this AppHost for coding agents.</source>
+        <target state="new">Created {0} with the start flow of this AppHost for coding agents.</target>
+        <note>{0} is the path of the AGENTS.md file.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileSkippedExternalLinkTarget">
+        <source>Left {0} unchanged because it links to {1}, outside this directory, which other repositories can share. Add the Aspire section to that file yourself, or replace the link with a file in this directory.</source>
+        <target state="new">Left {0} unchanged because it links to {1}, outside this directory, which other repositories can share. Add the Aspire section to that file yourself, or replace the link with a file in this directory.</target>
+        <note>{0} is the path of the AGENTS.md file. {1} is the path of the file the link points to.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileSkippedMalformedSection">
+        <source>Left {0} unchanged because its Aspire section markers are incomplete. The section must start with one closed '&lt;!-- aspire:begin --&gt;' comment and end with '{1}'; fix or remove the section to let the Aspire CLI update it.</source>
+        <target state="new">Left {0} unchanged because its Aspire section markers are incomplete. The section must start with one closed '&lt;!-- aspire:begin --&gt;' comment and end with '{1}'; fix or remove the section to let the Aspire CLI update it.</target>
+        <note>{0} is the path of the AGENTS.md file. {1} is the end marker comment.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileSkippedUnsupportedEncoding">
+        <source>Left {0} unchanged because it isn't valid UTF-8 and has no UTF-16 or UTF-32 byte order mark, so rewriting it could lose text. Save it as UTF-8 to let the Aspire CLI update it.</source>
+        <target state="new">Left {0} unchanged because it isn't valid UTF-8 and has no UTF-16 or UTF-32 byte order mark, so rewriting it could lose text. Save it as UTF-8 to let the Aspire CLI update it.</target>
+        <note>{0} is the path of the AGENTS.md file.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileUpdated">
+        <source>Updated the Aspire section of {0}.</source>
+        <target state="new">Updated the Aspire section of {0}.</target>
+        <note>{0} is the path of the AGENTS.md file.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileWriteFailed">
+        <source>Failed to write {0}: {1}</source>
+        <target state="new">Failed to write {0}: {1}</target>
+        <note>{0} is the path of the AGENTS.md file. {1} is the error message.</note>
+      </trans-unit>
       <trans-unit id="AppHostNotRunning">
         <source>No running AppHost found. Use 'aspire run' to start one first.</source>
         <target state="translated">Non è stato trovato alcun AppHost in esecuzione. Usare prima di tutto "aspire run" per avviarne uno.</target>

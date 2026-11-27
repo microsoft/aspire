@@ -554,5 +554,68 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UsingAppHost", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Created {0} with the start flow of this AppHost for coding agents..
+        /// </summary>
+        internal static string AgentInstructionsFileCreated {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileCreated", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Added an Aspire section with the start flow of this AppHost to the existing {0}. The rest of the file was not changed..
+        /// </summary>
+        internal static string AgentInstructionsFileAppended {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileAppended", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Updated the Aspire section of {0}..
+        /// </summary>
+        internal static string AgentInstructionsFileUpdated {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileUpdated", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Left {0} unchanged because its Aspire section markers are incomplete. The section must start with one closed &apos;&lt;!-- aspire:begin --&gt;&apos; comment and end with &apos;{1}&apos;; fix or remove the section to let the Aspire CLI update it..
+        /// </summary>
+        internal static string AgentInstructionsFileSkippedMalformedSection {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileSkippedMalformedSection", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Left {0} unchanged because it links to {1}, outside this directory, which other repositories can share. Add the Aspire section to that file yourself, or replace the link with a file in this directory..
+        /// </summary>
+        internal static string AgentInstructionsFileSkippedExternalLinkTarget {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileSkippedExternalLinkTarget", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Left {0} unchanged because it isn&apos;t valid UTF-8 and has no UTF-16 or UTF-32 byte order mark, so rewriting it could lose text. Save it as UTF-8 to let the Aspire CLI update it..
+        /// </summary>
+        internal static string AgentInstructionsFileSkippedUnsupportedEncoding {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileSkippedUnsupportedEncoding", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to write {0}: {1}.
+        /// </summary>
+        internal static string AgentInstructionsFileWriteFailed {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileWriteFailed", resourceCulture);
+            }
+        }
     }
 }

@@ -325,10 +325,30 @@ internal static partial class ConfigurationHelper
         await File.WriteAllTextAsync(filePath, jsonContent, cancellationToken);
     }
 
-    internal static async Task WriteSettingsFileAtomicallyAsync(
+    internal static Task WriteSettingsFileAtomicallyAsync(
         string filePath, JsonObject settings, CancellationToken cancellationToken,
         bool rejectSymbolicLinks = false, bool preserveOwnershipAndAcl = false,
         Func<CancellationToken, Task>? beforeReplace = null)
+        // Serialize to text rather than to the stream so the final newline is added the same way as in the
+        // other settings writers. Encoding.UTF8.GetBytes writes no byte order mark, like File.WriteAllText.
+        => WriteFileAtomicallyAsync(
+            filePath,
+            () => Encoding.UTF8.GetBytes(EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject))),
+            cancellationToken, rejectSymbolicLinks, preserveOwnershipAndAcl, beforeReplace);
+
+    /// <summary>
+    /// Writes <paramref name="content"/> in <paramref name="encoding"/>, preceded by its byte order mark when it
+    /// has one, to a sibling staging file and only then replaces <paramref name="filePath"/>, so a failed or
+    /// cancelled write leaves the existing file intact.
+    /// </summary>
+    internal static Task WriteTextFileAtomicallyAsync(string filePath, string content, Encoding encoding, CancellationToken cancellationToken)
+        => WriteFileAtomicallyAsync(filePath, () => [.. encoding.Preamble, .. encoding.GetBytes(content)], cancellationToken,
+            rejectSymbolicLinks: false, preserveOwnershipAndAcl: false, beforeReplace: null);
+
+    private static async Task WriteFileAtomicallyAsync(
+        string filePath, Func<byte[]> getContent, CancellationToken cancellationToken,
+        bool rejectSymbolicLinks, bool preserveOwnershipAndAcl,
+        Func<CancellationToken, Task>? beforeReplace)
     {
         ValidateSymbolicLinkPolicy(filePath, rejectSymbolicLinks);
         // Resolve before choosing the sibling so replacement updates the target, not the link.
@@ -338,7 +358,7 @@ internal static partial class ConfigurationHelper
         {
             if (!PathNormalizer.TryResolveSymlinks(filePath, out var resolvedPath))
             {
-                throw new IOException($"Unable to resolve symbolic links for settings file '{filePath}'.");
+                throw new IOException($"Unable to resolve symbolic links for file '{filePath}'.");
             }
             filePath = resolvedPath;
         }
@@ -367,10 +387,7 @@ internal static partial class ConfigurationHelper
                     stream.SetLength(0);
                 }
 
-                // Serialize to text rather than to the stream so the final newline is added the same way as in the
-                // other settings writers. Encoding.UTF8.GetBytes writes no byte order mark, like File.WriteAllText.
-                var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
-                await stream.WriteAsync(Encoding.UTF8.GetBytes(jsonContent), cancellationToken);
+                await stream.WriteAsync(getContent(), cancellationToken);
             }
             if (!preserveOwnershipAndAcl && !OperatingSystem.IsWindows() && destinationMode is { } mode)
             {
