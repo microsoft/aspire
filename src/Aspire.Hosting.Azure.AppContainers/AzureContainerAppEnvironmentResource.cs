@@ -240,6 +240,11 @@ public class AzureContainerAppEnvironmentResource :
 
             var containerApp = await containerAppEnvironmentContext.CreateContainerAppAsync(r, options.Value, cancellationToken).ConfigureAwait(false);
 
+            foreach (var endpoint in r.Annotations.OfType<AzureDeployedEndpointUrlAnnotation>())
+            {
+                endpoint.Url ??= new BicepOutputReference(AzureDeployedEndpointUrlAnnotation.GetOutputName(endpoint.EndpointName), containerApp);
+            }
+
             // Capture information about the container registry used by the
             // container app environment in the deployment target information
             // associated with each compute resource that needs an image
