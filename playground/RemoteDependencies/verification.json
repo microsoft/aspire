@@ -1,0 +1,44 @@
+{
+  "topology": "local AppHost/API -\u003E loopback SSH -\u003E isolated SSH fixture -\u003E host-network nested Redis",
+  "wan_tested": false,
+  "anonymous_volume_leaks": 0,
+  "verifier": "RemoteDependencies.Tools (.NET)",
+  "scenarios": [
+    {
+      "scenario": "local HTTP -\u003E SSH -\u003E real Redis; logs/status/cleanup/ownership",
+      "passed": true,
+      "responses": [
+        {
+          "requests": 1,
+          "cache": "127.0.0.1:16379",
+          "application": "local"
+        },
+        {
+          "requests": 2,
+          "cache": "127.0.0.1:16379",
+          "application": "local"
+        }
+      ]
+    },
+    {
+      "scenario": "SSH tunnel disconnect -\u003E Unavailable \u002B HTTP 503 \u002B scoped cleanup",
+      "passed": true
+    },
+    {
+      "scenario": "explicit AppHost restart restores remote development",
+      "passed": true
+    },
+    {
+      "scenario": "occupied local tunnel port -\u003E FailedToStart, no false readiness",
+      "passed": true
+    },
+    {
+      "scenario": "remote image startup failure -\u003E FailedToStart \u002B cleanup",
+      "passed": true
+    },
+    {
+      "scenario": "remote machine outage -\u003E Unavailable \u002B 503 \u002B explicit cleanup command",
+      "passed": true
+    }
+  ]
+}
