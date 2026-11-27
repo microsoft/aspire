@@ -86,7 +86,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             AmbientSettingsLoader = NuGetTestHelper.LoadSettings,
             MachineWideSettingsFactory = () => new TestMachineWideSettings(NullSettings.Instance),
             SourceRepositoryFactory = source => Repository.CreateSource(
-                [new Lazy<INuGetResourceProvider>(() => new PagedPackageSearchResourceProvider(searchResource))],
+                [new Lazy<INuGetResourceProvider>(() => new TestPackageSearchResourceProvider(searchResource))],
                 source)
         };
 
@@ -141,7 +141,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private sealed class PagedPackageSearchResourceProvider(PackageSearchResource resource)
+    private sealed class TestPackageSearchResourceProvider(PackageSearchResource resource)
         : ResourceProvider(typeof(PackageSearchResource))
     {
         public override Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
@@ -677,6 +677,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SearchAsync_ReturnsResultsWhenOneSourceFails()
     {
+        const string failingSource = "https://failed.example/v3/index.json";
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var feedDirectory = workspace.CreateDirectory("feed");
         CreatePackage(feedDirectory.FullName, "Aspire.Test.Package");
@@ -685,20 +686,25 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             new TestEnvironment(),
             new Aspire.Shared.TemporaryStorage(),
-            NullLogger<NuGetClient>.Instance);
+            NullLogger<NuGetClient>.Instance)
+        {
+            SourceRepositoryFactory = source => source.Source == failingSource
+                ? CreateFailingSearchRepository(source)
+                : Repository.Factory.GetCoreV3(source)
+        };
 
         var results = await client.SearchAsync(
             "Aspire.Test.Package",
             prerelease: false,
             take: 100,
-            ["https://127.0.0.1:1/v3/index.json", feedDirectory.FullName],
+            [failingSource, feedDirectory.FullName],
             nugetConfigPath: null,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
         var package = Assert.Single(results.Packages);
         Assert.Equal("Aspire.Test.Package", package.Id);
-        Assert.Equal(["https://127.0.0.1:1/v3/index.json"], results.FailedSources);
+        Assert.Equal([failingSource], results.FailedSources);
     }
 
     [Fact]
@@ -708,7 +714,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         const string sourceNameSecret = "source-name-secret";
         const string sourceValueSecret = "source-value-secret";
         var sourceName = $"https://alias.example/v3/index.json?sig={sourceNameSecret}";
-        var sourceValue = $"https://127.0.0.1:1/v3/index.json?sig={sourceValueSecret}";
+        var sourceValue = $"https://failed.example/v3/index.json?sig={sourceValueSecret}";
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
         File.WriteAllText(
             nugetConfigPath,
@@ -725,7 +731,10 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             new TestEnvironment(),
             new Aspire.Shared.TemporaryStorage(),
-            logger);
+            logger)
+        {
+            SourceRepositoryFactory = CreateFailingSearchRepository
+        };
 
         var results = await client.SearchAsync(
             "Aspire.Test.Package",
@@ -739,9 +748,19 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         Assert.Empty(results.Packages);
         Assert.Equal(["https://alias.example/v3/index.json"], results.FailedSources);
         var logRecords = logger.Collector.GetSnapshot();
-        Assert.NotEmpty(logRecords);
+        Assert.Contains(logRecords, record => record.Message.Contains(
+            "Unable to search 'https://alias.example/v3/index.json' at 'https://failed.example/v3/index.json'.",
+            StringComparison.Ordinal));
         Assert.DoesNotContain(logRecords, record => record.Message.Contains(sourceNameSecret, StringComparison.Ordinal));
         Assert.DoesNotContain(logRecords, record => record.Message.Contains(sourceValueSecret, StringComparison.Ordinal));
+    }
+
+    // Exercise the CLI's handling of a protocol failure without waiting for NuGet's HTTP retries.
+    private static SourceRepository CreateFailingSearchRepository(PackageSource source)
+    {
+        return Repository.CreateSource(
+            [new Lazy<INuGetResourceProvider>(() => new TestPackageSearchResourceProvider(new FailingPackageSearchResource(source)))],
+            source);
     }
 
     [Fact]
@@ -2077,6 +2096,24 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     {
         using var writer = new StreamWriter(archive.CreateEntry(path).Open());
         writer.Write(contents);
+    }
+
+    private sealed class FailingPackageSearchResource(PackageSource source) : PackageSearchResource
+    {
+        public override bool SupportsPackageTypeFiltering => false;
+
+        public override Task<IEnumerable<IPackageSearchMetadata>> SearchAsync(
+            string searchTerm,
+            global::NuGet.Protocol.Core.Types.SearchFilter filters,
+            int skip,
+            int take,
+            global::NuGet.Common.ILogger log,
+            CancellationToken cancellationToken)
+        {
+            var message = $"Unable to search '{source.Name}' at '{source.Source}'.";
+            log.LogWarning(message);
+            return Task.FromException<IEnumerable<IPackageSearchMetadata>>(new FatalProtocolException(message));
+        }
     }
 
     /// <summary>
