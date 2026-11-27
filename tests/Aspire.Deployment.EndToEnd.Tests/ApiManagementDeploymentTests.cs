@@ -112,7 +112,7 @@ apim.AddApi(
     "weather-api",
     apiService,
     path: "api",
-    subscriptionRequired: false);
+    options: new() { SubscriptionRequired = false });
 
 #pragma warning restore ASPIREAZURE003
 

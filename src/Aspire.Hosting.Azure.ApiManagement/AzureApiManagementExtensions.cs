@@ -166,8 +166,7 @@ public static class AzureApiManagementExtensions
     /// API Management service to have virtual network connectivity to the target.
     /// </param>
     /// <param name="path">The public path beneath the API Management gateway hostname.</param>
-    /// <param name="displayName">The API display name. The resource name is used when omitted.</param>
-    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key. The default is <see langword="true"/>.</param>
+    /// <param name="options">The API options. Defaults to the resource name for display and requires a subscription key.</param>
     /// <param name="apiName">The physical API identifier in API Management. The Aspire resource name is used when omitted.</param>
     /// <returns>A builder for the API resource.</returns>
     /// <remarks>
@@ -182,13 +181,12 @@ public static class AzureApiManagementExtensions
         [ResourceName] string name,
         IResourceBuilder<T> target,
         string path,
-        string? displayName = null,
-        bool subscriptionRequired = true,
+        AzureApiManagementApiOptions? options = null,
         string? apiName = null)
         where T : IComputeResource, IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(target);
-        return AddApiCore(builder, name, path, displayName, subscriptionRequired, apiName, target.Resource);
+        return AddApiCore(builder, name, path, options, apiName, target.Resource);
     }
 
     /// <summary>
@@ -197,8 +195,7 @@ public static class AzureApiManagementExtensions
     /// <param name="builder">The Azure API Management resource builder.</param>
     /// <param name="name">The globally unique Aspire resource name and default physical API name.</param>
     /// <param name="path">The public path beneath the API Management gateway hostname.</param>
-    /// <param name="displayName">The API display name. The resource name is used when omitted.</param>
-    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key. The default is <see langword="true"/>.</param>
+    /// <param name="options">The API options. Defaults to the resource name for display and requires a subscription key.</param>
     /// <param name="apiName">The physical API identifier in API Management. The Aspire resource name is used when omitted.</param>
     /// <returns>A builder for the API resource.</returns>
     /// <remarks>
@@ -210,11 +207,10 @@ public static class AzureApiManagementExtensions
         this IResourceBuilder<AzureApiManagementResource> builder,
         [ResourceName] string name,
         string path,
-        string? displayName = null,
-        bool subscriptionRequired = true,
+        AzureApiManagementApiOptions? options = null,
         string? apiName = null)
     {
-        return AddApiCore(builder, name, path, displayName, subscriptionRequired, apiName);
+        return AddApiCore(builder, name, path, options, apiName);
     }
 
     /// <summary>
@@ -300,8 +296,7 @@ public static class AzureApiManagementExtensions
     /// <param name="builder">The Azure API Management resource builder.</param>
     /// <param name="name">The globally unique Aspire resource name and default physical API name.</param>
     /// <param name="path">The public path beneath the API Management gateway hostname.</param>
-    /// <param name="displayName">The API display name. The resource name is used when omitted.</param>
-    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key. The default is <see langword="true"/>.</param>
+    /// <param name="options">The API options. Defaults to the resource name for display and requires a subscription key.</param>
     /// <param name="apiName">The physical API identifier in API Management. The Aspire resource name is used when omitted.</param>
     /// <returns>A builder for the API resource.</returns>
     /// <remarks>
@@ -314,11 +309,10 @@ public static class AzureApiManagementExtensions
         this IResourceBuilder<AzureApiManagementResource> builder,
         [ResourceName] string name,
         string path,
-        string? displayName = null,
-        bool subscriptionRequired = true,
+        AzureApiManagementApiOptions? options = null,
         string? apiName = null)
     {
-        var apiBuilder = AddApiCore(builder, name, path, displayName, subscriptionRequired, apiName);
+        var apiBuilder = AddApiCore(builder, name, path, options, apiName);
 
         apiBuilder.AddOperation(
             CreateBoundedIdentifier($"{name}-chat-completions", 64),
@@ -1095,8 +1089,7 @@ public static class AzureApiManagementExtensions
         IResourceBuilder<AzureApiManagementResource> builder,
         string name,
         string path,
-        string? displayName,
-        bool subscriptionRequired,
+        AzureApiManagementApiOptions? options,
         string? apiName,
         IComputeResource? target = null)
     {
@@ -1104,11 +1097,12 @@ public static class AzureApiManagementExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(path);
         ValidateApiIdentifier(apiName ?? name, nameof(apiName));
+        options ??= new();
 
         var normalizedPath = path.Trim('/');
         ArgumentException.ThrowIfNullOrEmpty(normalizedPath);
         ValidateMaximumLength(normalizedPath, 400, "The API path", nameof(path));
-        ValidateDisplayName(displayName ?? name, "API display name", nameof(displayName));
+        ValidateDisplayName(options.DisplayName ?? name, "API display name", $"{nameof(options)}.{nameof(options.DisplayName)}");
         ValidateApiUniqueness(builder.Resource, apiName ?? name, normalizedPath);
 
         var resource = target is null
@@ -1116,15 +1110,13 @@ public static class AzureApiManagementExtensions
                 name,
                 apiName ?? name,
                 normalizedPath,
-                displayName ?? name,
-                subscriptionRequired,
+                options,
                 builder.Resource)
             : new AzureApiManagementApiResource(
                 name,
                 apiName ?? name,
                 normalizedPath,
-                displayName ?? name,
-                subscriptionRequired,
+                options,
                 target,
                 builder.Resource);
         builder.Resource.Apis.Add(resource);
@@ -2580,9 +2572,9 @@ public static class AzureApiManagementExtensions
                 Count = options.FailureCount,
                 // Azure.Provisioning serializes TimeSpan literals as "00:00:30", but APIM requires ISO 8601.
                 // https://learn.microsoft.com/azure/templates/microsoft.apimanagement/service/backends#circuitbreakerfailurecondition
-                Interval = new StringLiteralExpression(XmlConvert.ToString(TimeSpan.FromSeconds(options.FailureIntervalSeconds))),
+                Interval = new StringLiteralExpression(XmlConvert.ToString(options.FailureInterval)),
             },
-            TripDuration = new StringLiteralExpression(XmlConvert.ToString(TimeSpan.FromSeconds(options.TripDurationSeconds))),
+            TripDuration = new StringLiteralExpression(XmlConvert.ToString(options.TripDuration)),
             AcceptRetryAfter = options.AcceptRetryAfter,
         };
 
@@ -2788,8 +2780,8 @@ public static class AzureApiManagementExtensions
         }
         ArgumentException.ThrowIfNullOrEmpty(circuitBreaker.Name);
         ArgumentOutOfRangeException.ThrowIfLessThan(circuitBreaker.FailureCount, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(circuitBreaker.FailureIntervalSeconds, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(circuitBreaker.TripDurationSeconds, 1);
+        ValidateCircuitBreakerDuration(circuitBreaker.FailureInterval, nameof(circuitBreaker.FailureInterval));
+        ValidateCircuitBreakerDuration(circuitBreaker.TripDuration, nameof(circuitBreaker.TripDuration));
 
         foreach (var range in circuitBreaker.StatusCodeRanges)
         {
@@ -2813,6 +2805,17 @@ public static class AzureApiManagementExtensions
             throw new ArgumentException(
                 "An API Management circuit-breaker rule cannot contain more than 10 status-code ranges.",
                 nameof(options));
+        }
+    }
+
+    private static void ValidateCircuitBreakerDuration(TimeSpan value, string parameterName)
+    {
+        if (value < TimeSpan.FromSeconds(1) || value.Ticks % TimeSpan.TicksPerSecond != 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                value,
+                "The circuit-breaker duration must be a whole number of seconds and at least one second.");
         }
     }
 

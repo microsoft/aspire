@@ -92,7 +92,7 @@ var catalogBackend = apim.AddBackend(
 var catalogApi = apim.AddApi(
     "catalog-api",
     path: "catalog",
-    displayName: "Catalog API")
+    options: new() { DisplayName = "Catalog API" })
     .WithBackend(catalogBackend);
 catalogApi.AddOperation(
     "get-items",

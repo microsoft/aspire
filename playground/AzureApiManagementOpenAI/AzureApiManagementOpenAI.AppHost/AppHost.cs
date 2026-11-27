@@ -35,8 +35,11 @@ var foundryPool = apim.AddBackendPool("foundry-pool")
 apim.AddOpenAIApi(
         "openai-api",
         path: "openai",
-        displayName: "Load-balanced OpenAI API",
-        subscriptionRequired: false)
+        options: new()
+        {
+            DisplayName = "Load-balanced OpenAI API",
+            SubscriptionRequired = false,
+        })
     .WithBackend(foundryPool);
 
 var primaryBlobBackend = apim.AddBackend(
@@ -52,8 +55,11 @@ var blobPool = apim.AddBackendPool("blob-pool")
 var blobApi = apim.AddApi(
         "blob-api",
         path: "blobs",
-        displayName: "Blob Storage origin and CDN failover API",
-        subscriptionRequired: false)
+        options: new()
+        {
+            DisplayName = "Blob Storage origin and CDN failover API",
+            SubscriptionRequired = false,
+        })
     .WithBackend(blobPool);
 blobApi.AddOperation(
     "release-index",
