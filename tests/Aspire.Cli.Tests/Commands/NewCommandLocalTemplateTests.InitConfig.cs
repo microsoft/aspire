@@ -10,7 +10,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Shared.Telemetry;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
@@ -56,7 +55,7 @@ public partial class NewCommandLocalTemplateTests
         };
         var services = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true);
         services.AddSingleton<IEnvironment>(new TestEnvironment());
-        services.AddSingleton<IInternalMicrosoftDetector>(new TestConfigSourceDetector { IsInternal = true });
+        services.AddSingleton<IConfigSourceDetector>(new TestConfigSourceDetector { HasMicrosoftHost = true });
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new() { ["personal"] = Path.Combine(workspace.Path, "personal") });
         var globalPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);

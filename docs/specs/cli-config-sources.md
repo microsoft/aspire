@@ -6,7 +6,7 @@ For example developer journeys, see [Microsoft first-party config-source scenari
 
 **Configuration sources provide optional defaults, not policy enforcement.** A source
 configured on a machine, including through organization-managed environment variables,
-or proposed by employee detection is a suggestion, not a requirement for new applications.
+or proposed by Microsoft GitHub host detection is a suggestion, not a requirement for new applications.
 Developers may decline it, choose another source, or edit the resulting application
 configuration. Opting out or overriding these defaults is supported, not a security
 bypass. This feature does not let administrators restrict which configuration,
@@ -58,17 +58,17 @@ During `aspire new`, `aspire init`, or adoption by `aspire update`, resolve a ca
 | Priority | Source |
 |---|---|
 | 1 | `ASPIRE_INIT_SOURCE_URL`, when explicitly set |
-| 2 | `https://msft.ghe.com/coreai/aspire-1p-init`, when the existing Microsoft-employee detector reports an internal Microsoft user |
+| 2 | `https://msft.ghe.com/coreai/aspire-1p-init`, when GitHub CLI configuration includes the `msft.ghe.com` host |
 | 3 | No remote source; continue with standard Aspire behavior |
 
 | Environment variable | Purpose | Default |
 |---|---|---|
-| `ASPIRE_INIT_SOURCE_URL` | Git repository address or absolute local repository path, not a raw JSON URL | Microsoft repository for detected employees; otherwise none |
+| `ASPIRE_INIT_SOURCE_URL` | Git repository address or absolute local repository path, not a raw JSON URL | Microsoft repository when the Microsoft GitHub host is configured; otherwise none |
 | `ASPIRE_INIT_SOURCE_PATH` | Repository-relative configuration file path; only applies when `ASPIRE_INIT_SOURCE_URL` is explicitly set | `aspire.config.json` at the repository root |
 | `ASPIRE_INIT_SOURCE_REF` | Branch name or full commit SHA; only applies when `ASPIRE_INIT_SOURCE_URL` is explicitly set | The repository's current default branch |
 | `ASPIRE_INIT_SOURCE_README_URL` | Absolute HTTP or HTTPS URL explaining the proposed configuration source | `https://msft.ghe.com/coreai/aspire-1p-init` for the Microsoft source; otherwise none |
 
-When `ASPIRE_INIT_SOURCE_URL` is unset, ignore `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF`, including when employee detection selects the Microsoft repository. Do not validate ignored overrides. The inferred Microsoft source always uses the root `aspire.config.json` and the repository's current default branch. To customize its path or ref, explicitly set `ASPIRE_INIT_SOURCE_URL` to the Microsoft repository URL.
+When `ASPIRE_INIT_SOURCE_URL` is unset, ignore `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF`, including when GitHub host detection selects the Microsoft repository. Do not validate ignored overrides. The inferred Microsoft source always uses the root `aspire.config.json` and the repository's current default branch. To customize its path or ref, explicitly set `ASPIRE_INIT_SOURCE_URL` to the Microsoft repository URL.
 
 For example:
 
@@ -80,7 +80,7 @@ $env:ASPIRE_INIT_SOURCE_README_URL = 'https://git.acme.example/aspire-init/blob/
 aspire new
 ```
 
-The README URL override applies to both explicit and employee-detected candidates.
+The README URL override applies to both explicit and Microsoft-default candidates.
 It is used when presenting the source for consent and when displaying access help
 after an acquisition error. It is not fetched by the CLI
 and is not saved in the application's configuration or source cache. An explicitly
@@ -95,7 +95,24 @@ acquisition error. Background advisory checks retain their existing warning beha
 
 When enabled by an explicit source URL, repository-relative paths use `/` separators on every platform. Reject empty or absolute paths, `.` or `..` segments, empty segments, backslashes, and control characters. Git addresses may use HTTPS, SSH URLs, or SCP-style SSH syntax. Absolute local repository paths are also supported, including paths with spaces; they use the current platform's path syntax and remain machine-specific when saved in a binding. Relative repository paths and `file://` URLs are not supported. Git remote-helper syntax, control characters, and remote addresses with embedded passwords/tokens, query strings, or fragments are not supported.
 
-Reuse `IInternalMicrosoftDetector` directly, independently of telemetry opt-in. An explicit source bypasses employee detection. Detection selects a default, not authorization or consent: Git still authenticates repository access. An inconclusive or failed detection does not select the Microsoft source.
+Use `IConfigSourceDetector`, independently of telemetry opt-in, to check whether GitHub CLI knows the `msft.ghe.com` host. This is a configured-host check, not an employee or corporate-machine identity check. The existing **Microsoft employee default** source-origin label names the suggested source; it does not establish employee status.
+
+Read GitHub CLI's `hosts.yml` directly rather than invoking `gh auth status` or testing credentials over the network. Only a top-level host key matching `msft.ghe.com` selects the Microsoft default; account names, nested keys, comments, and token contents do not. Tokens may live in the OS keyring, so their presence in the file is not required. Also include an explicitly configured `GH_HOST=msft.ghe.com`, which GitHub CLI includes in its known-host list even without stored credentials.
+
+Follow GitHub CLI's configuration-directory precedence:
+
+| Priority | Location |
+|---|---|
+| 1 | `$GH_CONFIG_DIR/hosts.yml`, when `GH_CONFIG_DIR` is nonempty |
+| 2 | `$XDG_CONFIG_HOME/gh/hosts.yml`, when `XDG_CONFIG_HOME` is nonempty |
+| 3 | `%APPDATA%\GitHub CLI\hosts.yml`, on Windows when `APPDATA` is nonempty |
+| 4 | `$HOME/.config/gh/hosts.yml` (`%USERPROFILE%\.config\gh\hosts.yml` on Windows), when that variable is nonempty |
+
+Only the highest-priority location is used. Unlike GitHub CLI, Aspire never falls back to the invocation's working directory: if no location applies, or the selected directory is not an absolute path (including literal `~` values), host detection is disabled. A missing, unreadable, or malformed file does not select the Microsoft default and is logged without exposing file contents. Host detection does not use the telemetry detector's OS enrollment, Visual Studio, GitHub organization membership, Copilot credentials, or six-hour cache. Changes to GitHub host configuration are visible on the next invocation.
+
+See GitHub CLI's [known-host implementation](https://github.com/cli/go-gh/blob/v2.17.0/pkg/auth/auth.go) and [configuration-directory resolution](https://github.com/cli/go-gh/blob/v2.17.0/pkg/config/config.go).
+
+An explicit source URL bypasses this host check. Detection selects a default, not authorization or consent: Git still authenticates repository access. An inconclusive or failed detection does not select the Microsoft source.
 
 Keep this mechanism separate from Aspire SDK/channel identity and existing package-source flags. Invalid explicit source values produce an error rather than falling back to another source.
 
@@ -115,7 +132,7 @@ Git supports a ref name or a fully spelled object ID as the source of a [fetch r
 
 ### Prompt during project creation
 
-Before acquiring or using the remote configuration, `aspire new` and `aspire init` display the candidate repository as **Git source** and whether it came from the environment or employee detection as **Source origin**. The file path is shown only when it differs from the default `aspire.config.json`, and the branch/commit selector is shown as **Git ref** only when explicitly specified:
+Before acquiring or using the remote configuration, `aspire new` and `aspire init` display the candidate repository as **Git source** and whether it came from the environment or GitHub host detection as **Source origin**. The file path is shown only when it differs from the default `aspire.config.json`, and the branch/commit selector is shown as **Git ref** only when explicitly specified:
 
 ```text
 A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.
@@ -167,7 +184,7 @@ check the destination before entering a basic-authentication password.
 - **Decline:** continue normally without Git acquisition or template-source inheritance from that source for the rest of the command, and save `"configSource": { "optOut": true }` after successful project creation or initialization. Independently configured global template sources remain available.
 - **Cancel:** stop without creating the application.
 
-The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` or opt-out without repeating the prompt. An opt-out does not require repository, path, ref, or applied-version fields, and source checks and refresh skip that file without falling back to ancestor or global bindings. Initialization checks the target directory's `aspire.config.json`; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
+The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` or opt-out without repeating the prompt. An opt-out does not require repository, path, ref, or applied-version fields, and source checks and refresh skip that file without falling back to ancestor or global bindings. Initialization checks the target directory's `aspire.config.json`; it does not reuse an ancestor's binding. An environment variable or GitHub host detection alone never enables a source.
 
 Initialization selects and materializes the source in the configuration file used by the AppHost. In C# solution mode, a new AppHost template creates `aspire.config.json` inside `<solution>.AppHost`, so that file receives the binding and source values rather than the solution-root configuration. An existing AppHost uses its nearest configuration; the solution-root file remains the target when there is no nearer AppHost configuration. An existing binding in the selected file is reused without renewed consent or reapplying source values, even when the initialization environment proposes another source. A parent binding hidden by the AppHost's own configuration is not reused or changed. File-based and polyglot initialization use the working-directory configuration. Agent setup still uses the solution/workspace root independently of the AppHost configuration.
 
@@ -175,11 +192,11 @@ Whether selected implicitly or with an explicit AppHost file or directory, `aspi
 
 An explicit AppHost path must exist as a file or directory. A nonexistent target fails before Git acquisition or changes to local settings. An existing directory without an AppHost can still refresh its nearest local configuration binding.
 
-If the nearest local settings file has no saved binding, report that there is no configuration source to update and exit successfully without Git acquisition or configuration changes, even when global configuration contains a binding. Do not enable a source from initialization environment variables or employee detection during refresh.
+If the nearest local settings file has no saved binding, report that there is no configuration source to update and exit successfully without Git acquisition or configuration changes, even when global configuration contains a binding. Do not enable a source from initialization environment variables or GitHub host detection during refresh.
 
 Other project commands, including standalone `aspire agent init` and `aspire add`, do not prompt to enable a source. Without a saved project `configSource`, they ignore the initialization-source environment variables and employee default. Template search and source listing have the separate runtime-only inheritance contract below.
 
-Non-interactive creation requires `--use-config-source` to accept the candidate or `--use-config-source false` to decline it. The bare flag means `true`; an explicit `--use-config-source true` is also accepted for compatibility. Omitting the option retains unspecified consent. When a candidate is available and the option is omitted, fail with instructions rather than waiting for input or silently treating employee detection as consent. The same option can bypass the source prompt during interactive creation:
+Non-interactive creation requires `--use-config-source` to accept the candidate or `--use-config-source false` to decline it. The bare flag means `true`; an explicit `--use-config-source true` is also accepted for compatibility. Omitting the option retains unspecified consent. When a candidate is available and the option is omitted, fail with instructions rather than waiting for input or silently treating GitHub host detection as consent. The same option can bypass the source prompt during interactive creation:
 
 ```shell
 aspire new aspire-starter --use-config-source
@@ -188,7 +205,7 @@ aspire init --use-config-source false
 
 ### Adopt a source in an existing project
 
-Plain `aspire update` also offers the candidate source when the selected AppHost's nearest local configuration has neither a `configSource` binding nor an explicit opt-out. It uses the same environment-variable and employee-detection precedence and the same consent prompt as project creation. If no candidate is available, nothing is saved.
+Plain `aspire update` also offers the candidate source when the selected AppHost's nearest local configuration has neither a `configSource` binding nor an explicit opt-out. It uses the same environment-variable and GitHub-host-detection precedence and the same consent prompt as project creation. If no candidate is available, nothing is saved.
 
 Accepting acquires and validates the source, then merges allowlisted settings and a binding with its applied version into that nearest configuration file. If no local configuration exists, create `aspire.config.json` beside the AppHost. Declining saves only the opt-out alongside existing settings:
 
@@ -243,7 +260,7 @@ than nuget.org.
 
 ### Acquire using Git
 
-Use the user's Git installation and normal credential helpers or SSH authentication. Do not introduce a separate login flow or reuse credentials from employee detection.
+Use the user's Git installation and normal credential helpers or SSH authentication. Do not introduce a separate login flow or extract credentials from GitHub CLI's host configuration.
 
 Configuration sources and repository templates share [GitClient](../../src/Aspire.Cli/Git/GitClient.cs) for repository initialization, shallow fetches, commit identification, and Git object access. [GitCommandRunner](../../src/Aspire.Cli/Git/GitCommandRunner.cs) owns process capture, environment isolation, failure classification, and lifecycle diagnostics. It reuses the existing tree-aware process-capture infrastructure and records all Git stdout and stderr in the CLI log at debug level, including output from successful, failed, and canceled operations. Output is logged as it is read, including partial lines, so authentication diagnostics remain available when a command stalls. Command arguments and exception details remain excluded from process diagnostics. Git output can include private repository information, configuration-file contents, or credentials emitted by Git or its helpers; review logs before sharing them. Callers retain their operation-wide timeout budgets and explicitly select interaction policy. Configuration sources use bare repositories and validate blobs without checkout; templates retain their ref-resolution rules, detached checkouts, and immutable cache publication. Template acquisition continues disabling terminal prompts without changing its existing credential-helper policy.
 
@@ -379,7 +396,7 @@ Directory cleanup failures are logged at debug level without displaying a UI war
 | `aspire new` / `aspire init` initially creating source-bound app configuration | After consent, fetch, validate, and materialize allowed values; save the binding, applied version, and tracking copy |
 | `aspire update --config-source` | Fetch and explicitly apply allowed values to the nearest local configuration with a saved binding, regardless of check age |
 | Other commands scoped to an existing source-bound app, including re-running initialization on an already-bound app | Check for updates when due; never apply source values or rewrite the fetched tracking copy |
-| Runtime template discovery in `aspire new` | After creation consent accepts an environment-selected or employee-detected source, reuse its acquired snapshot; use only `templateSources` at runtime without saving inherited settings |
+| Runtime template discovery in `aspire new` | After creation consent accepts an environment-selected or Microsoft-default source, reuse its acquired snapshot; use only `templateSources` at runtime without saving inherited settings |
 | `aspire template source list` | After shared consent (or explicit `--use-config-source` opt-in for JSON), acquire the selected source and publish its tracking snapshot; overlay only `templateSources`, without materializing project files or saving inherited settings |
 | Commands scoped to an app without a `configSource` in the nearest local configuration, excluding the runtime template operations above | No source check or acquisition, regardless of global bindings |
 | Other global commands not scoped to an app, help, and completion | No source check or acquisition |
@@ -424,7 +441,7 @@ aspire update --config-source --apphost MyApp.AppHost.csproj
 
 This is a configuration-update mode of `aspire update`, separate from its package-update workflow:
 
-- Resolve the project using the existing project-selection behavior, including `--apphost`, and process the saved binding in its nearest local settings file. Ignore global bindings and do not select a source from environment variables or employee detection. If the local configuration has no saved source or has opted out, report that there is no configuration source to update and exit successfully without Git acquisition.
+- Resolve the project using the existing project-selection behavior, including `--apphost`, and process the saved binding in its nearest local settings file. Ignore global bindings and do not select a source from environment variables or GitHub host detection. If the local configuration has no saved source or has opted out, report that there is no configuration source to update and exit successfully without Git acquisition.
 - When `--apphost` names a directory, discover and select an AppHost within that directory before considering a configuration-only fallback in the requested directory. If discovery finds no AppHost, use the nearest local settings file from that fallback directory; discovery ambiguity or unsupported-project errors must not silently select another binding.
 - Before acquisition, display the saved source's repository, non-default source-file path, optional ref, and declaring local settings file using the same source-details layout as creation. Skip the introductory explanation of configuration sources.
 - Acquire the saved branch's current commit, the saved exact commit, or the repository's current default branch when the binding has no ref, even when a recent check found no update. Validate it, merge only supplied allowlisted values into the declaring configuration file, and save its applied version with those values, preserving unrelated settings.
@@ -457,15 +474,15 @@ Persist the selected file path even when it is the default. Persist `ref` when a
 
 Commit the materialized settings and binding with the app. A teammate uses the same saved settings immediately, without fetching configuration to supply runtime values, and uses their own Git access for version checks or explicit updates.
 
-Later commands resolve source identity from this binding rather than repeating employee detection or using the current initialization environment variables. `appliedVersion` changes only when source values are successfully materialized in that app, not when a version check or another app's update succeeds.
+Later commands resolve source identity from this binding rather than repeating GitHub host detection or using the current initialization environment variables. `appliedVersion` changes only when source values are successfully materialized in that app, not when a version check or another app's update succeeds.
 
 A pre-existing binding without an applied version must not trigger automatic materialization. Report that `aspire update --config-source` is needed to establish the applied version and saved values. Do not infer that app's state from the user-directory tracking copy.
 
 ### Validation
 
-Cover source precedence and telemetry-independent detection; default/custom file paths, validation, consent, authentication modes, and failure handling. Verify that initial creation/initialization saves allowlisted values, binding identity, and applied version in the correct app file, while excluded settings are never copied.
+Cover source precedence and telemetry-independent GitHub host detection; top-level YAML host matching, keyring-backed accounts, `GH_HOST`, configuration-directory precedence, missing/malformed files, and changes after login/logout. Verify that positive telemetry heuristics alone never select an init source. Cover default/custom file paths, validation, consent, authentication modes, and failure handling. Verify that initial creation/initialization saves allowlisted values, binding identity, and applied version in the correct app file, while excluded settings are never copied.
 
-Cover the renamed environment variables and default/explicit ref selection when the source URL is explicit. Verify that path/ref overrides, including invalid values, are ignored without an explicit URL, both when Microsoft employee detection selects a source and when no source is selected. The inferred source must retain the root path and default-branch behavior. Explicitly setting the Microsoft URL enables both overrides.
+Cover the renamed environment variables and default/explicit ref selection when the source URL is explicit. Verify that path/ref overrides, including invalid values, are ignored without an explicit URL, both when Microsoft GitHub host detection selects a source and when no source is selected. The inferred source must retain the root path and default-branch behavior. Explicitly setting the Microsoft URL enables both overrides.
 
 Verify non-default and slash-containing branch names, full commit IDs, acquisition of a commit absent from a shallow default-branch snapshot, and explicit errors for invalid/missing refs or server-denied commits without fallback. Verify persisted ref portability, separate tracking for different selectors, branch movement, default-branch changes, and commit pins remaining unchanged during checks and explicit updates. Initialization environment variables must not retarget a saved binding.
 
@@ -481,9 +498,9 @@ Keep no-source, declined-source materialization, unrelated global-command, help,
 
 ## Runtime template sources
 
-After the developer accepts a configuration source in `aspire new`, template discovery/search reads that source's `templateSources` section, whether the source was selected by `ASPIRE_INIT_SOURCE_URL` or Microsoft employee detection. An interactive decline or `--use-config-source false` disables its runtime template inheritance for the rest of the command, not just project-file materialization. Discovery does not repeat the consent prompt and reuses the accepted source's identity and acquired snapshot. Outside creation, runtime discovery can use an explicitly set `ASPIRE_INIT_SOURCE_URL`; employee detection without consent does not enable inheritance. Optional `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` use the same validation, branch/commit selection, Git authentication, timeout, and immutable snapshot cache as configuration acquisition. Search and opted-in listing reuse a snapshot within the invocation; later invocations acquire an accepted source again rather than silently falling back to stale cached configuration.
+After the developer accepts a configuration source in `aspire new`, template discovery/search reads that source's `templateSources` section, whether the source was selected by `ASPIRE_INIT_SOURCE_URL` or Microsoft GitHub host detection. An interactive decline or `--use-config-source false` disables its runtime template inheritance for the rest of the command, not just project-file materialization. Discovery does not repeat the consent prompt and reuses the accepted source's identity and acquired snapshot. Outside creation, runtime discovery can use an explicitly set `ASPIRE_INIT_SOURCE_URL`; GitHub host detection without consent does not enable inheritance. Optional `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` use the same validation, branch/commit selection, Git authentication, timeout, and immutable snapshot cache as configuration acquisition. Search and opted-in listing reuse a snapshot within the invocation; later invocations acquire an accepted source again rather than silently falling back to stale cached configuration.
 
-`aspire template source list` uses the same candidate selection and consent prompt as `aspire new`, including the detected employee candidate when no explicit URL is set. Accepting includes the selected source's template definitions; declining lists only explicit global definitions. In a non-interactive host, an available candidate requires `--use-config-source` or `--use-config-source false`, just as for `aspire new`.
+`aspire template source list` uses the same candidate selection and consent prompt as `aspire new`, including the Microsoft-default candidate when no explicit URL is set. Accepting includes the selected source's template definitions; declining lists only explicit global definitions. In a non-interactive host, an available candidate requires `--use-config-source` or `--use-config-source false`, just as for `aspire new`.
 
 With `--format json`, listing never prompts. Without `--use-config-source` (or its explicit `true` form), it does not select, validate, or fetch an init source, and returns only explicit global template definitions. Explicit opt-in includes inherited sources and disables interactive Git authentication; diagnostics stay on stderr and stdout contains only JSON. All commands expose the same nullable Boolean option: bare means `true`, explicit `true`/`false` are accepted, and omission remains unspecified. No listing mode materializes project files.
 
@@ -520,7 +537,7 @@ Merge source names case-insensitively with global `templateSources`. The user's 
 
 `aspire template source add` and `remove` edit only explicit global definitions. Adding an alias supplied by the init source creates a global override; removing that override reveals the inherited source again. Removing an inherited-only alias reports that no global source was found. Listing preserves inherited fields without discovering templates or fetching template repositories; acquiring the init configuration itself can require Git/network access.
 
-Never save inherited template sources into the user's global configuration or the generated project's configuration. Unsetting `ASPIRE_INIT_SOURCE_URL` removes the explicit runtime source from subsequent search/list invocations; human-readable listing can still offer an employee-detected candidate through its normal consent flow. On `aspire new`, the creation consent decision controls both project configuration materialization and use of the source for runtime template inheritance. Accepted initialization and runtime discovery share the invocation's acquired snapshot.
+Never save inherited template sources into the user's global configuration or the generated project's configuration. Unsetting `ASPIRE_INIT_SOURCE_URL` removes the explicit runtime source from subsequent search/list invocations; human-readable listing can still offer a Microsoft-default candidate through its normal consent flow. On `aspire new`, the creation consent decision controls both project configuration materialization and use of the source for runtime template inheritance. Accepted initialization and runtime discovery share the invocation's acquired snapshot.
 
 ## Phase 2: Acquire content from configuration
 

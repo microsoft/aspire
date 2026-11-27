@@ -9,7 +9,6 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
-using Aspire.Shared.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -67,18 +66,16 @@ internal static class TestConfigSourceServices
     }
 }
 
-internal sealed class TestConfigSourceDetector : IInternalMicrosoftDetector
+internal sealed class TestConfigSourceDetector : IConfigSourceDetector
 {
     public int Calls { get; private set; }
-    public bool IsInternal { get; set; }
-    public string? Outcome { get; set; }
+    public bool HasMicrosoftHost { get; set; }
 
-    public Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
+    public Task<bool> IsMicrosoftGitHubHostConfiguredAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         Calls++;
-        return Task.FromResult(new InternalMicrosoftDetectionResult(IsInternal, null, null, null,
-            Outcome ?? (IsInternal ? InternalMicrosoftDetectorOutcome.Detected : InternalMicrosoftDetectorOutcome.NotDetected),
-            InternalMicrosoftDetectorCacheStatus.Miss, TimeSpan.Zero, []));
+        return Task.FromResult(HasMicrosoftHost);
     }
 }
 

@@ -89,7 +89,8 @@ internal static class CliTestHelper
 
         var configBuilder = new ConfigurationBuilder();
         services.AddSingleton<ConfigSourceService>();
-        services.AddSingleton<IInternalMicrosoftDetector, TestConfigSourceDetector>();
+        services.AddSingleton<IConfigSourceDetector, TestConfigSourceDetector>();
+        services.AddSingleton<IInternalMicrosoftDetector, TelemetryFixture.TestInternalMicrosoftDetector>();
 
         var configurationValues = new Dictionary<string, string?>();
 

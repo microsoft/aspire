@@ -9,7 +9,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Shared.Telemetry;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
@@ -341,7 +340,7 @@ public partial class NewCommandLocalTemplateTests
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IGitClient>(git);
         services.AddSingleton<IEnvironment>(new TestEnvironment());
-        services.AddSingleton<IInternalMicrosoftDetector>(detector);
+        services.AddSingleton<IConfigSourceDetector>(detector);
         using var provider = services.BuildServiceProvider();
         var options = json ? " --format json" : "";
         if (useSource is not null)
@@ -404,11 +403,11 @@ public partial class NewCommandLocalTemplateTests
                 return Task.FromResult(("version-1", new JsonObject()));
             }
         };
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector { HasMicrosoftHost = true };
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IGitClient>(git);
         services.AddSingleton<IEnvironment>(new TestEnvironment());
-        services.AddSingleton<IInternalMicrosoftDetector>(detector);
+        services.AddSingleton<IConfigSourceDetector>(detector);
         using var provider = services.BuildServiceProvider();
         var options = json ? " --format json" : "";
         if (useSource is not null)
