@@ -1,0 +1,15 @@
+{
+  "id": "aspire-cli-tests-dcpconnectionlifetime-session-whendisposed-windows-cancel",
+  "type": "main-repository-breakage",
+  "title": "DcpConnectionLifetimeTests.Session_WhenDisposed_StopsDcpBeforeParentExits cancelled reading DCP readiness on Windows",
+  "error_pattern": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Remote process failed with an unhandled exception.\nSystem.OperationCanceledException: The operation was canceled.\nat Aspire.Cli.Tests.TestServices.DcpConnectionTestProcess.RunAsync",
+  "occurrences": [
+    {
+      "run_id": 45924402534,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45924402534",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "observed_at": "2026-11-27T02:25:14Z",
+      "pr_number": 0
+    }
+  ]
+}
