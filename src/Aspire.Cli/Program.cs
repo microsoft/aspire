@@ -167,9 +167,8 @@ public class Program
         return null;
     }
 
-    private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
+    private static async Task<string> GetGlobalSettingsPathAsync(string usersAspirePath, ILogger logger, bool migrate, CancellationToken cancellationToken)
     {
-        var usersAspirePath = GetUsersAspirePath();
         var newPath = Path.Combine(usersAspirePath, Configuration.AspireConfigFile.FileName);
 
         // TODO: Remove globalsettings.json migration once confident most users have migrated.
@@ -190,7 +189,7 @@ public class Program
                 // Legacy and modern global writers share the modern destination's lock.
                 // Recheck both files after waiting so migration reads the latest completed edit.
                 using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-                    GetCacheDirectory(), new FileInfo(newPath), logger, cancellationToken)
+                    GetCacheDirectory(usersAspirePath), new FileInfo(newPath), logger, cancellationToken)
                     ?? throw new IOException("Could not acquire the global configuration lock.");
                 if (!File.Exists(newPath) && File.Exists(legacyPath))
                 {
@@ -303,8 +302,19 @@ public class Program
         return (factory, fileLoggerProvider);
     }
 
-    internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null)
+    internal static async Task<IHost> BuildApplicationAsync(
+        string[] args,
+        CliStartupContext startupContext,
+        Dictionary<string, string?>? configurationValues = null,
+        string? workingDirectoryOverride = null,
+        string? aspireHomeDirectoryOverride = null)
     {
+        // Resolve these once so global settings, workspace settings discovery, the execution
+        // context and home-derived services all agree. Tests pass fixture paths here instead of
+        // mutating process-wide state (environment variables or the current directory).
+        var workingDirectoryPath = workingDirectoryOverride ?? Environment.CurrentDirectory;
+        var aspireHomeDirectoryPath = aspireHomeDirectoryOverride ?? GetUsersAspirePath();
+
         var isCompletion = CompletionInvocation.Matches(args);
         // Source management must not migrate or normalize configuration before a
         // read-only or rejected operation. Existing config commands retain normal startup.
@@ -328,9 +338,10 @@ public class Program
 
         // Set up settings with appropriate paths.
         var globalSettingsFilePath = await GetGlobalSettingsPathAsync(
+            aspireHomeDirectoryPath,
             startupContext.Logger, migrate: !deferSettingsWrites, startupContext.CancellationManager.Token);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
-        var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
+        var workingDirectory = new DirectoryInfo(workingDirectoryPath);
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !deferSettingsWrites);
         builder.Services.AddSingleton<ConfigSourceService>();
 
@@ -454,7 +465,9 @@ public class Program
                 startupContext.LoggingOptions.ConsoleLogLevel,
                 startupContext.LoggingOptions.LogsDirectory,
                 startupContext.LoggingOptions.LogFilePath,
-                resolver);
+                resolver,
+                aspireHomeDirectory: aspireHomeDirectoryPath,
+                workingDirectory: workingDirectoryPath);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
             BuildAnsiConsole(s, Console.Out),
@@ -565,7 +578,7 @@ public class Program
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         builder.Services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
         builder.Services.AddSingleton<ICliDownloader, CliDownloader>();
-        builder.Services.AddSingleton<IFirstTimeUseNoticeSentinel>(_ => new FirstTimeUseNoticeSentinel(GetUsersAspirePath()));
+        builder.Services.AddSingleton<IFirstTimeUseNoticeSentinel>(_ => new FirstTimeUseNoticeSentinel(aspireHomeDirectoryPath));
         builder.Services.AddSingleton<IBannerService, BannerService>();
         builder.Services.AddSingleton<ResourceColorMap>();
         builder.Services.AddMemoryCache();
@@ -783,16 +796,14 @@ public class Program
         return app;
     }
 
-    private static DirectoryInfo GetHivesDirectory(string? processPath = null)
+    private static DirectoryInfo GetHivesDirectory(string homeDirectory)
     {
-        var homeDirectory = GetUsersAspirePath(processPath);
         var hivesDirectory = Path.Combine(homeDirectory, "hives");
         return new DirectoryInfo(hivesDirectory);
     }
 
-    private static DirectoryInfo GetSdksDirectory(string? processPath = null)
+    private static DirectoryInfo GetSdksDirectory(string homeDirectory)
     {
-        var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
     }
@@ -810,16 +821,17 @@ public class Program
         services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
     }
 
-    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, LogLevel? consoleLogLevel, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
+    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, LogLevel? consoleLogLevel, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null, string? aspireHomeDirectory = null, string? workingDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(identityResolver);
 
-        var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDirectory = GetHivesDirectory(processPath);
-        var cacheDirectory = GetCacheDirectory(processPath);
-        var sdksDirectory = GetSdksDirectory(processPath);
-        var packagesDirectory = GetPackagesDirectory(processPath);
-        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
+        var homeDirectory = aspireHomeDirectory ?? GetUsersAspirePath(processPath);
+        var workingDirectoryInfo = new DirectoryInfo(workingDirectory ?? Environment.CurrentDirectory);
+        var hivesDirectory = GetHivesDirectory(homeDirectory);
+        var cacheDirectory = GetCacheDirectory(homeDirectory);
+        var sdksDirectory = GetSdksDirectory(homeDirectory);
+        var packagesDirectory = GetPackagesDirectory(homeDirectory);
+        var aspireHomeDirectoryInfo = new DirectoryInfo(homeDirectory);
 
         var channel = identityResolver.ResolveChannel();
         var version = identityResolver.ResolveVersion();
@@ -851,7 +863,7 @@ public class Program
             : new DirectoryInfo(packagesOverride.Value);
 
         return new CliExecutionContext(
-            workingDirectory,
+            workingDirectoryInfo,
             hivesDirectory,
             cacheDirectory,
             sdksDirectory,
@@ -867,19 +879,17 @@ public class Program
             debugMode: debugMode,
             consoleLogLevel: consoleLogLevel,
             packagesDirectory: packagesDirectory,
-            aspireHomeDirectory: aspireHomeDirectory);
+            aspireHomeDirectory: aspireHomeDirectoryInfo);
     }
 
-    private static DirectoryInfo GetCacheDirectory(string? processPath = null)
+    private static DirectoryInfo GetCacheDirectory(string homeDirectory)
     {
-        var homeDirectory = GetUsersAspirePath(processPath);
         var cacheDirectoryPath = Path.Combine(homeDirectory, "cache");
         return new DirectoryInfo(cacheDirectoryPath);
     }
 
-    private static DirectoryInfo GetPackagesDirectory(string? processPath = null)
+    private static DirectoryInfo GetPackagesDirectory(string homeDirectory)
     {
-        var homeDirectory = GetUsersAspirePath(processPath);
         var packagesDirectoryPath = Path.Combine(homeDirectory, "packages");
         return new DirectoryInfo(packagesDirectoryPath);
     }
