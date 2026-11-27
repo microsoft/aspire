@@ -1,0 +1,14 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "web-config"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "web"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  Logging__LogLevel__Microsoft.AspNetCore: {{ tpl "{{ index .Values.config.web \"Logging__LogLevel__Microsoft.AspNetCore\" }}" . | quote }}
+  Logging__LogLevel__Microsoft_AspNetCore: {{ tpl "{{ .Values.config.web.Logging__LogLevel__Microsoft_AspNetCore }}" . | quote }}
+  1.feature: {{ tpl "{{ index .Values.config.web \"1.feature\" }}" . | quote }}
+  2FA_ENABLED: {{ tpl "{{ index .Values.config.web \"2FA_ENABLED\" }}" . | quote }}
