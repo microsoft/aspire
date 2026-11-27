@@ -2128,7 +2128,17 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             if (IsNilableGoType(type) && (p.Type is null || !ShouldApplyNullableType(p.Type)))
             {
                 var nilGuard = type == "any" ? $"!isNil({paramName})" : $"{paramName} != nil";
-                WriteLine($"{indent}if {nilGuard} {{ reqArgs[{GoStringLiteral(p.Name)}] = serializeValue({paramName}) }}");
+                if (GetEmptyGoCollectionLiteral(type) is { } emptyCollection && p.Type?.IsNullable != true)
+                {
+                    // A nil slice or map is Go's empty collection, and callers pass one to mean "no items"
+                    // (for example a forwarded variadic). Omitting it would fail the call with
+                    // "Missing required argument", so send the empty collection instead.
+                    WriteLine($"{indent}if {nilGuard} {{ reqArgs[{GoStringLiteral(p.Name)}] = serializeValue({paramName}) }} else {{ reqArgs[{GoStringLiteral(p.Name)}] = {emptyCollection} }}");
+                }
+                else
+                {
+                    WriteLine($"{indent}if {nilGuard} {{ reqArgs[{GoStringLiteral(p.Name)}] = serializeValue({paramName}) }}");
+                }
             }
             else
             {
@@ -3133,6 +3143,15 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         typeName.StartsWith("map[", StringComparison.Ordinal) ||
         typeName == "any" ||
         typeName.StartsWith("func(", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Returns the wire value for an empty Go slice or map, or <see langword="null"/> when the Go type is
+    /// not a collection.
+    /// </summary>
+    private static string? GetEmptyGoCollectionLiteral(string typeName) =>
+        typeName.StartsWith("[]", StringComparison.Ordinal) ? "[]any{}"
+        : typeName.StartsWith("map[", StringComparison.Ordinal) ? "map[string]any{}"
+        : null;
 
     private static bool ShouldApplyNullableType(AtsTypeRef typeRef) =>
         typeRef.IsNullable == true
