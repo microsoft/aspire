@@ -16,6 +16,12 @@ internal static class KnownMauiMSBuildProperties
     public const string AdbTarget = "AdbTarget";
 
     /// <summary>
+    /// MSBuild property that names the device <c>dotnet run</c> deploys to. When it is set, <c>dotnet run</c>
+    /// skips its interactive device selection.
+    /// </summary>
+    public const string Device = "Device";
+
+    /// <summary>
     /// MSBuild property that selects which iOS device or simulator <c>dotnet run</c> targets.
     /// Devices use the raw UDID; simulators use the <c>:v2:udid=&lt;UDID&gt;</c> form.
     /// See: https://learn.microsoft.com/dotnet/maui/ios/cli#launch-the-app-on-a-device.
