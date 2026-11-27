@@ -169,7 +169,7 @@ internal static class TemplateSourceConfiguration
 
     public static string ResolveEditKey(JsonObject settings, string key)
     {
-        var parts = key.Replace(':', '.').Split('.');
+        var parts = ConfigurationKey.Split(key);
         if (!parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
         {
             return key;
@@ -184,13 +184,13 @@ internal static class TemplateSourceConfiguration
             }
         }
 
-        return string.Join('.', parts);
+        return ConfigurationKey.Join(parts);
     }
 
     public static string ValidateEditKey(JsonObject settings, string key)
     {
         key = ResolveEditKey(settings, key);
-        var parts = key.Replace(':', '.').Split('.');
+        var parts = ConfigurationKey.Split(key);
         if (!parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
         {
             return key;
@@ -221,7 +221,7 @@ internal static class TemplateSourceConfiguration
 
     public static void ValidateEditedSource(JsonObject settings, string key)
     {
-        var parts = key.Replace(':', '.').Split('.');
+        var parts = ConfigurationKey.Split(key);
         if (parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
         {
             using var document = JsonDocument.Parse(settings[parts[0]]![parts[1]]!.ToJsonString());
