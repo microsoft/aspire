@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -38,6 +39,50 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         }
         return (command, args);
     }
+
+    internal static bool IsAspireHook(JsonNode? node, string executableProperty, string aspireHomeDirectory)
+    {
+        if (node is not JsonObject hook)
+        {
+            return false;
+        }
+
+        var shellPath = Path.Combine(aspireHomeDirectory, "hooks", TelemetryHookInstaller.ShellResourceName);
+        var powerShellPath = Path.Combine(aspireHomeDirectory, "hooks", TelemetryHookInstaller.PowerShellResourceName);
+        // Match the commands we registered, not a script name mentioned by a user hook.
+        if (HookText(hook, "bash") == HookCommandFormatter.BuildBashCommand(shellPath)
+            || HookText(hook, "powershell") == HookCommandFormatter.BuildPwshCommand(powerShellPath))
+        {
+            return true;
+        }
+        if (hook["args"] is not JsonArray args)
+        {
+            return false;
+        }
+
+        var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
+        var executable = HookText(hook, executableProperty);
+        var (currentCommand, _) = GetCommand(AgentTelemetryProtocol.HookOptionName);
+        var executableName = Path.GetFileNameWithoutExtension(executable);
+        var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
+        var isDirectAspireInvocation = !isDotnet
+            && values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
+            && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase));
+        var isManagedAspireInvocation = isDotnet
+            && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
+            && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
+
+        var isLegacyShellInvocation = string.Equals(executableName, "bash", StringComparison.OrdinalIgnoreCase)
+            && values is [var scriptPath] && scriptPath == shellPath;
+        var isLegacyPowerShellInvocation = string.Equals(executableName, "pwsh", StringComparison.OrdinalIgnoreCase)
+            && (values is ["-File", var script] && script == powerShellPath
+                || values is ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", var fullScript] && fullScript == powerShellPath);
+
+        return isDirectAspireInvocation || isManagedAspireInvocation || isLegacyShellInvocation || isLegacyPowerShellInvocation;
+    }
+
+    private static string? HookText(JsonObject hook, string property)
+        => hook[property] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     internal async Task<int> RunAsync(TextReader input, TextWriter output, TextWriter error, Func<string[], Task<int>> execute)
     {

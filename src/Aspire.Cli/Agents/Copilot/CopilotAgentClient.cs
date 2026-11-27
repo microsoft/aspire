@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
@@ -148,24 +149,64 @@ internal sealed class CopilotAgentClient(
             Directory.CreateDirectory(hooksDirectory);
             var filePath = Path.Combine(hooksDirectory, "aspire-telemetry.json");
             var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
-            var config = new JsonObject
-            {
-                ["version"] = 1,
-                ["hooks"] = new JsonObject
-                {
-                    ["postToolUse"] = new JsonArray(
-                        new JsonObject
-                        {
-                            ["type"] = "command",
-                            ["matcher"] = TelemetryHookMatcher,
-                            ["exec"] = command,
-                            ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
-                            ["timeoutSec"] = 30,
-                        }),
-                },
-            };
             var edit = new AgentConfiguration();
-            await edit.ReadBytesForEditAsync(filePath, cancellationToken);
+            JsonObject config;
+            try
+            {
+                config = await edit.ReadObjectForEditAsync(filePath, cancellationToken) ?? new JsonObject();
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogDebug(ex, "Copilot hooks at {Path} could not be merged; skipping hook registration.", filePath);
+                return ex.InnerException is JsonException
+                    ? TelemetryHookStatus.MalformedConfig : TelemetryHookStatus.UnexpectedConfigShape;
+            }
+
+            if (config.TryGetPropertyValue("version", out var version)
+                && (version is not JsonValue versionValue || !versionValue.TryGetValue<int>(out var number) || number != 1))
+            {
+                return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+
+            if (config.TryGetPropertyValue("hooks", out var hooksNode) && hooksNode is not JsonObject)
+            {
+                return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+            var hooks = hooksNode as JsonObject ?? new JsonObject();
+            // A malformed sibling event also prevents Copilot from loading this file.
+            if (hooks.Any(entry => entry.Value is not JsonArray events || events.Any(item => item is not JsonObject)))
+            {
+                return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+            hooks.TryGetPropertyValue("postToolUse", out var postToolUseNode);
+            var postToolUse = postToolUseNode as JsonArray ?? new JsonArray();
+
+            // This Aspire-owned file can still contain user entries. Replace only our
+            // invocation, preserving other events and hooks even when matchers overlap.
+            for (var i = postToolUse.Count - 1; i >= 0; i--)
+            {
+                if (AgentTelemetryHook.IsAspireHook(postToolUse[i], "exec", context.AspireHomeDirectory.FullName))
+                {
+                    postToolUse.RemoveAt(i);
+                }
+            }
+            postToolUse.Add((JsonNode)new JsonObject
+            {
+                ["type"] = "command",
+                ["matcher"] = TelemetryHookMatcher,
+                ["exec"] = command,
+                ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
+                ["timeoutSec"] = 30,
+            });
+            if (hooksNode is null)
+            {
+                config["hooks"] = hooks;
+            }
+            if (postToolUseNode is null)
+            {
+                hooks["postToolUse"] = postToolUse;
+            }
+            config["version"] ??= 1;
             await edit.PublishAsync(filePath, config, cancellationToken);
 
             return TelemetryHookStatus.Configured;
