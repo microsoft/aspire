@@ -1825,11 +1825,23 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _filter.ShowHiddenResources,
             _resourceByName.Values,
             SessionStorage,
-            EventCallback.Factory.Create<bool>(this, value =>
-            {
-                _filter.ShowHiddenResources = value;
-                UpdatePaneMenuItems();
-            }));
+            ShowHiddenResourcesChanged);
+    }
+
+    internal bool ShowHiddenResources => _filter.ShowHiddenResources;
+
+    internal EventCallback<bool> ShowHiddenResourcesChanged => EventCallback.Factory.Create<bool>(this, SetShowHiddenResources);
+
+    private void SetShowHiddenResources(bool value)
+    {
+        if (_filter.ShowHiddenResources == value)
+        {
+            return;
+        }
+
+        _filter.ShowHiddenResources = value;
+        UpdatePaneMenuItems();
+        ResourcesChanged?.Invoke();
     }
 
     // The density is set in the settings panel, which isn't part of this layout.
@@ -2323,7 +2335,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         if (resourceNames.Count == 0)
         {
-            return GetPaneTelemetryKeys();
+            return GetPaneTelemetryKeys(includeHiddenResources: _filter.ShowHiddenResources);
         }
 
         // Resolve even a single selection here. A page opened before the resource's first signal can
@@ -2378,9 +2390,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else
         {
-            // All resources: the app's resources, and the telemetry sources while the pane lists them. Parameters don't
-            // send telemetry.
-            names = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetPinResourceName);
+            names = GetOrderableResources().Select(GetPinResourceName);
             if (ShowTelemetryOnlyResources)
             {
                 names = names.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey.Name));
@@ -2393,16 +2403,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         string GetPinResourceName(ResourceViewModel resource) => GetTelemetryResource(resource)?.ResourceKey.Name ?? resource.DisplayName;
     }
 
-    internal IReadOnlyList<ResourceKey> GetPaneTelemetryKeys()
+    internal IReadOnlyList<ResourceKey> GetPaneTelemetryKeys(bool includeHiddenResources)
     {
         if (IsTelemetryPane)
         {
             return _telemetryOnlyResources.Select(r => r.Resource.ResourceKey).Distinct().ToList();
         }
 
-        // "All resources" covers the app's resources, and the telemetry sources while the pane lists them. Parameters
-        // don't send telemetry.
-        var keys = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey);
+        var keys = _resourceByName.Values
+            .Where(r => !r.IsParameter && !r.IsResourceHidden(includeHiddenResources))
+            .Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey);
         if (ShowTelemetryOnlyResources)
         {
             keys = keys.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey));

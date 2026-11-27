@@ -360,29 +360,66 @@ public class TracesTests : DashboardTestContext
         }).AsTask());
 
         Assert.Equal(["api"], result.Items.Select(item => item.RootResource.ResourceName));
+    }
 
-        static Task AddTraceAsync(SqliteTelemetryRepository repository, string name, string traceId)
+    [Fact]
+    public async Task ResourcesLayout_AllResources_HidesTracesWithoutVisibleResources()
+    {
+        SetupTracesServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker", hidden: true)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddTraceAsync(repository, "api", "trace-mixed");
+        await AddTraceAsync(repository, "worker", "trace-mixed");
+        await AddTraceAsync(repository, "worker", "trace-worker");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.TracesUrl());
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
-            // Without an instance ID, the telemetry resource's name matches the app model resource's name.
-            var resource = CreateResource(name);
-            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
-            var timestamp = DateTime.UnixEpoch;
-            return repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+            builder.OpenComponent<Traces>(0);
+            builder.CloseComponent();
+        }));
+        var page = cut.FindComponent<Traces>();
+
+        await AssertTraceRowsAsync(["api"], ["trace-mixed"]);
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: true);
+        await AssertTraceRowsAsync(["api", "worker"], ["trace-mixed", "trace-worker"]);
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: false);
+        await AssertTraceRowsAsync(["api"], ["trace-mixed"]);
+
+        async Task AssertTraceRowsAsync(string[] resourceNames, string[] expectedTraceIds)
+        {
+            cut.WaitForAssertion(() => Assert.Equal(resourceNames, page.Instance.TracesViewModel.ResourceKeys?.Select(key => key.Name).Order()));
+            var grid = page.FindComponent<AspireFluentDataGrid<TraceSummary>>();
+            var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary> { StartIndex = 0, Count = 100 }).AsTask());
+            Assert.Equal(expectedTraceIds.Select(GetHexId), result.Items.Select(item => item.TraceId).Order());
+            var mixedTrace = Assert.Single(result.Items, item => item.TraceId == GetHexId("trace-mixed"));
+            Assert.Equal(["api", "worker"], mixedTrace.Resources.Select(summary => summary.Resource.ResourceName).Order());
+        }
+    }
+
+    private static Task AddTraceAsync(SqliteTelemetryRepository repository, string name, string traceId)
+    {
+        // Without an instance ID, the telemetry resource's name matches the app model resource's name.
+        var resource = CreateResource(name);
+        resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        var timestamp = DateTime.UnixEpoch;
+        return repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
             {
-                new ResourceSpans
+                Resource = resource,
+                ScopeSpans =
                 {
-                    Resource = resource,
-                    ScopeSpans =
+                    new ScopeSpans
                     {
-                        new ScopeSpans
-                        {
-                            Scope = CreateScope(),
-                            Spans = { CreateSpan(traceId: traceId, spanId: $"{traceId}-span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
-                        }
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: traceId, spanId: $"{traceId}-{name}-span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
                     }
                 }
-            });
-        }
+            }
+        });
     }
 
     private void SetupTracesServices()

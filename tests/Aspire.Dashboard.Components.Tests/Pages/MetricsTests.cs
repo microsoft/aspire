@@ -783,6 +783,55 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ResourcesLayout_AllResources_HiddenOnlyMetricsFollowTheVisibilityToggle()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("worker-TestId", displayName: "worker", hidden: true)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddMetricsAsync(new AddContext(),
+        [
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "worker"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "worker-meter"),
+                        Metrics = { CreateSumMetric(metricName: "requests", startTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            }
+        ]);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.MetricsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder
+            .AddCascadingValue(viewport)
+            .Add(p => p.Body, bodyBuilder =>
+            {
+                bodyBuilder.OpenComponent<Metrics>(0);
+                bodyBuilder.CloseComponent();
+            }));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Empty(cut.FindComponents<MetricPinButton>());
+        });
+
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: true);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindComponents<MetricPinButton>());
+            Assert.Equal("worker-meter", cut.FindComponent<Metrics>().Instance.PageViewModel.Instruments!.Single().Parent.Name);
+        });
+
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: false);
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindComponents<MetricPinButton>()));
+    }
+
+    [Fact]
     public async Task PinButton_PinsAndUnpinsForEachResourceOfTheSelection()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

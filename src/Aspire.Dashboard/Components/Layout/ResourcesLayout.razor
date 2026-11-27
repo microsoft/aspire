@@ -239,7 +239,9 @@
                  aria-hidden="@(_isPaneFullCanvas || _isPaneSelectionReveal || (!isDesktop && _isDrawerOpen) ? "true" : null)">
             <div class="resource-tab-body">
                 <CascadingValue Value="this" IsFixed="true" @key="IsTelemetryPane">
-                    @Body
+                    <CascadingValue Name="@nameof(ShowHiddenResources)" Value="@ShowHiddenResources">
+                        @Body
+                    </CascadingValue>
                 </CascadingValue>
             </div>
         </section>

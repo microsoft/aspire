@@ -441,6 +441,46 @@ public class ApplicationSummaryTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_GraphVisibilityChanges_UpdateHiddenNodesAndEdges()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourceOverview(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", relationships: [new("worker", "Reference")]),
+                ModelTestHelpers.CreateResource("worker", hidden: true)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        module.Mode = JSRuntimeMode.Loose;
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport).Add(p => p.Body, body =>
+        {
+            body.OpenComponent<ResourceOverview>(0);
+            body.CloseComponent();
+        }));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Graph));
+
+        cut.WaitForAssertion(() => AssertGraph(showHidden: false));
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: true);
+        cut.WaitForAssertion(() => AssertGraph(showHidden: true));
+        await ResourceSetupHelpers.ToggleHiddenResourcesAsync(cut, show: false);
+        cut.WaitForAssertion(() => AssertGraph(showHidden: false));
+
+        void AssertGraph(bool showHidden)
+        {
+            var update = module.Invocations.Last(invocation => invocation.Identifier == "updateResourcesGraph");
+            var nodes = Assert.IsType<List<ResourceDto>>(update.Arguments[0]);
+            Assert.Equal(showHidden ? ["api", "worker"] : ["api"], nodes.Select(node => node.Name));
+            Assert.Equal(showHidden ? ["worker"] : [], nodes[0].ReferencedNames);
+            if (showHidden)
+            {
+                Assert.True(nodes[1].IsHidden);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Render_GraphSelectionChanges_UpdateResourcesImmediately()
     {
         var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
