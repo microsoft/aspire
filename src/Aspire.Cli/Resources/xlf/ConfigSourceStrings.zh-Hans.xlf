@@ -69,7 +69,7 @@
       </trans-unit>
       <trans-unit id="FeatureDisabled">
         <source>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</source>
-        <target state="new">Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</target>
+        <target state="translated">配置源已禁用。请在配置位置中将 features.configSourceEnabled 设置为 true，然后重试。</target>
         <note>Do not translate "features.configSourceEnabled" or "true".</note>
       </trans-unit>
       <trans-unit id="GitNotFound">

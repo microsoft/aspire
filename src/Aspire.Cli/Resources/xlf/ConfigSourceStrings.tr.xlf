@@ -69,7 +69,7 @@
       </trans-unit>
       <trans-unit id="FeatureDisabled">
         <source>Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</source>
-        <target state="new">Configuration sources are disabled. Set features.configSourceEnabled to true where it is configured, then retry.</target>
+        <target state="translated">Yapılandırma kaynakları devre dışı bırakıldı. Yapılandırıldığı yerde features.configSourceEnabled değerini true olarak ayarlayın ve yeniden deneyin.</target>
         <note>Do not translate "features.configSourceEnabled" or "true".</note>
       </trans-unit>
       <trans-unit id="GitNotFound">

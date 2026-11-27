@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="HomeActivityBucketTraceCaveat">
         <source>Some traces may not include a request counted in this bar.</source>
-        <target state="new">Some traces may not include a request counted in this bar.</target>
+        <target state="translated">Certaines traces peuvent ne pas inclure de requête comptabilisée dans cette barre.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityBucketTraceHint">
         <source>View traces with spans that started in this interval.</source>
-        <target state="new">View traces with spans that started in this interval.</target>
+        <target state="translated">Affichez les traces dont les étendues ont commencé dans cet intervalle.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
@@ -659,7 +659,7 @@
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Expand console logs</source>
-        <target state="new">Expand console logs</target>
+        <target state="translated">Développer les journaux d’activité de la console</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">

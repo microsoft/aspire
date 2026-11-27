@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
         <source>No metrics found</source>
-        <target state="new">No metrics found</target>
+        <target state="translated">Nessuna metrica trovata</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">
@@ -164,7 +164,7 @@
       </trans-unit>
       <trans-unit id="MetricsPinLimitReached">
         <source>Can't pin this metric. The limit is {0} pins per application. Select fewer resources or unpin existing metrics.</source>
-        <target state="new">Can't pin this metric. The limit is {0} pins per application. Select fewer resources or unpin existing metrics.</target>
+        <target state="translated">Non è possibile aggiungere questa metrica. Il limite è di {0} metriche aggiunte per applicazione. Seleziona meno risorse o rimuovi le metriche già aggiunte.</target>
         <note>{0} is the maximum number of saved metric pins.</note>
       </trans-unit>
       <trans-unit id="MetricsPinnedEmpty">

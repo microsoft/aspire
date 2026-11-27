@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="HomeActivityBucketTraceCaveat">
         <source>Some traces may not include a request counted in this bar.</source>
-        <target state="new">Some traces may not include a request counted in this bar.</target>
+        <target state="translated">Некоторые трассировки могут не содержать запрос, учтенный в этом столбце.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityBucketTraceHint">
         <source>View traces with spans that started in this interval.</source>
-        <target state="new">View traces with spans that started in this interval.</target>
+        <target state="translated">Просмотр трассировок с интервалами, начало которых приходится на этот диапазон.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityChartLabel">
@@ -659,7 +659,7 @@
       </trans-unit>
       <trans-unit id="ResourceOverviewOpenConsole">
         <source>Expand console logs</source>
-        <target state="new">Expand console logs</target>
+        <target state="translated">Развернуть журналы консоли</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewPageTitle">
@@ -789,7 +789,7 @@
       </trans-unit>
       <trans-unit id="ResourceTagsLimitReached">
         <source>Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</source>
-        <target state="new">Can't add this tag. The limit is {0} tag assignments per application. Remove an existing tag assignment first.</target>
+        <target state="translated">Невозможно добавить этот тег. Лимит составляет {0} назначений тегов для приложения. Сначала удалите существующее назначение тега.</target>
         <note>{0} is the maximum number of user-added resource tag assignments.</note>
       </trans-unit>
       <trans-unit id="ResourceTagsRemove">

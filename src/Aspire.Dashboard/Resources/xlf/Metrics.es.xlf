@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="MetricsNoMatchingInstruments">
         <source>No metrics found</source>
-        <target state="new">No metrics found</target>
+        <target state="translated">No se encontró ninguna métrica</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">
