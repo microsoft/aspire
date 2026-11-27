@@ -8,7 +8,9 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
@@ -742,8 +744,18 @@ public sealed class DcpHostNotificationTests
         try
         {
             await File.WriteAllTextAsync(locations.DcpKubeconfigPath, "kubeconfig written by DCP");
+            var environmentComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            var inheritedSalt = dcpHost.CreateDcpProcessSpec(locations).EnvironmentVariables
+                .FirstOrDefault(pair => environmentComparer.Equals(pair.Key, MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable)).Value;
 
             dcpHost.EnsureDcpHostRunning();
+
+            var spec = new ExecutableSpec();
+            dcpHost.MsBuildNodeReuseIsolation.Apply(
+                new ExecutableResource("__dotnet-project-build", "dotnet", "."),
+                spec,
+                new SecretRedactionHistory());
+            Assert.StartsWith($"{inheritedSalt}:", Assert.Single(spec.Env!).Value, StringComparison.Ordinal);
 
             // Shut down without waiting for the launcher result, as an AppHost that stops right after starting DCP would.
             fileSystemService.Dispose();

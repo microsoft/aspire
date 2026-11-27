@@ -64,6 +64,12 @@ after their direct build; uncoordinated file-based launches use `--no-cache` ins
 the coordinated output, matching project-based resources. Use the Rebuild command after source changes to
 rebuild and restart the resource.
 
+Coordinated builds and rebuilds can reuse MSBuild workers within an AppHost run. Aspire gives each DCP run
+its own MSBuild handshake salt, so it normally cannot reuse workers from another run or an external build.
+This can increase warm-start time; on Linux and macOS, workers from earlier runs may remain idle until
+MSBuild's idle timeout and temporarily use additional memory. Node reuse is not disabled. The handshake
+salt is an MSBuild implementation detail, not a security boundary.
+
 Legacy project-only IDE sessions keep the existing file-app launch path. File apps wait for the final
 coordinated project prebuild, preventing overlap with that prebuild, but separate file apps are not mutually
 serialized and can still race when sharing `#:project` outputs. In capability-less Visual Studio sessions,
@@ -179,6 +185,9 @@ Use `WithBuildEnvironment` when an environment variable must affect MSBuild eval
 builds instead of a shared traversal build. Build environment variables are not added to the launched process;
 configure the same variable with `WithEnvironment` as well when it is needed at runtime. The same build-only
 values are applied when the project is published through the .NET SDK container targets.
+If `MSBUILDNODEHANDSHAKESALT` is configured, Aspire composes it with the current run's salt only in the
+coordinated build or rebuild process environment. The configured MSBuild property and IDE metadata retain
+their original value.
 
 IDE debugging with `WithBuildEnvironment` requires a launcher that advertises
 `project-with-external-build.v1` and consumes the coordinated build context. Aspire rejects legacy

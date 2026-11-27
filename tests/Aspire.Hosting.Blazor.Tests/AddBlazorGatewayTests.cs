@@ -5,6 +5,7 @@ using System.Net;
 using System.Text.Json;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Publishing;
@@ -588,6 +589,8 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
             renderedResource,
             plan,
             pemCertificates: null,
+            new MsBuildNodeReuseIsolation(),
+            new SecretRedactionHistory(),
             NullLogger<ExecutableCreator>.Instance);
 
         Assert.Equal(ExecutionType.Process, executable.Spec.ExecutionType);

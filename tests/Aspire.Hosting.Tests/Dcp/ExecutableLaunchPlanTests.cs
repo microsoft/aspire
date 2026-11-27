@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREEXTENSION001
 
 using System.Text.Json;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Microsoft.Extensions.Configuration;
@@ -14,6 +15,143 @@ namespace Aspire.Hosting.Tests.Dcp;
 [Trait("Partition", "4")]
 public class ExecutableLaunchPlanTests
 {
+    private const string HandshakeSalt = MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable;
+
+    [Fact]
+    public async Task ManagedBuildsShareWorkersWithinDcpRunButNotAcrossRuns()
+    {
+        var isolation = new MsBuildNodeReuseIsolation();
+        isolation.StartDcpRun([new(HandshakeSalt, "inherited")]);
+        var history = new SecretRedactionHistory();
+        var parent = new ExecutableResource("app", "dotnet", ".");
+        ExecutableResource[] builds =
+        [
+            new("__dotnet-project-build", "dotnet", "."),
+            new("__dotnet-project-build-1", "dotnet", "."),
+            new ProjectRebuilderResource("rebuilder", parent, Path.Combine(".", "app.csproj")),
+        ];
+
+        var rendered = new List<(RenderedModelResource<Executable> Resource, ExecutableLaunchPlan Plan)>();
+        foreach (var build in builds)
+        {
+            rendered.Add(await RenderExecutableAsync(build, isolation, history));
+        }
+
+        var firstSalt = GetHandshakeSalt(rendered[0].Resource.DcpResource);
+        Assert.StartsWith("inherited:", firstSalt, StringComparison.Ordinal);
+        Assert.All(rendered, build => Assert.Equal(firstSalt, GetHandshakeSalt(build.Resource.DcpResource)));
+
+        var customizedBuild = new ExecutableResource("__dotnet-project-build-2", "dotnet", ".");
+        customizedBuild.Annotations.Add(new EnvironmentCallbackAnnotation((EnvironmentCallbackContext context) =>
+            context.EnvironmentVariables[HandshakeSalt] = "custom"));
+        var customized = await RenderExecutableAsync(customizedBuild, isolation, history);
+        var customizedSalt = GetHandshakeSalt(customized.Resource.DcpResource);
+        Assert.StartsWith("custom:", customizedSalt, StringComparison.Ordinal);
+        Assert.NotEqual(firstSalt, customizedSalt);
+
+        var (resource, plan) = rendered[0];
+        ExecutableCreator.Render(resource, plan, null, isolation, history, NullLogger<ExecutableCreator>.Instance);
+        Assert.Equal(firstSalt, GetHandshakeSalt(resource.DcpResource));
+
+        isolation.StartDcpRun([new(HandshakeSalt, "inherited")]);
+        ExecutableCreator.Render(resource, plan, null, isolation, history, NullLogger<ExecutableCreator>.Instance);
+        var nextSalt = GetHandshakeSalt(resource.DcpResource);
+        Assert.StartsWith("inherited:", nextSalt, StringComparison.Ordinal);
+        Assert.NotEqual(firstSalt, nextSalt);
+    }
+
+    [Theory]
+    [InlineData("custom")]
+    [InlineData("")]
+    public async Task ResourceSaltOverridesInheritedSaltAfterCachedCallbacks(string configuredSalt)
+    {
+        var isolation = new MsBuildNodeReuseIsolation();
+        isolation.StartDcpRun([new(HandshakeSalt, "inherited")]);
+        var history = new SecretRedactionHistory();
+        var resource = new ExecutableResource("__dotnet-project-build", "dotnet", ".");
+        var firstCallbackCount = 0;
+        var lastCallbackCount = 0;
+        resource.Annotations.Add(new EnvironmentCallbackAnnotation((EnvironmentCallbackContext context) =>
+        {
+            firstCallbackCount++;
+            context.EnvironmentVariables[HandshakeSalt] = "first";
+        }));
+        resource.Annotations.Add(new EnvironmentCallbackAnnotation((EnvironmentCallbackContext context) =>
+        {
+            lastCallbackCount++;
+            context.EnvironmentVariables[HandshakeSalt] = configuredSalt;
+        }));
+
+        var first = await RenderExecutableAsync(resource, isolation, history);
+        var second = await RenderExecutableAsync(resource, isolation, history);
+        var effectiveSalt = GetHandshakeSalt(second.Resource.DcpResource);
+
+        Assert.Equal(1, firstCallbackCount);
+        Assert.Equal(1, lastCallbackCount);
+        Assert.StartsWith($"{configuredSalt}:", effectiveSalt, StringComparison.Ordinal);
+        Assert.Equal(GetHandshakeSalt(first.Resource.DcpResource), effectiveSalt);
+        Assert.Equal(configuredSalt, Assert.Single(second.Plan.EnvironmentVariables).Value);
+        Assert.Contains(effectiveSalt, history.AddValuesAndSnapshot([]));
+    }
+
+    [Fact]
+    public async Task DeferredSensitiveSaltIsRedactedAfterComposition()
+    {
+        var isolation = new MsBuildNodeReuseIsolation();
+        isolation.StartDcpRun([]);
+        var history = new SecretRedactionHistory();
+        var secret = new ParameterResource("secret", _ => "secret-value", secret: true);
+        var resource = new ExecutableResource("__dotnet-project-build", "dotnet", ".");
+        resource.Annotations.Add(new EnvironmentCallbackAnnotation((EnvironmentCallbackContext context) =>
+            context.EnvironmentVariables[HandshakeSalt] = ReferenceExpression.Create($"prefix-{secret}")));
+
+        var rendered = await RenderExecutableAsync(resource, isolation, history);
+        var effectiveSalt = GetHandshakeSalt(rendered.Resource.DcpResource);
+
+        Assert.Equal("prefix-secret-value", Assert.Single(rendered.Plan.EnvironmentVariables).Value);
+        Assert.StartsWith("prefix-secret-value:", effectiveSalt, StringComparison.Ordinal);
+        Assert.Contains(effectiveSalt, history.AddValuesAndSnapshot([]));
+    }
+
+    [Fact]
+    public async Task SaltNameUsesPlatformEnvironmentCasing()
+    {
+        var isolation = new MsBuildNodeReuseIsolation();
+        var lowerCaseName = HandshakeSalt.ToLowerInvariant();
+        isolation.StartDcpRun([new(lowerCaseName, "inherited")]);
+        var history = new SecretRedactionHistory();
+        var traversal = new ExecutableResource("__dotnet-project-build", "dotnet", ".");
+        var direct = new ExecutableResource("__dotnet-project-build-1", "dotnet", ".");
+        direct.Annotations.Add(new EnvironmentCallbackAnnotation((EnvironmentCallbackContext context) =>
+            context.EnvironmentVariables[lowerCaseName] = "resource"));
+
+        var traversalResult = await RenderExecutableAsync(traversal, isolation, history);
+        var directResult = await RenderExecutableAsync(direct, isolation, history);
+
+        Assert.StartsWith(OperatingSystem.IsWindows() ? "inherited:" : ":", GetHandshakeSalt(traversalResult.Resource.DcpResource), StringComparison.Ordinal);
+        Assert.StartsWith(OperatingSystem.IsWindows() ? "resource:" : ":", GetHandshakeSalt(directResult.Resource.DcpResource), StringComparison.Ordinal);
+        var names = directResult.Resource.DcpResource.Spec.Env!.Select(variable => variable.Name);
+        string[] expectedNames = OperatingSystem.IsWindows() ? [HandshakeSalt] : [lowerCaseName, HandshakeSalt];
+        Assert.Equal(expectedNames, names);
+    }
+
+    [Theory]
+    [InlineData("app", "dotnet")]
+    [InlineData("__dotnet-project-build", "other")]
+    [InlineData("__dotnet-project-builder", "dotnet")]
+    public async Task UnrelatedExecutablesKeepTheirEnvironment(string name, string command)
+    {
+        var resource = new ExecutableResource(name, command, ".");
+        resource.Annotations.Add(new EnvironmentCallbackAnnotation((EnvironmentCallbackContext context) =>
+            context.EnvironmentVariables[HandshakeSalt] = "original"));
+        var history = new SecretRedactionHistory();
+
+        var rendered = await RenderExecutableAsync(resource, new MsBuildNodeReuseIsolation(), history);
+
+        Assert.Equal("original", GetHandshakeSalt(rendered.Resource.DcpResource));
+        Assert.Empty(history.AddValuesAndSnapshot([]));
+    }
+
     [Fact]
     public async Task OwnedLaunchToolArgumentsAreSeparatedFromIdeArguments()
     {
@@ -269,6 +407,8 @@ public class ExecutableLaunchPlanTests
             renderedResource,
             plan,
             pemCertificates: null,
+            new MsBuildNodeReuseIsolation(),
+            new SecretRedactionHistory(),
             NullLogger<ExecutableCreator>.Instance);
 
         Assert.Equal(ExecutionType.Process, executable.Spec.ExecutionType);
@@ -307,6 +447,8 @@ public class ExecutableLaunchPlanTests
             renderedResource,
             plan,
             pemCertificates: null,
+            new MsBuildNodeReuseIsolation(),
+            new SecretRedactionHistory(),
             NullLogger<ExecutableCreator>.Instance);
 
         Assert.True(executable.TryGetAnnotationAsObjectList<int>(
@@ -353,6 +495,29 @@ public class ExecutableLaunchPlanTests
             new ExecutableLaunchPolicy(configuration),
             NullLogger.Instance,
             CancellationToken.None);
+    }
+
+    private static async Task<(RenderedModelResource<Executable> Resource, ExecutableLaunchPlan Plan)> RenderExecutableAsync(
+        ExecutableResource resource,
+        MsBuildNodeReuseIsolation isolation,
+        SecretRedactionHistory history)
+    {
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(
+                new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+                NullLogger.Instance,
+                TestContext.Current.CancellationToken);
+        Assert.Null(executionConfiguration.Exception);
+        var plan = await ResolveLaunchPlanAsync(resource, executionConfiguration, []);
+        var rendered = new RenderedModelResource<Executable>(resource, Executable.Create(resource.Name, resource.Command));
+        ExecutableCreator.Render(rendered, plan, null, isolation, history, NullLogger<ExecutableCreator>.Instance);
+        return (rendered, plan);
+    }
+
+    private static string GetHandshakeSalt(Executable executable)
+    {
+        return Assert.Single(executable.Spec.Env!, variable => variable.Name == HandshakeSalt).Value!;
     }
 
     private static ExecutionConfigurationResult CreateExecutionConfiguration(

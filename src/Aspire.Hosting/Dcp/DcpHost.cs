@@ -44,6 +44,8 @@ internal sealed class DcpHost
     private string? _dcpTlsKeyFile;
     private Task? _logProcessorTask;
 
+    internal MsBuildNodeReuseIsolation MsBuildNodeReuseIsolation { get; } = new();
+
     public DcpHost(
         ILoggerFactory loggerFactory,
         IOptions<DcpOptions> dcpOptions,
@@ -282,6 +284,7 @@ internal sealed class DcpHost
             _logger.LogError(ex, "Failed to enable orchestration logging.");
         }
 
+        MsBuildNodeReuseIsolation.StartDcpRun(dcpProcessSpec.EnvironmentVariables);
         var (dcpLauncherResult, _) = ProcessUtil.Run(dcpProcessSpec);
 
         // DCP now owns DCP_SESSION_FOLDER: the detached apiserver reads the kubeconfig there during its own cleanup,

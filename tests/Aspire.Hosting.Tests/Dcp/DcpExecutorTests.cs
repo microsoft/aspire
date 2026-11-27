@@ -20,6 +20,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.DevTunnels;
@@ -45,6 +46,64 @@ namespace Aspire.Hosting.Tests.Dcp;
 [Trait("Partition", "4")]
 public class DcpExecutorTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task ManagedBuildEnvironmentIsIsolatedOnCreationAndRestart()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var configuredSalt = "first";
+        var callbackCount = 0;
+        var buildResource = new ExecutableResource("__dotnet-project-build", "dotnet", builder.AppHostDirectory);
+        buildResource.Annotations.Add(NameValidationPolicyAnnotation.None);
+        var build = builder.AddResource(buildResource)
+            .WithEnvironment(context =>
+            {
+                callbackCount++;
+                context.EnvironmentVariables[MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable] = configuredSalt;
+            })
+            .Resource;
+        var application = builder.AddExecutable("application", "dotnet", builder.AppHostDirectory)
+            .WithEnvironment(MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable, "runtime")
+            .Resource;
+        var rebuilder = builder.AddResource(new ProjectRebuilderResource(
+            "rebuilder",
+            application,
+            Path.Combine(builder.AppHostDirectory, "application.csproj"))).Resource;
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        Assert.Same(
+            app.Services.GetRequiredService<DcpHost>().MsBuildNodeReuseIsolation,
+            app.Services.GetRequiredService<MsBuildNodeReuseIsolation>());
+        var earlyEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(build, serviceProvider: app.Services);
+        Assert.Equal("first", earlyEnvironment[MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable]);
+
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var firstBuild = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, build.Name));
+        var firstSalt = Assert.Single(firstBuild.Spec.Env!, variable => variable.Name == MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable).Value!;
+        var rebuild = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, rebuilder.Name));
+        var rebuildSalt = Assert.Single(rebuild.Spec.Env!, variable => variable.Name == MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable).Value;
+        var runtime = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, application.Name));
+        Assert.Equal("runtime", Assert.Single(runtime.Spec.Env!, variable => variable.Name == MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable).Value);
+        Assert.StartsWith("first:", firstSalt, StringComparison.Ordinal);
+        Assert.Equal(firstSalt["first".Length..], rebuildSalt);
+        Assert.Equal(1, callbackCount);
+
+        configuredSalt = "second";
+        var reference = executor.GetResource(firstBuild.Metadata.Name);
+        await executor.StopResourceAsync(reference, TestContext.Current.CancellationToken);
+        await executor.StartResourceAsync(reference, TestContext.Current.CancellationToken);
+
+        var restartedBuild = GetCreatedExecutablesForResource(kubernetesService, build.Name).Last();
+        var restartedSalt = Assert.Single(restartedBuild.Spec.Env!, variable => variable.Name == MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable).Value!;
+        Assert.StartsWith("second:", restartedSalt, StringComparison.Ordinal);
+        Assert.Equal(firstSalt["first".Length..], restartedSalt["second".Length..]);
+        Assert.Equal(2, callbackCount);
+    }
+
     [Fact]
     public async Task ExecutableCanRestartFromResourceChangedCallback()
     {
@@ -13050,6 +13109,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var executableConfigurationResolver = new ExecutableConfigurationResolver(executionContext, locations, aspireStore);
         var executableLaunchPolicy = new ExecutableLaunchPolicy(configuration);
+        var msBuildNodeReuseIsolation = new MsBuildNodeReuseIsolation();
+        msBuildNodeReuseIsolation.StartDcpRun([]);
 
         var executableCreator = new ExecutableCreator(
             nameGenerator,
@@ -13060,6 +13121,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             configuration,
             applicationOptions,
             executableLaunchPolicy,
+            msBuildNodeReuseIsolation,
+            new SecretRedactionHistory(),
             NullLogger<ExecutableCreator>.Instance);
 
         return new DcpExecutor(

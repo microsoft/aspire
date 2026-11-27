@@ -11,6 +11,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Eventing;
@@ -1056,16 +1058,29 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void PublishModeDoesNotCreateCoordinatedBuildOrSuppressProjectBuild()
+    public async Task PublishModeDoesNotCreateCoordinatedBuildOrSuppressProjectBuild()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var project = builder.AddDotnetProject("api", "Api.csproj", options => options.ExcludeLaunchProfile = true);
+        var project = builder.AddDotnetProject("api", "Api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable, "configured");
 
         Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
         Assert.False(metadata.SuppressBuild);
         Assert.Empty(project.Resource.Annotations.OfType<WaitAnnotation>());
+        var callback = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>());
+        var environment = new Dictionary<string, object>();
+        await callback.ApplyAsync(new EnvironmentCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            project.Resource,
+            environment,
+            TestContext.Current.CancellationToken));
+        Assert.Collection(environment, variable =>
+        {
+            Assert.Equal(MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable, variable.Key);
+            Assert.Equal("configured", variable.Value);
+        });
     }
 
     [Theory]
@@ -1498,6 +1513,94 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             });
         AssertBuildDependency(api.Resource, buildResources[1]);
         AssertBuildDependency(worker.Resource, buildResources[1]);
+    }
+
+    [Fact]
+    public async Task HandshakeSaltIsolationDoesNotChangeBuildPropertiesOrProjectMetadata()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var saltName = MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable;
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(saltName, "configured")
+            .WithEnvironment(saltName, "runtime");
+        var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
+        IReadOnlyDictionary<string, string>? resolverEnvironment = null;
+        metadata.RunPropertiesResolver = (_, _, environment, _, _, _) =>
+        {
+            resolverEnvironment = environment;
+            return Task.FromResult(new DotnetProjectRunProperties(
+                "resolved-command",
+                "--from-resolver",
+                WorkingDirectory: null,
+                Path.Combine(Path.GetDirectoryName(projectPath)!, "bin", "Worker.dll"),
+                UseAppHost: false));
+        };
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(buildResource)
+            .WithArgumentsConfig()
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(
+                app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+                NullLogger.Instance,
+                TestContext.Current.CancellationToken);
+        Assert.Null(executionConfiguration.Exception);
+        var responseFile = Assert.Single(executionConfiguration.Arguments, argument => argument.Value.StartsWith('@')).Value[1..];
+        Assert.Equal($"\"--property:{saltName}=configured\"{Environment.NewLine}", File.ReadAllText(responseFile));
+
+        var isolation = new MsBuildNodeReuseIsolation();
+        isolation.StartDcpRun([new(saltName, "inherited")]);
+        var history = new SecretRedactionHistory();
+        var buildExecutable = await RenderBuildAsync(buildResource, executionConfiguration);
+        var rebuildConfiguration = await EvaluateEnvironmentAsync(rebuilder, app.Services, TestContext.Current.CancellationToken);
+        var rebuildExecutable = await RenderBuildAsync(rebuilder, rebuildConfiguration);
+        var effectiveSalt = Assert.Single(buildExecutable.Spec.Env!, variable => variable.Name == saltName).Value!;
+        Assert.StartsWith("configured:", effectiveSalt, StringComparison.Ordinal);
+        Assert.Equal(effectiveSalt, Assert.Single(rebuildExecutable.Spec.Env!, variable => variable.Name == saltName).Value);
+        Assert.Equal("configured", Assert.Single(executionConfiguration.EnvironmentVariables, variable => variable.Key == saltName).Value);
+        Assert.Equal("configured", metadata.BuildEnvironment[saltName]);
+
+        var runtimeEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, serviceProvider: app.Services);
+        Assert.Equal("runtime", runtimeEnvironment[saltName]);
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
+            await project.Resource.CreateLaunchConfigurationAsync(
+                LaunchConfigurationTestHelpers.CreateCallbackContext(project.Resource, ExecutableLaunchMode.Debug)));
+        Assert.NotNull(launchConfiguration.BuildEnvironment);
+        Assert.Equal("configured", launchConfiguration.BuildEnvironment[saltName]);
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        await ArgumentEvaluator.GetArgumentListAsync(project.Resource, app.Services);
+        Assert.NotNull(resolverEnvironment);
+        Assert.Equal("configured", resolverEnvironment[saltName]);
+
+        async Task<Executable> RenderBuildAsync(ExecutableResource resource, IExecutionConfigurationResult configuration)
+        {
+            Assert.Null(configuration.Exception);
+            var plan = await ExecutableCreator.ResolveLaunchPlanAsync(
+                resource,
+                configuration,
+                builder.Configuration,
+                app.Services.GetRequiredService<DistributedApplicationOptions>(),
+                new ExecutableLaunchPolicy(builder.Configuration),
+                NullLogger.Instance,
+                TestContext.Current.CancellationToken);
+            var executable = Executable.Create(resource.Name, resource.Command);
+            var rendered = new RenderedModelResource<Executable>(resource, executable);
+            ExecutableCreator.Render(rendered, plan, null, isolation, history, NullLogger<ExecutableCreator>.Instance);
+            return executable;
+        }
     }
 
     [Fact]
@@ -3890,6 +3993,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Target Name="ValidateBuildOrder" BeforeTargets="CoreCompile">
               <Error Condition="!Exists('$(MSBuildProjectDirectory)/../First/first-built.txt')" Text="The first build group has not completed." />
               <Error Condition="'$(BUILD_FLAVOR)' != 'custom'" Text="The direct build environment was not applied." />
+              <Error Condition="'$(MSBUILDNODEHANDSHAKESALT)' != 'configured'" Text="The configured build property was changed." />
+              <WriteLinesToFile File="$(MSBuildProjectDirectory)/handshake-salt.txt" Lines="$([System.Environment]::GetEnvironmentVariable('MSBUILDNODEHANDSHAKESALT'))" Overwrite="true" />
             </Target>
             """);
         var firstSentinel = Path.Combine(workspace.Path, "first-ran.txt");
@@ -3902,6 +4007,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             .WithArgs(firstSentinel);
         builder.AddDotnetProject("second", secondProject, options => options.ExcludeLaunchProfile = true)
             .WithBuildEnvironment("BUILD_FLAVOR", "custom")
+            .WithBuildEnvironment(MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable, "configured")
             .WithArgs(secondSentinel);
         await using var app = builder.Build();
 
@@ -3926,6 +4032,17 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, builder.Resources.OfType<DotnetProjectBuildResource>().Count());
         Assert.Equal("started", File.ReadAllText(firstSentinel));
         Assert.Equal("started", File.ReadAllText(secondSentinel));
+
+        var executables = await app.Services.GetRequiredService<IKubernetesService>()
+            .ListAsync<Executable>(cancellationToken: TestContext.Current.CancellationToken);
+        var traversal = Assert.Single(executables, executable => executable.AppModelResourceName == DotnetProjectBuildCoordinator.BuildResourceName);
+        var direct = Assert.Single(executables, executable => executable.AppModelResourceName == $"{DotnetProjectBuildCoordinator.BuildResourceName}-2");
+        var saltName = MsBuildNodeReuseIsolation.HandshakeSaltEnvironmentVariable;
+        var traversalSalt = Assert.Single(traversal.Spec.Env!, variable => variable.Name == saltName).Value!;
+        var directSalt = Assert.Single(direct.Spec.Env!, variable => variable.Name == saltName).Value!;
+        Assert.StartsWith("configured:", directSalt, StringComparison.Ordinal);
+        Assert.EndsWith(directSalt["configured".Length..], traversalSalt, StringComparison.Ordinal);
+        Assert.Equal(directSalt, File.ReadAllText(Path.Combine(Path.GetDirectoryName(secondProject)!, "handshake-salt.txt")).TrimEnd('\r', '\n'));
 
         using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
         await app.StopAsync(stopCts.Token);
