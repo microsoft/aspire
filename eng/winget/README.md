@@ -62,8 +62,8 @@ still targets .NET 9. This
 side-effect-free smoke catches runtime compatibility changes before the release
 pipeline attempts a public submission; it does not exercise credentials or
 submission. The release WinGet job repeats the same startup check whenever that
-job is selected, including dry-run and non-production-branch builds, while the
-submission step remains limited to non-dry-run production builds.
+job is selected, including dry-run builds, while the submission step runs only
+for non-dry-run builds.
 
 ## Validation model
 
