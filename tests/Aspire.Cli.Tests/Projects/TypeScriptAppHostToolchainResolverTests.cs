@@ -153,29 +153,35 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
-    [Fact]
-    public void Resolve_WhenPackageLockExists_ReturnsNpm()
+    [Theory]
+    [InlineData("package-lock.json", "yarn.lock")]
+    [InlineData("package-lock.json", "pnpm-lock.yaml")]
+    [InlineData("npm-shrinkwrap.json", "yarn.lock")]
+    [InlineData("npm-shrinkwrap.json", "pnpm-lock.yaml")]
+    public void Resolve_WhenNpmLockExists_ReturnsNpm(string lockFileName, string parentLockFileName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
         var parentDirectory = appHostDirectory.Parent!;
         File.WriteAllText(Path.Combine(parentDirectory.FullName, "package.json"), "{ \"name\": \"workspace\" }");
-        File.WriteAllText(Path.Combine(parentDirectory.FullName, "yarn.lock"), string.Empty);
+        File.WriteAllText(Path.Combine(parentDirectory.FullName, parentLockFileName), string.Empty);
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
-        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package-lock.json"), "{}");
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, lockFileName), "{}");
 
         var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory, new TestEnvironment());
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, resolution.Toolchain);
-        Assert.Equal($"package-lock.json found in {appHostDirectory.FullName}", resolution.Reason);
+        Assert.Equal($"{lockFileName} found in {appHostDirectory.FullName}", resolution.Reason);
     }
 
-    [Fact]
-    public void Resolve_WhenPackageLockAndYarnLockExistInSameDirectory_ReturnsYarn()
+    [Theory]
+    [InlineData("package-lock.json")]
+    [InlineData("npm-shrinkwrap.json")]
+    public void Resolve_WhenNpmLockAndYarnLockExistInSameDirectory_ReturnsYarn(string lockFileName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
-        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package-lock.json"), "{}");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, lockFileName), "{}");
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock"), string.Empty);
 
         var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
@@ -254,20 +260,25 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal($"packageManager 'bun@1.2.0' found in {Path.Combine(appHostDirectory.FullName, "package.json")}", resolution.Reason);
     }
 
-    [Fact]
-    public void Resolve_WhenAppHostLockFileAndParentPackageManagerDiffer_ReturnsAppHostLockFileToolchain()
+    [Theory]
+    [InlineData("pnpm-lock.yaml", "pnpm")]
+    [InlineData("package-lock.json", "npm")]
+    [InlineData("npm-shrinkwrap.json", "npm")]
+    public void Resolve_WhenAppHostLockFileAndParentPackageManagerDiffer_ReturnsAppHostLockFileToolchain(
+        string lockFileName,
+        string expectedCommand)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
         File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"yarn@4.14.1\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
-        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "pnpm-lock.yaml"), "lockfileVersion: '9.0'");
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, lockFileName), string.Empty);
 
         var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory, new TestEnvironment());
 
-        Assert.Equal(TypeScriptAppHostToolchain.Pnpm, resolution.Toolchain);
-        Assert.Equal($"pnpm-lock.yaml found in {appHostDirectory.FullName}", resolution.Reason);
+        Assert.Equal(expectedCommand, TypeScriptAppHostToolchainResolver.GetCommandName(resolution.Toolchain));
+        Assert.Equal($"{lockFileName} found in {appHostDirectory.FullName}", resolution.Reason);
     }
 
     [Fact]
