@@ -45,6 +45,8 @@ internal sealed class KubernetesPublishingContext(
 
     internal async Task WriteModelAsync(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
     {
+        environment.HelmChartPublishingResult = null;
+
         if (!executionContext.IsPublishMode)
         {
             return;
@@ -62,6 +64,8 @@ internal sealed class KubernetesPublishingContext(
         }
 
         await WriteKubernetesOutputAsync(model, environment).ConfigureAwait(false);
+
+        environment.HelmChartPublishingResult = new HelmChartPublishingResult(OutputPath, environment);
 
         logger.FinishGeneratingKubernetes(OutputPath);
     }
