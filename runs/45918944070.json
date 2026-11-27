@@ -1,0 +1,63 @@
+{
+  "run_id": 45918944070,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45918944070",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-27T01:54:45Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22686,
+    "title": "Disable product telemetry in E2E tests",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-disable-e2e-product-telemetry",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22686",
+    "merged_at": "2026-11-27T00:48:58Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1f53da3c18fbada3e1ad7ac7584e37073321562d",
+    "failed_sha": "b7dcf2882f470e0b2c1234c45d340ed34e203ca5",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "da6316e088ae282d1a9f20679c59a8f9c9e13cef",
+        "message": "[automated] test: Replace the stapler retry JavaScript harness with C# (#21811) ## Description **Replace the stapler retry JavaScript harness with C#, following [this review feedback](https://github.com/microsoft/aspire/pull/21768#discussion_r4483055066).** The C# test delegated fixture setup and assertions to Node just to exercise a Bash script, adding an unnecessary language hop and runtime dependency. Run the real script from C# using `TemporaryWorkspace` and `TestProcessRunner`. Small Bash s",
+        "html_url": "https://github.com/microsoft/aspire/commit/da6316e088ae282d1a9f20679c59a8f9c9e13cef",
+        "pull_request": {
+          "number": 21811,
+          "title": "[automated] test: Replace the stapler retry JavaScript harness with C#",
+          "url": "https://github.com/microsoft/aspire/pull/21811",
+          "merged_at": "2026-11-27T00:12:38Z"
+        }
+      },
+      {
+        "sha": "b7dcf2882f470e0b2c1234c45d340ed34e203ca5",
+        "message": "Disable product telemetry in E2E tests (#22686) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `b063ec9f2d685a46dcd4e302fd06be62349e9957` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8/10 | ↑ CLI and deployment host inheritance tests pass; a real prebuilt Docker terminal confirms container opt-outs.<br>↑ Deployment CI sets the CLI opt-out before install/setup commands.<br>↓ Full profiling E",
+        "html_url": "https://github.com/microsoft/aspire/commit/b7dcf2882f470e0b2c1234c45d340ed34e203ca5",
+        "pull_request": {
+          "number": 22686,
+          "title": "Disable product telemetry in E2E tests",
+          "url": "https://github.com/microsoft/aspire/pull/22686",
+          "merged_at": "2026-11-27T00:48:58Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 140246113462,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45918944070/job/140246113462",
+      "classification": "transient-infra",
+      "reason": "Hosted runner lost communication with the server; no test results captured.",
+      "failed_steps": []
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosted-runner-lost-communication-windows-template-tests"
+  ]
+}
