@@ -26,6 +26,17 @@ public sealed class TextVisualizerFormatHelpersTests
     }
 
     [Theory]
+    [InlineData("db.system.name", "mysql", true)]
+    [InlineData("db.system", "mysql", true)]
+    [InlineData("db.system.name", "", false)]
+    [InlineData("db.system", "", false)]
+    [InlineData("rpc.system", "grpc", false)]
+    public void HasDatabaseSystem_RequiresNonEmptyDatabaseSystem(string key, string value, bool expected)
+    {
+        Assert.Equal(expected, TextVisualizerFormatHelpers.HasDatabaseSystem([KeyValuePair.Create(key, value)]));
+    }
+
+    [Theory]
     [InlineData("Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat)]
     [InlineData("Microsoft.EntityFrameworkCore.Database.Command.Custom", DashboardUIHelpers.SqlFormat)]
     [InlineData("Microsoft.EntityFrameworkCore", null)]

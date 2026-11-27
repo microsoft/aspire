@@ -142,8 +142,7 @@
     <PackageVersion Include="MongoDB.Driver" Version="3.12.0" />
     <PackageVersion Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" Version="3.0.0" />
     <!-- Pin AspNetCore.HealthChecks.MySql's transitive dependency: https://github.com/advisories/GHSA-473q-m89c-ghf8 -->
-    <PackageVersion Include="MySqlConnector" Version="2.6.2" />
-    <PackageVersion Include="MySqlConnector.DependencyInjection" Version="2.6.2" />
+    <PackageVersion Include="MySqlConnector" Version="3.0.0" />
     <PackageVersion Include="MySqlConnector.Logging.Microsoft.Extensions.Logging" Version="2.1.0" />
     <PackageVersion Include="NATS.Net" Version="2.8.2" />
     <PackageVersion Include="NCrontab.Signed" Version="3.4.0" />
@@ -320,6 +319,7 @@
     <!-- Npgsql 11 RC3 requires the exact EF Core RC3 versions. Keep this pin and the
          HealthChecks EF Core VersionOverrides in the Npgsql EF Core projects aligned until the GA provider is published. -->
     <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.3" />
+    <PackageVersion Update="Microting.EntityFrameworkCore.MySql" Version="11.0.0" />
   </ItemGroup>
 
   <!-- The template engine uses the .NET 11 SDK dependency line. Keep these pins scoped to
