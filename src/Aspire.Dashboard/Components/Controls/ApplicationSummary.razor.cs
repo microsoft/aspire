@@ -1046,16 +1046,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
     }
 
-    private enum HealthBucket
-    {
-        Attention,
-        Pending,
-        Running,
-        Finished,
-        NotStarted,
-        Unknown
-    }
-
     private readonly record struct HealthSummary(int Total, int Running, int Pending, int Attention, int Finished, int NotStarted, int Unknown, DateTime? StartedAt, int MissingParameters);
 
     private sealed class HomeActivity
@@ -1117,4 +1107,16 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         public required List<TraceSummary> RecentFailedTraces { get; init; }
         public required int InstrumentCount { get; init; }
     }
+}
+
+// Keep this enum outside the component so Blazor's OpenComponent does not preserve its
+// inherited Enum.GetValues(Type), which requires dynamic code under Native AOT.
+internal enum HealthBucket
+{
+    Attention,
+    Pending,
+    Running,
+    Finished,
+    NotStarted,
+    Unknown
 }
