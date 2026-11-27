@@ -55,7 +55,7 @@ internal enum CliInstallMode
 internal static class AspireCliShellCommandHelpers
 {
     internal const string NumberedPromptSetupCommand = "CMDCOUNT=0; PROMPT_COMMAND='s=$?;((CMDCOUNT++));PS1=\"[$CMDCOUNT $([ $s -eq 0 ] && echo OK || echo ERR:$s)] \\$ \"'";
-    internal const string CommonAspireEnvironmentAssignments = "ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false";
+    internal const string CommonAspireEnvironmentAssignments = "ASPIRE_PLAYGROUND=true TERM=xterm ASPIRE_CLI_TELEMETRY_OPTOUT=true ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false";
     internal const string AspireCliVersionCommand = "aspire --version";
     internal const string DockerInstallScriptCommandPrefix = "/opt/aspire-scripts/get-aspire-cli.sh";
     internal const string DockerPullRequestInstallCommandPrefix = "/opt/aspire-scripts/get-aspire-cli-pr.sh";

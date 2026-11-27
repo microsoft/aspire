@@ -264,6 +264,21 @@ public class CliInstallStrategyTests(ITestOutputHelper output)
         Assert.Empty(options.BuildArgs);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConfigureDockerContainerStrategy_OptsOutOfProductTelemetry(bool prebuiltImageSelected)
+    {
+        var options = new DockerContainerOptions();
+        options.Environment["ASPIRE_CLI_TELEMETRY_OPTOUT"] = "false";
+        options.Environment["ASPIRE_DASHBOARD_TELEMETRY_OPTOUT"] = "false";
+
+        CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, CliInstallStrategy.LatestGa(), prebuiltImageSelected);
+
+        Assert.Equal("true", options.Environment["ASPIRE_CLI_TELEMETRY_OPTOUT"]);
+        Assert.Equal("true", options.Environment["ASPIRE_DASHBOARD_TELEMETRY_OPTOUT"]);
+    }
+
     [Fact]
     public void ConfigureContainer_ThrowsWhenPrebuiltImageAlsoHasDockerfileConfiguration()
     {

@@ -6,6 +6,8 @@ This project contains end-to-end tests that deploy Aspire applications to real A
 
 These tests use the [Hex1b](https://github.com/hex1b/hex1b) terminal automation library to drive the Aspire CLI, similar to the CLI E2E tests. The key difference is that these tests actually deploy to Azure and verify the deployed applications work correctly.
 
+The deployment workflow opts out of CLI product telemetry before installing and setting up the CLI. The test host and its local child processes also opt out of CLI and dashboard product telemetry; local OTLP data remains available. This opt-out does not automatically configure dashboards deployed to Azure.
+
 ## Azure Subscription Quota Requirements
 
 The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Most scenarios, including the AKS (Azure Kubernetes Service) scenarios, deploy to `westus3`; a resource-specific test uses `eastus2`. Ensure the quotas below are available in the region noted for each section.

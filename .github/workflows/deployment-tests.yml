@@ -458,6 +458,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.enumerate.outputs.matrix) }}
     env:
+      ASPIRE_CLI_TELEMETRY_OPTOUT: "true"
       ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
       ASPIRE_DEPLOYMENT_TEST_RG_PREFIX: ${{ vars.ASPIRE_DEPLOYMENT_TEST_RG_PREFIX || 'aspire-e2e' }}
       # Sandboxes remain an explicit opt-in until the deployment-testing environment has
