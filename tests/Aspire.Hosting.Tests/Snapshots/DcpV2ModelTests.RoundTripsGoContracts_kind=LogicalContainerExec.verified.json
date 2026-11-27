@@ -1,0 +1,54 @@
+﻿{
+  "spec": {
+    "containerRef": "app/container",
+    "execution": {
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "echo hello"
+      ],
+      "workingDirectory": "/app",
+      "env": [
+        {
+          "name": "EMPTY",
+          "value": ""
+        }
+      ],
+      "envFiles": [
+        "/config/env"
+      ]
+    }
+  },
+  "status": {
+    "phase": "Exited",
+    "startedAt": "2026-11-09T12:00:00.000000Z",
+    "finishedAt": "2026-11-09T12:00:01.000000Z",
+    "exitCode": 0,
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-09T12:00:01Z",
+        "message": "Done",
+        "observedGeneration": 1,
+        "reason": "ExecutionExited",
+        "status": "True",
+        "type": "Ready"
+      }
+    ],
+    "physicalExecRef": "app/exec-physical",
+    "containerID": "container-id",
+    "runtimeLogs": {
+      "name": "exec",
+      "uid": "exec-uid",
+      "stdoutFile": "/logs/exec.out",
+      "stderrFile": "/logs/exec.err",
+      "available": true,
+      "complete": true
+    }
+  },
+  "metadata": {
+    "name": "resource",
+    "namespace": "app"
+  },
+  "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+  "kind": "LogicalContainerExec"
+}

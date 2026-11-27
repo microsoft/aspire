@@ -1,0 +1,40 @@
+﻿{
+  "container": {
+    "logsAvailable": false,
+    "spec": {
+      "image": "image",
+      "restartPolicy": "no"
+    },
+    "metadata": {
+      "name": "container",
+      "namespace": ""
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v1",
+    "kind": "Container"
+  },
+  "executable": {
+    "logsAvailable": false,
+    "spec": {
+      "executablePath": "/bin/server"
+    },
+    "metadata": {
+      "name": "process",
+      "namespace": ""
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v1",
+    "kind": "Executable"
+  },
+  "service": {
+    "hasCompleteAddress": false,
+    "spec": {
+      "protocol": "TCP",
+      "addressAllocationMode": "Localhost"
+    },
+    "metadata": {
+      "name": "service",
+      "namespace": ""
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v1",
+    "kind": "Service"
+  }
+}

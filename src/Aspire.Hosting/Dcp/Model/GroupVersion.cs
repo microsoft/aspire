@@ -13,9 +13,11 @@ internal struct GroupVersion
 
 internal static class Dcp
 {
+    public const string GroupName = "usvc-dev.developer.microsoft.com";
+
     public static GroupVersion GroupVersion { get; } = new GroupVersion
     {
-        Group = "usvc-dev.developer.microsoft.com",
+        Group = GroupName,
         Version = "v1"
     };
 
@@ -42,5 +44,13 @@ internal static class Dcp
         Schema.Add<ContainerVolume>(ContainerVolumeKind, "containervolumes");
         Schema.Add<ContainerExec>(ContainerExecKind, "containerexecs");
         Schema.Add<ContainerNetworkTunnelProxy>(ContainerNetworkTunnelProxyKind, "containernetworktunnelproxies");
+        Schema.Add<V2.Namespace>(V2.Dcp.GroupVersion, V2.Namespace.ObjectKind, "namespaces", isNamespaced: false);
+        Schema.Add<V2.LogicalService>(V2.Dcp.GroupVersion, V2.LogicalService.ObjectKind, "logicalservices", isNamespaced: true);
+        Schema.Add<V2.LogicalContainerNetwork>(V2.Dcp.GroupVersion, V2.LogicalContainerNetwork.ObjectKind, "logicalcontainernetworks", isNamespaced: true);
+        Schema.Add<V2.LogicalContainer>(V2.Dcp.GroupVersion, V2.LogicalContainer.ObjectKind, "logicalcontainers", isNamespaced: true);
+        Schema.Add<V2.LogicalProcess>(V2.Dcp.GroupVersion, V2.LogicalProcess.ObjectKind, "logicalprocesses", isNamespaced: true);
+        Schema.Add<V2.LogicalContainerExec>(V2.Dcp.GroupVersion, V2.LogicalContainerExec.ObjectKind, "logicalcontainerexecs", isNamespaced: true);
+        Schema.Add<V2.ServiceEndpoint>(V2.Dcp.GroupVersion, V2.ServiceEndpoint.ObjectKind, "serviceendpoints", isNamespaced: true);
+        Schema.Add<V2.PhysicalContainerVolume>(V2.Dcp.GroupVersion, V2.PhysicalContainerVolume.ObjectKind, "physicalcontainervolumes", isNamespaced: true);
     }
 }

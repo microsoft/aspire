@@ -1,0 +1,134 @@
+﻿{
+  "Namespace": {
+    "metadata": {
+      "name": "app"
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+    "kind": "Namespace"
+  },
+  "LogicalService": {
+    "spec": {},
+    "metadata": {
+      "name": "service",
+      "namespace": "app"
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+    "kind": "LogicalService"
+  },
+  "ServiceEndpoint": {
+    "spec": {
+      "serviceRef": "service",
+      "addresses": []
+    },
+    "metadata": {
+      "name": "endpoint",
+      "namespace": "app"
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+    "kind": "ServiceEndpoint"
+  },
+  "LogicalContainerNetwork": {
+    "spec": {},
+    "metadata": {
+      "name": "network",
+      "namespace": "app"
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+    "kind": "LogicalContainerNetwork"
+  },
+  "LogicalContainer": {
+    "spec": {},
+    "metadata": {
+      "name": "container",
+      "namespace": "app"
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+    "kind": "LogicalContainer"
+  },
+  "LogicalProcess": {
+    "spec": {},
+    "metadata": {
+      "name": "process",
+      "namespace": "app"
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+    "kind": "LogicalProcess"
+  },
+  "LogicalContainerExec": {
+    "spec": {
+      "containerRef": "container",
+      "execution": {
+        "command": ""
+      }
+    },
+    "metadata": {
+      "name": "exec",
+      "namespace": "app"
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+    "kind": "LogicalContainerExec"
+  },
+  "PhysicalContainerVolume": {
+    "spec": {
+      "volumeName": "data"
+    },
+    "metadata": {
+      "name": "volume",
+      "namespace": "app"
+    },
+    "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+    "kind": "PhysicalContainerVolume"
+  },
+  "pointerZeroes": {
+    "container": {
+      "image": {
+        "pullRetryLimit": 0
+      },
+      "createFiles": [
+        {
+          "destination": "",
+          "umask": 0,
+          "entries": [
+            {
+              "name": "file",
+              "owner": 0,
+              "group": 0
+            }
+          ]
+        }
+      ]
+    },
+    "monitorPID": 0
+  },
+  "allocatedProcessPort": {
+    "port": 0,
+    "name": "http"
+  },
+  "unknownProcessExitCode": {
+    "phase": "Exited"
+  },
+  "successfulProcessExitCode": {
+    "exitCode": 0
+  },
+  "containerPortRange": {
+    "hostPort": 9000,
+    "containerPort": 8000,
+    "rangeSize": 3,
+    "protocol": "UDP",
+    "hostIP": "::1"
+  },
+  "existingImageRef": {
+    "imageRef": "app/image"
+  },
+  "directoryBuild": {
+    "context": "/src"
+  },
+  "inlineArchive": {
+    "rawContents": "dGFy"
+  },
+  "existingProcess": {
+    "mode": "existing",
+    "pid": 4294967295,
+    "identityTimestamp": "2026-11-09T12:00:00.000000Z"
+  }
+}
