@@ -5,6 +5,7 @@ using System.Text.Json;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -18,6 +19,25 @@ namespace Aspire.Cli.Tests.Commands.Sdk;
 
 public class SdkExportCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("staging")]
+    [InlineData("stable")]
+    [InlineData("daily")]
+    [InlineData("pr-12345")]
+    [InlineData("local")]
+    public async Task SdkExportRestoresFromTheCliIdentityChannel(string channel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var project = new CapturingAppHostServerProject();
+        using var provider = CreateProvider(new TestInteractionService(), workspace,
+            new StubExportRpcClient(), project, identityChannel: channel);
+
+        var exitCode = await InvokeAsync(provider, "sdk export --language go");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(channel == PackageChannelNames.Local ? null : channel, project.RequestedChannel);
+    }
+
     [Fact]
     public async Task SdkExportWithHelpReturnsZero()
     {
@@ -392,17 +412,19 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
         IAppHostRpcClient rpcClient,
         IAppHostServerProject appHostServerProject,
         string? identityVersion = null,
-        IFeatures? features = null)
+        IFeatures? features = null,
+        string identityChannel = PackageChannelNames.Local)
     {
         var testWorkspace = workspace;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
-            if (identityVersion is not null)
+            if (identityVersion is not null || identityChannel != PackageChannelNames.Local)
             {
                 options.CliExecutionContextFactory = _ => testWorkspace.CreateExecutionContext(
+                    identityChannel: identityChannel,
                     identityVersion: identityVersion,
-                    identityOverridden: true);
+                    identityOverridden: identityVersion is not null);
             }
 
             if (features is not null)
@@ -467,6 +489,8 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
 
         public int PrepareCallCount { get; private set; }
 
+        public string? RequestedChannel { get; private set; }
+
         public string GetInstanceIdentifier() => AppDirectoryPath;
 
         public Task<AppHostServerPrepareResult> PrepareAsync(
@@ -478,6 +502,7 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken = default)
         {
             PrepareCallCount++;
+            RequestedChannel = requestedChannel;
             Integrations = [.. integrations];
             return Task.FromResult(new AppHostServerPrepareResult(Success: true, Output: null));
         }
