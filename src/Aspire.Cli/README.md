@@ -283,13 +283,19 @@ environment-variable input is not a guarantee that the secret cannot be read.
 
 `aspire update` preserves package-only AppHosts: it updates their
 `Aspire.Hosting.AppHost` reference without adding `Aspire.AppHost.Sdk`.
-SDK-based AppHosts remain supported, including C#, F#, and Visual Basic project
-files and C# file-based AppHosts with an SDK directive.
+When updating to Aspire 17 or later, SDK-based AppHosts migrate from the obsolete
+`Aspire.AppHost.Sdk` to `Microsoft.NET.Sdk` with an explicit
+`Aspire.Hosting.AppHost` reference. File-based C# AppHosts use a package directive
+instead of the obsolete SDK directive. With Central Package Management enabled,
+the version is added or updated in `Directory.Packages.props` rather than on the
+reference. Updates targeting earlier releases retain the SDK-based format.
+This does not rewrite `AddProject` resource declarations; see the
+[SDK migration guide](../../docs/migrate-from-apphost-sdk.md) for the remaining steps.
 
 For non-central package references declared in imported build files, the updater
 changes the original declaration rather than adding a duplicate to the AppHost.
-Imported SDK versions are updated in place when evaluation identifies one
-declaring file, including older SDKs without the SDK-use marker. Inactive SDK
+Imported SDK declarations are migrated or updated in place when evaluation
+identifies one declaring file, including older SDKs without the SDK-use marker. Inactive SDK
 imports in shared build files do not turn package-only AppHosts into SDK projects.
 Ambiguous imported declarations require an explicit SDK version
 update instead of guessing which shared file to change.
