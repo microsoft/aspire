@@ -325,6 +325,16 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public int ExecuteResourceCommandCallCount { get; private set; }
 
+    /// <summary>
+    /// Gets or sets an optional handler that computes the ExecuteResourceCommandAsync response per call.
+    /// </summary>
+    public Func<ExecuteResourceCommandOptions?, ExecuteResourceCommandResponse>? ExecuteResourceCommandHandler { get; set; }
+
+    /// <summary>
+    /// Gets the options passed to every ExecuteResourceCommandAsync call, in order.
+    /// </summary>
+    public List<ExecuteResourceCommandOptions?> ExecuteResourceCommandCalls { get; } = [];
+
     public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
@@ -334,7 +344,8 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         ExecuteResourceCommandCallCount++;
         ExecuteResourceCommandOptions = options;
         ExecuteResourceCommandArguments = options?.Arguments;
-        return Task.FromResult(ExecuteResourceCommandResult);
+        ExecuteResourceCommandCalls.Add(options);
+        return Task.FromResult(ExecuteResourceCommandHandler?.Invoke(options) ?? ExecuteResourceCommandResult);
     }
 
     /// <summary>
