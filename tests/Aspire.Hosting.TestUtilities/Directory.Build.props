@@ -3,7 +3,7 @@
     <!--
       TestDistributedApplicationBuilder lives in this assembly. DistributedApplicationTestingBuilder
       locates the application host by walking the call stack for the first assembly that carries the
-      'dcpclipath' AssemblyMetadata attribute, which is only emitted for Aspire host projects
+      'apphostprojectpath' AssemblyMetadata attribute, which is only emitted for Aspire host projects
       (IsAspireHost=true imports the Aspire.Hosting.AppHost build targets). Consumers call
       TestDistributedApplicationBuilder.Create() through this assembly, so this assembly's frame must
       supply that metadata. Without IsAspireHost=true the lookup throws

@@ -91,6 +91,30 @@ public class FirstTimeUseNoticeSentinelTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(sentinelFilePath));
     }
 
+    [Fact]
+    public void CreateIfNotExists_WhenCalledConcurrently_DoesNotThrow()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        // Mirrors several CLI processes running for the first time at once (https://github.com/microsoft/aspire/issues/22490).
+        Parallel.For(0, 32, _ => new FirstTimeUseNoticeSentinel(workspace.WorkspaceRoot.FullName).CreateIfNotExists());
+
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "cli", "cli.firstUseSentinel")));
+    }
+
+    [Fact]
+    public void CreateIfNotExists_WhenSentinelCannotBeCreated_DoesNotThrow()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        // A directory in place of the sentinel file makes creating the file fail.
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "cli", "cli.firstUseSentinel"));
+        var sentinel = new FirstTimeUseNoticeSentinel(workspace.WorkspaceRoot.FullName);
+
+        var exception = Record.Exception(sentinel.CreateIfNotExists);
+
+        Assert.Null(exception);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

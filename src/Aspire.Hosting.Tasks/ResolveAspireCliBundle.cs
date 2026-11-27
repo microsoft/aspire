@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
+using Aspire.Shared;
 using Microsoft.Build.Framework;
 
 namespace Aspire.Hosting.Tasks;
@@ -11,15 +11,6 @@ namespace Aspire.Hosting.Tasks;
 /// </summary>
 public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
 {
-    private const string BundleDirectoryName = "bundle";
-    private const string VersionsDirectoryName = "versions";
-    private const string InstallSidecarFileName = ".aspire-install.json";
-    private const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
-    private const string PinnedLayoutsDirectoryName = "dnx";
-    private const string PinnedCliPackageDirectoryName = "aspire.cli";
-    private const int MaxInstallSidecarBytes = 64 * 1024;
-    private static readonly Version s_unversionedDirectoryVersion = new(0, 0);
-
     /// <summary>
     /// Optional path to an Aspire CLI bundle or layout directory.
     /// </summary>
@@ -108,207 +99,43 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
 
     public override bool Execute()
     {
-        var aspireHomeDirectory = GetDefaultAspireHomeDirectory();
+        var aspireHomeDirectory = AspireCliBundleLayoutResolver.GetAspireHomeDirectory(
+            Environment.GetEnvironmentVariable(AspireCliBundleLayoutResolver.AspireHomeEnvironmentVariable));
         AspireHomeDirectory = aspireHomeDirectory;
         AspireCliSetupDirectory = aspireHomeDirectory;
 
-        if (!string.IsNullOrWhiteSpace(AspireCliBundlePath))
+        var selection = new AspireCliBundleSelection(AspireCliBundlePath, AspireCliPath, PinnedAspireCliVersion, SearchPathForAspireCli);
+        if (selection.Kind == AspireCliBundleSelectionKind.PinnedVersion)
         {
-            if (TryResolveFromLayoutPath(AspireCliBundlePath, out var explicitBundle))
-            {
-                SetOutputs(explicitBundle);
-                return true;
-            }
+            AspireCliSetupDirectory = AspireCliBundleLayoutResolver.GetPinnedLayoutDirectory(aspireHomeDirectory, PinnedAspireCliVersion!);
+        }
 
-            if (WarnOnInvalidPaths)
-            {
-                Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
-            }
-
+        if (AspireCliBundleLayoutResolver.TryResolve(selection, aspireHomeDirectory, static () => CommandPathResolver.EnumerateFromPath("aspire"), out var layout))
+        {
+            SetOutputs(layout);
             return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(AspireCliPath))
+        if (WarnOnInvalidPaths && selection.Kind == AspireCliBundleSelectionKind.BundlePath)
         {
-            if (File.Exists(AspireCliPath) && TryResolveFromCliPath(AspireCliPath, out var explicitCliBundle))
-            {
-                SetOutputs(explicitCliBundle);
-                return true;
-            }
-
-            if (WarnOnInvalidPaths)
-            {
-                Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
-            }
-
-            return true;
+            Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
         }
-
-        if (!string.IsNullOrWhiteSpace(PinnedAspireCliVersion))
+        else if (WarnOnInvalidPaths && selection.Kind == AspireCliBundleSelectionKind.CliPath)
         {
-            var pinnedLayoutDirectory = GetPinnedLayoutDirectory(aspireHomeDirectory, PinnedAspireCliVersion!);
-            AspireCliSetupDirectory = pinnedLayoutDirectory;
-
-            if (TryResolveFromLayoutPath(pinnedLayoutDirectory, out var pinnedBundle))
-            {
-                SetOutputs(pinnedBundle);
-            }
-
-            return true;
-        }
-
-        if (SearchPathForAspireCli && TryResolveFromPath(out var pathBundle))
-        {
-            SetOutputs(pathBundle);
-            return true;
-        }
-
-        if (TryResolveFromLayoutPath(aspireHomeDirectory, out var aspireHomeBundle))
-        {
-            SetOutputs(aspireHomeBundle);
-            return true;
+            Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
         }
 
         return true;
     }
 
-    private void SetOutputs(BundleResolution resolution)
+    private void SetOutputs(AspireCliBundleLayout layout)
     {
-        DcpDir = EnsureTrailingDirectorySeparator(resolution.DcpDir);
-        AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.DashboardDir);
-        AspireDashboardPath = resolution.DashboardPath;
-        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.TerminalHostDir);
-        AspireTerminalHostPath = resolution.TerminalHostPath;
-        AspireTerminalHostInvocationArgs = resolution.TerminalHostInvocationArgs;
-    }
-
-    private static bool TryResolveFromPath(out BundleResolution resolution)
-    {
-        resolution = default!;
-
-        foreach (var cliPath in EnumerateAspireCliPaths())
-        {
-            if (TryResolveFromCliPath(cliPath, out resolution))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static IEnumerable<string> EnumerateAspireCliPaths()
-    {
-        return CommandPathResolver.EnumerateFromPath("aspire");
-    }
-
-    private static bool TryResolveFromCliPath(string cliPath, out BundleResolution resolution, bool includeDefaultAspireHomeFallback = true)
-    {
-        resolution = default!;
-
-        var candidateCliPaths = EnumerateCandidateCliPaths(Path.GetFullPath(cliPath));
-        foreach (var candidateCliPath in candidateCliPaths)
-        {
-            var cliDirectory = Path.GetDirectoryName(candidateCliPath);
-            if (string.IsNullOrEmpty(cliDirectory))
-            {
-                continue;
-            }
-
-            foreach (var layoutPath in EnumerateLayoutPathsForCliDirectory(cliDirectory))
-            {
-                if (TryResolveFromLayoutPath(layoutPath, out resolution))
-                {
-                    return true;
-                }
-            }
-
-            foreach (var dotnetToolCliPath in EnumerateDotNetToolStoreCliPaths(cliDirectory))
-            {
-                if (TryResolveFromCliPath(dotnetToolCliPath, out resolution, includeDefaultAspireHomeFallback: false))
-                {
-                    return true;
-                }
-            }
-        }
-
-        if (includeDefaultAspireHomeFallback && TryResolveFromLayoutPath(GetDefaultAspireHomeDirectory(), out resolution))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryResolveFromLayoutPath(string layoutPath, out BundleResolution resolution)
-    {
-        var fullPath = Path.GetFullPath(layoutPath);
-        if (TryResolveBundleRoot(fullPath, out resolution))
-        {
-            return true;
-        }
-
-        if (TryResolveBundleRoot(Path.Combine(fullPath, BundleDirectoryName), out resolution))
-        {
-            return true;
-        }
-
-        return TryResolveVersionedBundleRoot(fullPath, out resolution);
-    }
-
-    private static bool TryResolveBundleRoot(string bundleRoot, out BundleResolution resolution)
-    {
-        resolution = default!;
-
-        var dcpDir = Path.Combine(bundleRoot, "dcp");
-        var dcpPath = Path.Combine(dcpDir, IsWindows() ? "dcp.exe" : "dcp");
-        var managedDir = Path.Combine(bundleRoot, "managed");
-        var managedPath = Path.Combine(managedDir, IsWindows() ? "aspire-managed.exe" : "aspire-managed");
-
-        // Current bundles isolate the Native AOT Dashboard and its static assets in dashboard/.
-        // Preserve compatibility with transitional bundles that placed Aspire.Dashboard in managed/;
-        // if there is no dashboard/ component or transitional executable, fall back to the older aspire-managed
-        // dispatcher, which launches the Dashboard through its "dashboard" subcommand.
-        var dashboardDir = Path.Combine(bundleRoot, "dashboard");
-        var dashboardPath = Path.Combine(dashboardDir, IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
-        if (Directory.Exists(dashboardDir) && !File.Exists(dashboardPath))
-        {
-            // An incomplete current bundle must not fall back to aspire-managed, which no longer
-            // supports the dashboard subcommand. Only older layouts omit dashboard/ entirely.
-            return false;
-        }
-
-        if (!File.Exists(dashboardPath))
-        {
-            dashboardDir = managedDir;
-            dashboardPath = Path.Combine(managedDir, IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
-        }
-
-        if (!File.Exists(dcpPath) || !File.Exists(managedPath))
-        {
-            return false;
-        }
-
-        var terminalHostDir = Path.Combine(bundleRoot, "terminalhost");
-        var terminalHostPath = Path.Combine(terminalHostDir, IsWindows() ? "Aspire.TerminalHost.exe" : "Aspire.TerminalHost");
-        if (Directory.Exists(terminalHostDir) && !File.Exists(terminalHostPath))
-        {
-            return false;
-        }
-
-        // Older CLI bundles omit terminalhost/ entirely. Try their legacy dispatcher as a
-        // best-effort fallback; an existing but incomplete component was rejected above.
-        var hasStandaloneTerminalHost = File.Exists(terminalHostPath);
-        resolution = new BundleResolution(
-            dcpDir,
-            managedDir,
-            managedPath,
-            dashboardDir,
-            File.Exists(dashboardPath) ? dashboardPath : managedPath,
-            hasStandaloneTerminalHost ? terminalHostDir : managedDir,
-            hasStandaloneTerminalHost ? terminalHostPath : managedPath,
-            hasStandaloneTerminalHost ? string.Empty : "terminalhost");
-        return true;
+        DcpDir = EnsureTrailingDirectorySeparator(layout.DcpDir);
+        AspireDashboardDir = EnsureTrailingDirectorySeparator(layout.DashboardDir);
+        AspireDashboardPath = layout.DashboardPath;
+        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(layout.TerminalHostDir);
+        AspireTerminalHostPath = layout.TerminalHostPath;
+        AspireTerminalHostInvocationArgs = layout.TerminalHostInvocationArgs;
     }
 
     private static string EnsureTrailingDirectorySeparator(string path)
@@ -317,284 +144,5 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             path.EndsWith(Path.AltDirectorySeparatorChar.ToString(), StringComparison.Ordinal)
                 ? path
                 : path + Path.DirectorySeparatorChar;
-    }
-
-    private static bool IsWindows() => Path.DirectorySeparatorChar == '\\';
-
-    private static IEnumerable<string> EnumerateCandidateCliPaths(string cliPath)
-    {
-        var seenPaths = new HashSet<string>(GetPathComparer());
-
-        if (seenPaths.Add(cliPath))
-        {
-            yield return cliPath;
-        }
-
-        var resolvedCliPath = ResolveSymlinkOrOriginalPath(cliPath);
-        if (seenPaths.Add(resolvedCliPath))
-        {
-            yield return resolvedCliPath;
-        }
-    }
-
-    private static IEnumerable<string> EnumerateLayoutPathsForCliDirectory(string cliDirectory)
-    {
-        var seenPaths = new HashSet<string>(GetPathComparer());
-
-        foreach (var layoutPath in EnumerateLayoutPathsForCliDirectoryCore(cliDirectory))
-        {
-            if (!string.IsNullOrEmpty(layoutPath) && seenPaths.Add(layoutPath))
-            {
-                yield return layoutPath;
-            }
-        }
-    }
-
-    private static IEnumerable<string?> EnumerateLayoutPathsForCliDirectoryCore(string cliDirectory)
-    {
-        yield return cliDirectory;
-
-        // Install-route sidecars are written as:
-        //   { "source": "winget" }
-        // Known package-manager routes extract beside the binary and script/localhive
-        // routes extract under the parent prefix. Sidecar-less/unknown routes fall
-        // back to ASPIRE_HOME after any dotnet-tool store payload has been probed.
-        yield return TryReadInstallSource(cliDirectory) switch
-        {
-            "winget" or "brew" or "dotnet-tool" => cliDirectory,
-            "script" or "pr" or "localhive" => Path.GetDirectoryName(cliDirectory) ?? cliDirectory,
-            _ => null,
-        };
-
-        yield return Path.GetDirectoryName(cliDirectory);
-    }
-
-    private static IEnumerable<string> EnumerateDotNetToolStoreCliPaths(string cliDirectory)
-    {
-        var storeRoot = Path.Combine(cliDirectory, ".store", "aspire.cli");
-        if (!Directory.Exists(storeRoot))
-        {
-            yield break;
-        }
-
-        foreach (var executableName in GetNativeAspireExecutableNames())
-        {
-            foreach (var candidate in EnumerateFiles(storeRoot, executableName))
-            {
-                yield return candidate;
-            }
-        }
-    }
-
-    private static IEnumerable<string> EnumerateFiles(string path, string searchPattern)
-    {
-        try
-        {
-            return Directory.GetFiles(path, searchPattern, SearchOption.AllDirectories);
-        }
-        catch (Exception ex) when (IsPathDiscoveryException(ex))
-        {
-            return [];
-        }
-    }
-
-    private static string[] GetNativeAspireExecutableNames()
-    {
-        return IsWindows()
-            ? ["aspire.exe"]
-            : ["aspire"];
-    }
-
-    private static bool TryResolveVersionedBundleRoot(string layoutPath, out BundleResolution resolution)
-    {
-        var versionsRoot = Path.Combine(layoutPath, VersionsDirectoryName);
-        if (Directory.Exists(versionsRoot))
-        {
-            foreach (var versionDirectory in EnumerateDirectories(versionsRoot)
-                         .Where(IsVersionDirectoryCandidate)
-                         .OrderByDescending(GetVersionDirectoryVersion)
-                         .ThenByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
-            {
-                if (TryResolveBundleRoot(versionDirectory, out resolution))
-                {
-                    return true;
-                }
-            }
-        }
-
-        resolution = default!;
-        return false;
-    }
-
-    private static Version GetVersionDirectoryVersion(string path)
-    {
-        var directoryName = Path.GetFileName(path);
-        return Version.TryParse(GetLeadingVersion(StripVersionIdHash(directoryName)), out var version)
-            ? version
-            : s_unversionedDirectoryVersion;
-    }
-
-    private static string GetLeadingVersion(string directoryName)
-    {
-        // BundleService.ComputeVersionId keeps the informational-version prefix and appends a hash:
-        //   13.10.0-preview.1.25301.1_gdae6efcb-bbbbbbbbbbbbbbbb
-        // System.Version cannot parse the prerelease/hash suffix, but it can compare the leading
-        // numeric version that determines which extracted bundle is newer.
-        var versionEnd = 0;
-        while (versionEnd < directoryName.Length && directoryName[versionEnd] is (>= '0' and <= '9') or '.')
-        {
-            versionEnd++;
-        }
-
-        return versionEnd == 0
-            ? string.Empty
-            : directoryName.Substring(0, versionEnd).TrimEnd('.');
-    }
-
-    private static string StripVersionIdHash(string directoryName)
-    {
-        // BundleService version directories are named "<sanitized-version>-<16-hex-xxhash>",
-        // for example "9.10.0-bbbbbbbbbbbbbbbb". Strip the hash so System.Version
-        // compares the semantic version instead of the full directory name.
-        var separatorIndex = directoryName.LastIndexOf('-');
-        if (separatorIndex < 0 ||
-            directoryName.Length - separatorIndex - 1 != 16 ||
-            !ContainsOnlyHexDigits(directoryName, separatorIndex + 1))
-        {
-            return directoryName;
-        }
-
-        return directoryName.Substring(0, separatorIndex);
-    }
-
-    private static bool ContainsOnlyHexDigits(string value, int startIndex)
-    {
-        for (var i = startIndex; i < value.Length; i++)
-        {
-            var ch = value[i];
-            if (ch is not ((>= '0' and <= '9') or (>= 'A' and <= 'F') or (>= 'a' and <= 'f')))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool IsVersionDirectoryCandidate(string path)
-    {
-        var directoryName = Path.GetFileName(path);
-        return !directoryName.Contains(".tmp.", StringComparison.Ordinal)
-            && !directoryName.Contains(".bad.", StringComparison.Ordinal)
-            && !directoryName.Contains(".old.", StringComparison.Ordinal);
-    }
-
-    private static IEnumerable<string> EnumerateDirectories(string path)
-    {
-        try
-        {
-            return Directory.GetDirectories(path);
-        }
-        catch (Exception ex) when (IsPathDiscoveryException(ex))
-        {
-            return [];
-        }
-    }
-
-    private static string? TryReadInstallSource(string cliDirectory)
-    {
-        var sidecarPath = Path.Combine(cliDirectory, InstallSidecarFileName);
-        if (!File.Exists(sidecarPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            if (new FileInfo(sidecarPath).Length > MaxInstallSidecarBytes)
-            {
-                return null;
-            }
-
-            var sidecar = File.ReadAllText(sidecarPath);
-            var sourceMatch = Regex.Match(sidecar, @"""source""\s*:\s*""(?<source>[^""]*)""");
-            return sourceMatch.Success ? sourceMatch.Groups["source"].Value : null;
-        }
-        catch (Exception ex) when (IsPathDiscoveryException(ex))
-        {
-            return null;
-        }
-    }
-
-    private static string GetDefaultAspireHomeDirectory()
-    {
-        var aspireHome = Environment.GetEnvironmentVariable(AspireHomeEnvironmentVariable);
-        return string.IsNullOrWhiteSpace(aspireHome)
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire")
-            : aspireHome;
-    }
-
-    internal static string GetPinnedLayoutDirectory(string aspireHomeDirectory, string version)
-    {
-        // Package versions only contain alphanumerics, '.', '-' and '+'. Replace anything else so
-        // the version cannot escape the pinned layouts directory.
-        var directoryName = new string(version.Trim().Select(static ch => char.IsLetterOrDigit(ch) || ch is '.' or '-' or '+' ? ch : '_').ToArray());
-        if (directoryName.Trim('.').Length == 0)
-        {
-            directoryName = directoryName.Replace('.', '_');
-        }
-
-        return Path.Combine(aspireHomeDirectory, PinnedLayoutsDirectoryName, PinnedCliPackageDirectoryName, directoryName);
-    }
-
-    private static StringComparer GetPathComparer()
-    {
-        return IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-    }
-
-    private static string ResolveSymlinkOrOriginalPath(string path)
-    {
-#if NET8_0_OR_GREATER
-        try
-        {
-            return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
-        }
-        catch (Exception ex) when (IsPathDiscoveryException(ex))
-        {
-            return path;
-        }
-#else
-        return path;
-#endif
-    }
-
-    private static bool IsPathDiscoveryException(Exception ex)
-    {
-        return ex is IOException
-            or UnauthorizedAccessException
-            or ArgumentException
-            or NotSupportedException
-            or PathTooLongException
-            or System.Security.SecurityException;
-    }
-
-    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath, string dashboardDir, string dashboardPath,
-        string terminalHostDir, string terminalHostPath, string terminalHostInvocationArgs)
-    {
-        public string DcpDir { get; } = dcpDir;
-
-        public string ManagedDir { get; } = managedDir;
-
-        public string ManagedPath { get; } = managedPath;
-
-        public string DashboardDir { get; } = dashboardDir;
-
-        public string DashboardPath { get; } = dashboardPath;
-
-        public string TerminalHostDir { get; } = terminalHostDir;
-
-        public string TerminalHostPath { get; } = terminalHostPath;
-
-        public string TerminalHostInvocationArgs { get; } = terminalHostInvocationArgs;
     }
 }

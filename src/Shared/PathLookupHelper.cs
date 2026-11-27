@@ -34,7 +34,7 @@ internal static class PathLookupHelper
 
         var path = pathOverride ?? Environment.GetEnvironmentVariable("PATH");
         var pathExtensions = OperatingSystem.IsWindows()
-            ? (pathExtensionsOverride ?? Environment.GetEnvironmentVariable("PATHEXT"))?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
+            ? GetWindowsPathExtensions(pathExtensionsOverride ?? Environment.GetEnvironmentVariable("PATHEXT"))
             : null;
 
         // Non-explicit command names must resolve through the effective PATH before Process.Start sees them. On Windows,
@@ -78,7 +78,7 @@ internal static class PathLookupHelper
     public static string? FindFullPathFromPath(string command)
     {
         var pathExtensions = OperatingSystem.IsWindows()
-            ? Environment.GetEnvironmentVariable("PATHEXT")?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
+            ? GetWindowsPathExtensions(Environment.GetEnvironmentVariable("PATHEXT"))
             : null;
 
         return FindFullPathFromPath(command, Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
@@ -91,11 +91,23 @@ internal static class PathLookupHelper
     /// <returns>The matching executable paths in PATH lookup order.</returns>
     public static IEnumerable<string> FindAllFullPathsFromPath(string command)
     {
+        return FindAllFullPathsFromPath(command, Environment.GetEnvironmentVariable("PATH"), Environment.GetEnvironmentVariable("PATHEXT"));
+    }
+
+    /// <summary>
+    /// Finds all full paths of a command by searching the given PATH and PATHEXT values instead of the process environment.
+    /// </summary>
+    /// <param name="command">The command name to search for.</param>
+    /// <param name="pathVariable">The PATH value to search.</param>
+    /// <param name="pathExtensionsVariable">The PATHEXT value to apply on Windows; ignored on other platforms.</param>
+    /// <returns>The matching executable paths in PATH lookup order.</returns>
+    public static IEnumerable<string> FindAllFullPathsFromPath(string command, string? pathVariable, string? pathExtensionsVariable)
+    {
         var pathExtensions = OperatingSystem.IsWindows()
-            ? Environment.GetEnvironmentVariable("PATHEXT")?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
+            ? GetWindowsPathExtensions(pathExtensionsVariable)
             : null;
 
-        return FindAllFullPathsFromPath(command, Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
+        return FindAllFullPathsFromPath(command, pathVariable, Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
     }
 
     /// <summary>
@@ -152,10 +164,33 @@ internal static class PathLookupHelper
         return null;
     }
 
+    /// <summary>
+    /// Splits a Windows PATHEXT value, falling back to the command shell's defaults when it has no entries.
+    /// </summary>
+    /// <remarks>
+    /// cmd.exe searches .COM, .EXE, .BAT and .CMD when PATHEXT is unset. Without this fallback, a process started
+    /// with a stripped environment could only find extensionless files on Windows.
+    /// See https://learn.microsoft.com/windows-server/administration/windows-commands/path
+    /// </remarks>
+    internal static string[] GetWindowsPathExtensions(string? pathExtensions)
+    {
+        var extensions = pathExtensions?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        return extensions.Length > 0 ? extensions : [".COM", ".EXE", ".BAT", ".CMD"];
+    }
+
     private static IEnumerable<string> FindAllFullPaths(string command, string? pathVariable, char pathSeparator, Func<string, bool> fileExists, string[]? pathExtensions)
     {
-        foreach (var directory in (pathVariable ?? string.Empty).Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var pathEntry in (pathVariable ?? string.Empty).Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
+            // Windows PATH entries can be quoted, and Path.Combine keeps the quotes as part of the directory name:
+            //   C:\Tools;"C:\Program Files\Aspire";C:\Users\user\.dotnet\tools
+            // Unix PATH has no quoting, so ':'-separated entries are literal and a quote or space is part of the name.
+            var directory = pathSeparator == ';' ? pathEntry.Trim().Trim('"') : pathEntry;
+            if (directory.Length == 0)
+            {
+                continue;
+            }
+
             // On Windows, search each directory completely with all PATHEXT extensions before moving to the next.
             // This matches Windows command lookup behavior where directory order takes precedence.
             if (pathExtensions is not null && pathExtensions.Length > 0)
@@ -166,7 +201,7 @@ internal static class PathLookupHelper
                     if (TryCombine(directory, command + extension, out var fullPathWithExt) &&
                         FileExistsSafe(fileExists, fullPathWithExt))
                     {
-                        yield return fullPathWithExt;
+                        yield return GetOnDiskPath(fullPathWithExt);
                         foundExtensionMatch = true;
                         break;
                     }
@@ -185,6 +220,37 @@ internal static class PathLookupHelper
                 yield return fullPath;
             }
         }
+    }
+
+    // PATHEXT entries are conventionally upper case (".CMD"), but Windows file names are case-insensitive, so
+    // "aspire" + ".CMD" matches "aspire.cmd". Report the file name as it exists on disk so resolved paths read the
+    // way the file was named. Falls back to the constructed path when the directory cannot be enumerated, for
+    // example when a test supplies its own existence probe.
+    private static string GetOnDiskPath(string path)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            var fileName = Path.GetFileName(path);
+            if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
+            {
+                return path;
+            }
+
+            var options = new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, MatchType = MatchType.Simple };
+            foreach (var match in Directory.EnumerateFiles(directory, fileName, options))
+            {
+                if (string.Equals(Path.GetFileName(match), fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Path.Combine(directory, Path.GetFileName(match));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
+        {
+        }
+
+        return path;
     }
 
     private static bool TryCombine(string directory, string fileName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? path)

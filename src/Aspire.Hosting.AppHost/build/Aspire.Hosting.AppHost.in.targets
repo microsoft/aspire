@@ -449,7 +449,7 @@ namespace Projects%3B
 
     <PropertyGroup>
       <_AspireCliBundleNotFoundError>
-        $(MSBuildProjectName) is configured to use the Aspire CLI bundle, but the bundle could not be resolved. New features require the Aspire CLI to be installed. The Aspire dashboard &amp; DCP packages will be deprecated in a future release.
+        $(MSBuildProjectName) is configured to use the Aspire CLI bundle, but the bundle could not be resolved. The build continues, and the AppHost tries to locate the bundle again when it starts. New features require the Aspire CLI to be installed. The Aspire dashboard &amp; DCP packages will be deprecated in a future release.
         Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupExecutable)' != '' or '$(_AspireCliFallbackDnxSetupExecutable)' != ''">
@@ -484,9 +484,12 @@ namespace Projects%3B
       </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
-    <Error Code="ASPIRE009"
-           Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')"
-           Text="$(_AspireCliBundleNotFoundError)" />
+    <!-- A warning rather than an error: build-only jobs (CI compilation, CodeQL) don't need the bundle, and the AppHost
+         repeats this selection at runtime from the settings embedded by EmbedAspireCliBundleSelection, so it can still
+         start once a bundle is installed. See https://github.com/microsoft/aspire/issues/22491. -->
+    <Warning Code="ASPIRE009"
+             Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')"
+             Text="$(_AspireCliBundleNotFoundError)" />
   </Target>
 
   <PropertyGroup>
@@ -768,6 +771,35 @@ namespace Projects%3B
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
         <_Parameter1>apphostglobalartifactspath</_Parameter1>
         <_Parameter2>$(_AspireGlobalArtifactsPath)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Embeds the settings that select the Aspire CLI bundle, so the AppHost can repeat the same selection at runtime
+    if the resolved bundle paths above are missing from its assembly. Unlike those paths, which ResolveAspireCliBundlePaths
+    only computes in real builds, these are plain project properties: design-time and real builds write identical values,
+    so a generated AssemblyInfo file left behind by a design-time build still carries them.
+  -->
+  <Target Name="EmbedAspireCliBundleSelection" BeforeTargets="GetAssemblyAttributes" Condition=" '$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' ">
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>aspirecliinvocationmode</_Parameter1>
+        <_Parameter2>$(_AspireCliInvocationMode)</_Parameter2>
+      </AssemblyAttribute>
+      <!-- The build resolves relative paths from the project directory (MSBuild's current directory for tasks), but the
+           AppHost may run from elsewhere, such as a test output directory, so embed full paths. -->
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition=" '$(AspireCliPath)' != '' ">
+        <_Parameter1>aspireclipath</_Parameter1>
+        <_Parameter2>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(AspireCliPath)'))</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition=" '$(AspireCliBundlePath)' != '' ">
+        <_Parameter1>aspireclibundlepath</_Parameter1>
+        <_Parameter2>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(AspireCliBundlePath)'))</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition=" '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned' ">
+        <_Parameter1>aspireclipinnedversion</_Parameter1>
+        <_Parameter2>$(_AspireAppHostPackageVersion)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>

@@ -506,6 +506,35 @@ public class PathLookupHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(dir1ExactPath, result);
     }
 
+    [Fact]
+    public void FindAllFullPathsFromPath_QuotedWindowsEntries_AreUnquoted()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "Program Files", "Aspire");
+        var existingFiles = new HashSet<string>
+        {
+            Path.Combine(dir, "aspire.EXE")
+        };
+
+        var result = PathLookupHelper.FindAllFullPathsFromPath("aspire", $" \"{dir}\" ;\"\"", ';', existingFiles.Contains, [".EXE"]);
+
+        Assert.Equal([Path.Combine(dir, "aspire.EXE")], result);
+    }
+
+    [Fact]
+    public void FindAllFullPathsFromPath_UnixEntries_AreUsedVerbatim()
+    {
+        var dir = "/opt/aspire";
+        var existingFiles = new HashSet<string>
+        {
+            Path.Combine(dir, "aspire")
+        };
+
+        // Unix PATH has no quoting, so these name directories that literally contain quotes or a trailing space.
+        var result = PathLookupHelper.FindAllFullPathsFromPath("aspire", $"\"{dir}\":{dir} ", ':', existingFiles.Contains, null);
+
+        Assert.Empty(result);
+    }
+
     private static void MakeExecutableOnUnix(string path)
     {
         if (!OperatingSystem.IsWindows())

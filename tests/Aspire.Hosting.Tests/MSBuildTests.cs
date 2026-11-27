@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Shared;
@@ -352,11 +353,11 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         return result.Output;
     }
 
-    private static string BuildProjectWithFailure(string workingDirectory, IDictionary<string, string>? environment = null)
+    private static string BuildProjectWithWarnings(string workingDirectory, IDictionary<string, string>? environment = null)
     {
         var result = BuildProjectCore(workingDirectory, environment);
 
-        Assert.NotEqual(0, result.ExitCode);
+        Assert.True(result.ExitCode == 0, $"Build failed: {Environment.NewLine}{result.Output}");
 
         return result.Output;
     }
@@ -564,6 +565,29 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void CliBundleSelectionEmbedsRelativeBundlePathAsFullPath()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // CreateSdkBundleAppHostProject places the project in <workspace>/AppHost.
+        var bundle = CreateFakeCliBundle(workspace.WorkspaceRoot.FullName);
+        var relativeLayoutRoot = Path.GetRelativePath(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost"), bundle.LayoutRoot);
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
+            $"""
+              <AspireCliBundlePath>{relativeLayoutRoot}</AspireCliBundlePath>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        BuildProject(appHostDirectory);
+
+        // The runtime fallback resolves this value from the AppHost's working directory, which differs from the
+        // project directory in tests, so the build must embed the full path.
+        Assert.Equal(Path.GetFullPath(bundle.LayoutRoot), GetGeneratedAssemblyMetadataValue(appHostDirectory, "aspireclibundlepath"));
+    }
+
+    [Fact]
     public async Task CliBundleOptInResolvesNewestVersionedBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
@@ -765,11 +789,11 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(
+        var output = BuildProjectWithWarnings(
             appHostDirectory,
             new Dictionary<string, string> { ["ASPIRE_HOME"] = aspireHome });
 
-        Assert.Contains("ASPIRE009", output);
+        Assert.Contains("warning ASPIRE009", output);
         Assert.Contains("Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.", output);
         Assert.Contains("The command timed out", output, StringComparison.OrdinalIgnoreCase);
     }
@@ -827,7 +851,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(appHostDirectory, new Dictionary<string, string>
+        var output = BuildProjectWithWarnings(appHostDirectory, new Dictionary<string, string>
         {
             ["ASPIRE_HOME"] = Path.Combine(workspace.WorkspaceRoot.FullName, "empty-aspire-home"),
             ["ASPIRE_LITERAL_SEGMENT"] = "expanded-segment"
@@ -927,7 +951,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void CliBundleOptInFailsWhenExplicitBundlePathIsInvalid()
+    public void CliBundleOptInWarnsWhenExplicitBundlePathIsInvalid()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -941,12 +965,12 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(appHostDirectory);
+        var output = BuildProjectWithWarnings(appHostDirectory);
 
         Assert.Contains("warning", output);
         Assert.Contains("AspireCliBundlePath", output);
         Assert.Contains(missingBundlePath, output);
-        Assert.Contains("ASPIRE009", output);
+        Assert.Contains("warning ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
         Assert.Contains("New features require the Aspire CLI to be installed.", output);
         Assert.Contains("https://get.aspire.dev", output);
@@ -956,7 +980,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(null)]
     [InlineData("Dnx")]
-    public void CliBundleDnxInvocationFailsWhenSetupCannotProduceLayout(string? invocationMode)
+    public void CliBundleDnxInvocationWarnsWhenSetupCannotProduceLayout(string? invocationMode)
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -986,13 +1010,18 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(appHostDirectory, new Dictionary<string, string>
+        var output = BuildProjectWithWarnings(appHostDirectory, new Dictionary<string, string>
         {
             ["ASPIRE_HOME"] = Path.Combine(workspace.WorkspaceRoot.FullName, "empty-aspire-home"),
             ["PATH"] = GetPathWithoutAspire(fakeCliDirectory.FullName)
         });
 
-        Assert.Contains("ASPIRE009", output);
+        // Build-only jobs succeed without a bundle (https://github.com/microsoft/aspire/issues/22491). The AppHost
+        // carries the bundle selection settings instead of DCP paths, so it can resolve a bundle when it runs.
+        Assert.Equal(invocationMode ?? "Path", GetGeneratedAssemblyMetadataValue(appHostDirectory, "aspirecliinvocationmode"));
+        Assert.Null(GetGeneratedAssemblyMetadataValue(appHostDirectory, "dcpclipath"));
+
+        Assert.Contains("warning ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
         Assert.Contains("failed with exit code", output);
         if (!OperatingSystem.IsWindows())
@@ -1002,7 +1031,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void CliBundleOptInFailsWhenExplicitCliPathIsInvalid()
+    public void CliBundleOptInWarnsWhenExplicitCliPathIsInvalid()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1015,7 +1044,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(appHostDirectory);
+        var output = BuildProjectWithWarnings(appHostDirectory);
 
         Assert.Contains("warning", output);
         Assert.Contains("AspireCliPath", output);
@@ -1168,6 +1197,19 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
           <Import Project="{repoRoot}\src\Aspire.AppHost.Sdk\SDK\Sdk.in.targets" />
         </Project>
         """);
+    }
+
+    private static string? GetGeneratedAssemblyMetadataValue(string projectDirectory, string key)
+    {
+        var assemblyInfo = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(projectDirectory, "obj"), "*.AssemblyInfo.cs", SearchOption.AllDirectories)));
+
+        // WriteCodeFragment splits long string literals into concatenations, for example:
+        //   [assembly: System.Reflection.AssemblyMetadataAttribute("key", ("/a/very/long" +
+        //       "/path"))]
+        // Join the pieces, then read the C# string literal that follows the key.
+        var joined = Regex.Replace(assemblyInfo, "\"\\s*\\+\\s*\"", string.Empty);
+        var match = Regex.Match(joined, $"\"{Regex.Escape(key)}\",\\s*\\(?\"(?<value>(?:[^\"\\\\]|\\\\.)*)\"");
+        return match.Success ? Regex.Unescape(match.Groups["value"].Value) : null;
     }
 
     private static (string LayoutRoot, string DcpDir, string DashboardDir, string DashboardPath) CreateFakeCliBundle(string basePath)
