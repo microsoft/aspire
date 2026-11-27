@@ -384,6 +384,80 @@ public class ExcludeFromMcpTests
         Assert.DoesNotContain(SecretServiceName, textContent.Text);
     }
 
+    [Theory]
+    [InlineData(ListTracesTool.SummaryFormat)]
+    [InlineData(ListTracesTool.FullFormat)]
+    public async Task ListTracesTool_FiltersExcludedResourceSpans_WhenResourceSpecified(string format)
+    {
+        // The dashboard returns whole traces that contain the requested resource, so a trace for the included
+        // resource can still carry a failing span, with exception details, from the excluded resource.
+        var resourceSpans = CreateTraceWithExcludedFailingSpan();
+        var resources = new[] { ApiServiceName, SecretServiceName }
+            .Select(name => new ResourceInfoJson { Name = name, HasLogs = true, HasTraces = true, HasMetrics = true })
+            .ToArray();
+        var (mockHttpClientFactory, _) = CreateMockHttp(resources, new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans },
+            TotalCount = 1,
+            ReturnedCount = 1
+        });
+
+        var tool = CreateTracesTool(CreateMonitorWithDashboardAndExcludedResource(), mockHttpClientFactory);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement(ApiServiceName),
+            ["format"] = JsonSerializer.SerializeToElement(format)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var trace = Assert.Single(JsonNode.Parse(text[text.IndexOf('[')..(text.LastIndexOf(']') + 1)])!.AsArray())!;
+        if (format == ListTracesTool.SummaryFormat)
+        {
+            Assert.Equal(1, trace["spanCount"]!.GetValue<int>());
+            Assert.Equal([ApiServiceName], trace["resources"]!.AsArray().Select(resource => resource!.GetValue<string>()));
+            Assert.False(trace["hasError"]!.GetValue<bool>());
+            Assert.Equal("api-span", trace["rootSpan"]!["spanId"]!.GetValue<string>());
+            Assert.Null(trace["firstErrorSpan"]);
+        }
+        else
+        {
+            var span = Assert.Single(trace["spans"]!.AsArray())!;
+            Assert.Equal("api-span", span["spanId"]!.GetValue<string>());
+        }
+    }
+
+    [Fact]
+    public async Task ListTracesTool_FiltersExcludedResourceSpans_WhenTraceIdProvided()
+    {
+        // Requesting a trace by ID skips the list-mode resource checks, so the detail response, which includes span
+        // events, must still drop the excluded resource's failing span and its exception details.
+        var (result, requestedPaths) = await GetTraceByIdAsync(CreateTraceWithExcludedFailingSpan()).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.Equal(["/api/telemetry/resources", "/api/telemetry/traces/abc123def456"], requestedPaths);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        var trace = JsonNode.Parse(text[text.IndexOf('{')..(text.LastIndexOf('}') + 1)])!.AsObject();
+        Assert.False(trace["hasError"]!.GetValue<bool>());
+        var span = Assert.Single(trace["spans"]!.AsArray())!;
+        Assert.Equal("api-span", span["spanId"]!.GetValue<string>());
+        Assert.Equal(ApiServiceName, span["source"]!.GetValue<string>());
+        Assert.Null(span["events"]);
+    }
+
+    [Fact]
+    public async Task ListTracesTool_ReturnsNotFound_WhenTraceIdProvidedAndAllSpansAreExcluded()
+    {
+        // Keep only the excluded resource's span so every span of the trace is filtered out.
+        var (result, requestedPaths) = await GetTraceByIdAsync(CreateTraceWithExcludedFailingSpan()[1..]).DefaultTimeout();
+
+        Assert.True(result.IsError);
+        Assert.Equal(["/api/telemetry/resources", "/api/telemetry/traces/abc123def456"], requestedPaths);
+        Assert.Equal("Trace 'abc123def456' not found.", Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text);
+    }
+
     [Fact]
     public async Task ListTraceStructuredLogsTool_FiltersExcludedResourceLogs()
     {
@@ -582,15 +656,95 @@ public class ExcludeFromMcpTests
         });
     }
 
+    private static OtlpResourceSpansJson[] CreateTraceWithExcludedFailingSpan()
+    {
+        return
+        [
+            CreateResourceSpans(ApiServiceName, new OtlpSpanJson
+            {
+                Name = "GET /orders",
+                TraceId = "abc123def456",
+                SpanId = "api-span",
+                StartTimeUnixNano = 1706540400000000000,
+                EndTimeUnixNano = 1706540400100000000,
+                Kind = 2
+            }),
+            CreateResourceSpans(SecretServiceName, new OtlpSpanJson
+            {
+                Name = "GET /secret",
+                TraceId = "abc123def456",
+                SpanId = "secret-span",
+                ParentSpanId = "api-span",
+                StartTimeUnixNano = 1706540400010000000,
+                EndTimeUnixNano = 1706540400090000000,
+                Kind = 2,
+                Status = new OtlpSpanStatusJson { Code = 2, Message = "secret failure" },
+                Events =
+                [
+                    new OtlpSpanEventJson
+                    {
+                        Name = "exception",
+                        TimeUnixNano = 1706540400090000000,
+                        Attributes =
+                        [
+                            new OtlpKeyValueJson { Key = "exception.type", Value = new OtlpAnyValueJson { StringValue = "System.InvalidOperationException" } },
+                            new OtlpKeyValueJson { Key = "exception.message", Value = new OtlpAnyValueJson { StringValue = "connection string contains a secret" } }
+                        ]
+                    }
+                ]
+            })
+        ];
+    }
+
+    private static async Task<(CallToolResult result, List<string> requestedPaths)> GetTraceByIdAsync(OtlpResourceSpansJson[] resourceSpans)
+    {
+        var resources = new[] { ApiServiceName, SecretServiceName }
+            .Select(name => new ResourceInfoJson { Name = name, HasLogs = true, HasTraces = true, HasMetrics = true })
+            .ToArray();
+        var requestedPaths = new List<string>();
+        var (mockHttpClientFactory, _) = CreateMockHttp(
+            resources,
+            new TelemetryApiResponse
+            {
+                Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans },
+                TotalCount = 1,
+                ReturnedCount = 1
+            },
+            request => requestedPaths.Add(request.RequestUri!.AbsolutePath));
+
+        var tool = CreateTracesTool(CreateMonitorWithDashboardAndExcludedResource(), mockHttpClientFactory);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["traceId"] = JsonSerializer.SerializeToElement("abc123def456")
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None);
+        return (result, requestedPaths);
+    }
+
+    private static OtlpResourceSpansJson CreateResourceSpans(string serviceName, params OtlpSpanJson[] spans)
+    {
+        return new OtlpResourceSpansJson
+        {
+            Resource = new OtlpResourceJson
+            {
+                Attributes = [new OtlpKeyValueJson { Key = "service.name", Value = new OtlpAnyValueJson { StringValue = serviceName } }]
+            },
+            ScopeSpans = [new OtlpScopeSpansJson { Scope = new OtlpInstrumentationScopeJson { Name = "TestScope" }, Spans = spans }]
+        };
+    }
+
     private static (MockHttpClientFactory factory, MockHttpMessageHandler handler) CreateMockHttp(
         ResourceInfoJson[] resources,
-        TelemetryApiResponse apiResponseObj)
+        TelemetryApiResponse apiResponseObj,
+        Action<HttpRequestMessage>? onRequest = null)
     {
         var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         var handler = new MockHttpMessageHandler(request =>
         {
+            onRequest?.Invoke(request);
             if (request.RequestUri?.AbsolutePath.Contains("/resources") == true)
             {
                 return new HttpResponseMessage(HttpStatusCode.OK)

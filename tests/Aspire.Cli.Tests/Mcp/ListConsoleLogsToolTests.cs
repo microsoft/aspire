@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Backchannel;
@@ -525,6 +526,203 @@ public class ListConsoleLogsToolTests
         // The qualifier value "error" is treated as a text fragment and matches
         Assert.Contains("level:error something failed", codeBlockContent);
         Assert.DoesNotContain("Normal operation", codeBlockContent);
+    }
+
+    [Theory]
+    [InlineData(null, "Returned latest 2 console logs. Earlier 3 console logs not returned because of size limits.", "line 4\nline 5")]
+    [InlineData("tail", "Returned latest 2 console logs. Earlier 3 console logs not returned because of size limits.", "line 4\nline 5")]
+    [InlineData("head", "Returned first 2 console logs. Later 3 console logs not returned because of size limits.", "line 1\nline 2")]
+    public async Task ListConsoleLogsTool_ReturnsLinesFromChosenEndUpToLimit(string? from, string expectedSummary, string expectedLines)
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            LogLines = [.. Enumerable.Range(1, 5).Select(index => new ResourceLogLine { ResourceName = "api-service", LineNumber = index, Content = $"line {index}", IsError = false })]
+        };
+        monitor.AddConnection("socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement("api-service"),
+            ["limit"] = JsonSerializer.SerializeToElement(2)
+        };
+        if (from is not null)
+        {
+            arguments["from"] = JsonSerializer.SerializeToElement(from);
+        }
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith(expectedSummary, text, StringComparison.Ordinal);
+        Assert.Equal(expectedLines, ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public async Task ListConsoleLogsTool_Head_CountsOnlyMatchingLines()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            LogLines =
+            [
+                new ResourceLogLine { ResourceName = "api-service", LineNumber = 1, Content = "Starting", IsError = false },
+                new ResourceLogLine { ResourceName = "api-service", LineNumber = 2, Content = "fail: first", IsError = true },
+                new ResourceLogLine { ResourceName = "api-service", LineNumber = 3, Content = "Running", IsError = false },
+                new ResourceLogLine { ResourceName = "api-service", LineNumber = 4, Content = "fail: second", IsError = true }
+            ]
+        };
+        monitor.AddConnection("socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement("api-service"),
+            ["search"] = JsonSerializer.SerializeToElement("fail"),
+            ["from"] = JsonSerializer.SerializeToElement("head"),
+            ["limit"] = JsonSerializer.SerializeToElement(1)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith("Returned first 1 console log. Later 1 console log not returned because of size limits.", text, StringComparison.Ordinal);
+        Assert.Equal("fail: first", ExtractCodeBlockContent(text));
+    }
+
+    [Fact]
+    public async Task ListConsoleLogsTool_Head_ReturnsEarliestLinesAcrossInterleavedReplicas()
+    {
+        // Replicas stream their histories concurrently, so a slower replica's startup failure
+        // can arrive after a faster replica's later lines.
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            LogLines =
+            [
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 1, Content = "2026-01-01T00:00:03.0000000Z replica a started", IsError = false },
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 2, Content = "2026-01-01T00:00:04.0000000Z replica a serving", IsError = false },
+                new ResourceLogLine { ResourceName = "api-service-def", LineNumber = 1, Content = "2026-01-01T00:00:01.0000000Z replica b failed to bind port", IsError = true },
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 3, Content = "2026-01-01T00:00:05.0000000Z replica a healthy", IsError = false },
+                new ResourceLogLine { ResourceName = "api-service-def", LineNumber = 2, Content = "2026-01-01T00:00:02.0000000Z replica b exited", IsError = true }
+            ]
+        };
+        monitor.AddConnection("socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement("api-service"),
+            ["from"] = JsonSerializer.SerializeToElement("head"),
+            ["limit"] = JsonSerializer.SerializeToElement(3)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith("Returned first 3 console logs. Later 2 console logs not returned because of size limits.", text, StringComparison.Ordinal);
+        Assert.Equal(
+            "replica b failed to bind port\nreplica b exited\nreplica a started",
+            ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public async Task ListConsoleLogsTool_HeadWithSearch_OrdersUntimestampedMatchesByPrecedingReplicaTimestamp()
+    {
+        // The untimestamped continuation line from replica a matches the search, but the timestamped
+        // line it continues doesn't. It must still be ordered at 00:00:03, after replica b's 00:00:01
+        // failure that arrives later.
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            LogLines =
+            [
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 1, Content = "2026-01-01T00:00:03.0000000Z replica a unhandled exception", IsError = true },
+                new ResourceLogLine { ResourceName = "api-service-abc", LineNumber = 2, Content = "   at ReplicaA.Startup() failure", IsError = true },
+                new ResourceLogLine { ResourceName = "api-service-def", LineNumber = 1, Content = "2026-01-01T00:00:01.0000000Z replica b failure binding port", IsError = true }
+            ]
+        };
+        monitor.AddConnection("socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement("api-service"),
+            ["from"] = JsonSerializer.SerializeToElement("head"),
+            ["search"] = JsonSerializer.SerializeToElement("failure"),
+            ["limit"] = JsonSerializer.SerializeToElement(1)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.StartsWith("Returned first 1 console log. Later 1 console log not returned because of size limits.", text, StringComparison.Ordinal);
+        Assert.Equal("replica b failure binding port", ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
+    }
+
+    [Theory]
+    [InlineData("tail", 200, 200, 'a', 1000)]
+    [InlineData("head", 200, 200, 'a', 1000)]
+    // CJK characters take three UTF-8 bytes each, so the size budget is reached after fewer lines.
+    [InlineData("tail", 200, 200, '界', 1000)]
+    [InlineData("head", 200, 200, '界', 1000)]
+    // Many short lines at the maximum limit: the line terminators and per-line rounding add up,
+    // so they must be counted against the budget too.
+    [InlineData("tail", 2000, 2000, 'a', 4)]
+    [InlineData("head", 2000, 2000, 'a', 4)]
+    public async Task ListConsoleLogsTool_StopsAtSizeBudgetBeforeLimit(string from, int lineCount, int limit, char filler, int fillerLength)
+    {
+        // Each line starts with a unique index so the retained lines can be identified.
+        var lines = Enumerable.Range(1, lineCount)
+            .Select(index => $"{index:D6} {new string(filler, fillerLength)}")
+            .ToList();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            LogLines = [.. lines.Select((content, i) => new ResourceLogLine { ResourceName = "api-service", LineNumber = i + 1, Content = content, IsError = false })]
+        };
+        monitor.AddConnection("socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonSerializer.SerializeToElement("api-service"),
+            ["limit"] = JsonSerializer.SerializeToElement(limit),
+            ["from"] = JsonSerializer.SerializeToElement(from)
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        // The 4,096-token budget is four UTF-8 bytes per token. Each returned line costs its bytes plus its line
+        // terminator, rounded up to whole tokens, so the returned lines never exceed 16 KB.
+        var lineTokens = (Encoding.UTF8.GetByteCount(lines[0]) + Environment.NewLine.Length + 3) / 4;
+        var expectedCount = 4096 / lineTokens;
+        Assert.InRange(expectedCount, 1, limit - 1);
+        var omittedCount = lineCount - expectedCount;
+        var expectedLines = from == "head" ? lines[..expectedCount] : lines[^expectedCount..];
+        var expectedSummary = from == "head"
+            ? $"Returned first {expectedCount} console logs. Later {omittedCount} console logs not returned because of size limits."
+            : $"Returned latest {expectedCount} console logs. Earlier {omittedCount} console logs not returned because of size limits.";
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        Assert.Equal(expectedSummary, text.ReplaceLineEndings("\n").Split('\n')[0]);
+        Assert.Equal(string.Join("\n", expectedLines), ExtractCodeBlockContent(text).ReplaceLineEndings("\n"));
+        Assert.InRange(Encoding.UTF8.GetByteCount(text), 1, 20_000);
+    }
+
+    [Theory]
+    [InlineData("""{"from":"middle"}""", "Argument 'from' must be one of: tail, head.")]
+    [InlineData("""{"limit":2001}""", "Argument 'limit' must be an integer from 1 through 2000.")]
+    public async Task ListConsoleLogsTool_RejectsInvalidArguments(string json, string expectedMessage)
+    {
+        using var document = JsonDocument.Parse(json);
+        var arguments = document.RootElement.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone());
+        arguments["resourceName"] = JsonSerializer.SerializeToElement("api-service");
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("socket.hash1", new TestAppHostAuxiliaryBackchannel());
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.Equal(ModelContextProtocol.McpErrorCode.InvalidParams, exception.ErrorCode);
+        Assert.Equal(expectedMessage, exception.Message);
     }
 
     private static string ExtractCodeBlockContent(string text)

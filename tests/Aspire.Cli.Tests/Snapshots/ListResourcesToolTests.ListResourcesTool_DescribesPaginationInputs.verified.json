@@ -14,6 +14,11 @@
       "maximum": 64,
       "default": 64,
       "description": "Maximum number of resources to return in this page."
+    },
+    "includeCommandDetails": {
+      "type": "boolean",
+      "default": false,
+      "description": "Include command descriptions and argument inputs. By default only command names and states are listed."
     }
   },
   "additionalProperties": false

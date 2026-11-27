@@ -23,7 +23,30 @@ internal static class SharedAIHelpers
     public const int StructuredLogsLimit = 800;
     public const int ConsoleLogsLimit = 2000;
     public const int MaximumListTokenLength = 8192;
+
+    /// <summary>
+    /// Token budget for compact list responses, such as the default MCP telemetry tool responses.
+    /// </summary>
+    /// <remarks>
+    /// Agent harnesses commonly replace tool results larger than about 20 KB with a pointer to a
+    /// spill file (for example, Copilot CLI writes them to disk and shows only the first 500 characters),
+    /// so the model reads the data through extra file reads instead of the tool result.
+    /// <see cref="EstimateTokenCount"/> uses four UTF-8 bytes per token, so this keeps the list itself
+    /// at about 16 KB and leaves room for the response header.
+    /// See https://github.com/microsoft/aspire/issues/22507.
+    /// </remarks>
+    public const int CompactListTokenLength = 4096;
+
     public const int MaximumStringLength = 2048;
+
+    // Summary strings and shortened attribute values are bounded by their serialized size in UTF-8 bytes rather than
+    // by character count, because one character can be written as up to six bytes (a control character is escaped as
+    // "\u0001") and the response budget is in serialized bytes.
+    private const int MaximumSummaryStringLength = 512;
+    private const int MaximumSummaryResourceCount = 16;
+    private const int MaximumSummaryResourceNameLength = 128;
+
+    private const string TruncatedMarker = "...[TRUNCATED]";
 
     internal static readonly JsonSerializerOptions s_jsonSerializerOptions = new JsonSerializerOptions
     {
@@ -34,9 +57,14 @@ internal static class SharedAIHelpers
     /// Estimates the token count for a string.
     /// This is a rough estimate - use a library for exact calculation.
     /// </summary>
+    /// <remarks>
+    /// The estimate counts UTF-8 bytes rather than UTF-16 characters: responses are written as UTF-8, and token budgets
+    /// exist to keep that output under a byte size. Counting characters would let non-ASCII text, such as CJK characters
+    /// that take three bytes each, produce roughly three times the intended output.
+    /// </remarks>
     public static int EstimateTokenCount(string text)
     {
-        return text.Length / 4;
+        return Encoding.UTF8.GetByteCount(text) / 4;
     }
 
     /// <summary>
@@ -52,23 +80,50 @@ internal static class SharedAIHelpers
     /// Converts OTLP resource logs to structured logs JSON for AI processing.
     /// </summary>
     /// <param name="resourceLogs">The OTLP resource logs containing log records.</param>
+    /// <param name="limit">The maximum number of log entries to return.</param>
+    /// <param name="maximumTokenLength">The estimated token budget for the returned log entries.</param>
+    /// <param name="boundEntryFields">
+    /// Whether to bound the size of each entry's fields so that a single large entry always fits in the budget.
+    /// When <see langword="false"/>, entries are returned unchanged and an entry that doesn't fit ends the list.
+    /// </param>
     /// <param name="getResourceName">Optional function to resolve resource names.</param>
     /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     /// <returns>A tuple containing the JSON string and a limit message.</returns>
     public static (string json, string limitMessage) GetStructuredLogsJson(
         IList<OtlpResourceLogsJson>? resourceLogs,
+        int limit,
+        int maximumTokenLength,
+        bool boundEntryFields,
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
-        var logRecords = GetLogRecordsFromOtlpData(resourceLogs);
+        // GetLimitFromEndWithSummary keeps the last items, but OTLP data is grouped by resource and scope,
+        // so interleaved records from different resources are not in time order. Sort them so the limit keeps
+        // the newest entries. This is done here rather than in GetLogRecordsFromOtlpData so the CLI output order
+        // of other callers is unchanged. OrderBy is stable, so records with equal timestamps keep their order.
+        var logRecords = GetLogRecordsFromOtlpData(resourceLogs)
+            .OrderBy(GetLogTimestampUnixNano)
+            .ToList();
         var promptContext = new PromptContext();
+
+        // GetLimitFromEndWithSummary stops at the first entry that doesn't fit, so a single newest log with large
+        // content would otherwise hide every log. Bound the serialized size of each entry's attributes, message and
+        // exception to a quarter of the budget each: the budget is in tokens and EstimateTokenCount counts four UTF-8
+        // bytes per token, so maximumTokenLength bytes is a quarter of it. The remaining quarter is left for the other
+        // fields, which are identifiers or bounded to MaximumSummaryResourceNameLength bytes (severity, resource name
+        // and source), so a bounded entry always fits.
+        // This is opt-in: detail tools such as list_trace_structured_logs return a small, focused set of entries, and
+        // bounding would drop attribute data they returned before even when the entry fits the budget.
+        int? maximumFieldLength = boundEntryFields ? maximumTokenLength : null;
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
             logRecords,
-            StructuredLogsLimit,
+            logRecords.Count,
+            limit,
+            maximumTokenLength,
             "log entry",
             "log entries",
-            i => GetLogEntryDto(i, promptContext, getResourceName, dashboardBaseUrl),
+            i => GetLogEntryDto(i, promptContext, getResourceName, dashboardBaseUrl, maximumFieldLength),
             EstimateSerializedJsonTokenSize);
 
         var jsonArray = new JsonArray(trimmedItems.ToArray());
@@ -101,29 +156,223 @@ internal static class SharedAIHelpers
     /// Converts OTLP resource spans to traces JSON for AI processing.
     /// </summary>
     /// <param name="resourceSpans">The OTLP resource spans containing trace data.</param>
+    /// <param name="limit">The maximum number of traces to return.</param>
+    /// <param name="maximumTokenLength">The estimated token budget for the returned traces.</param>
     /// <param name="getResourceName">Optional function to resolve resource names.</param>
     /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     /// <returns>A tuple containing the JSON string and a limit message.</returns>
     public static (string json, string limitMessage) GetTracesJson(
         IList<OtlpResourceSpansJson>? resourceSpans,
+        int limit,
+        int maximumTokenLength,
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
-        var traces = GetTracesFromOtlpData(resourceSpans);
+        var traces = GetTracesInStartOrder(resourceSpans);
         var promptContext = new PromptContext();
 
         var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
             traces,
-            TracesLimit,
+            traces.Count,
+            limit,
+            maximumTokenLength,
             "trace",
             "traces",
-            t => GetTraceDto(t, promptContext, getResourceName, dashboardBaseUrl),
+            t => GetTraceDto(t, promptContext, getResourceName, includeEvents: false, dashboardBaseUrl),
             EstimateSerializedJsonTokenSize);
 
         var jsonArray = new JsonArray(trimmedItems.ToArray());
         var tracesData = jsonArray.ToJsonString(s_jsonSerializerOptions);
 
         return (tracesData, limitMessage);
+    }
+
+    /// <summary>
+    /// Converts OTLP resource spans to one compact summary per trace for AI processing.
+    /// Each summary names the root span, the slowest span and the first failed span instead of listing every span.
+    /// </summary>
+    /// <param name="resourceSpans">The OTLP resource spans containing trace data.</param>
+    /// <param name="limit">The maximum number of traces to return.</param>
+    /// <param name="getResourceName">Function to resolve resource names.</param>
+    /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
+    /// <returns>A tuple containing the JSON string and a limit message.</returns>
+    public static (string json, string limitMessage) GetTraceSummariesJson(
+        IList<OtlpResourceSpansJson>? resourceSpans,
+        int limit,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl = null)
+    {
+        var traces = GetTracesInStartOrder(resourceSpans);
+
+        var (trimmedItems, limitMessage) = GetLimitFromEndWithSummary(
+            traces,
+            traces.Count,
+            limit,
+            CompactListTokenLength,
+            "trace",
+            "traces",
+            t => GetTraceSummaryDto(t, getResourceName, dashboardBaseUrl),
+            EstimateSerializedJsonTokenSize);
+
+        var jsonArray = new JsonArray(trimmedItems.ToArray());
+        return (jsonArray.ToJsonString(s_jsonSerializerOptions), limitMessage);
+    }
+
+    /// <summary>
+    /// Creates a compact JsonObject summarizing a trace for AI processing.
+    /// </summary>
+    /// <remarks>
+    /// The summary keeps what is needed to pick a trace to investigate: the root span, the child span
+    /// with the most self time and its database statement (the usual cause of a slow request), and the first failed
+    /// span with its exception. The full span list is available by requesting the trace by ID.
+    /// </remarks>
+    public static JsonObject GetTraceSummaryDto(
+        OtlpTraceDto trace,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl = null)
+    {
+        var rootSpan = GetRootSpan(trace);
+        var spansByStart = trace.Spans.OrderBy(s => s.Span.StartTimeUnixNano ?? 0).ToList();
+
+        // Rank child spans by self time (duration not covered by their own children). Ranking by duration
+        // would pick the span that wraps everything, such as the outgoing HTTP call, instead of the database
+        // call inside it where the time was actually spent.
+        var childrenBySpanId = trace.Spans
+            .Where(s => !string.IsNullOrEmpty(s.Span.ParentSpanId))
+            .GroupBy(s => s.Span.ParentSpanId!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(s => s.Span).ToList(), StringComparer.Ordinal);
+        var slowestSpan = trace.Spans
+            .Where(s => !ReferenceEquals(s, rootSpan))
+            .MaxBy(s => CalculateSelfTimeNano(
+                s.Span,
+                s.Span.SpanId is { } spanId && childrenBySpanId.TryGetValue(spanId, out var children) ? children : []) is { } selfTime
+                    ? (long)selfTime
+                    : -1);
+
+        // A failure usually propagates to its parents, which then also end with an error status.
+        // The failed span that ended first is the closest to the origin of the failure; among spans
+        // ending together, prefer the one that started last because it is the deepest.
+        var firstErrorSpan = trace.Spans
+            .Where(s => s.Span.Status?.Code == 2)
+            .OrderBy(s => s.Span.EndTimeUnixNano ?? ulong.MaxValue)
+            .ThenByDescending(s => s.Span.StartTimeUnixNano ?? 0)
+            .FirstOrDefault();
+
+        var timestamp = rootSpan?.Span.StartTimeUnixNano is { } startNano
+            ? OtlpHelpers.UnixNanoSecondsToDateTime(startNano)
+            : (DateTime?)null;
+
+        var distinctResources = spansByStart
+            .Select(s => getResourceName(s.Resource))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var resources = distinctResources
+            .Take(MaximumSummaryResourceCount)
+            .Select(name => (JsonNode)LimitSerializedLength(name, MaximumSummaryResourceNameLength))
+            .ToArray();
+        var resourcesOmitted = distinctResources.Count - resources.Length;
+
+        // Every string in a summary is bounded by its serialized size and the resource list is capped, so a summary
+        // is at most about 11 KB, well under the CompactListTokenLength budget (about 16 KB). That guarantees the newest
+        // trace always fits: GetLimitFromEndWithSummary stops at the first trace that doesn't fit, so an oversized
+        // newest summary would hide every older trace too. Trace and span IDs are left whole because callers use them
+        // to request full detail; OTLP defines them as 16 and 8 byte identifiers, so they are short.
+        var summary = new JsonObject
+        {
+            ["traceId"] = trace.TraceId,
+            ["title"] = LimitSerializedLength(rootSpan?.Span.Name, MaximumSummaryStringLength),
+            ["timestamp"] = timestamp,
+            ["durationMs"] = CalculateTraceDurationMs(trace.Spans),
+            ["spanCount"] = trace.Spans.Count,
+            ["resources"] = new JsonArray(resources),
+            // Tells the agent the resource list is incomplete; requesting the trace by ID returns every span.
+            ["resourcesOmitted"] = resourcesOmitted > 0 ? resourcesOmitted : null,
+            ["hasError"] = firstErrorSpan is not null,
+            ["rootSpan"] = rootSpan is null ? null : GetSpanSummaryDto(rootSpan, getResourceName),
+            ["slowestSpan"] = slowestSpan is null ? null : GetSpanSummaryDto(slowestSpan, getResourceName),
+            ["firstErrorSpan"] = firstErrorSpan is null ? null : GetSpanSummaryDto(firstErrorSpan, getResourceName)
+        };
+
+        if (dashboardBaseUrl is not null)
+        {
+            summary["dashboardUrl"] = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.TraceDetailUrl(trace.TraceId));
+        }
+
+        return StripNullProperties(summary);
+    }
+
+    private static OtlpSpanDto? GetRootSpan(OtlpTraceDto trace)
+    {
+        // Prefer a span without a parent. A trace often has none: the caller is outside the app (a browser or load
+        // generator sends a traceparent header), or the root span is still running because spans are exported when
+        // they end. Then use the top-most received span, one whose parent isn't in the trace, rather than whichever
+        // span the API listed first, which can be a deep child such as a database call. Ties use the earliest start,
+        // matching the dashboard, which falls back to the earliest span when a trace has no root.
+        var spanIds = trace.Spans
+            .Select(s => s.Span.SpanId)
+            .Where(id => !string.IsNullOrEmpty(id))
+            .ToHashSet(StringComparer.Ordinal);
+
+        return trace.Spans
+            .OrderBy(s => string.IsNullOrEmpty(s.Span.ParentSpanId) ? 0 : spanIds.Contains(s.Span.ParentSpanId) ? 2 : 1)
+            .ThenBy(s => s.Span.StartTimeUnixNano ?? ulong.MaxValue)
+            .FirstOrDefault();
+    }
+
+    private static JsonObject GetSpanSummaryDto(OtlpSpanDto spanDto, Func<IOtlpResource, string> getResourceName)
+    {
+        var span = spanDto.Span;
+        var httpStatus = span.Attributes?.FirstOrDefault(a => a.Key is "http.response.status_code" or "http.status_code") is { } statusAttribute
+            && int.TryParse(GetAttributeValue(statusAttribute), CultureInfo.InvariantCulture, out var statusCode)
+                ? GetHttpStatusName(statusCode)
+                : null;
+
+        // Database client spans carry the executed statement under the current semantic convention
+        // (db.query.text) or the deprecated one (db.statement).
+        // See https://opentelemetry.io/docs/specs/semconv/database/database-spans/
+        var statement = GetAttributeStringValue(span.Attributes, "db.query.text")
+            ?? GetAttributeStringValue(span.Attributes, "db.statement");
+
+        var spanObj = new JsonObject
+        {
+            ["spanId"] = span.SpanId,
+            ["name"] = LimitSerializedLength(span.Name, MaximumSummaryStringLength),
+            ["kind"] = GetSpanKindName(span.Kind),
+            ["source"] = LimitSerializedLength(getResourceName(spanDto.Resource), MaximumSummaryResourceNameLength),
+            ["destination"] = LimitSerializedLength(GetAttributeStringValue(span.Attributes, OtlpHelpers.AspireDestinationNameAttribute), MaximumSummaryResourceNameLength),
+            ["durationMs"] = CalculateDurationMs(span.StartTimeUnixNano, span.EndTimeUnixNano),
+            ["status"] = span.Status?.Code switch
+            {
+                1 => "Ok",
+                2 => "Error",
+                _ => null
+            },
+            ["statusMessage"] = LimitSerializedLength(span.Status?.Message, MaximumSummaryStringLength),
+            ["httpStatus"] = httpStatus,
+            ["statement"] = LimitSerializedLength(statement, MaximumSummaryStringLength),
+            ["exception"] = LimitSerializedLength(GetSpanExceptionText(span), MaximumSummaryStringLength)
+        };
+
+        return StripNullProperties(spanObj);
+    }
+
+    private static string? GetSpanExceptionText(OtlpSpanJson span)
+    {
+        // Exceptions are recorded as span events named "exception" with exception.type and exception.message attributes.
+        // See https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/
+        var exceptionEvent = span.Events?.FirstOrDefault(e => e.Name == "exception");
+        if (exceptionEvent is null)
+        {
+            return null;
+        }
+
+        var type = GetAttributeStringValue(exceptionEvent.Attributes, ExceptionTypeField);
+        var message = GetAttributeStringValue(exceptionEvent.Attributes, ExceptionMessageField);
+        return (type, message) switch
+        {
+            (not null, not null) => $"{type}: {message}",
+            _ => type ?? message
+        };
     }
 
     /// <summary>
@@ -141,7 +390,7 @@ internal static class SharedAIHelpers
         var traces = GetTracesFromOtlpData(resourceSpans);
         var trace = traces.FirstOrDefault() ?? throw new InvalidOperationException("No trace found in OTLP data.");
         var promptContext = new PromptContext();
-        var dto = GetTraceDto(trace, promptContext, getResourceName, dashboardBaseUrl);
+        var dto = GetTraceDto(trace, promptContext, getResourceName, includeEvents: false, dashboardBaseUrl);
 
         return dto.ToJsonString(s_jsonSerializerOptions);
     }
@@ -157,7 +406,7 @@ internal static class SharedAIHelpers
     {
         var spans = GetSpanDtosFromOtlpData(resourceSpans);
         var context = new PromptContext(processValues: false);
-        var jsonArray = new JsonArray(spans.Select(s => GetSpanDto(s, context, getResourceName, dashboardBaseUrl)).ToArray<JsonNode>());
+        var jsonArray = new JsonArray(spans.Select(s => GetSpanDto(s, context, getResourceName, includeEvents: false, dashboardBaseUrl)).ToArray<JsonNode>());
         return jsonArray.ToJsonString(s_jsonSerializerOptions);
     }
 
@@ -185,7 +434,7 @@ internal static class SharedAIHelpers
     {
         var traces = GetTracesFromOtlpData(resourceSpans);
         var context = new PromptContext(processValues: false);
-        var jsonArray = new JsonArray(traces.Select(t => GetTraceDto(t, context, getResourceName, dashboardBaseUrl)).ToArray<JsonNode>());
+        var jsonArray = new JsonArray(traces.Select(t => GetTraceDto(t, context, getResourceName, includeEvents: false, dashboardBaseUrl)).ToArray<JsonNode>());
         return jsonArray.ToJsonString(s_jsonSerializerOptions);
     }
 
@@ -198,20 +447,26 @@ internal static class SharedAIHelpers
         string? dashboardBaseUrl = null)
     {
         var context = new PromptContext(processValues: false);
-        return GetTraceDto(traceDto, context, getResourceName ?? (s => s.ResourceName), dashboardBaseUrl)
+        return GetTraceDto(traceDto, context, getResourceName ?? (s => s.ResourceName), includeEvents: false, dashboardBaseUrl)
             .ToJsonString(s_jsonSerializerOptions);
     }
 
     /// <summary>
     /// Creates a JsonObject representing a single span for AI processing.
     /// </summary>
+    /// <param name="spanDto">The span to convert.</param>
+    /// <param name="context">The prompt context for tracking duplicate values.</param>
+    /// <param name="getResourceName">Function to resolve resource names.</param>
+    /// <param name="includeEvents">Whether to include the span events, such as recorded exceptions, and their attributes.</param>
+    /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     public static JsonObject GetSpanDto(
         OtlpSpanDto spanDto,
         PromptContext context,
         Func<IOtlpResource, string> getResourceName,
+        bool includeEvents,
         string? dashboardBaseUrl = null)
     {
-        // `aspire otel spans --format json` and trace JSON output use this shape;
+        // `aspire otel spans --format json` and trace JSON output use this shape (without events);
         // keep docs/specs/cli-output-formats.md in sync when changing it.
         var span = spanDto.Span;
         var spanId = span.SpanId ?? string.Empty;
@@ -236,6 +491,41 @@ internal static class SharedAIHelpers
                 ["spanId"] = link.SpanId ?? string.Empty
             }).ToArray();
             linksArray = new JsonArray(linkObjects);
+        }
+
+        // Exceptions are recorded as span events named "exception" carrying exception.type, exception.message and
+        // exception.stacktrace attributes; the trace summary only shows a truncated "type: message", so the trace
+        // detail includes events to make the full exception available.
+        // See https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/
+        // Event attribute values bypass the prompt context: its length cap would cut long exception messages and
+        // stack traces, and its duplicate-line removal would drop legitimately repeated frames such as recursive
+        // calls. Span names, status messages and attributes still go through the context so large traces with
+        // repeated SQL or URLs stay compact; events are only emitted for the single-trace detail, which exists to
+        // show them in full.
+        JsonArray? eventsArray = null;
+        if (includeEvents && span.Events is { Length: > 0 })
+        {
+            var eventObjects = span.Events.Select(spanEvent =>
+            {
+                var eventAttributesObj = new JsonObject();
+                if (spanEvent.Attributes is not null)
+                {
+                    foreach (var attr in spanEvent.Attributes)
+                    {
+                        eventAttributesObj[attr.Key!] = GetAttributeValue(attr);
+                    }
+                }
+
+                return (JsonNode)StripNullProperties(new JsonObject
+                {
+                    ["name"] = spanEvent.Name,
+                    ["timestamp"] = spanEvent.TimeUnixNano is { } eventNano
+                        ? OtlpHelpers.UnixNanoSecondsToDateTime(eventNano)
+                        : (DateTime?)null,
+                    ["attributes"] = eventAttributesObj
+                });
+            }).ToArray();
+            eventsArray = new JsonArray(eventObjects);
         }
 
         var resourceName = getResourceName?.Invoke(spanDto.Resource) ?? spanDto.Resource.ResourceName;
@@ -266,7 +556,8 @@ internal static class SharedAIHelpers
             ["durationMs"] = CalculateDurationMs(span.StartTimeUnixNano, span.EndTimeUnixNano),
             ["timestamp"] = timestamp,
             ["attributes"] = attributesObj,
-            ["links"] = linksArray
+            ["links"] = linksArray,
+            ["events"] = eventsArray
         };
 
         if (dashboardBaseUrl is not null)
@@ -372,26 +663,28 @@ internal static class SharedAIHelpers
     /// <param name="trace">The trace DTO to convert.</param>
     /// <param name="context">The prompt context for tracking duplicate values.</param>
     /// <param name="getResourceName">Optional function to resolve resource names.</param>
+    /// <param name="includeEvents">Whether to include span events, such as recorded exceptions, and their attributes.</param>
     /// <param name="dashboardBaseUrl">Optional dashboard URL.</param>
     /// <returns>A JsonObject containing the trace data.</returns>
     public static JsonObject GetTraceDto(
         OtlpTraceDto trace,
         PromptContext context,
         Func<IOtlpResource, string> getResourceName,
+        bool includeEvents,
         string? dashboardBaseUrl = null)
     {
-        // `aspire otel traces --format json` uses this shape;
+        // `aspire otel traces --format json` uses this shape (without events);
         // keep docs/specs/cli-output-formats.md in sync when changing it.
         var spanObjects = new List<JsonNode>();
         foreach (var s in trace.Spans)
         {
-            var spanObj = GetSpanDto(s, context, getResourceName, dashboardBaseUrl: null);
+            var spanObj = GetSpanDto(s, context, getResourceName, includeEvents, dashboardBaseUrl: null);
             spanObjects.Add(spanObj);
         }
 
         var spanArray = new JsonArray(spanObjects.ToArray());
         var traceId = trace.TraceId;
-        var rootSpan = trace.Spans.FirstOrDefault(s => string.IsNullOrEmpty(s.Span.ParentSpanId)) ?? trace.Spans.FirstOrDefault();
+        var rootSpan = GetRootSpan(trace);
         var hasError = trace.Spans.Any(s => s.Span.Status?.Code == 2);
         var timestamp = rootSpan?.Span.StartTimeUnixNano is { } startNano
             ? OtlpHelpers.UnixNanoSecondsToDateTime(startNano)
@@ -556,6 +849,81 @@ internal static class SharedAIHelpers
     }
 
     /// <summary>
+    /// Calculates the time of a span not covered by any of its children, in nanoseconds.
+    /// </summary>
+    /// <remarks>
+    /// Children can run in parallel, so subtracting the sum of their durations would double-count overlapping
+    /// time. Instead, the union of the child intervals, clipped to the parent interval, is subtracted.
+    /// Children without both timestamps are ignored.
+    /// </remarks>
+    private static ulong? CalculateSelfTimeNano(OtlpSpanJson span, List<OtlpSpanJson> children)
+    {
+        if (span.StartTimeUnixNano is not { } start || span.EndTimeUnixNano is not { } end || end < start)
+        {
+            return null;
+        }
+
+        var childIntervals = children
+            .Where(c => c.StartTimeUnixNano is not null && c.EndTimeUnixNano is not null)
+            .Select(c => (Start: Math.Max(c.StartTimeUnixNano!.Value, start), End: Math.Min(c.EndTimeUnixNano!.Value, end)))
+            .Where(i => i.End > i.Start)
+            .OrderBy(i => i.Start);
+
+        ulong covered = 0;
+        ulong? currentStart = null;
+        ulong currentEnd = 0;
+        foreach (var (childStart, childEnd) in childIntervals)
+        {
+            if (currentStart is null || childStart > currentEnd)
+            {
+                if (currentStart is not null)
+                {
+                    covered += currentEnd - currentStart.Value;
+                }
+
+                currentStart = childStart;
+                currentEnd = childEnd;
+            }
+            else
+            {
+                currentEnd = Math.Max(currentEnd, childEnd);
+            }
+        }
+
+        if (currentStart is not null)
+        {
+            covered += currentEnd - currentStart.Value;
+        }
+
+        return end - start - covered;
+    }
+
+    private static ulong GetLogTimestampUnixNano(OtlpLogEntryDto logEntry)
+    {
+        // OTLP uses 0 for an unknown time; fall back to the time the collector observed the record.
+        // See https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-observedtimestamp
+        return logEntry.LogRecord.TimeUnixNano is { } time and not 0
+            ? time
+            : logEntry.LogRecord.ObservedTimeUnixNano ?? 0;
+    }
+
+    /// <summary>
+    /// Gets traces ordered by their earliest span start time.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="GetLimitFromEndWithSummary"/> keeps the last items, but <see cref="GetTracesFromOtlpData"/> returns
+    /// traces in resource and scope traversal order, which is not chronological when resources are interleaved.
+    /// <see cref="GetTracesFromOtlpData"/> itself is left unchanged so the CLI output order of other callers stays the same.
+    /// OrderBy is stable, so traces with equal start times keep their original order.
+    /// </remarks>
+    private static List<OtlpTraceDto> GetTracesInStartOrder(IList<OtlpResourceSpansJson>? resourceSpans)
+    {
+        return GetTracesFromOtlpData(resourceSpans)
+            .OrderBy(t => t.Spans.Select(s => s.Span.StartTimeUnixNano).Min() ?? 0)
+            .ToList();
+    }
+
+    /// <summary>
     /// Extracts log records from OTLP resource logs.
     /// </summary>
     public static List<OtlpLogEntryDto> GetLogRecordsFromOtlpData(IList<OtlpResourceLogsJson>? resourceLogs)
@@ -712,6 +1080,19 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
+        return GetLogEntryDto(logEntry, context, getResourceName, dashboardBaseUrl, maximumFieldLength: null);
+    }
+
+    // When maximumFieldLength is set, it is the maximum serialized size in UTF-8 bytes of the attributes, and separately
+    // of the message and of the exception. The severity, resource name and source are then also bounded to
+    // MaximumSummaryResourceNameLength bytes each.
+    private static JsonObject GetLogEntryDto(
+        OtlpLogEntryDto logEntry,
+        PromptContext context,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl,
+        int? maximumFieldLength)
+    {
         // `aspire otel logs --format json` uses this shape;
         // keep docs/specs/cli-output-formats.md in sync when changing it.
         var exceptionText = GetExceptionText(logEntry);
@@ -719,11 +1100,61 @@ internal static class SharedAIHelpers
         var logId = long.TryParse(logIdString, CultureInfo.InvariantCulture, out var parsedLogId) ? parsedLogId : (long?)null;
         var resourceName = getResourceName?.Invoke(logEntry.Resource) ?? logEntry.Resource.ResourceName;
 
+        var attributes = GetFilteredAttributes(logEntry.LogRecord.Attributes)
+            .Select(a => (Key: a.Key!, Value: GetAttributeValue(a)))
+            .ToList();
+
+        // Decide whether to bound attributes before any value is registered with the prompt context.
+        // Registered values become "Duplicate of ..." references in entries converted afterwards, so registering a value
+        // that is then shortened or dropped here would point those references at data that isn't in the output.
+        // Sizes are measured as serialized, so escaped characters such as control characters count at their written size.
+        var attributesTruncated = maximumFieldLength is { } maxLength
+            && attributes.Sum(a => EstimateAttributeLength(a.Key, LimitLength(a.Value, MaximumStringLength))) > maxLength;
+
         var attributesObject = new JsonObject();
-        foreach (var attr in GetFilteredAttributes(logEntry.LogRecord.Attributes))
+        var attributesLength = 0;
+        foreach (var (key, value) in attributes)
         {
-            var attrValue = GetAttributeValue(attr);
-            attributesObject[attr.Key!] = context.AddValue(attrValue, id => $@"Duplicate of attribute ""{id.Key}"" for log entry {id.LogId}", (LogId: logId, attr.Key));
+            if (attributesTruncated)
+            {
+                // Bound the key as well as the value: keys are producer-supplied, and one very long key would otherwise
+                // use the whole field budget and hide every attribute after it.
+                // Shortened keys aren't registered with the prompt context, so no reference ever names one.
+                var boundedKey = LimitSerializedLength(key, MaximumSummaryResourceNameLength);
+                if (attributesObject.ContainsKey(boundedKey))
+                {
+                    // Two long keys share the shortened prefix. Keep the first rather than overwrite it; the entry is
+                    // already marked with attributesTruncated, and the full attributes are available from the dashboard.
+                    continue;
+                }
+
+                var boundedValue = LimitSerializedLength(value, MaximumSummaryStringLength);
+                attributesLength += EstimateAttributeLength(boundedKey, boundedValue);
+                if (attributesLength > maximumFieldLength)
+                {
+                    break;
+                }
+
+                attributesObject[boundedKey] = boundedValue;
+            }
+            else if (maximumFieldLength is not null && GetSerializedLength(key) > MaximumSummaryResourceNameLength)
+            {
+                // A repeated value is written as a reference that embeds the key of the first attribute holding it, so a
+                // long key could make a later reference larger than the value it replaces and the entry exceed the budget.
+                // Shortening the key in the reference would make it ambiguous: two keys sharing the shortened prefix would
+                // produce identical references to different values. Write the value without registering it instead, so
+                // references only name keys of at most MaximumSummaryResourceNameLength bytes, exactly. A reference is
+                // then at most about 190 serialized bytes (23 + 2 + 128 for the key + 2 + 15 + 20 for the log id), and the
+                // prompt context only references values of at least 256 characters, so a reference is always smaller
+                // than the value it replaces.
+                // The key is written in full because the size check above counted it, and the value is capped the same
+                // way the size check measured it.
+                attributesObject[key] = LimitLength(value, MaximumStringLength);
+            }
+            else
+            {
+                attributesObject[key] = context.AddValue(value, id => $@"Duplicate of attribute ""{id.Key}"" for log entry {id.LogId}", (LogId: logId, Key: key));
+            }
         }
 
         var message = GetLogMessage(logEntry.LogRecord) ?? string.Empty;
@@ -732,12 +1163,15 @@ internal static class SharedAIHelpers
             ["logId"] = logId,
             ["spanId"] = logEntry.LogRecord.SpanId,
             ["traceId"] = logEntry.LogRecord.TraceId,
-            ["message"] = context.AddValue(message, id => $@"Duplicate of ""message"" for log entry {id}", logId),
-            ["severity"] = logEntry.LogRecord.SeverityText ?? "Unknown",
-            ["resourceName"] = resourceName,
+            ["message"] = AddBoundedValue(message, id => $@"Duplicate of ""message"" for log entry {id}"),
+            ["severity"] = LimitShortValue(logEntry.LogRecord.SeverityText ?? "Unknown"),
+            ["resourceName"] = LimitShortValue(resourceName),
             ["attributes"] = attributesObject,
-            ["exception"] = context.AddValue(exceptionText, id => $@"Duplicate of ""exception"" for log entry {id}", logId),
-            ["source"] = logEntry.ScopeName
+            // Tells the agent that attribute values were shortened or omitted; the full entry is available
+            // from the dashboard (dashboardUrl).
+            ["attributesTruncated"] = attributesTruncated ? true : null,
+            ["exception"] = AddBoundedValue(exceptionText, id => $@"Duplicate of ""exception"" for log entry {id}"),
+            ["source"] = LimitShortValue(logEntry.ScopeName)
         };
 
         if (dashboardBaseUrl is not null && logId is not null)
@@ -746,6 +1180,92 @@ internal static class SharedAIHelpers
         }
 
         return StripNullProperties(log);
+
+        // Severity, resource name and scope name are producer-supplied and normally short, but nothing prevents a very
+        // long value, which would make the entry exceed the budget and hide every older entry. Bound them in the
+        // budgeted projection only so the CLI output is unchanged. logId, spanId, traceId and dashboardUrl are
+        // identifiers or derived from them, so they stay short and aren't bounded.
+        string? LimitShortValue(string? value)
+        {
+            return maximumFieldLength is null ? value : LimitSerializedLength(value, MaximumSummaryResourceNameLength);
+        }
+
+        string? AddBoundedValue(string? value, Func<long?, string> getKey)
+        {
+            // The prompt context caps values at MaximumStringLength characters, which is enough for ASCII text but
+            // not for text written as several bytes per character (CJK text, escaped control characters). Shorten
+            // such values to the field budget instead, without registering them for the same reason as attributes.
+            if (value is not null
+                && maximumFieldLength is { } maxLength
+                && GetSerializedLength(LimitLength(value, MaximumStringLength)) > maxLength)
+            {
+                return LimitSerializedLength(value, maxLength);
+            }
+
+            return context.AddValue(value, getKey, logId);
+        }
+    }
+
+    // Size of "key":"value" as serialized, including quotes, colon and separator.
+    private static int EstimateAttributeLength(string key, string value)
+    {
+        return GetSerializedLength(key) + GetSerializedLength(value) + 6;
+    }
+
+    /// <summary>
+    /// Gets the size in UTF-8 bytes of a string value as written with <see cref="s_jsonSerializerOptions"/>, excluding quotes.
+    /// </summary>
+    /// <remarks>
+    /// Escapes count at their written size: for example, a control character is written as the six bytes <c>\u0001</c>.
+    /// </remarks>
+    private static int GetSerializedLength(ReadOnlySpan<char> value)
+    {
+        return JsonEncodedText.Encode(value, s_jsonSerializerOptions.Encoder).EncodedUtf8Bytes.Length;
+    }
+
+    /// <summary>
+    /// Limits a string so that its serialized size, as measured by <see cref="GetSerializedLength"/>, is at most
+    /// <paramref name="maximumLength"/> UTF-8 bytes, appending a truncation marker if needed.
+    /// </summary>
+    [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(value))]
+    private static string? LimitSerializedLength(string? value, int maximumLength)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        // Every character is written as at least one byte, so no prefix longer than maximumLength characters fits.
+        var candidate = value.AsSpan(0, Math.Min(value.Length, maximumLength));
+        if (candidate.Length == value.Length && GetSerializedLength(candidate) <= maximumLength)
+        {
+            return value;
+        }
+
+        // Find the longest prefix that fits. The serialized size grows with the prefix length, and the candidate is at most
+        // maximumLength characters, so this encodes a short span a few times.
+        var low = 0;
+        var high = candidate.Length;
+        while (low < high)
+        {
+            var middle = (low + high + 1) / 2;
+            if (GetSerializedLength(candidate[..middle]) <= maximumLength)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        // Don't split a surrogate pair: a lone high surrogate isn't valid UTF-16.
+        if (low > 0 && char.IsHighSurrogate(candidate[low - 1]))
+        {
+            low--;
+        }
+
+        return string.Concat(candidate[..low], TruncatedMarker);
     }
 
     /// <summary>
@@ -789,29 +1309,18 @@ internal static class SharedAIHelpers
     /// </summary>
     public static string LimitLength(string value)
     {
-        if (value.Length <= MaximumStringLength)
+        return LimitLength(value, MaximumStringLength)!;
+    }
+
+    [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(value))]
+    private static string? LimitLength(string? value, int maximumLength)
+    {
+        if (value is null || value.Length <= maximumLength)
         {
             return value;
         }
 
-        return
-            $"""
-            {value.AsSpan(0, MaximumStringLength)}...[TRUNCATED]
-            """;
-    }
-
-    /// <summary>
-    /// Gets items from the end of a list with a summary message, applying count and token limits.
-    /// </summary>
-    public static (List<TResult> items, string message) GetLimitFromEndWithSummary<T, TResult>(
-        List<T> values,
-        int limit,
-        string itemName,
-        string pluralItemName,
-        Func<T, TResult> convertToDto,
-        Func<TResult, int> estimateTokenSize)
-    {
-        return GetLimitFromEndWithSummary(values, values.Count, limit, itemName, pluralItemName, convertToDto, estimateTokenSize);
+        return string.Concat(value.AsSpan(0, maximumLength), TruncatedMarker);
     }
 
     /// <summary>
@@ -821,6 +1330,7 @@ internal static class SharedAIHelpers
         List<T> values,
         int totalValues,
         int limit,
+        int maximumTokenLength,
         string itemName,
         string pluralItemName,
         Func<T, TResult> convertToDto,
@@ -833,28 +1343,69 @@ internal static class SharedAIHelpers
             : values[^limit..];
 
         var currentTokenCount = 0;
-        var serializedValuesCount = 0;
-        var dtos = trimmedItems.Select(i => convertToDto(i)).ToList();
+        var dtos = new List<TResult>();
 
-        // Loop backwards to prioritize the latest items.
-        for (var i = dtos.Count - 1; i >= 0; i--)
+        // Convert from newest to oldest to prioritize the latest items, and stop at the first item that doesn't fit so
+        // items that are not returned are never converted. The order also matters for conversions that deduplicate values
+        // with a PromptContext: a repeated value is written in full in the newest item that has it, and older items refer
+        // to that newer item. The returned items are always a suffix of the list, so every referenced item is returned too.
+        // Converting oldest first would let a returned item refer to an older item that was dropped to fit the budget.
+        for (var i = trimmedItems.Count - 1; i >= 0; i--)
         {
-            var obj = dtos[i];
-            var tokenCount = estimateTokenSize(obj);
+            var dto = convertToDto(trimmedItems[i]);
+            var tokenCount = estimateTokenSize(dto);
 
-            if (currentTokenCount + tokenCount > MaximumListTokenLength)
+            if (currentTokenCount + tokenCount > maximumTokenLength)
             {
                 break;
             }
 
-            serializedValuesCount++;
+            dtos.Add(dto);
             currentTokenCount += tokenCount;
         }
 
-        // Trim again with what fits in the token limit.
-        dtos = dtos[^serializedValuesCount..];
+        dtos.Reverse();
 
         return (dtos, GetLimitSummary(totalValues, dtos.Count, itemName, pluralItemName));
+    }
+
+    /// <summary>
+    /// Gets items from the start of a list with a summary message, applying count and token limits.
+    /// </summary>
+    public static (List<TResult> items, string message) GetLimitFromStartWithSummary<T, TResult>(
+        List<T> values,
+        int totalValues,
+        int limit,
+        int maximumTokenLength,
+        string itemName,
+        string pluralItemName,
+        Func<T, TResult> convertToDto,
+        Func<TResult, int> estimateTokenSize)
+    {
+        Debug.Assert(totalValues >= values.Count, "Total values should be large or equal to the values passed into the method.");
+
+        var currentTokenCount = 0;
+        var dtos = new List<TResult>();
+
+        foreach (var value in values.Take(limit))
+        {
+            var dto = convertToDto(value);
+            var tokenCount = estimateTokenSize(dto);
+
+            if (currentTokenCount + tokenCount > maximumTokenLength)
+            {
+                break;
+            }
+
+            dtos.Add(dto);
+            currentTokenCount += tokenCount;
+        }
+
+        var message = totalValues == dtos.Count
+            ? $"Returned {ToQuantity(dtos.Count, itemName, pluralItemName)}."
+            : $"Returned first {ToQuantity(dtos.Count, itemName, pluralItemName)}. Later {ToQuantity(totalValues - dtos.Count, itemName, pluralItemName)} not returned because of size limits.";
+
+        return (dtos, message);
     }
 
     /// <summary>

@@ -1,0 +1,6 @@
+﻿Returned 1 trace.
+Each trace is summarized by its root span, slowest span (most self time) and first failed span. Call list_traces with traceId to get every span of a trace.
+
+# TRACES DATA
+
+[{"traceId":"0af7651916cd43dd8448eb211c80319c","title":"GET /orders","timestamp":"2024-01-29T15:00:00Z","durationMs":1200,"spanCount":4,"resources":["frontend","api"],"hasError":true,"rootSpan":{"spanId":"1000000000000001","name":"GET /orders","kind":"Server","source":"frontend","durationMs":1200,"status":"Error","httpStatus":"500 Internal Server Error"},"slowestSpan":{"spanId":"2000000000000001","name":"postgres","kind":"Client","source":"api","durationMs":900,"status":"Ok","statement":"SELECT * FROM orders WHERE customer_id = $1"},"firstErrorSpan":{"spanId":"2000000000000002","name":"postgres","kind":"Client","source":"api","durationMs":70,"status":"Error","statusMessage":"permission denied","statement":"UPDATE orders SET status = 'seen'","exception":"Npgsql.PostgresException: 25006: cannot execute UPDATE in a read-only transaction"},"dashboardUrl":"http://localhost:18888/traces/detail/0af7651916cd43dd8448eb211c80319c"}]

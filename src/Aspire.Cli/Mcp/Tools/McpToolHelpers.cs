@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using Aspire.Cli.Backchannel;
@@ -473,5 +475,62 @@ internal static class McpToolHelpers
         }
 
         return excludedNames;
+    }
+
+    /// <summary>
+    /// Reads an optional string argument. Non-string values are ignored, matching how the
+    /// telemetry tools have always treated <c>resourceName</c> and <c>search</c>.
+    /// </summary>
+    internal static string? GetOptionalString(IReadOnlyDictionary<string, JsonElement>? arguments, string name)
+    {
+        return arguments?.TryGetValue(name, out var element) == true && element.ValueKind == JsonValueKind.String
+            ? element.GetString()
+            : null;
+    }
+
+    /// <summary>
+    /// Reads an optional integer argument within an inclusive range, returning <paramref name="defaultValue"/>
+    /// when the argument is omitted. Unlike the legacy string arguments, a wrong type or an out-of-range value
+    /// is reported to the caller so an agent asking for less data is never silently given the default.
+    /// </summary>
+    internal static int GetOptionalInt32(IReadOnlyDictionary<string, JsonElement>? arguments, string name, int minimum, int maximum, int defaultValue)
+    {
+        if (arguments?.TryGetValue(name, out var element) != true)
+        {
+            return defaultValue;
+        }
+
+        if (element.ValueKind != JsonValueKind.Number || !element.TryGetInt32(out var value) || value < minimum || value > maximum)
+        {
+            throw new McpProtocolException(
+                string.Create(CultureInfo.InvariantCulture, $"Argument '{name}' must be an integer from {minimum} through {maximum}."),
+                McpErrorCode.InvalidParams);
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Reads an optional string argument that must match one of <paramref name="allowedValues"/>
+    /// (case-insensitive). Returns the canonical allowed value, or <paramref name="defaultValue"/> when omitted.
+    /// </summary>
+    [return: NotNullIfNotNull(nameof(defaultValue))]
+    internal static string? GetOptionalChoice(IReadOnlyDictionary<string, JsonElement>? arguments, string name, IReadOnlyList<string> allowedValues, string? defaultValue)
+    {
+        if (arguments?.TryGetValue(name, out var element) != true)
+        {
+            return defaultValue;
+        }
+
+        if (element.ValueKind == JsonValueKind.String &&
+            element.GetString() is { } value &&
+            allowedValues.FirstOrDefault(allowed => string.Equals(allowed, value, StringComparison.OrdinalIgnoreCase)) is { } match)
+        {
+            return match;
+        }
+
+        throw new McpProtocolException(
+            $"Argument '{name}' must be one of: {string.Join(", ", allowedValues)}.",
+            McpErrorCode.InvalidParams);
     }
 }

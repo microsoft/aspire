@@ -20,48 +20,60 @@ namespace Aspire.Cli.Mcp.Tools;
 /// </summary>
 internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInfoProvider, IAuxiliaryBackchannelMonitor? auxiliaryBackchannelMonitor, IHttpClientFactory httpClientFactory, ILogger<ListStructuredLogsTool> logger) : CliMcpTool
 {
+    internal const int DefaultLimit = 50;
+
+    // Minimum severities accepted by the Dashboard telemetry API, which parses them as Microsoft.Extensions.Logging.LogLevel.
+    private static readonly string[] s_severities = ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
+
+    private static readonly JsonElement s_inputSchema = JsonDocument.Parse(
+        $$"""
+        {
+          "type": "object",
+          "properties": {
+            "resourceName": {
+              "type": "string",
+              "description": "The resource name. This limits logs returned to the specified resource. If no resource name is specified then structured logs for all resources are returned."
+            },
+            "search": {
+              "type": "string",
+              "description": "Full-text search to filter logs. Searches across log text, attribute values, names, source, IDs, and other fields."
+            },
+            "severity": {
+              "type": "string",
+              "enum": ["Trace", "Debug", "Information", "Warning", "Error", "Critical"],
+              "description": "Minimum severity of the logs to return. For example, 'Warning' returns Warning, Error and Critical logs."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": {{SharedAIHelpers.StructuredLogsLimit}},
+              "default": {{DefaultLimit}},
+              "description": "Maximum number of the most recent log entries to return. Responses are also capped by size."
+            }
+          }
+        }
+        """).RootElement;
+
     public override string Name => KnownMcpTools.ListStructuredLogs;
 
-    public override string Description => "List structured logs for resources.";
+    public override string Description => "List structured logs for resources. Returns the most recent log entries; use severity, search, resourceName and limit to narrow the results.";
 
     public override JsonElement GetInputSchema()
     {
-        return JsonDocument.Parse("""
-            {
-              "type": "object",
-              "properties": {
-                "resourceName": {
-                  "type": "string",
-                  "description": "The resource name. This limits logs returned to the specified resource. If no resource name is specified then structured logs for all resources are returned."
-                },
-                "search": {
-                  "type": "string",
-                  "description": "Full-text search to filter logs. Searches across log text, attribute values, names, source, IDs, and other fields."
-                }
-              }
-            }
-            """).RootElement;
+        return s_inputSchema;
     }
 
     public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
         var arguments = context.Arguments;
+
+        // Validate arguments before contacting the dashboard so invalid input is reported as such.
+        var resourceName = McpToolHelpers.GetOptionalString(arguments, "resourceName");
+        var search = McpToolHelpers.GetOptionalString(arguments, "search");
+        var severity = McpToolHelpers.GetOptionalChoice(arguments, "severity", s_severities, defaultValue: null);
+        var limit = McpToolHelpers.GetOptionalInt32(arguments, "limit", minimum: 1, maximum: SharedAIHelpers.StructuredLogsLimit, defaultValue: DefaultLimit);
+
         var (apiToken, apiBaseUrl, dashboardBaseUrl) = await dashboardInfoProvider.GetDashboardInfoAsync(cancellationToken).ConfigureAwait(false);
-
-        // Extract resourceName from arguments
-        string? resourceName = null;
-        if (arguments?.TryGetValue("resourceName", out var resourceNameElement) == true &&
-            resourceNameElement.ValueKind == JsonValueKind.String)
-        {
-            resourceName = resourceNameElement.GetString();
-        }
-
-        string? search = null;
-        if (arguments?.TryGetValue("search", out var searchElement) == true &&
-            searchElement.ValueKind == JsonValueKind.String)
-        {
-            search = searchElement.GetString();
-        }
 
         try
         {
@@ -91,7 +103,7 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
             }
 
             // Fetch all logs from the API. Limiting of returned telemetry to the MCP caller happens later.
-            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
+            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resolvedResources, severity: severity, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
 
             logger.LogDebug(
                 "Fetching structured logs from {Url}",
@@ -117,6 +129,9 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
 
             var (logsData, limitMessage) = SharedAIHelpers.GetStructuredLogsJson(
                 resourceLogs,
+                limit,
+                SharedAIHelpers.CompactListTokenLength,
+                boundEntryFields: true,
                 getResourceName: s => OtlpHelpers.GetResourceName(s, resources.Select(r => new SimpleOtlpResource(r.Name, r.InstanceId)).ToList()),
                 dashboardBaseUrl: dashboardBaseUrl);
 

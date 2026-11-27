@@ -107,6 +107,10 @@ internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboa
 
             var (logsData, limitMessage) = SharedAIHelpers.GetStructuredLogsJson(
                 resourceLogs,
+                SharedAIHelpers.StructuredLogsLimit,
+                SharedAIHelpers.MaximumListTokenLength,
+                // This is the detail tool for one trace, so return entries in full rather than bounding their fields.
+                boundEntryFields: false,
                 getResourceName: s => OtlpHelpers.GetResourceName(s, resources.Select(r => new SimpleOtlpResource(r.Name, r.InstanceId)).ToList()),
                 dashboardBaseUrl: dashboardBaseUrl);
 
