@@ -3,6 +3,7 @@
 
 using System.ComponentModel;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Resources;
@@ -27,6 +28,10 @@ internal sealed class IntegrationSourceConfiguration
     [JsonPropertyName("patterns")]
     [Description("Optional allowed package IDs: exact IDs, prefixes ending in *, or * for all packages. Defaults to * when omitted.")]
     public string[]? Patterns { get; init; }
+
+    // Unmodeled settings must survive typed load/save cycles of aspire.config.json.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
     [JsonIgnore]
     internal string Name { get; init; } = DefaultName;

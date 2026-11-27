@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Git;
@@ -29,6 +30,10 @@ internal sealed class ConfigSource
 
     [JsonPropertyName("appliedVersion")]
     public string? AppliedVersion { get; init; }
+
+    // Unmodeled settings must survive typed load/save cycles of aspire.config.json.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
     internal string GetGitRef()
     {

@@ -572,7 +572,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
               "appHost": { "path": "UpdateTester.AppHost/UpdateTester.AppHost.csproj" },
               "channel": "stable",
-              "sdk": { "version": "9.4.1" }
+              "sdk": { "version": "9.4.1" },
+              "docs": { "custom": "keep" }
             }
             """);
 
@@ -697,6 +698,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         using var configDoc = JsonDocument.Parse(updatedConfig);
         Assert.Equal("daily", configDoc.RootElement.GetProperty("channel").GetString());
         Assert.Equal("9.5.0-preview.1", configDoc.RootElement.GetProperty("sdk").GetProperty("version").GetString());
+        // Settings set with `aspire config set` that the typed config model does not know about
+        // must survive the SDK version rewrite.
+        Assert.Equal("keep", configDoc.RootElement.GetProperty("docs").GetProperty("custom").GetString());
     }
 
     [Fact]

@@ -528,6 +528,10 @@ internal sealed class AspireConfigAppHost
     [JsonPropertyName("language")]
     [Description("Language identifier (e.g., \"typescript/nodejs\", \"python\"). Used to determine which runtime to use for execution.")]
     public string? Language { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -541,6 +545,10 @@ internal sealed class AspireConfigSdk
     [JsonPropertyName("version")]
     [Description("The Aspire SDK version. Determines the version of Aspire.Hosting packages to use.")]
     public string? Version { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -561,6 +569,10 @@ internal sealed class AspireConfigDocs
     [JsonPropertyName("api")]
     [Description("Optional API reference source overrides consumed by aspire docs api. Leave these unset to use the built-in aspire.dev API sources.")]
     public AspireConfigApiDocs? Api { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -574,6 +586,10 @@ internal sealed class AspireConfigCertificates
     [JsonPropertyName("nssDbPaths")]
     [Description("NSS database paths used for browser certificate trust on Linux. Separate paths with the platform path separator. Prefix a path with \"firefox=\" or \"chromium=\" to apply the trust settings expected by that browser family.")]
     public string? NssDbPaths { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -592,6 +608,10 @@ internal sealed class AspireConfigContainerTunnel
     [JsonPropertyName(BaseImagePropertyName)]
     [Description("Base image used by the container network tunnel that routes traffic to host services.")]
     public string? BaseImage { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -610,6 +630,10 @@ internal sealed class AspireConfigPortAllocation
     [JsonPropertyName(PersistInIsolatedModePropertyName)]
     [Description("Persist generated port allocations when the AppHost runs in isolated mode.")]
     public bool? PersistInIsolatedMode { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -623,6 +647,10 @@ internal sealed class AspireConfigApiDocs
     [JsonPropertyName("sitemapUrl")]
     [Description($"""Optional override for the API sitemap consumed by aspire docs api. Defaults to {ApiDocsSourceConfiguration.DefaultSitemapUrl}.""")]
     public string? SitemapUrl { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -642,6 +670,10 @@ internal sealed class AspireConfigTemplateSource
 
     [JsonPropertyName("ref")]
     public string? Ref { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 /// <summary>
@@ -662,4 +694,8 @@ internal sealed class AspireConfigProfile
     [JsonPropertyName("environmentVariables")]
     [Description("Environment variables for this profile.")]
     public Dictionary<string, string>? EnvironmentVariables { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
