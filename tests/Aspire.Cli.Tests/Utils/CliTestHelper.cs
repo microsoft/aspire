@@ -285,6 +285,7 @@ internal static class CliTestHelper
         services.AddSingleton<IApiDocsFetcher, TestApiDocsFetcher>();
         services.AddSingleton(options.ApiDocsIndexServiceFactory);
 
+        services.AddSingleton(new LauncherWatchdogOptions { PollInterval = options.LauncherWatchdogPollInterval });
         services.AddSingleton<CommonCommandServices>();
         services.AddSingleton<ResourceWaitService>();
         services.AddSingleton<AppHostConfigurationProjector>();
@@ -384,6 +385,13 @@ internal static class CliTestHelper
 internal sealed class CliServiceCollectionTestOptions
 {
     private readonly ITestOutputHelper _outputHelper;
+
+    /// <summary>
+    /// Gets or sets the interval between launcher-watchdog parent-liveness probes. Tests that wait for a
+    /// killed launcher to be detected set a short interval so the assertion is about the watchdog firing
+    /// rather than about wall-clock scheduling under CPU contention.
+    /// </summary>
+    public TimeSpan? LauncherWatchdogPollInterval { get; set; }
 
     public CliServiceCollectionTestOptions(ITestOutputHelper outputHelper, DirectoryInfo workingDirectory)
     {

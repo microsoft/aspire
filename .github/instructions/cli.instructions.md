@@ -17,3 +17,10 @@ applyTo: "src/Aspire.Cli/**/*.cs"
 - Display `-` for empty table cells rather than leaving them blank.
 - For commands supporting table and JSON output, use the existing `OutputFormat` convention. Emit JSON with `DisplayRawText` on stdout and let the shared command infrastructure route diagnostics to stderr.
 - Preserve JSON value types and empty objects/arrays. Table display placeholders and Spectre markup must not appear in JSON output.
+
+## Long-running `--follow` commands
+
+- Streaming commands that a host process (the VS Code extension) can spawn must override `RunsUnderLauncherWatchdog(ParseResult)` on `BaseCommand` so the launcher watchdog is armed before `ExecuteAsync` runs.
+- Do not call `ParentProcessWatchdog` from a command. `StartForCliParent` is internal, and arming the watchdog inside `ExecuteAsync` leaves earlier awaits — connection resolution, RPC handshake, initial state load — unwatched, so a force-killed launcher can strand the command there forever.
+- Treat a launcher-triggered cancellation as a normal end of stream. `BaseCommand` already maps it to a successful exit; do not surface it as an error.
+- See [Launcher watchdogs for long-running commands](../../docs/specs/process-management.md#launcher-watchdogs-for-long-running-commands).

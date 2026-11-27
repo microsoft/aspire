@@ -12,6 +12,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -56,6 +57,19 @@ internal abstract class BaseCommand : Command
     /// <c>aspire run</c> overrides it to give the AppHost a real cooperative-shutdown window.
     /// </summary>
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
+
+    /// <summary>
+    /// Whether this invocation is a long-running stream that a host process (the VS Code extension) may
+    /// have launched. <see cref="BaseCommand"/> arms the launcher watchdog before calling
+    /// <see cref="ExecuteAsync"/> so no awaited setup can run unwatched, and replaces the invocation token
+    /// with the watchdog-linked token.
+    /// </summary>
+    /// <remarks>
+    /// Commands must not arm the watchdog themselves. Doing so from inside <see cref="ExecuteAsync"/>
+    /// leaves every await before that point (connection resolution, RPC handshake, initial state load)
+    /// unwatched, so a force-killed launcher can strand the command there forever.
+    /// </remarks>
+    protected virtual bool RunsUnderLauncherWatchdog(ParseResult parseResult) => false;
 
     private readonly CliExecutionContext _executionContext;
     private bool _isMachineReadableFormatRequested;
@@ -142,6 +156,19 @@ internal abstract class BaseCommand : Command
 
         CommandResult result;
         var stoppingMessageShown = false;
+
+        // Arm the launcher watchdog before any command code runs. Arming it from inside ExecuteAsync
+        // leaves earlier awaits (connection resolution, RPC handshake, initial state load) unwatched, so a
+        // force-killed launcher could strand the command there forever. The scope owns the linked token,
+        // so the hook cannot be used to obtain a token without also starting the monitor.
+        await using var launcherWatchdogScope = RunsUnderLauncherWatchdog(parseResult)
+            ? ParentProcessWatchdog.StartCliParentScope(cancellationToken, services.LauncherWatchdogOptions.PollInterval)
+            : null;
+        if (launcherWatchdogScope is not null)
+        {
+            cancellationToken = launcherWatchdogScope.Token;
+        }
+
         try
         {
             // Configure the shared shutdown manager with this command's graceful-shutdown budget
@@ -211,6 +238,12 @@ internal abstract class BaseCommand : Command
         {
             // Error messages have already been displayed by the interaction service.
             result = CommandResult.Failure(CliExitCodes.MissingRequiredArgument);
+        }
+        catch (OperationCanceledException) when (launcherWatchdogScope is { IsWatchingLauncher: true } && launcherWatchdogScope.Token.IsCancellationRequested)
+        {
+            // The launcher disappeared. This is the orphaned-command condition the watchdog exists to
+            // end, so exit quietly instead of reporting a cancellation or an unexpected failure.
+            result = CommandResult.Success();
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested || ex is ExtensionOperationCanceledException)
         {

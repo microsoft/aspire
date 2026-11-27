@@ -10,7 +10,7 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
 {
     // The poll interval is intentionally coarse: this is a backstop for a parent that died abnormally, so
     // a one-second granularity is plenty and keeps the wakeups cheap.
-    private static readonly TimeSpan s_pollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan s_defaultPollInterval = TimeSpan.FromSeconds(1);
 
     private readonly CancellationTokenSource _stopCts = new();
     private readonly Task _monitorTask;
@@ -21,9 +21,10 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
         long? parentStartedUnix,
         Func<CancellationToken, Task> onParentExited,
         TimeProvider timeProvider,
-        bool useRuntimeStartTime)
+        bool useRuntimeStartTime,
+        TimeSpan pollInterval)
     {
-        _monitorTask = MonitorAsync(parentPid, parentStartedUnix, onParentExited, timeProvider, useRuntimeStartTime, _stopCts.Token);
+        _monitorTask = MonitorAsync(parentPid, parentStartedUnix, onParentExited, timeProvider, useRuntimeStartTime, pollInterval, _stopCts.Token);
     }
 
     /// <summary>
@@ -37,15 +38,24 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
     /// <remarks>
     /// <paramref name="parentStartedUnix"/> is interpreted per <paramref name="useRuntimeStartTime"/>:
     /// whole Unix seconds for the legacy <c>Process.StartTime</c> domain, or Unix milliseconds for the stable identity time.
+    /// <paramref name="pollInterval"/> defaults to one second. Tests shorten it so a parent that dies after
+    /// the initial probe is detected without depending on wall-clock scheduling under CPU contention.
     /// </remarks>
     public static ParentProcessLivenessMonitor Start(
         int parentPid,
         long? parentStartedUnix,
         Func<CancellationToken, Task> onParentExited,
         TimeProvider? timeProvider = null,
-        bool useRuntimeStartTime = false)
+        bool useRuntimeStartTime = false,
+        TimeSpan? pollInterval = null)
     {
-        return new ParentProcessLivenessMonitor(parentPid, parentStartedUnix, onParentExited, timeProvider ?? TimeProvider.System, useRuntimeStartTime);
+        return new ParentProcessLivenessMonitor(
+            parentPid,
+            parentStartedUnix,
+            onParentExited,
+            timeProvider ?? TimeProvider.System,
+            useRuntimeStartTime,
+            pollInterval ?? s_defaultPollInterval);
     }
 
     private static async Task MonitorAsync(
@@ -54,6 +64,7 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
         Func<CancellationToken, Task> onParentExited,
         TimeProvider timeProvider,
         bool useRuntimeStartTime,
+        TimeSpan pollInterval,
         CancellationToken stopToken)
     {
         try
@@ -63,7 +74,7 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
             // instead of after a full poll interval.
             await Task.Yield();
 
-            using var timer = new PeriodicTimer(s_pollInterval, timeProvider);
+            using var timer = new PeriodicTimer(pollInterval, timeProvider);
 
             // Probe once before awaiting the first tick. If the parent already died during our startup
             // window it is detected immediately instead of after a full poll interval, which closes the

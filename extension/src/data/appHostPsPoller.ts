@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ChildProcessWithoutNullStreams } from 'child_process';
-import { spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
+import { spawnCliProcess, terminateCliProcess, getCliParentWatchdogEnvironment } from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strings';
@@ -290,6 +290,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
+            env: getCliParentWatchdogEnvironment(),
             stdoutCallback: (data) => {
                 psFollowStdout.append(data);
             },
