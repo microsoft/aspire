@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting.GitHubPages\Aspire.Hosting.GitHubPages.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
+    <PackageReference Include="Verify.XunitV3" />
+    <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" />
+  </ItemGroup>
+
+</Project>
