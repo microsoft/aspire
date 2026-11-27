@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource icons in the dashboard resource list are now colored, making resource types and states easier to scan.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udfa8",
+  "firstMergedAt": "2026-11-23T23:12:49Z",
+  "lastMergedAt": "2026-11-23T23:12:49Z",
+  "name": "Colored resource icons in the resource list",
+  "owner": "JamesNK",
+  "prs": [
+    22514
+  ]
+}

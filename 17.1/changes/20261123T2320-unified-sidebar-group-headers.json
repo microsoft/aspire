@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Group headers in the dashboard sidebar now use a unified design and behavior across resource groups.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\udded",
+  "firstMergedAt": "2026-11-23T23:20:39Z",
+  "lastMergedAt": "2026-11-23T23:20:39Z",
+  "name": "Unified sidebar group headers",
+  "owner": "JamesNK",
+  "prs": [
+    22524
+  ]
+}

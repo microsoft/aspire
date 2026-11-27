@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The CLI no longer wraps Azure DevOps logging commands in pipeline output, so they are recognized by Azure Pipelines.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udea7",
+  "firstMergedAt": "2026-11-24T21:05:06Z",
+  "lastMergedAt": "2026-11-24T21:05:06Z",
+  "name": "Azure DevOps logging commands stay unwrapped in pipeline output",
+  "owner": "davidfowl",
+  "prs": [
+    21487
+  ]
+}

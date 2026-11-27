@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@4dwaffle"
+  ],
+  "description": "Dashboard static assets are now served through MapStaticAssets with fingerprinted URLs and immutable cache headers, so browsers reuse assets across loads and pick up new versions reliably.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\uddc2\ufe0f",
+  "firstMergedAt": "2026-11-23T03:11:56Z",
+  "lastMergedAt": "2026-11-23T03:11:56Z",
+  "name": "Fingerprinted static assets served with immutable caching",
+  "owner": "JamesNK",
+  "prs": [
+    22423
+  ]
+}

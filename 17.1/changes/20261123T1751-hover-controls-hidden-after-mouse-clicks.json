@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard hover controls no longer stay visible after a mouse click, keeping the resource and metric views tidy.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\uddb1\ufe0f",
+  "firstMergedAt": "2026-11-23T17:51:00Z",
+  "lastMergedAt": "2026-11-23T17:51:00Z",
+  "name": "Hover controls hidden after mouse clicks",
+  "owner": "JamesNK",
+  "prs": [
+    22515
+  ]
+}

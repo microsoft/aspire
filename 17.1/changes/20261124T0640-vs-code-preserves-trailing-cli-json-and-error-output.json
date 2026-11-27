@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension no longer drops trailing JSON or error output from Aspire CLI commands.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udcdc",
+  "firstMergedAt": "2026-11-24T06:40:20Z",
+  "lastMergedAt": "2026-11-24T06:40:20Z",
+  "name": "VS Code preserves trailing CLI JSON and error output",
+  "owner": "radical",
+  "prs": [
+    22595
+  ]
+}

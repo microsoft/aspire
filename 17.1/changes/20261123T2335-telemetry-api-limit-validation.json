@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard telemetry API now validates limit values and rejects invalid requests instead of processing them.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udee1\ufe0f",
+  "firstMergedAt": "2026-11-23T23:35:44Z",
+  "lastMergedAt": "2026-11-23T23:35:44Z",
+  "name": "Telemetry API limit validation",
+  "owner": "JamesNK",
+  "prs": [
+    22533
+  ]
+}

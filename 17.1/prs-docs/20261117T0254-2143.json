@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Go pre-start tools trust certificates correctly",
+  "mergedAt": "2026-11-17T02:54:39Z",
+  "number": 2143,
+  "runDate": "2026-11-27T06:10:00Z",
+  "status": "included",
+  "title": "[docs] Go module helpers certificate trust defaults"
+}

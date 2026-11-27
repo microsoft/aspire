@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "`aspire agent init` registers telemetry hooks only for the selected agent clients, names each client clearly, and removes stale static Aspire skill copies replaced by configured skill sources.",
-  "docsPrs": [],
+  "docsPrs": [
+    2063
+  ],
   "docsRequired": false,
-  "emoji": "🤖",
+  "emoji": "\ud83e\udd16",
   "firstMergedAt": "2026-11-13T00:02:18Z",
   "lastMergedAt": "2026-11-13T20:52:07Z",
   "name": "Telemetry hooks and stale skills handled per agent in aspire agent init",

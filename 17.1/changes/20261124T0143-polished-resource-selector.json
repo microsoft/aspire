@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard resource selector received layout and interaction polish.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf9a\ufe0f",
+  "firstMergedAt": "2026-11-24T01:43:28Z",
+  "lastMergedAt": "2026-11-24T01:43:28Z",
+  "name": "Polished resource selector",
+  "owner": "JamesNK",
+  "prs": [
+    22532
+  ]
+}

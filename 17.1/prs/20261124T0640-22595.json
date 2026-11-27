@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "VS Code preserves trailing CLI JSON and error output",
+  "mergedAt": "2026-11-24T06:40:20Z",
+  "number": 22595,
+  "runDate": "2026-11-27T06:10:00Z",
+  "status": "included",
+  "title": "fix(vscode): Preserve trailing CLI JSON and error output"
+}

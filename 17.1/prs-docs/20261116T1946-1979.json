@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-16T19:46:23Z",
+  "number": 1979,
+  "runDate": "2026-11-27T06:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Document existing Dockerfile entrypoint handling for Go and Python"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI/engineering-only Homebrew validation fix",
+  "mergedAt": "2026-11-23T20:46:45Z",
+  "number": 22468,
+  "runDate": "2026-11-27T06:10:00Z",
+  "status": "excluded",
+  "title": "Fix Homebrew cask style validation in CI"
+}

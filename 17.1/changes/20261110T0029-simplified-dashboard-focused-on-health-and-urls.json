@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The dashboard now opens on the full resource table with a URL column, adds an \"All resources\" row to selection, and quiets secondary UI so it centers on seeing that everything is healthy and reaching the app\u2019s URLs.",
-  "docsPrs": [],
+  "docsPrs": [
+    2095
+  ],
   "docsRequired": true,
   "emoji": "\ud83c\udfaf",
   "firstMergedAt": "2026-11-10T00:29:46Z",

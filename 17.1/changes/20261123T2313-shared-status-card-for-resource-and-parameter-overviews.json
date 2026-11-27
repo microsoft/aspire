@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource and parameter Overview pages now share a single Status card, giving a consistent view of state and details.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udccb",
+  "firstMergedAt": "2026-11-23T23:13:15Z",
+  "lastMergedAt": "2026-11-23T23:13:15Z",
+  "name": "Shared Status card for resource and parameter overviews",
+  "owner": "JamesNK",
+  "prs": [
+    22517
+  ]
+}

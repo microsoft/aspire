@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard Summary and resource Overview pages load faster by reducing the data and work needed to render live metrics and summaries.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u26a1",
+  "firstMergedAt": "2026-11-23T23:34:16Z",
+  "lastMergedAt": "2026-11-23T23:34:16Z",
+  "name": "Faster Summary and resource Overview loading",
+  "owner": "JamesNK",
+  "prs": [
+    22534
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI diagnostics archiving; no user-facing impact",
+  "mergedAt": "2026-11-24T21:15:23Z",
+  "number": 22348,
+  "runDate": "2026-11-27T06:10:00Z",
+  "status": "excluded",
+  "title": "[ci] Archive CLI starter validation diagnostics before artifact upload"
+}

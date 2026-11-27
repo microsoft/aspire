@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard text visualizer dialog controls that went missing have been restored.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd24",
+  "firstMergedAt": "2026-11-23T23:56:26Z",
+  "lastMergedAt": "2026-11-23T23:56:26Z",
+  "name": "Text visualizer controls restored",
+  "owner": "JamesNK",
+  "prs": [
+    22527
+  ]
+}

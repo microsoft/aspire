@@ -1,0 +1,9 @@
+{
+  "author": "4dwaffle",
+  "comment": "Fingerprinted static assets served with immutable caching",
+  "mergedAt": "2026-11-23T03:11:56Z",
+  "number": 22423,
+  "runDate": "2026-11-27T06:10:00Z",
+  "status": "included",
+  "title": "Enable MapStaticAssets for fingerprinted immutable Dashboard static assets"
+}

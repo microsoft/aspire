@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource row actions are shared across views, and up to two highlighted parameter commands are now shown directly on parameter rows.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\u25b6\ufe0f",
+  "firstMergedAt": "2026-11-24T06:28:52Z",
+  "lastMergedAt": "2026-11-24T06:28:52Z",
+  "name": "Shared row actions with highlighted parameter commands",
+  "owner": "JamesNK",
+  "prs": [
+    22516
+  ]
+}
