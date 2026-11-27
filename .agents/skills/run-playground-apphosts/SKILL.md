@@ -5,19 +5,57 @@ description: Run Aspire repository playground AppHosts using the CLI built from 
 
 # Run playground AppHosts from source
 
-1. Run `restore.cmd` (Windows) or `./restore.sh` (Linux/macOS) from the worktree root to set up the pinned SDK. Use that worktree's `run-aspire` wrapper to exercise the checkout's source CLI. No full solution build or CLI install is needed for the C# example below.
+1. Set up the worktree's pinned SDK on the first run; reuse it on repeat runs. Use that worktree's `run-aspire` wrapper to exercise the checkout's source CLI. No full solution build or CLI install is needed for the C# examples below.
 2. Pick the exact AppHost file under `playground/`. Use the one the user named; ask if several match. If no specific app is needed for a smoke test, `DotnetProject` is a container-free C# playground. Check `ps` before starting so you don't replace an existing run at the same path.
 3. For local-only testing, default to `ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true` for the launch. Omit it (or set it to `false` if inherited) when testing auth or when the dashboard is not loopback-only. Don't commit this setting or use it on a tunnel or shared network endpoint. `--allow-anonymous` is for `aspire dashboard run`, not AppHost startup.
 4. Use `start` for a background run. Use the dashboard URL printed by `start` and `describe` for resource URLs; don't assume the launch profile's ports. Use `wait` for the resource you need (`--status up` if you only need it running), and report the dashboard URL and any failed resources.
 
-## Windows (PowerShell, from the worktree root)
+## SDK setup and restore
+
+- **First run in a worktree:** From its root, run `.\restore.cmd` (Windows) or `./restore.sh` (Linux/macOS) to set up the pinned SDK and restore the repository.
+- **Repeat runs:** Reuse the worktree's SDK and skip the solution-wide restore. The `run-aspire` wrapper builds the source CLI, and `start` builds the selected AppHost unless you pass `--no-build`.
+- **If solution restore fails after SDK setup:** For a NuGet failure outside the selected AppHost's dependency graph, try a project-scoped restore from the same worktree: `.\dotnet.cmd restore $app` in PowerShell or `./dotnet.sh restore "$app"` in Bash. Set `$app` to the exact AppHost path as shown below. Continue only if that restore succeeds; this does not repair the solution-wide restore.
+
+## Windows: TestShop dashboard (PowerShell, from the worktree root)
+
+TestShop uses containers, so have a container engine running. Check whether this exact TestShop project is running in this worktree before starting it. Keep the JSON in memory: it may include dashboard login tokens.
 
 ```powershell
-$app = '.\playground\DotnetProject\DotnetProject.AppHost\DotnetProject.AppHost.csproj'
-.\run-aspire.cmd ps --non-interactive
+$app = '.\playground\TestShop\TestShop.AppHost\TestShop.AppHost.csproj'
+$appPath = (Resolve-Path -LiteralPath $app -ErrorAction Stop).Path
+$output = .\run-aspire.cmd ps --format Json --non-interactive
+if ($LASTEXITCODE -ne 0)
+{
+    throw "Aspire ps failed (exit code $LASTEXITCODE)."
+}
+
+# The source wrapper can print build/SDK messages before the JSON array ([...] or []).
+$json = [regex]::Match(($output -join "`n"), '(?ms)^\[(?=\s*(?:\{|\])).*\]\s*\z')
+if (-not $json.Success)
+{
+    throw 'Aspire ps did not return a JSON array.'
+}
+try
+{
+    $appHosts = ConvertFrom-Json -InputObject $json.Value -ErrorAction Stop
+}
+catch
+{
+    throw 'Aspire ps returned invalid JSON.'
+}
+
+$running = $appHosts | Where-Object { $_.appHostPath -eq $appPath -and $_.status -eq 'running' }
+if ($running)
+{
+    Write-Output "Running: $appPath"
+}
+else
+{
+    Write-Output "Not running: $appPath"
+}
 ```
 
-After `ps` succeeds and you've confirmed that this exact AppHost isn't already running, continue in the same shell. The wrapper records the selected SDK directory in `artifacts\toolset\sdk.txt`, but doesn't update the calling shell's `PATH`. Prepend that directory for `start` so Aspire's SDK check can find it even if no system SDK is installed.
+Continue in the same shell only if the check reports `Not running`. The wrapper records the selected SDK directory in `artifacts\toolset\sdk.txt`, but doesn't update the calling shell's `PATH`. Prepend that directory for `start` so Aspire's SDK check can find it even if no system SDK is installed.
 
 ```powershell
 $sdkRoot = Get-Content -LiteralPath '.\artifacts\toolset\sdk.txt' -TotalCount 1 -ErrorAction Stop
@@ -38,11 +76,17 @@ finally
     $env:PATH = $previousPath
     $env:ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS = $previousAnonymous
 }
-.\run-aspire.cmd wait apiservice --timeout 60 --non-interactive --apphost $app
+.\run-aspire.cmd wait aspire-dashboard --timeout 90 --non-interactive --apphost $app
+if ($LASTEXITCODE -ne 0)
+{
+    throw "TestShop dashboard did not become healthy (exit code $LASTEXITCODE)."
+}
 .\run-aspire.cmd describe --non-interactive --apphost $app
 # When done with this run:
 .\run-aspire.cmd stop --non-interactive --apphost $app
 ```
+
+If TestShop is already running from this worktree and only the dashboard project changed, follow [Rebuilding the dashboard in a running AppHost](../../../.github/instructions/dashboard.instructions.md#rebuilding-the-dashboard-in-a-running-apphost). Rebuilding just the `aspire-dashboard` project resource keeps TestShop running at the same origin, so you can retest browser preferences without clearing them or starting a second AppHost.
 
 ## Linux/macOS (Bash, from the worktree root)
 
