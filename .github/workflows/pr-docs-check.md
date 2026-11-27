@@ -3,13 +3,15 @@ description: |
   Analyzes merged pull requests for significant user-facing changes. When a
   PR is merged against main or release/* branches, this workflow determines
   whether microsoft/aspire.dev needs a documentation PR. If documentation
-  updates are required, it creates a draft PR with the changes following the
-  doc-writer skill conventions. The draft PR targets the aspire.dev branch
+  updates are required, it opens a ready-for-review PR with the changes
+  following the doc-writer skill conventions. The docs PR targets the aspire.dev branch
   resolved from the source PR's release reasoning (PR milestone, linked-issue
   milestone, then source PR base), using the matching release/* branch when it
-  already exists and falling back to aspire.dev main otherwise. It also
-  comments on the original PR with a link to the draft PR (or a "no docs
-  needed" message).
+  already exists and falling back to aspire.dev main otherwise. It assigns the
+  source PR's author and assignees (plus the merger when the author is not on
+  the Aspire team), requests review from the SME and
+  Copilot, and comments on the original PR with a link to the docs PR (or a
+  "no docs needed" message). The workflow never merges docs PRs.
 
 max-daily-ai-credits: -1
 
@@ -204,11 +206,16 @@ safe-outputs:
   create-pull-request:
     title-prefix: "[docs] "
     labels: [docs-from-code]
-    # NOTE: do NOT set a static `reviewers:` here. The drafted PR's reviewer is
-    # the SME identified from the source aspire PR's reviews at runtime, and
-    # that decision can't live in static frontmatter. The `notify-source-pr`
-    # safe-output job below requests the SME on the drafted PR after creation.
-    draft: true
+    # NOTE: do NOT set static `reviewers:` or `assignees:` here. Who owns the
+    # docs PR depends on the source aspire PR (author, merger, assignees, and
+    # reviews), so the trusted `notify-source-pr` safe-output job resolves and
+    # applies people after creation. The agent never supplies logins.
+    #
+    # Open docs PRs ready for review: maintainers always marked the drafts ready
+    # anyway, and GitHub does not request CODEOWNERS reviews on draft PRs.
+    # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+    # The workflow never merges docs PRs; a human still reviews and merges them.
+    draft: false
     # Generate the agent-time patch against the aspire.dev branch selected below.
     # At apply time, the separate safe-outputs job resolves that trusted branch
     # from canonical output or the safe-output server metadata retained in raw
@@ -228,9 +235,10 @@ safe-outputs:
       name: "Notify source PR"
       description: |
         Post the documentation analysis result as a comment on the source
-        microsoft/aspire pull request and (when a draft documentation PR was
-        opened on microsoft/aspire.dev) request a review from the SME
-        identified from the source PR.
+        microsoft/aspire pull request. When a docs PR (or its fallback issue)
+        was opened on microsoft/aspire.dev, the job also assigns people and
+        requests reviewers from the source PR deterministically; do not pass
+        any logins.
 
         Emit exactly one `notify_source_pr` item per run. On the drafting path,
         prepare both payloads, emit this notification intent immediately BEFORE
@@ -255,10 +263,6 @@ safe-outputs:
           description: "'drafted' when ready to request a docs PR on microsoft/aspire.dev (post-processing verifies creation); 'skipped' if no docs PR was needed; 'draft_failed' if docs were required but a docs PR could not be prepared."
           required: true
           type: string
-        sme_login:
-          description: "GitHub login of the SME from the source PR (preferred reviewer for the drafted docs PR). Empty string if no SME was identified."
-          required: false
-          type: string
         target_branch:
           description: "Effective target branch on microsoft/aspire.dev (only meaningful when result is 'drafted')."
           required: false
@@ -274,19 +278,24 @@ safe-outputs:
             persist-credentials: false
             path: _validator
             sparse-checkout: |
+              .github/workflows/pr-docs-check/resolve_people.py
               .github/workflows/pr-docs-check/resolve_safe_output_target.py
               .github/workflows/pr-docs-check/validate_outcome.py
             sparse-checkout-cone-mode: false
+        # Also minted when no PR URL exists: people are applied to the
+        # `fallback-as-issue` docs issue on that path.
         - name: Mint aspire-bot token (microsoft/aspire.dev)
           id: aspire-dev-token
-          if: needs.safe_outputs.outputs.created_pr_url != ''
           uses: actions/create-github-app-token@v3.2.0
           with:
             client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire.dev
-            # Reads the drafted PR base and requests the SME reviewer.
+            # Reads the docs PR base and requests reviewers (pull requests); lists
+            # issues to find the fallback issue, assigns people, and updates the
+            # PR or issue body with the people footer (issues).
+            permission-issues: write
             permission-pull-requests: write
         - name: Resolve drafted PR base
           id: drafted-pr-base
@@ -331,7 +340,8 @@ safe-outputs:
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire
-            # Lists, minimizes, and creates comments on the source pull request.
+            # Lists, minimizes, and creates comments on the source pull request,
+            # and reads its reviews to resolve docs PR people.
             permission-issues: write
             permission-pull-requests: write
         - name: Post status comment on source PR
@@ -388,14 +398,14 @@ safe-outputs:
                   summary,
                   '',
                   '> [!NOTE]',
-                  '> This draft PR needs human review before merging.'
+                  '> This PR needs human review before merging.'
                 ].join('\n');
               } else if (renderKind === 'drafted_missing_pr') {
                 // Agent intended to draft a PR but the safe-outputs handler did not produce
                 // a created_pr_url. Surface this as a failure rather than a "skipped" result.
                 body = [
                   MARKER,
-                  '⚠️ Documentation drafting was attempted but the draft PR could not be confirmed.',
+                  '⚠️ Documentation drafting was attempted but the docs PR could not be confirmed.',
                   '',
                   `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
                   '',
@@ -477,57 +487,202 @@ safe-outputs:
                 return;
               }
               core.info(`Posted ${renderKind || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
-        - name: Request SME review on draft PR
-          if: needs.safe_outputs.outputs.created_pr_url != ''
+        # Who owns the docs PR is resolved here from the live source PR, never from
+        # agent output (the agent job can write to anything it hands over). Every
+        # people operation is best-effort: a failure is a warning, not a failed run.
+        - name: Resolve docs PR people from the source PR
+          id: people-resolve
+          if: ${{ !cancelled() }}
+          continue-on-error: true
+          env:
+            CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
+            GH_TOKEN: ${{ steps.aspire-token.outputs.token }}
+            PEOPLE_DIR: ${{ runner.temp }}/pr-docs-check-people
+          run: |
+            set -euo pipefail
+
+            if [ ! -f "${CANONICAL_OUTCOME_PATH}" ] \
+              || [ "$(jq -r '.allow_people == true' "${CANONICAL_OUTCOME_PATH}")" != "true" ]; then
+              echo "Canonical outcome does not allow people operations; skipping."
+              exit 0
+            fi
+            SOURCE_PR_NUMBER="$(jq -r '.source_pr_number' "${CANONICAL_OUTCOME_PATH}")"
+            if ! [[ "${SOURCE_PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "ERROR: Canonical source PR number '${SOURCE_PR_NUMBER}' is not a positive integer." >&2
+              exit 1
+            fi
+
+            mkdir -p "${PEOPLE_DIR}"
+            gh api "/repos/microsoft/aspire/pulls/${SOURCE_PR_NUMBER}" > "${PEOPLE_DIR}/pr.json"
+            gh api --paginate "/repos/microsoft/aspire/pulls/${SOURCE_PR_NUMBER}/reviews?per_page=100" \
+              | jq -s 'add // []' > "${PEOPLE_DIR}/reviews.json"
+            # The merger is assigned only when the effective author is not on the
+            # Aspire team (write, maintain, or admin; the API reports maintain as
+            # write). A failed lookup counts as not on the team. Candidates are
+            # validated GitHub logins, so they are safe in the URL.
+            # https://docs.github.com/en/rest/collaborators/collaborators#get-repository-permissions-for-a-user
+            : > "${PEOPLE_DIR}/team.txt"
+            python3 _validator/.github/workflows/pr-docs-check/resolve_people.py team-candidates \
+              "${PEOPLE_DIR}/pr.json" > "${PEOPLE_DIR}/candidates.txt"
+            while IFS= read -r login; do
+              permission="$(gh api "/repos/microsoft/aspire/collaborators/${login}/permission" --jq '.permission' 2>/dev/null || true)"
+              case "${permission}" in
+                admin|write) echo "${login}" >> "${PEOPLE_DIR}/team.txt" ;;
+              esac
+            done < "${PEOPLE_DIR}/candidates.txt"
+            jq -R -s 'split("\n") | map(select(length > 0))' "${PEOPLE_DIR}/team.txt" > "${PEOPLE_DIR}/team.json"
+            python3 _validator/.github/workflows/pr-docs-check/resolve_people.py resolve \
+              "${PEOPLE_DIR}/pr.json" "${PEOPLE_DIR}/reviews.json" "${PEOPLE_DIR}/team.json" \
+              "${PEOPLE_DIR}/people.json"
+            cat "${PEOPLE_DIR}/people.json"
+        - name: Assign people and request reviewers on docs PR
+          id: people-apply
+          if: ${{ !cancelled() && steps.people-resolve.outcome == 'success' }}
+          continue-on-error: true
           uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
-            DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
+            COPILOT_REVIEW_MODE: ${{ vars.COPILOT_REVIEW_MODE }}
+            CREATED_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
+            PEOPLE_DIR: ${{ runner.temp }}/pr-docs-check-people
           with:
             github-token: ${{ steps.aspire-dev-token.outputs.token }}
             script: |
               const fs = require('fs');
+              const path = require('path');
+              const owner = 'microsoft';
+              const repo = 'aspire.dev';
+              // The only bot ever requested, and only as a reviewer. Same identity as
+              // organization-funded-copilot-reviews.yml, gated by the same variable.
+              const copilotReviewer = 'copilot-pull-request-reviewer[bot]';
+              // Mirrors resolve_people.py: only well-formed human logins reach the API.
+              const loginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+              const humans = values => (Array.isArray(values) ? values : [])
+                .filter(login => typeof login === 'string' && loginPattern.test(login));
 
-              const outputPath = process.env.CANONICAL_OUTCOME_PATH;
-              if (!outputPath || !fs.existsSync(outputPath)) {
-                core.info('Canonical outcome file not found; skipping reviewer request.');
+              const peoplePath = path.join(process.env.PEOPLE_DIR, 'people.json');
+              if (!fs.existsSync(peoplePath)) {
+                core.info('No resolved people for this outcome; skipping.');
                 return;
               }
-              let outcome;
-              try {
-                outcome = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
-              } catch (e) {
-                core.warning(`Failed to parse canonical outcome: ${e.message}`);
-                return;
-              }
-              if (!outcome.allow_sme_review) {
-                core.info(`Canonical outcome rejected SME review: ${outcome.diagnostic || 'outcome is not a confirmed draft'}`);
-                return;
-              }
-              const sme = (outcome.sme_login || '').toString().trim().replace(/^@/, '');
-              if (!sme) {
-                core.info('No SME login provided; leaving draft PR without an explicit reviewer.');
-                return;
-              }
+              const people = JSON.parse(fs.readFileSync(peoplePath, 'utf8'));
+              const outcome = JSON.parse(fs.readFileSync(process.env.CANONICAL_OUTCOME_PATH, 'utf8'));
 
-              const draftNumber = parseInt(String(process.env.DRAFT_PR_NUMBER || ''), 10);
-              if (!Number.isInteger(draftNumber) || draftNumber <= 0) {
-                core.warning(`Invalid draft PR number: ${process.env.DRAFT_PR_NUMBER}`);
-                return;
-              }
-              try {
-                await github.rest.pulls.requestReviewers({
-                  owner: 'microsoft',
-                  repo: 'aspire.dev',
-                  pull_number: draftNumber,
-                  reviewers: [sme],
+              let target = null;
+              const prNumber = parseInt(String(process.env.CREATED_PR_NUMBER || ''), 10);
+              if (Number.isInteger(prNumber) && prNumber > 0) {
+                target = { number: prNumber, isPull: true };
+              } else if (outcome.render_kind === 'drafted_missing_pr') {
+                // gh-aw's `fallback-as-issue` body footer links the run that created it:
+                //   https://github.com/microsoft/aspire/actions/runs/26201234567
+                // Match this exact run id (not a longer one) so another run's issue is
+                // never modified. The REST list is used instead of search because the
+                // search index lags behind just-created issues.
+                const repoPattern = process.env.GITHUB_REPOSITORY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const runPattern = new RegExp(`/${repoPattern}/actions/runs/${process.env.GITHUB_RUN_ID}(?![0-9])`);
+                const { data: issues } = await github.rest.issues.listForRepo({
+                  owner, repo, state: 'all', sort: 'created', direction: 'desc', per_page: 50,
                 });
-                core.info(`Requested @${sme} as reviewer on microsoft/aspire.dev#${draftNumber}`);
-              } catch (e) {
-                // Best-effort: an SME may not be assignable on aspire.dev (no write access,
-                // outside collaborator, etc.). Don't fail the job over this.
-                core.warning(`Failed to request reviewer @${sme} on microsoft/aspire.dev#${draftNumber}: ${e.message}`);
+                const match = issues.find(issue => !issue.pull_request && runPattern.test(issue.body || ''));
+                if (match) {
+                  target = { number: match.number, isPull: false };
+                }
               }
+              if (!target) {
+                core.info('No docs PR or fallback issue was created; skipping people.');
+                return;
+              }
+
+              const rows = [];
+              let assigned = [];
+              const wanted = humans(people.assignees);
+              if (wanted.length > 0) {
+                try {
+                  // GitHub silently drops logins that cannot be assigned in this
+                  // repository (for example community authors without access), so
+                  // the response is the source of truth for who was kept.
+                  const { data } = await github.rest.issues.addAssignees({
+                    owner, repo, issue_number: target.number, assignees: wanted,
+                  });
+                  assigned = (data.assignees || []).map(assignee => assignee.login);
+                } catch (e) {
+                  core.warning(`Failed to assign ${wanted.join(', ')} on ${owner}/${repo}#${target.number}: ${e.message}`);
+                }
+              }
+              const assignedKeys = new Set(assigned.map(login => login.toLowerCase()));
+              for (const login of wanted) {
+                rows.push([login, 'assignee', assignedKeys.has(login.toLowerCase()) ? 'assigned' : 'not assignable; mentioned']);
+              }
+              for (const login of humans(people.overflow)) {
+                rows.push([login, 'assignee', 'over the assignee cap; mentioned']);
+              }
+              fs.writeFileSync(path.join(process.env.PEOPLE_DIR, 'assigned.json'), JSON.stringify(assigned));
+              core.setOutput('number', String(target.number));
+
+              if (target.isPull) {
+                const sme = humans([people.sme_login])[0];
+                if (sme) {
+                  try {
+                    await github.rest.pulls.requestReviewers({ owner, repo, pull_number: target.number, reviewers: [sme] });
+                    rows.push([sme, `reviewer (${people.sme_source})`, 'requested']);
+                  } catch (e) {
+                    core.warning(`Failed to request reviewer ${sme} on ${owner}/${repo}#${target.number}: ${e.message}`);
+                    rows.push([sme, `reviewer (${people.sme_source})`, 'request failed']);
+                  }
+                }
+
+                // Same modes as organization-funded-copilot-reviews.yml: `enabled`
+                // requests, `disabled` skips, and anything else (default) is a dry run.
+                const mode = process.env.COPILOT_REVIEW_MODE || 'dry-run';
+                if (mode === 'enabled') {
+                  try {
+                    await github.rest.pulls.requestReviewers({ owner, repo, pull_number: target.number, reviewers: [copilotReviewer] });
+                    rows.push([copilotReviewer, 'reviewer', 'requested']);
+                  } catch (e) {
+                    core.warning(`Failed to request Copilot review on ${owner}/${repo}#${target.number}: ${e.message}`);
+                    rows.push([copilotReviewer, 'reviewer', 'request failed']);
+                  }
+                } else {
+                  rows.push([copilotReviewer, 'reviewer', mode === 'disabled' ? 'disabled' : 'dry run']);
+                }
+              }
+
+              await core.summary
+                .addHeading(`Docs ${target.isPull ? 'PR' : 'fallback issue'} people: ${owner}/${repo}#${target.number}`, 3)
+                .addTable([
+                  [{ data: 'Login', header: true }, { data: 'Role', header: true }, { data: 'Result', header: true }],
+                  ...rows,
+                ])
+                .write();
+        - name: Write people footer on docs PR
+          if: ${{ !cancelled() && steps.people-apply.outputs.number != '' }}
+          continue-on-error: true
+          env:
+            GH_TOKEN: ${{ steps.aspire-dev-token.outputs.token }}
+            PEOPLE_DIR: ${{ runner.temp }}/pr-docs-check-people
+            TARGET_NUMBER: ${{ steps.people-apply.outputs.number }}
+          run: |
+            set -euo pipefail
+
+            if ! [[ "${TARGET_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "ERROR: Docs PR or issue number '${TARGET_NUMBER}' is not a positive integer." >&2
+              exit 1
+            fi
+
+            # The footer is written here rather than by the agent because gh-aw's
+            # safe-output sanitizer neutralizes agent-authored @mentions (it wraps
+            # them in backticks), so they never notify anyone.
+            gh api "/repos/microsoft/aspire.dev/issues/${TARGET_NUMBER}" --jq '.body // ""' > "${PEOPLE_DIR}/body.md"
+            python3 _validator/.github/workflows/pr-docs-check/resolve_people.py footer \
+              "${PEOPLE_DIR}/people.json" "${PEOPLE_DIR}/assigned.json" \
+              "${PEOPLE_DIR}/body.md" "${PEOPLE_DIR}/new-body.md"
+            if cmp -s "${PEOPLE_DIR}/body.md" "${PEOPLE_DIR}/new-body.md"; then
+              echo "People footer is already up to date."
+              exit 0
+            fi
+            gh api -X PATCH "/repos/microsoft/aspire.dev/issues/${TARGET_NUMBER}" \
+              -F "body=@${PEOPLE_DIR}/new-body.md" > /dev/null
+            echo "Updated people footer on microsoft/aspire.dev#${TARGET_NUMBER}."
 
 # The agent that follows used to resolve the target microsoft/aspire.dev
 # branch itself (PR milestone -> linked-issue milestone -> PR base, then
@@ -939,7 +1094,7 @@ pre-agent-steps:
   # "draft a docs PR" gate. The catalog deliberately favors high
   # recall over precision: false positives fall into the Step 5
   # allowlist and the worst case is a drafted docs PR that a human
-  # closes (drafted PRs never auto-merge), while a false negative
+  # closes (docs PRs never auto-merge), while a false negative
   # ships an undocumented user-facing change — the failure mode this
   # step exists to fix.
   #
@@ -1019,15 +1174,27 @@ pre-agent-steps:
       python3 _repos/aspire/.github/workflows/pr-docs-check/compute_pr_context.py \
         "${PR_JSON}" "${FILES_JSON}" "${PR_CONTEXT_OUT}"
 
-      # --- 4. Resolve the subject-matter expert (SME) ---------------------
-      # SME selection from assignees/reviews is a deterministic algorithm, so
-      # it runs once here (reading the curated pr.json + reviews) instead of
-      # inside the agent loop. The agent reads .pr-docs-check/sme.json in
-      # Step 2. Only the fuzzy CODEOWNERS hint is left to the agent, signalled
-      # via "needs_codeowners_fallback". See resolve_sme.py.
-      SME_OUT=.pr-docs-check/sme.json
-      python3 _repos/aspire/.github/workflows/pr-docs-check/resolve_sme.py \
-        "${PR_CONTEXT_OUT}" "${REVIEWS_JSON}" "${SME_OUT}"
+      # --- 4. Resolve docs PR people (context only) ------------------------
+      # Assignees and the SME reviewer are a deterministic function of the raw
+      # PR + reviews, written to .pr-docs-check/people.json so the agent can
+      # address open questions to the SME. This copy is never used for side
+      # effects: the trusted notify-source-pr job recomputes it from the live
+      # source PR before assigning or requesting anyone. See resolve_people.py.
+      PEOPLE_OUT=.pr-docs-check/people.json
+      # Same team lookup as the notify-source-pr job; see the comment there.
+      TEAM_TXT="$(mktemp)"
+      TEAM_JSON="$(mktemp)"
+      python3 _repos/aspire/.github/workflows/pr-docs-check/resolve_people.py team-candidates \
+        "${PR_JSON}" | while IFS= read -r login; do
+          permission="$(gh api "/repos/microsoft/aspire/collaborators/${login}/permission" --jq '.permission' 2>/dev/null || true)"
+          case "${permission}" in
+            admin|write) echo "${login}" ;;
+          esac
+        done > "${TEAM_TXT}"
+      jq -R -s 'split("\n") | map(select(length > 0))' "${TEAM_TXT}" > "${TEAM_JSON}"
+      python3 _repos/aspire/.github/workflows/pr-docs-check/resolve_people.py resolve \
+        "${PR_JSON}" "${REVIEWS_JSON}" "${TEAM_JSON}" "${PEOPLE_OUT}"
+      rm -f "${TEAM_TXT}" "${TEAM_JSON}"
 
       # Keep patches available for targeted reads without inflating pr.json or
       # spending model calls fetching and decoding the same API response again.
@@ -1038,8 +1205,8 @@ pre-agent-steps:
       cat "${OUT}"
       echo "--- ${PR_CONTEXT_OUT} ---"
       cat "${PR_CONTEXT_OUT}"
-      echo "--- ${SME_OUT} ---"
-      cat "${SME_OUT}"
+      echo "--- ${PEOPLE_OUT} ---"
+      cat "${PEOPLE_OUT}"
 
 timeout-minutes: 20
 ---
@@ -1048,7 +1215,7 @@ timeout-minutes: 20
 
 Analyze a merged pull request in `microsoft/aspire` and determine whether documentation
 updates are needed on the `microsoft/aspire.dev` documentation site. If updates are
-needed, create a draft PR with the actual documentation changes.
+needed, open a ready-for-review PR with the actual documentation changes.
 
 ## Context
 
@@ -1103,9 +1270,9 @@ use are:
 | Field | Purpose |
 | --- | --- |
 | `number`, `title`, `body` | Source PR identity and the author's own description of the change. |
-| `author.login`, `author.type` | Author identity; `type` (`User`/`Bot`) drives Step 2's Copilot-authored branch. |
+| `author.login`, `author.type` | Author identity (`type` is `User` or `Bot`). |
 | `base_ref`, `milestone`, `labels` | Context for the change. |
-| `assignees` | Used by Step 2 to find the SME for Copilot-authored PRs. |
+| `assignees` | Source PR assignees (for Copilot-authored PRs, the humans who started the session). |
 | `linked_issues` | Same-repo issue numbers from `Closes`/`Fixes`/`Resolves #N` in the body. |
 | `changed_files` | Each `{filename, status, additions, deletions}`. |
 
@@ -1137,29 +1304,22 @@ filenames. Step 10 must cite at least one piece of evidence per triggered signal
 category, and the comment threads are often where that evidence lives in
 human-readable form.
 
-## Step 2: Identify the Subject-Matter Expert (SME)
+## Step 2: Read the Docs PR People (context only)
 
-The SME — the human best placed to review the drafted documentation PR — has
-already been resolved deterministically by a `pre-agent-steps:` shell step
-(`resolve_sme.py`) and written to `.pr-docs-check/sme.json`. **Read that file**;
-do **not** re-fetch assignees or reviews or re-run the selection logic.
+Who owns the docs PR was resolved deterministically by a `pre-agent-steps:`
+shell step (`resolve_people.py`) and written to `.pr-docs-check/people.json`.
+**Read that file for context only**; do **not** re-fetch assignees or reviews.
 
 | Field | Meaning |
 | --- | --- |
-| `sme_login` | The chosen reviewer login (no `@`), or `""` if none could be resolved. |
-| `sme_source` | How it was chosen — e.g. `copilot_originator` (the human who initiated the Copilot session), `approved_reviewer`, `substantive_reviewer`, or `none`. |
-| `needs_codeowners_fallback` | `true` only when there was no usable assignee/review signal and you should consult CODEOWNERS as a last-resort hint. |
-| `candidates` | The eligible reviewers (login + latest state), for context. |
+| `assignees` | Humans the workflow assigns to the docs PR: the source PR author and assignees, plus the merger when the author is not on the Aspire team. |
+| `sme_login` | The subject-matter expert requested as reviewer, or `""` when none was resolved. |
+| `sme_source` | How it was chosen: `approved_reviewer`, `substantive_reviewer`, or `none`. |
 
-Use `sme_login` directly as `SME_LOGIN`. **Only** when it is empty **and**
-`needs_codeowners_fallback` is `true`, look at CODEOWNERS for the changed files
-in `microsoft/aspire` and use the first individual login (skip team handles) as
-a weak hint. If `sme_login` is empty and the fallback flag is `false`, leave
-`SME_LOGIN` empty — the workflow drafts the PR without an explicit reviewer
-rather than guess.
-
-Capture the chosen login as `SME_LOGIN`. Do NOT include the `@` prefix. You will pass
-this to the `notify_source_pr` safe output later.
+You never pass these logins anywhere. A trusted post-processing job assigns
+people, requests the SME and Copilot reviews, and adds a footer that mentions
+the source PR author (and the merger when assigned). Do **not** write `@` mentions in the PR body
+or summary; refer to people as "the source PR author" or "the SME" instead.
 
 ## Step 3: Read the Pre-Resolved Target Branch
 
@@ -1173,8 +1333,8 @@ Read `.pr-docs-check/target.json`. The fields you will use are:
 
 | Field | Purpose |
 | --- | --- |
-| `effective_target_branch` | The branch you must base all docs edits and the draft PR on (`main` or `release/X.Y[.Z]`). |
-| `docs_work_branch` | The unique local branch already created from `effective_target_branch`; use it unchanged as the draft PR head branch. |
+| `effective_target_branch` | The branch you must base all docs edits and the docs PR on (`main` or `release/X.Y[.Z]`). |
+| `docs_work_branch` | The unique local branch already created from `effective_target_branch`; use it unchanged as the docs PR head branch. |
 | `candidate_source` | Why the candidate was chosen: `pr_milestone`, `linked_issue_milestone`, `pr_base`, or `fallback_main`. Use it in the PR description. |
 | `candidate_source_detail` | The raw milestone title or base ref that drove the choice. Use it in the PR description. |
 | `target_resolution` | How `effective_target_branch` was chosen: `exact_match`, `latest_release_fallback`, or `main_fallback`. Use it in the PR description. |
@@ -1212,7 +1372,7 @@ Read `.pr-docs-check/signals.json`. The fields you will use are:
 | `evidence` | Per-triggered-signal list of `{ file, hint }` entries showing the changed file and the matching diff fragment or PR-body snippet. Use these to write the PR description and the `notify_source_pr` summary. |
 
 The catalog favors recall over precision: a false positive at worst
-drafts a docs PR a human closes (drafted PRs never auto-merge), while a
+drafts a docs PR a human closes (docs PRs never auto-merge), while a
 false negative ships an undocumented user-facing change. You do **not**
 need the full catalog definition here — `triggered_signals` and
 `evidence` in `signals.json` tell you exactly which signals fired and
@@ -1344,8 +1504,8 @@ docs PR.
 ### Ambiguity rule
 
 When the evidence is mixed or you are unsure, **draft the PR** (recall over
-precision, as explained in Step 4). The drafted PR is in `draft:` state; it does
-not merge until a human flips it out of draft. This rule does **not** apply
+precision, as explained in Step 4). The workflow never merges the docs PR; a
+human reviews it and merges or closes it. This rule does **not** apply
 when `excluded == true` — an excluded PR is always skipped.
 
 ## Step 6: Emit the No-Docs Outcome (only when Step 5 allowed it)
@@ -1355,7 +1515,6 @@ result. Emit a single `notify_source_pr` safe output with:
 
 - `source_pr_number`: the source PR number from Step 1.
 - `result`: `"skipped"`.
-- `sme_login`: `SME_LOGIN` from Step 2 (or an empty string if none was found).
 - `summary`: a structured markdown rationale that proves the decision.
   It **must** include:
   1. The Step 5 branch you took, named explicitly: either
@@ -1457,7 +1616,6 @@ and base described in Step 11 before emitting any output. Prepare a single
 
 - `source_pr_number`: the source PR number from Step 1.
 - `result`: `"drafted"`.
-- `sme_login`: `SME_LOGIN` from Step 2 (or an empty string).
 - `target_branch`: `effective_target_branch` from `.pr-docs-check/target.json`.
 - `summary`: a short summary of the changes and modified files, citing the
   triggered signals. Do not invent a PR URL or number.
@@ -1472,7 +1630,7 @@ immediately to Step 11. `"drafted"` records intent, not a successful remote
 operation: trusted post-processing verifies the actual PR before commenting or
 requesting review. A notification without a created PR still fails validation.
 
-## Step 11: Create Draft PR and Stop
+## Step 11: Create the Docs PR and Stop
 
 > [!IMPORTANT]
 > Emit `create_pull_request` **exactly once**, and only after you have actually
@@ -1491,7 +1649,7 @@ requesting review. A notification without a created PR still fails validation.
 > `.pr-docs-check`, or `_repos` changes. The deterministic checkout helper also
 > hides those runtime files from Git as defense in depth.
 
-Create a draft pull request on `microsoft/aspire.dev` with:
+Create a ready-for-review pull request on `microsoft/aspire.dev` with:
 
 **Base branch**: the `effective_target_branch` value from
 `.pr-docs-check/target.json` (read in Step 3). When emitting the
@@ -1508,7 +1666,6 @@ string. Do not derive, rename, or replace it.
 
 **Description** that includes:
 - A prominent link to the source PR: `Documents changes from microsoft/aspire#<number>`
-- The PR author mention: `@<author>`
 - The target branch and how it was chosen, using `candidate_source`,
   `candidate_source_detail`, and `target_resolution` from
   `.pr-docs-check/target.json`. For example:
@@ -1529,9 +1686,9 @@ string. Do not derive, rename, or replace it.
 - A list of files modified or created
 - Whether pages were updated or newly created
 
-Do **not** include `reviewers` in the `create_pull_request` emission. The SME
-identified in Step 2 is requested as a reviewer by the `notify_source_pr`
-safe-output job, not by `create_pull_request`.
+Do **not** include `reviewers`, `assignees`, or `@` mentions in the
+`create_pull_request` emission. The `notify_source_pr` safe-output job assigns
+people, requests reviews, and appends a people footer with real mentions.
 
 > [!IMPORTANT]
 > Do not call `add_comment` on any path. The `notify_source_pr` job uses the
