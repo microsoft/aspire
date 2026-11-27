@@ -1,0 +1,15 @@
+﻿[
+  --entrypoints.web.address=:80,
+  --entrypoints.traefik.address=:8080,
+  --global.checknewversion=false,
+  --global.sendanonymoususage=false,
+  --log.level=DEBUG,
+  --accesslog=true,
+  --accesslog.format=json,
+  --accesslog.filters.statuscodes=400-599,302,
+  --accesslog.filters.retryattempts=true,
+  --accesslog.filters.minduration=250ms,
+  --accesslog.fields.headers.names.User-Agent=keep,
+  --ping=true,
+  --providers.file.directory=/etc/traefik/dynamic
+]

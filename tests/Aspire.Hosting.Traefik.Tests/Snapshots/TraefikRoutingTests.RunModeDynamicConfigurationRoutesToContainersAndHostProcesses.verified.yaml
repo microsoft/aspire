@@ -1,0 +1,31 @@
+﻿http:
+  routers:
+    whoami:
+      rule: Host(`whoami.dev.localhost`)
+      entryPoints:
+      - web
+      service: whoami
+    api:
+      rule: Host(`api.dev.localhost`)
+      entryPoints:
+      - web
+      service: api
+    app-api:
+      rule: Host(`app.dev.localhost`) && PathPrefix(`/api`)
+      entryPoints:
+      - web
+      service: app-api
+      priority: 100
+  services:
+    whoami:
+      loadBalancer:
+        servers:
+        - url: http://whoami:80
+    api:
+      loadBalancer:
+        servers:
+        - url: http://host.docker.internal:5123
+    app-api:
+      loadBalancer:
+        servers:
+        - url: http://host.docker.internal:5123

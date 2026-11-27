@@ -1,0 +1,51 @@
+﻿http:
+  routers:
+    api:
+      rule: Host(`api.dev.localhost`) && PathPrefix(`/v1`) && (Method(`GET`) || Method(`HEAD`))
+      entryPoints:
+      - web
+      service: api
+      middlewares:
+      - defaults
+      - api-strip
+    api-admin:
+      rule: Host(`admin.dev.localhost`) && Header(`X-Admin`, `1`) && Query(`debug`, `true`) && ClientIP(`10.0.0.0/8`) && (PathPrefix(`/admin`) || PathRegexp(`^/ops/[0-9]{2,3}`)) && !Method(`DELETE`)
+      entryPoints:
+      - web
+      service: api-admin
+    api-raw:
+      rule: Host(`a.example.com`) || Host(`b.example.com`)
+      entryPoints:
+      - web
+      service: api-raw
+  services:
+    api:
+      loadBalancer:
+        servers:
+        - url: http://api:8080
+    api-admin:
+      loadBalancer:
+        servers:
+        - url: http://api:8080
+    api-raw:
+      loadBalancer:
+        servers:
+        - url: http://api:8080
+  middlewares:
+    security:
+      headers:
+        stsSeconds: 31536000
+        frameDeny: true
+        contentTypeNosniff: true
+        referrerPolicy: strict-origin-when-cross-origin
+    compress:
+      compress: {}
+    defaults:
+      chain:
+        middlewares:
+        - security
+        - compress
+    api-strip:
+      stripPrefix:
+        prefixes:
+        - /v1

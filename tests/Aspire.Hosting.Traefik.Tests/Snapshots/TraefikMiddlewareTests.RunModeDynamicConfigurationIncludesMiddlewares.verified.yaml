@@ -1,0 +1,46 @@
+﻿http:
+  routers:
+    api:
+      rule: Host(`api.dev.localhost`)
+      entryPoints:
+      - web
+      service: api
+      middlewares:
+      - sec
+      - compress
+    app-v1:
+      rule: Host(`app.dev.localhost`) && PathPrefix(`/v1`)
+      entryPoints:
+      - web
+      service: app-v1
+      middlewares:
+      - sec
+      - compress
+      - strip-v1
+  services:
+    api:
+      loadBalancer:
+        servers:
+        - url: http://api:8080
+    app-v1:
+      loadBalancer:
+        servers:
+        - url: http://api:8080
+  middlewares:
+    sec:
+      headers:
+        frameDeny: true
+        stsSeconds: 31536000
+        customRequestHeaders:
+          X-Script-Name: test
+        accessControlAllowOriginList:
+        - https://app.dev.localhost
+    strip-v1:
+      stripPrefix:
+        prefixes:
+        - /v1
+    compress:
+      compress: {}
+    unused:
+      inFlightReq:
+        amount: 10
