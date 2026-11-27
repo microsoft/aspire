@@ -141,10 +141,12 @@ suite('extension/package.json', () => {
 
         const openDashboard = contextMenus.find(item => item.command === 'aspire-vscode.openDashboard');
         const expandAll = contextMenus.find(item => item.command === 'aspire-vscode.expandAll');
+        const collapseAll = contextMenus.find(item => item.command === 'aspire-vscode.collapseAll');
         const openAppHostSource = contextMenus.find(item => item.command === 'aspire-vscode.openAppHostSource');
 
         assertContains(openDashboard?.when, 'workspaceResources');
         assertContains(expandAll?.when, 'workspaceResources');
+        assertContains(collapseAll?.when, 'workspaceResources');
         assertContains(openAppHostSource?.when, 'workspaceResources');
     });
 
