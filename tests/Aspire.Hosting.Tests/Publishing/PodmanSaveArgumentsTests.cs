@@ -131,6 +131,23 @@ public class PodmanSaveArgumentsTests
     }
 
     [Fact]
+    public void BuildSaveArguments_FileOutputPath_SavesToThatFile()
+    {
+        var archivePath = Path.Combine("Images", "worker.tar");
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "worker",
+            Tag = "latest",
+            OutputPath = archivePath,
+            ImageFormat = ContainerImageFormat.Oci
+        };
+
+        var arguments = PodmanContainerRuntime.BuildSaveArguments("worker:latest", options);
+
+        Assert.Equal($"save --format \"oci-archive\" --output \"{archivePath}\" \"worker:latest\"", arguments);
+    }
+
+    [Fact]
     public void BuildSaveArguments_TagIsPreservedInArchiveName()
     {
         // Dropping the tag would place the archive at a path nothing else resolves to.

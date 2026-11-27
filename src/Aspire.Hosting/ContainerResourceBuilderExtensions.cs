@@ -644,6 +644,25 @@ public static class ContainerResourceBuilderExtensions
         throw new InvalidOperationException($"The resource '{builder.Resource.Name}' does not have a container image specified. Use WithImage to specify the container image and tag.");
     }
 
+    private static void SetDefaultDockerfileLocalImage(ContainerBuildOptionsCallbackContext context)
+    {
+        // Report the image the Dockerfile build tags by default (the DockerfileBuildAnnotation's name and tag,
+        // otherwise the resource's container image), so ContainerImageReference and archive builds that keep
+        // these defaults name the same archive. The callback reads the annotations when it runs, so later
+        // WithImage/WithImageTag calls are reflected.
+        if (context.Resource.TryGetContainerImageName(out var imageReference))
+        {
+            var (imageName, imageTag) = ResourceExtensions.SplitContainerImageNameAndTag(imageReference);
+            context.LocalImageName = imageName;
+            context.LocalImageTag = imageTag ?? "latest";
+        }
+        else
+        {
+            context.LocalImageName = context.Resource.Name.ToLowerInvariant();
+            context.LocalImageTag = "latest";
+        }
+    }
+
     /// <summary>
     /// Changes the resource to be published as a container in the manifest.
     /// </summary>
@@ -714,20 +733,10 @@ public static class ContainerResourceBuilderExtensions
         var imageTag = ImageNameGenerator.GenerateImageTag(builder);
         var annotation = new DockerfileBuildAnnotation(fullyQualifiedContextPath, fullyQualifiedDockerfilePath, stage);
 
-        // Add default container build options annotation that uses the DockerfileBuildAnnotation's ImageName and ImageTag
+        // Add default container build options annotation that reports the image the Dockerfile build tags
         var defaultContainerBuildOptions = new ContainerBuildOptionsCallbackAnnotation(context =>
         {
-            // Use DockerfileBuildAnnotation values if set, otherwise fall back to resource name
-            if (context.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileAnnotation))
-            {
-                context.LocalImageName = dockerfileAnnotation.ImageName ?? context.Resource.Name;
-                context.LocalImageTag = dockerfileAnnotation.ImageTag ?? "latest";
-            }
-            else
-            {
-                context.LocalImageName = context.Resource.Name;
-                context.LocalImageTag = "latest";
-            }
+            SetDefaultDockerfileLocalImage(context);
 
             // Default to linux/amd64 for publish, where outputs must be portable across host
             // architectures. In run mode, leave the platform unset so docker/podman uses the host
@@ -867,20 +876,10 @@ public static class ContainerResourceBuilderExtensions
             DockerfileFactory = dockerfileFactory
         };
 
-        // Add default container build options annotation that uses the DockerfileBuildAnnotation's ImageName and ImageTag
+        // Add default container build options annotation that reports the image the Dockerfile build tags
         var defaultContainerBuildOptions = new ContainerBuildOptionsCallbackAnnotation(context =>
         {
-            // Use DockerfileBuildAnnotation values if set, otherwise fall back to resource name
-            if (context.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileAnnotation))
-            {
-                context.LocalImageName = dockerfileAnnotation.ImageName ?? context.Resource.Name;
-                context.LocalImageTag = dockerfileAnnotation.ImageTag ?? "latest";
-            }
-            else
-            {
-                context.LocalImageName = context.Resource.Name;
-                context.LocalImageTag = "latest";
-            }
+            SetDefaultDockerfileLocalImage(context);
 
             // Publish/run split: see AddDockerfile.
             if (context.ExecutionContext.IsPublishMode)

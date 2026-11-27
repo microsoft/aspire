@@ -61,6 +61,36 @@ public class DockerContainerRuntimeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task BuildImageAsync_ArchiveFileOutputPath_WritesThatFile()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult();
+        var runtime = new DockerContainerRuntime(
+            NullLogger<DockerContainerRuntime>.Instance,
+            processRunner);
+        var archivePath = Path.Combine("Images", "worker.tar");
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "worker",
+            Tag = "latest",
+            OutputPath = archivePath,
+            ImageFormat = ContainerImageFormat.Oci
+        };
+
+        await BuildImageAsync(runtime, options);
+
+        var processSpecs = processRunner.ProcessSpecs;
+        var builderName = AssertAndGetBuilderName(processSpecs[1].Arguments);
+        Assert.Equal(
+            ["buildx", "build", "--file", "Dockerfile", "--tag", "worker:latest", "--builder", builderName,
+                "--output", $"type=oci,dest={archivePath}", GetNormalizedContextPath()],
+            processSpecs[2].ArgumentList);
+    }
+
+    [Fact]
     public async Task BuildImageAsync_ArchiveUsesUniqueIsolatedBuilders()
     {
         var processRunner = new TestProcessRunner();

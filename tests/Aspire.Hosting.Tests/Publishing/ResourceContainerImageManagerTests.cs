@@ -732,6 +732,95 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Equal(Path.GetFullPath(tempContextPath), Path.GetFullPath(buildCall.contextPath));
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BuildImageAsync_DockerfileArchive_WritesPathReportedByContainerImageReference(bool fileOutputPath, bool overrideLocalImage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        var fakeContainerRuntime = new FakeContainerRuntime();
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
+
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var outputPath = fileOutputPath
+            ? Path.Combine(workspace.WorkspaceRoot.FullName, "Images", "worker.tar")
+            : Path.Combine(workspace.WorkspaceRoot.FullName, "Images");
+        var container = builder.AddDockerfile("worker", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath)
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.Destination = ContainerImageDestination.Archive;
+                ctx.ImageFormat = ContainerImageFormat.Oci;
+                ctx.OutputPath = outputPath;
+                if (overrideLocalImage)
+                {
+                    ctx.LocalImageName = "team/worker";
+                    ctx.LocalImageTag = "v1";
+                }
+            });
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+        await imageManager.BuildImageAsync(container.Resource, cts.Token);
+
+        var generatedTag = container.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single().ImageTag;
+        var options = Assert.Single(fakeContainerRuntime.BuildImageCalls).options!;
+        Assert.Equal(overrideLocalImage ? "team/worker" : "worker", options.ImageName);
+        Assert.Equal(overrideLocalImage ? "v1" : generatedTag, options.Tag);
+        Assert.Equal(outputPath, options.OutputPath);
+
+        var expectedArchivePath = fileOutputPath
+            ? outputPath
+            : Path.Combine(outputPath, overrideLocalImage ? "team-worker-v1.tar" : $"worker-{generatedTag}.tar");
+
+        // Docker and Podman derive the archive they write from the build options' image reference.
+        Assert.Equal(
+            expectedArchivePath,
+            ResourceExtensions.GetContainerImageArchivePath(options.OutputPath!, $"{options.ImageName}:{options.Tag}"));
+        Assert.True(Directory.Exists(Path.GetDirectoryName(expectedArchivePath)));
+        Assert.False(Directory.Exists(expectedArchivePath));
+
+        IValueProvider imageReference = new ContainerImageReference(container.Resource);
+        var reportedPath = await imageReference.GetValueAsync(
+            new ValueProviderContext { ExecutionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>() },
+            cts.Token);
+        Assert.Equal(expectedArchivePath, reportedPath);
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_DockerfileWithoutOutputPath_KeepsContainerImageName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        var fakeContainerRuntime = new FakeContainerRuntime();
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
+
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
+        var container = builder.AddDockerfile("worker", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath)
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.LocalImageName = "custom";
+                ctx.LocalImageTag = "v1";
+            });
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+        await imageManager.BuildImageAsync(container.Resource, cts.Token);
+
+        // Push and deployment look the image up by the resource's container image name, so a build that
+        // loads the image into the runtime must keep that name.
+        Assert.True(container.Resource.TryGetContainerImageName(out var containerImageName));
+        var options = Assert.Single(fakeContainerRuntime.BuildImageCalls).options!;
+        Assert.Equal(containerImageName, $"{options.ImageName}:{options.Tag}");
+    }
+
     [Fact]
     public async Task BuildImageAsync_ThrowsInvalidOperationException_WhenDockerRuntimeNotAvailable()
     {
@@ -1947,6 +2036,31 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Equal("mycontainer", context.LocalImageName);
         Assert.NotNull(context.LocalImageTag);
         Assert.Null(context.TargetPlatform);
+    }
+
+    [Fact]
+    public async Task DockerfileResource_WithImageOverride_DefaultMatchesBuiltImage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
+        var container = builder.AddDockerfile("mycontainer", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath)
+            .WithImage("team/custom", "v2");
+
+        using var app = builder.Build();
+
+        var logger = app.Services.GetRequiredService<ILogger<ResourceContainerImageBuilderTests>>();
+        var context = await container.Resource.ProcessContainerBuildOptionsCallbackAsync(
+            app.Services,
+            logger,
+            cancellationToken: CancellationToken.None);
+
+        // WithImage clears the DockerfileBuildAnnotation's generated name and tag, so the build tags the
+        // container image instead. The default must report that image, not the resource name and "latest".
+        Assert.True(container.Resource.TryGetContainerImageName(out var builtImageName));
+        Assert.Equal("team/custom:v2", builtImageName);
+        Assert.Equal("team/custom", context.LocalImageName);
+        Assert.Equal("v2", context.LocalImageTag);
     }
 
     [Fact]

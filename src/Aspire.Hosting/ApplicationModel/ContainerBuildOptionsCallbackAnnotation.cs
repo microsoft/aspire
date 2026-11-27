@@ -101,10 +101,11 @@ public sealed class ContainerBuildOptionsCallbackContext
     /// Gets or sets the output path for the container archive.
     /// </summary>
     /// <remarks>
-    /// For .NET SDK publishing, a non-existent path with any filename extension is an archive filename.
-    /// End a directory path with the platform's directory separator to make directory intent explicit,
-    /// especially when its name contains a period. Prefer an explicit archive filename to avoid ambiguity.
-    /// Other container image builders may interpret this path as an output directory.
+    /// A non-existent path with any filename extension is an archive filename; otherwise the path is a
+    /// directory that receives an archive named after the image. This applies to .NET SDK publishing and
+    /// to Dockerfile builds. End a directory path with the platform's directory separator to make directory
+    /// intent explicit, especially when its name contains a period. Prefer an explicit archive filename to
+    /// avoid ambiguity.
     /// </remarks>
     public string? OutputPath { get; set; }
 
@@ -121,10 +122,19 @@ public sealed class ContainerBuildOptionsCallbackContext
     /// <summary>
     /// Gets or sets the local image name for the built container.
     /// </summary>
+    /// <remarks>
+    /// For Dockerfile builds, this name applies when the image is written to an archive
+    /// (<see cref="OutputPath"/> is set). It names the built image, the archive file and the image reference
+    /// recorded in the archive. Builds that load the image into the container runtime keep the resource's
+    /// container image name, which deployment and push steps rely on.
+    /// </remarks>
     public string? LocalImageName { get; set; }
 
     /// <summary>
     /// Gets or sets the local image tag for the built container.
     /// </summary>
+    /// <remarks>
+    /// For Dockerfile builds, this tag applies under the same conditions as <see cref="LocalImageName"/>.
+    /// </remarks>
     public string? LocalImageTag { get; set; }
 }

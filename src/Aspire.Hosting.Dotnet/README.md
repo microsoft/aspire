@@ -382,7 +382,8 @@ does not compress the archive, and Aspire logs a warning when one is configured.
 format are the same whether or not `PublishWithContainerFiles` layers files into the image.
 
 These conventions are based on the .NET SDK's, but Aspire chooses the directory filename itself.
-Dockerfile/container-runtime publishing has its own output conventions. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
+Dockerfile/container-runtime publishing uses the same explicit-filename rule, but a directory receives
+`<LocalImageName>-<LocalImageTag>.tar`. See the [SDK archive publishing documentation](https://learn.microsoft.com/dotnet/core/containers/sdk-publish#publish-net-app-to-a-tarball).
 
 ### Other publishing options
 
