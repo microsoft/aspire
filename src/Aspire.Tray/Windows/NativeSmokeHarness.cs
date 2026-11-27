@@ -28,6 +28,7 @@ internal sealed class NativeSmokeHarness
     private TrayController _controller = null!;
     private TrayApplication _application = null!;
     private int _phase;
+    private long _stopRequestDeadline;
     private int _lastLoggedPhase = -1;
     private int _dashboardCalls;
     private int _documentationCalls;
@@ -197,9 +198,23 @@ internal sealed class NativeSmokeHarness
                 // An action from a scene drawn before the lifetime was replaced must be rejected.
                 _application.RunPanelActionForSmoke(new(PanelActionKind.Stop, _staleHost));
                 Require(_errors == 1 && _client.Stops.Count == 1, "A stale action stopped a replacement lifetime.");
-                // Stopping isn't confirmed: the request goes out at once, here through UI Automation.
+                // Reopening the flyout resets confirmation state, so inspect the panel already used for Stop.
+                var stopPanel = _application.PanelForSmoke;
                 _application.PressPanelForSmoke(PanelTargetKind.Stop, _hosts[2].Id);
-                Require(_client.Stops.Count == 2, "Stop did not send its request without a dialog.");
+                Require(stopPanel.Confirmation is null, "Stop opened a confirmation dialog.");
+                // RequestStop queues the call to the client. Let the native loop
+                // continue while waiting for the fake client to record delivery.
+                _stopRequestDeadline = Environment.TickCount64 + 5_000;
+                _phase = 12;
+                break;
+            case 12:
+                var stops = _client.Stops.ToArray();
+                if (stops.Length < 2 && Environment.TickCount64 < _stopRequestDeadline)
+                {
+                    return;
+                }
+                Require(stops.Length == 2 && stops.Contains(_hosts[0].Id) && stops.Contains(_hosts[2].Id),
+                    "Stop did not send exactly one request to the selected AppHost lifetime.");
                 var missing = state.RecentAppHosts.Single(host => TrayAppHostPath.Comparer.Equals(host.Id.AppHostPath, _missing));
                 _application.ClickPanelForSmoke(PanelTargetKind.Start, missing.Id);
                 Require(_application.PanelForSmoke.Confirmation == PanelConfirmKind.RemoveMissing, "A missing recent AppHost was not offered for removal inline.");
