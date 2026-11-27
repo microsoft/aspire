@@ -6,10 +6,11 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { createMockDocument } from './testHelpers';
 import { AspireCodeLensProvider } from '../editor/AspireCodeLensProvider';
+import { hideCodeLensGuidance } from '../editor/codeLensGuidance';
 import { AspireGutterDecorationProvider } from '../editor/AspireGutterDecorationProvider';
 import * as AppHostResourceParser from '../editor/parsers/AppHostResourceParser';
 import { ParsedResource } from '../editor/parsers/AppHostResourceParser';
-import { codeLensCommand, codeLensJavaAppHostAlreadyRunning, codeLensJavaAppHostAlreadyRunningTooltip, codeLensJavaAppHostUseAspire, codeLensJavaAppHostUseAspireTooltip, codeLensResourceValueMissing, codeLensRustAppHostUseAspire, codeLensSpringBootDashboardBypassesAspire, codeLensSpringBootDashboardBypassesAspireTooltip } from '../loc/strings';
+import { codeLensCommand, codeLensHideDebuggerHints, codeLensHideDebuggerHintsTooltip, codeLensHideGuidance, codeLensHideInWorkspaceSettings, codeLensHideRustLaunchGuidanceTooltip, codeLensHideSpringBootGuidanceTooltip, codeLensJavaAppHostAlreadyRunning, codeLensJavaAppHostAlreadyRunningTooltip, codeLensJavaAppHostUseAspire, codeLensJavaAppHostUseAspireTooltip, codeLensResourceValueMissing, codeLensRustAppHostUseAspire, codeLensSpringBootDashboardBypassesAspire, codeLensSpringBootDashboardBypassesAspireTooltip } from '../loc/strings';
 import { ResourceState, ResourceType } from '../editor/resourceConstants';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
@@ -1657,5 +1658,204 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
             assert.deepStrictEqual(lenses.map(lens => lens.range.start.line), [2]);
             harness.dispose();
         });
+    });
+});
+
+suite('AspireCodeLensProvider advisory guidance dismissal', () => {
+    const hideCommand = 'aspire-vscode.hideCodeLensGuidance';
+    const springBootDashboard = 'vscjava.vscode-spring-boot-dashboard';
+    let disabledSettings: Set<string>;
+    let getConfigStub: sinon.SinonStub;
+
+    setup(() => {
+        disabledSettings = new Set();
+        getConfigStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
+            get: (key: string) => !disabledSettings.has(key),
+            has: () => true,
+            inspect: () => undefined,
+            update: () => Promise.resolve(),
+        } as any);
+    });
+
+    teardown(() => {
+        getConfigStub.restore();
+    });
+
+    async function lensesFor(content: string, docPath: string, opts: Parameters<typeof createHarness>[0] = {}): Promise<vscode.CodeLens[]> {
+        const harness = createHarness(opts);
+        try {
+            return await harness.provider.provideCodeLenses(createMockDocument(content, docPath), cancellationToken) as vscode.CodeLens[];
+        } finally {
+            harness.dispose();
+        }
+    }
+
+    function hideLenses(lenses: vscode.CodeLens[]): vscode.CodeLens[] {
+        return lenses.filter(lens => lens.command?.command === hideCommand);
+    }
+
+    const springBootDoc = 'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddJavaApp("api", "../api").WithMavenGoal("spring-boot:run");';
+    const rustDoc = 'fn main() {\n    let builder = create_builder(None)?;\n}';
+    const javaDoc = 'void main() {\n    var builder = DistributedApplication.CreateBuilder();\n    builder.build().run();\n}';
+
+    test('adds a Hide lens next to the Spring Boot Dashboard warning', async () => {
+        const lenses = await lensesFor(springBootDoc, p('repo', 'AppHost', 'AppHost.cs'), { installedExtensions: [springBootDashboard] });
+        const hide = hideLenses(lenses);
+
+        assert.strictEqual(hide.length, 1);
+        assert.strictEqual(hide[0].command?.title, codeLensHideGuidance);
+        assert.strictEqual(hide[0].command?.tooltip, codeLensHideSpringBootGuidanceTooltip);
+        assert.deepStrictEqual(hide[0].command?.arguments, ['enableCodeLensSpringBootGuidance']);
+        assert.strictEqual(hide[0].range.start.line, 1, 'the Hide lens sits beside the warning it dismisses');
+    });
+
+    test('hides the Spring Boot warning without hiding the Java entry point warning', async () => {
+        disabledSettings.add('enableCodeLensSpringBootGuidance');
+        const content = 'void main() {\n    var builder = DistributedApplication.CreateBuilder();\n    builder.addSpringBootApp("catalog", "./catalog");\n}';
+
+        const lenses = await lensesFor(content, p('repo', 'AppHost', 'AppHost.java'), { installedExtensions: [springBootDashboard] });
+
+        assert.ok(!lenses.some(lens => lens.command?.title === codeLensSpringBootDashboardBypassesAspire));
+        assert.ok(lenses.some(lens => lens.command?.title === codeLensJavaAppHostUseAspire));
+        assert.deepStrictEqual(hideLenses(lenses).map(lens => lens.command?.arguments), [['enableCodeLensJavaLaunchGuidance']]);
+    });
+
+    test('one Java setting hides both the stopped and already-running reminders but keeps AppHost actions', async () => {
+        const javaPath = p('repo', 'AppHost', 'AppHost.java');
+        disabledSettings.add('enableCodeLensJavaLaunchGuidance');
+
+        const stopped = await lensesFor(javaDoc, javaPath);
+        const running = await lensesFor(javaDoc, javaPath, { appHosts: [makeAppHost(javaPath)] });
+
+        assert.ok(!stopped.some(lens => lens.command?.title === codeLensJavaAppHostUseAspire));
+        assert.ok(!running.some(lens => lens.command?.title === codeLensJavaAppHostAlreadyRunning));
+        assert.deepStrictEqual(hideLenses([...stopped, ...running]), []);
+        assert.ok(running.some(lens => lens.command?.command === 'aspire-vscode.codeLensOpenDashboard'));
+        assert.ok(running.some(lens => lens.command?.command === 'aspire-vscode.codeLensViewAppHostLogs'));
+    });
+
+    test('offers Hide on both Rust reminder variants and hides both with one setting', async () => {
+        const rustPath = p('repo', 'AppHost', 'apphost.rs');
+
+        for (const opts of [{}, { appHosts: [makeAppHost(rustPath)] }]) {
+            const hide = hideLenses(await lensesFor(rustDoc, rustPath, opts));
+            assert.strictEqual(hide.length, 1);
+            assert.strictEqual(hide[0].command?.tooltip, codeLensHideRustLaunchGuidanceTooltip);
+            assert.deepStrictEqual(hide[0].command?.arguments, ['enableCodeLensRustLaunchGuidance']);
+        }
+
+        disabledSettings.add('enableCodeLensRustLaunchGuidance');
+        const stopped = await lensesFor(rustDoc, rustPath);
+        const running = await lensesFor(rustDoc, rustPath, { appHosts: [makeAppHost(rustPath)] });
+
+        assert.ok(!stopped.some(lens => lens.command?.title === codeLensRustAppHostUseAspire));
+        assert.ok(!running.some(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost'));
+        assert.deepStrictEqual(hideLenses([...stopped, ...running]), []);
+    });
+
+    test('labels the debugger hint dismissal and hides only the hint, not the resource lenses', async () => {
+        const getExtensionStub = sinon.stub(vscode.extensions, 'getExtension').returns(undefined);
+        const opts = {
+            workspaceAppHostPath: p('repo', 'AppHost', 'AppHost.csproj'),
+            workspaceResources: [makeResource('python', { properties: { [launchConfigurationTypePropertyName]: 'python' } })],
+        };
+        const content = 'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddPythonApp("python", "../python", "app.py");';
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+
+        try {
+            const shown = await lensesFor(content, docPath, opts);
+            const hide = hideLenses(shown);
+            assert.strictEqual(hide.length, 1);
+            assert.strictEqual(hide[0].command?.title, codeLensHideDebuggerHints);
+            assert.strictEqual(hide[0].command?.tooltip, codeLensHideDebuggerHintsTooltip);
+            assert.deepStrictEqual(hide[0].command?.arguments, ['enableCodeLensDebuggerHints']);
+
+            disabledSettings.add('enableCodeLensDebuggerHints');
+            const hidden = await lensesFor(content, docPath, opts);
+
+            assert.ok(!hidden.some(lens => lens.command?.command === 'aspire-vscode.installDebuggerExtension'));
+            assert.deepStrictEqual(hideLenses(hidden), []);
+            assert.ok(hidden.some(lens => lens.command?.command === 'aspire-vscode.codeLensRevealResource'));
+            assert.ok(hidden.some(lens => lens.command?.command === 'aspire-vscode.codeLensViewLogs'));
+        } finally {
+            getExtensionStub.restore();
+        }
+    });
+
+    test('refreshes lenses when Aspire configuration changes', () => {
+        let listener: ((e: vscode.ConfigurationChangeEvent) => void) | undefined;
+        const onDidChangeStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration').callsFake(((l: (e: vscode.ConfigurationChangeEvent) => void) => {
+            listener = l;
+            return { dispose: () => { } };
+        }) as any);
+        const harness = createHarness({});
+        let fired = 0;
+        const subscription = harness.provider.onDidChangeCodeLenses(() => fired++);
+
+        try {
+            listener?.({ affectsConfiguration: section => section === 'aspire' });
+            listener?.({ affectsConfiguration: () => false });
+            assert.strictEqual(fired, 1);
+        } finally {
+            subscription.dispose();
+            harness.dispose();
+            onDidChangeStub.restore();
+        }
+    });
+});
+
+suite('hideCodeLensGuidance', () => {
+    let updates: Array<{ key: string; value: unknown; target: unknown }>;
+    let workspaceValue: boolean | undefined;
+    let getConfigStub: sinon.SinonStub;
+    let showWarningStub: sinon.SinonStub;
+
+    setup(() => {
+        updates = [];
+        workspaceValue = undefined;
+        getConfigStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
+            get: () => true,
+            has: () => true,
+            inspect: (key: string) => ({ key, workspaceValue }),
+            update: async (key: string, value: unknown, target: unknown) => { updates.push({ key, value, target }); },
+        } as any);
+        showWarningStub = sinon.stub(vscode.window, 'showWarningMessage');
+    });
+
+    teardown(() => {
+        showWarningStub.restore();
+        getConfigStub.restore();
+    });
+
+    test('writes the dismissal to User settings without prompting', async () => {
+        await hideCodeLensGuidance('enableCodeLensSpringBootGuidance');
+
+        assert.deepStrictEqual(updates, [{ key: 'enableCodeLensSpringBootGuidance', value: false, target: vscode.ConfigurationTarget.Global }]);
+        assert.ok(showWarningStub.notCalled);
+    });
+
+    test('asks before writing Workspace settings when a workspace value keeps the guidance visible', async () => {
+        workspaceValue = true;
+        showWarningStub.resolves(codeLensHideInWorkspaceSettings);
+
+        await hideCodeLensGuidance('enableCodeLensJavaLaunchGuidance');
+
+        assert.ok(showWarningStub.calledOnce);
+        assert.deepStrictEqual(updates.map(u => u.target), [vscode.ConfigurationTarget.Global, vscode.ConfigurationTarget.Workspace]);
+    });
+
+    test('leaves Workspace settings alone when the prompt is dismissed', async () => {
+        workspaceValue = true;
+        showWarningStub.resolves(undefined);
+
+        await hideCodeLensGuidance('enableCodeLensJavaLaunchGuidance');
+
+        assert.deepStrictEqual(updates.map(u => u.target), [vscode.ConfigurationTarget.Global]);
+    });
+
+    test('ignores settings that are not guidance families', async () => {
+        await hideCodeLensGuidance('enableCodeLens');
+
+        assert.deepStrictEqual(updates, []);
     });
 });
