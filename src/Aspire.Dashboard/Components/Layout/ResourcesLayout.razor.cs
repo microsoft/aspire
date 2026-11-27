@@ -274,6 +274,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     internal bool IsParameterOnlySelection => _selectedItems.Count > 0 && _selectedItems.All(i => i.Resource is { IsParameter: true });
 
+    /// <summary>
+    /// Gets a value indicating whether resources are selected and all of them are telemetry sources. A selection that
+    /// also includes an app model resource, or a name that doesn't match a resource, isn't telemetry-only.
+    /// </summary>
+    internal bool IsTelemetryOnlySelection => _selectedItems.Count > 0 && _selectedItems.All(i => i.TelemetryOnly is not null);
+
     internal IReadOnlyList<string> AvailableResourceTags => TagStore.GetAllTags(_resourceByName.Values);
 
     internal ConcurrentDictionary<string, ResourceViewModel> ResourceByName => _resourceByName;

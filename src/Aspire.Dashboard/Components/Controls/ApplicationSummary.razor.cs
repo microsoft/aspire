@@ -83,8 +83,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Gets or sets whether the summarized resources are telemetry sources rather than resources of the app model,
-    /// as they are without an app host. Telemetry sources have no state or relationships, so the header counts the
-    /// sources instead of summarizing resource health, and there's no graph.
+    /// as they are without an app host or when only telemetry sources are selected. Telemetry sources have no state or
+    /// relationships, so the header counts the sources instead of summarizing resource health, and there's no graph.
     /// </summary>
     [Parameter]
     public bool IsTelemetrySourceSummary { get; set; }

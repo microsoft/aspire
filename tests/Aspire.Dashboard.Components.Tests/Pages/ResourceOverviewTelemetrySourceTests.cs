@@ -162,6 +162,38 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
         Assert.Empty(cut.FindComponents<MissingParametersPanel>());
     }
 
+    // With an app host, selecting only telemetry sources summarizes them, even when the graph is chosen for the app's
+    // resources. A selection that includes an app model resource keeps the resource summary and its layout choice.
+    [Theory]
+    [InlineData("/resources?resource=browser&resource=worker", true)]
+    [InlineData("/resources?resource=api-TestId&resource=browser", false)]
+    public async Task AppHost_TelemetryOnlySelectionShowsTelemetrySourceSummary(string url, bool expectTelemetrySummary)
+    {
+        Setup(hasAppHost: true);
+        JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.GroupOverview ? (true, nameof(GroupOverview.Graph)) : (false, null);
+        await AddLogAsync("browser", []);
+        await AddLogAsync("worker", []);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(url);
+
+        var cut = RenderOverview(resourceName: null);
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<ApplicationSummary>()));
+        if (expectTelemetrySummary)
+        {
+            cut.WaitForAssertion(() => Assert.Equal("2 telemetry sources", cut.Find(".home-telemetry-sources .home-hero-headline").TextContent));
+            Assert.Empty(cut.FindAll(".home.graph-view"));
+            Assert.Empty(cut.FindComponents<IconToggleGroup<GroupOverview>>());
+        }
+        else
+        {
+            cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home.graph-view")));
+            Assert.Empty(cut.FindAll(".home-telemetry-sources"));
+            Assert.Single(cut.FindComponents<IconToggleGroup<GroupOverview>>());
+        }
+    }
+
     [Fact]
     public async Task TelemetrySource_MetricsCardLoadsSavedPins()
     {

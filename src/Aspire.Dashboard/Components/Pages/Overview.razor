@@ -1,4 +1,4 @@
-@page "/resources"
+﻿@page "/resources"
 @page "/resources/{ResourceName}"
 @layout ResourcesLayout
 @using Aspire.Dashboard.Components.Controls.Overview
@@ -41,9 +41,11 @@
     else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
     {
         var resourceNames = ResourcesLayout.SelectedResourceNames;
+        @* Without an app host everything is a telemetry source. With one, only a selection of nothing but telemetry
+           sources gets their summary; all resources and mixed selections summarize the app model's resources. *@
         <ApplicationSummary ResourceNames="@(resourceNames.Count > 0 ? resourceNames : null)"
                             TelemetryResourceKeys="@ResourcesLayout.GetSelectionTelemetryKeys(resourceNames)"
-                            IsTelemetrySourceSummary="@(!DashboardClient.IsEnabled)" />
+                            IsTelemetrySourceSummary="@(!DashboardClient.IsEnabled || ResourcesLayout.IsTelemetryOnlySelection)" />
     }
     else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {
