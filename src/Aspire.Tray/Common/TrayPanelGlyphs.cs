@@ -109,7 +109,7 @@ internal static class TrayPanelGlyphs
                     .MoveTo(12.5, 3.5).LineTo(7.5, 8.5), 1.5);
                 break;
             case PanelIcon.Stop:
-                Fill(PanelPath.RoundedRect(new(4.25, 4.25, 7.5, 7.5), 1.5));
+                Fill(PanelPath.RoundedRect(new(3.5, 3.5, 9, 9), 1.75));
                 break;
             case PanelIcon.Play:
                 // Fill and stroke the same triangle: the round joins soften its corners.
