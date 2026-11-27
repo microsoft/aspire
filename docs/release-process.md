@@ -96,7 +96,7 @@ Before starting a release:
    - Permission to use the NuGet.org service connection.
    - Permission to use the `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` service connection if publishing the VS Code extension.
    - Approval to use the DevDiv ESRP service connection for MicroBuild npm publishing.
-   - Valid ESRP owner and approver aliases for npm publishing.
+   - Access to the configured ESRP release contacts for npm publishing (owner `joperezr`, approver `adamratzman`).
    - GitHub write access for creating tags, releases, and PRs if you need to run the GitHub workflow manually.
 4. **AzDO secrets** (already configured for chained dispatch):
    - `aspire-bot-app-id` — `aspire-repo-bot` GitHub App ID.
@@ -127,22 +127,19 @@ Before starting a release:
    |-----------|-------------|---------|
    | `SkipNuGetPublish` | Set `true` if re-running after NuGet success. | `false` |
    | `SkipNpmRidPublish` | Set `true` if npm RID packages published but the pointer package did not. | `false` |
-   | `SkipNpmPointerPublish` | Set `true` if the pointer package published but a later validation or promotion step failed. Registry validation still runs. | `false` |
+   | `SkipNpmPointerPublish` | Set `true` if the pointer package already published successfully through ESRP. | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success. | `false` |
    | `SkipWinGetPublish` | Set `true` if re-running a stable release after WinGet success. Prerelease releases skip WinGet automatically. | `false` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow. | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading `aspire-cli-*` assets to the GitHub release. | `false` |
    | `SkipNixPackageUpdate` | Set `true` if the Nix flake update was already added to the baseline version PR. Stable releases dispatch the updater with checksums from the source build; prereleases skip it. | `false` |
    | `SkipVSCodeExtensionPublish` | Set `false` to publish the signed `aspire-vscode-extension` artifact to the Visual Studio Marketplace. | `true` |
-   | `NpmPublishOwners` | Single ESRP owner alias or email. Overrides must be one of the required owner aliases in `eng/pipelines/release-publish-nuget.yml` (currently `joperezr` or `ankj`). | `joperezr` |
-   | `NpmPublishApprovers` | Single ESRP approver alias or email. The approver must be a Microsoft address and must not be the same alias as the owner. | `adamratzman` |
-   | `NpmRegistryPropagationDelayMinutes` | Delay between npm RID package and pointer package submissions. | `10` |
    | `GitHubTasksWorkflowRef` | Ref to load release GitHub workflows from when dispatching. Only affects the workflow source; the release branch and commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
 
 4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown.
    - The picker shows all recent builds from the `microsoft-aspire` pipeline regardless of branch. Pick the build that corresponds to the release branch and version you intend to ship.
    - Each build's tags are shown alongside its number. Verify the `release-version - X.Y.Z` tag matches the version you intend to ship before clicking **Run**. If the tag is missing, either re-run the source build after the tag-emitting change in `azure-pipelines.yml` is on that release branch or pass an explicit `ReleaseVersion` override.
-5. Click **Run** and monitor the pipeline. The final stage (`GitHubTasks`) dispatches `release-github-tasks.yml`, waits for it to complete, uploads the `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the newly-created **draft** GitHub release, and then dispatches `update-nix-cli-flake.yml` for stable releases so `eng/nix/versions.json` is bumped from the source build's `.sha512` checksums on the `update-baseline-<version>` branch before the baseline PR is created or updated. The AzDO pipeline only succeeds if the enabled GitHub tasks, asset upload, and Nix update dispatch succeed.
+5. Click **Run** and monitor the pipeline. After artifact preparation, parameter validation, and the shared payload integrity preflight succeed, the selected NuGet publish, npm publish, darc promotion, VS Code publishing, and GitHub release tasks run in parallel. The preflight checks NuGet signatures only when NuGet publishing is selected, and validates npm install summaries, inventory, signature-sidecar inputs, and tarball versions when either npm publish is selected. Any failed preflight prevents all publishers from starting, including in dry runs; skipped NuGet publishing does not require NuGet inputs. WinGet waits for channel promotion (or an explicitly skipped promotion on a rerun). The GitHub jobs dispatch `release-github-tasks.yml`, wait for it to create the tag, draft release, merge-back PR, and baseline branch, then upload the `aspire-cli-*` archives to the draft release while the stable-release Nix updater independently uses the source build's `.sha512` checksums to update `eng/nix/versions.json` on the `update-baseline-<version>` branch. The AzDO pipeline only succeeds if every selected publish, promotion, GitHub task, asset upload, and Nix update succeeds; a failed parallel publication does not roll back other completed publishes.
 6. Verify packages appear on NuGet.org and npm, verify that the `aspire-cli-*` archives are attached to the draft GitHub release, and review the generated baseline version PR including the Nix flake manifest update. Then proceed to [Step 5: Publish the draft release](#step-5-publish-the-draft-release).
 
 To publish only the VS Code extension after merging an extension release PR, run the same `release-publish-nuget` pipeline, select the signed source build from that merge, and set:
@@ -166,11 +163,13 @@ To publish only the VS Code extension after merging an extension release PR, run
 
 For a full Aspire release that should also publish the extension, keep the normal NuGet/channel/GitHub task settings and set `SkipVSCodeExtensionPublish` to `false`. `IsPrerelease` also controls whether extension publishing passes `--pre-release` to `vsce`; for a pre-release extension, the selected source build must also have been queued with `Package VS Code Extension as Pre-Release=true`.
 
-The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, and then publishes the top-level `@microsoft/aspire-cli` pointer package. After the pointer package publishes, the pipeline installs it from the live npm registry and runs `aspire --version` before channel promotion. This avoids installing a pointer package whose optional RID dependencies are not visible yet and catches registry propagation issues before the release is promoted. For prereleases, set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
+The npm release path validates Windows, Linux, and macOS install summaries and staged package versions and signatures locally, publishes the seven RID packages first, waits for ESRP completion, and then submits the top-level `@microsoft/aspire-cli` pointer package and waits for ESRP completion again. ESRP handles registry validation and publication; the release job makes no direct npm registry queries or install attempts and adds no propagation delay, because release-job network isolation blocks direct npm access. Aspire follows a tip-only release policy: after shipping a version, no earlier version is released, so no npm `latest` version guard is needed. The ESRP owner (`joperezr`) and approver (`adamratzman`) are fixed pipeline variables, not queue-time parameters. For prereleases, set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
 
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
 > **Tip**: Use `DryRun: true` to test end-to-end without publishing, promoting, tagging, creating PRs, or uploading release assets. The dry-run state is propagated to the GitHub workflow as `dry_run: true`.
+
+Channel promotion provisions the .NET SDK and installs darc into an isolated tool directory, then invokes its absolute executable path. The promotion step probes `darc --version` before the dry-run exit so dry runs also detect missing executables or incompatible runtimes.
 
 ### Step 2: Prepare a VS Code extension release PR
 
@@ -193,7 +192,7 @@ Run this step only when releasing the VS Code extension independently of the nor
 
 The GitHub workflow is normally dispatched by the AzDO pipeline as the `aspire-repo-bot` GitHub App, with its `authorize` job bypassed for the bot. If a GitHub-side step fails partway through and you need to re-run only the GitHub work, you can:
 
-1. Re-run the AzDO pipeline with completed AzDO-side work skipped, such as `SkipNuGetPublish`, `SkipNpmRidPublish`, `SkipNpmPointerPublish`, `SkipChannelPromotion`, `SkipWinGetPublish`, `SkipNixPackageUpdate`, and `SkipReleaseAssets` set as appropriate, keeping `SkipGitHubTasks: false`. The `GitHubTasks` stage will dispatch the workflow again with the right inputs, and the workflow's own `skip_*` idempotency makes the completed steps no-ops.
+1. Re-run the AzDO pipeline with completed AzDO-side work skipped, such as `SkipNuGetPublish`, `SkipNpmRidPublish`, `SkipNpmPointerPublish`, `SkipChannelPromotion`, `SkipWinGetPublish`, `SkipNixPackageUpdate`, and `SkipReleaseAssets` set as appropriate, keeping `SkipGitHubTasks: false`. `DispatchGitHubTasksJob` will dispatch the workflow again with the right inputs, and the workflow's own `skip_*` idempotency makes the completed steps no-ops.
 2. Or, navigate to Actions → **Release GitHub Tasks**, click **Run workflow**, and fill in the parameters manually:
 
    | Parameter | Description | Example |
@@ -265,7 +264,6 @@ These automations are designed to be idempotent and safe to re-run.
 | Prepare/List npm Packages | Check that the selected source build produced all eight `microsoft-aspire-cli*.tgz` tarballs and matching `.tgz.sig` sidecars in `BlobArtifacts`. |
 | Push Packages to NuGet.org | Check NuGet.org for partial success, then re-run with already-completed steps skipped as needed. |
 | MicroBuild npm Publish | Check the ESRP release result. If RID packages published but the pointer package did not, re-run with `SkipNuGetPublish: true`, `SkipNpmRidPublish: true`, `SkipNpmPointerPublish: false`, and `SkipChannelPromotion: true`; do not set `SkipNpmPointerPublish` until the pointer package is published. |
-| Validate Published npm Package from Registry | Confirm the pointer package is visible on npm and that `npm install -g @microsoft/aspire-cli@<version>` works. If registry propagation is slow, re-run with completed publish steps skipped after the package is visible. |
 | Promote Build to Channel | Re-run with completed publish steps skipped. |
 | WinGet publishing | Re-run with the corresponding skip flag for completed work. |
 | Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify the `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` service connection identity is a Contributor on the Visual Studio Marketplace `microsoft-aspire` publisher; re-run with the already-completed `Skip*` flags set to `true`. |
@@ -365,7 +363,7 @@ If ESRP published the RID packages but failed before publishing `@microsoft/aspi
 3. Set `SkipNpmRidPublish: true` and keep `SkipNpmPointerPublish: false` so only the pointer package is submitted.
 4. Set `SkipNpmPointerPublish: true` only after the pointer package is visible.
 
-If the pointer package published but the live npm registry validation failed afterward, re-run with `SkipNpmRidPublish: true` and `SkipNpmPointerPublish: true` so the pipeline retries the install smoke without resubmitting already-published packages.
+If ESRP reports successful publication of both groups, set both npm skip flags on a rerun. The release job does not retry registry install smoke tests; ESRP owns publish validation.
 
 ### Tag already exists but points to different commit
 
@@ -408,18 +406,27 @@ Azure DevOps release-publish-nuget.yml
      -> split npm RID and pointer artifacts with SBOM
      -> republish WinGet artifacts with SBOM when selected
   -> ReleaseJob
-     -> verify NuGet signatures
+     -> validate parameters and export release metadata
+     -> verify NuGet inventory and signatures when NuGet publishing is selected
+     -> validate npm summaries, inventory, signature-sidecar inputs, and tarball versions when npm is selected
+     -> fan out selected release work only after all selected payload checks pass
+  -> NuGetPublishJob (parallel with npm, promotion, extension, and GitHub jobs)
      -> publish NuGet through 1ES.PublishNuget@1
+  -> NpmPublishJob
      -> publish npm RID packages through MicroBuild.Publish
-     -> wait for npm propagation
+     -> wait for ESRP completion
      -> publish npm pointer package through MicroBuild.Publish
-     -> install the pointer package from npm and run aspire --version
+     -> wait for ESRP completion (no direct npm registry access)
+  -> ChannelPromotionJob
+     -> install darc with an isolated tool path and probe startup even in dry runs
      -> promote BAR build to GA channel
   -> WinGetJob
-  -> GitHubTasks
+     -> waits for ChannelPromotionJob, or a skipped promotion rerun
+  -> VSCodeExtensionJob
+  -> GitHub jobs
      -> dispatch release-github-tasks.yml as aspire-repo-bot
      -> upload aspire-cli-* assets to the draft GitHub release
-     -> dispatch update-nix-cli-flake.yml as aspire-repo-bot (stable releases),
+     -> dispatch update-nix-cli-flake.yml in parallel with asset upload (stable releases),
         passing the build's aspire-cli-*.tar.gz.sha512 checksums as inputs
 
 GitHub release-github-tasks.yml

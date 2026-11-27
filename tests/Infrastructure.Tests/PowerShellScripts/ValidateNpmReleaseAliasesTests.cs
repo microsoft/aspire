@@ -172,6 +172,8 @@ public sealed class ValidateNpmReleaseAliasesTests
         result.EnsureSuccessful();
         Assert.Contains("variable=NpmPublishOwnersEffective]joperezr", result.Output);
         Assert.Contains("variable=NpmPublishApproversEffective]adamratzman", result.Output);
+        Assert.Contains("##vso[task.setvariable variable=NpmPublishOwnersEffective;isOutput=true]joperezr", result.Output);
+        Assert.Contains("##vso[task.setvariable variable=NpmPublishApproversEffective;isOutput=true]adamratzman", result.Output);
     }
 
     private async Task<CommandResult> RunValidation(string owners, string approvers, string requiredOwners = RequiredOwners)

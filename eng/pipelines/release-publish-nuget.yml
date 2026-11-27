@@ -94,24 +94,6 @@ parameters:
     type: boolean
     default: false
 
-  # Azure DevOps manual string parameters cannot be left blank. Keep these
-  # defaults valid for unattended queue submissions: the owners must include a
-  # required ESRP owner alias, and the approver must be a single distinct alias.
-  - name: NpmPublishOwners
-    displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'
-    type: string
-    default: 'joperezr'
-
-  - name: NpmPublishApprovers
-    displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'
-    type: string
-    default: 'adamratzman'
-
-  - name: NpmRegistryPropagationDelayMinutes
-    displayName: '[Advanced] Minutes to wait between npm RID and pointer package submissions'
-    type: number
-    default: 10
-
   - name: SkipVSCodeExtensionPublish
     displayName: '[Advanced] Skip VS Code Extension Publishing'
     type: boolean
@@ -134,6 +116,11 @@ variables:
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
   - name: NPM_PUBLISH_REQUIRED_OWNERS
     value: joperezr,ankj
+  # ESRP release contacts are fixed rather than exposed as queue-time parameters.
+  - name: NPM_PUBLISH_OWNERS
+    value: joperezr
+  - name: NPM_PUBLISH_APPROVERS
+    value: adamratzman
   # Variable group containing aspire-repo-bot credentials.
   # Note: NuGet and VS Code Marketplace publishing use service connections instead of API keys.
   - group: Aspire-Release-Secrets
@@ -210,8 +197,8 @@ extends:
               # Disable the auto-injected MicroBuildAuthorizePublishPlugin@0 task for jobs
               # that do not perform an ESRP publish. PrepareJob only downloads artifacts
               # and re-publishes them as pipeline artifacts (so 1ES PT can attach SBOM);
-              # the actual NuGet/npm push happens in ReleaseJob via 1ES.PublishNuget@1 and
-              # MicroBuild.Publish.yml. Without this opt-out, the plugin tries to fetch its
+              # the actual NuGet/npm push happens in NuGetPublishJob and NpmPublishJob via
+              # 1ES.PublishNuget@1 and MicroBuild.Publish.yml. Without this opt-out, the plugin tries to fetch its
               # nuget package from devdiv.pkgs.visualstudio.com/_packaging/MicroBuildToolset
               # using credentials this pipeline (in the dnceng collection) does not have,
               # producing a 401 and failing the stage. See MicroBuildTemplate Jobs/PublishJob.yml.
@@ -362,7 +349,7 @@ extends:
                   SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
               # Download artifacts from the source build pipeline
-              - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
+              - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
                 - download: aspire-build
                   displayName: 'Download PackageArtifacts from Source Build'
                   artifact: PackageArtifacts
@@ -430,7 +417,7 @@ extends:
                   artifact: aspire-vscode-extension
 
               # Move artifacts to expected location for output
-              - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
+              - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
                 - powershell: |
                     $sourcePath = "$(Pipeline.Workspace)/aspire-build/PackageArtifacts"
                     $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
@@ -453,7 +440,7 @@ extends:
                     Write-Host "✓ Artifacts prepared for SBOM generation"
                   displayName: 'Prepare Artifacts for Publishing'
 
-              - ${{ if and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true)) }}:
+              - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
                 - powershell: |
                     $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
 
@@ -461,7 +448,7 @@ extends:
                       New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
                     }
 
-                    Write-Host "Installer-only run detected; created empty PackageArtifacts placeholder."
+                    Write-Host "NuGet publishing skipped; created empty PackageArtifacts placeholder."
                   displayName: 'Prepare Empty PackageArtifacts Placeholder'
 
               - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
@@ -747,47 +734,39 @@ extends:
         dependsOn: PrepareArtifacts
         jobs:
           - job: ReleaseJob
-            displayName: 'Validate, Publish, and Promote'
-            timeoutInMinutes: 240
+            displayName: 'Validate Release Parameters and Payloads'
+            timeoutInMinutes: 90
             pool:
               name: NetCore1ESPool-Internal
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
               BarBuildId: ''
-            # templateContext type: releaseJob enables proper network access for external publishing
-            # inputs.pipelineArtifact consumes artifacts from PrepareArtifacts stage (which have SBOM)
+              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
             templateContext:
               type: releaseJob
               isProduction: true
-              # ReleaseJob is the only job that performs ESRP-backed publish (1ES.PublishNuget@1,
-              # MicroBuild.Publish.yml for npm via DryRun=true gating). The auto-injected
-              # MicroBuildAuthorizePublishPlugin@0 task must therefore be able to authenticate
-              # to the MicroBuildToolset feed. The dnceng collection (b55de4ed-4b5a-4215-a8e4-0a0a5f71e7d8)
-              # hosts its own mirror at pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset,
-              # which is accessible to builds in this collection automatically. Using the dnceng
-              # mirror avoids needing the DevDivEsrpAzDoSrvConn service connection (which is
-              # only required for the actual sign/publish ESRP calls, gated by DryRun=false).
-              # Pattern: dotnet/roslyn uses the same dnceng MicroBuildToolset mirror.
               mb:
                 publish:
-                  feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'
+                  enabled: false
               inputs:
-                - input: pipelineArtifact
-                  artifactName: PackageArtifacts
-                  targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
-                - input: pipelineArtifact
-                  artifactName: NpmRidPackageArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/rid-packages'
-                - input: pipelineArtifact
-                  artifactName: NpmPointerPackageArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/pointer-package'
-                - input: pipelineArtifact
-                  artifactName: NpmValidationSummary
-                  targetPath: '$(Pipeline.Workspace)/npm/validation-summary'
-                - input: pipelineArtifact
-                  artifactName: NpmSignatureArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/signatures'
+                - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
+                  - input: pipelineArtifact
+                    artifactName: PackageArtifacts
+                    targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+                - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
+                  - input: pipelineArtifact
+                    artifactName: NpmRidPackageArtifacts
+                    targetPath: '$(Pipeline.Workspace)/npm/rid-packages'
+                  - input: pipelineArtifact
+                    artifactName: NpmPointerPackageArtifacts
+                    targetPath: '$(Pipeline.Workspace)/npm/pointer-package'
+                  - input: pipelineArtifact
+                    artifactName: NpmValidationSummary
+                    targetPath: '$(Pipeline.Workspace)/npm/validation-summary'
+                  - input: pipelineArtifact
+                    artifactName: NpmSignatureArtifacts
+                    targetPath: '$(Pipeline.Workspace)/npm/signatures'
             steps:
               # ===== VALIDATION =====
               # Note: No checkout - releaseJob doesn't allow it. All scripts are inlined.
@@ -830,9 +809,7 @@ extends:
                     # The alias-validation helpers below are mirrored in
                     # eng/scripts/validate-npm-release-aliases.ps1, which is exercised directly by
                     # ValidateNpmReleaseAliasesTests. releaseJob runs with `checkout: none`, so these
-                    # functions are inlined here instead of dot-sourced; the
-                    # ReleasePublishNugetPipelineTests.NpmAliasValidationHelpersMatchScript test keeps
-                    # the inline copy and the script in sync.
+                    # functions are inlined here instead of dot-sourced.
                     # >>> BEGIN npm release alias helpers (keep in sync with eng/scripts/validate-npm-release-aliases.ps1) >>>
                     function Format-NpmReleaseAliasForError([string] $value) {
                       $escaped = $value.Replace("`r", '\r').Replace("`n", '\n')
@@ -927,15 +904,13 @@ extends:
 
                       Write-Host "##vso[task.setvariable variable=NpmPublishOwnersEffective]$effectiveOwners"
                       Write-Host "##vso[task.setvariable variable=NpmPublishApproversEffective]$effectiveApprovers"
+                      Write-Host "##vso[task.setvariable variable=NpmPublishOwnersEffective;isOutput=true]$effectiveOwners"
+                      Write-Host "##vso[task.setvariable variable=NpmPublishApproversEffective;isOutput=true]$effectiveApprovers"
                       Write-Host "npm ESRP owners and approvers were resolved and include the required release contacts."
                     }
                     # <<< END npm release alias helpers <<<
 
-                    # Read queue-time owner/approver values from the environment instead of
-                    # interpolating template expressions into this script. Compile-time string
-                    # interpolation would let an operator-supplied value break out of the quoted
-                    # literal and run as code; passing them through the step's env block keeps the
-                    # values as data until ConvertTo-NpmReleaseAliasSet validates them.
+                    # Keep aliases as data until ConvertTo-NpmReleaseAliasSet validates them.
                     $owners = $env:NPM_PUBLISH_OWNERS
                     $approvers = $env:NPM_PUBLISH_APPROVERS
                     $requiredNpmOwnersValue = $env:NPM_PUBLISH_REQUIRED_OWNERS
@@ -945,15 +920,23 @@ extends:
 
                   Write-Host "==================================="
                 displayName: 'Validate Parameters'
-                # Forward the queue-time owner/approver values (and the hard-coded required
-                # owners) as environment variables so the inline script reads them as data.
-                # Embedding template expressions inside a string scalar keeps Azure Pipelines from
-                # preserving expression-object typing for the env value while still avoiding
-                # interpolation into the PowerShell source.
                 env:
-                  NPM_PUBLISH_OWNERS: '${{ parameters.NpmPublishOwners }}'
-                  NPM_PUBLISH_APPROVERS: '${{ parameters.NpmPublishApprovers }}'
+                  NPM_PUBLISH_OWNERS: $(NPM_PUBLISH_OWNERS)
+                  NPM_PUBLISH_APPROVERS: $(NPM_PUBLISH_APPROVERS)
                   NPM_PUBLISH_REQUIRED_OWNERS: $(NPM_PUBLISH_REQUIRED_OWNERS)
+                name: validateParameters
+
+              - powershell: |
+                  $releaseVersion = "$(ReleaseVersionEffective)"
+                  if ([string]::IsNullOrWhiteSpace($releaseVersion) -or $releaseVersion -like '$(*)') {
+                    Write-Error "ReleaseVersionEffective was not set by PrepareArtifacts.PrepareJob."
+                    exit 1
+                  }
+
+                  Write-Host "ReleaseVersionEffective: $releaseVersion"
+                  Write-Host "##vso[task.setvariable variable=releaseVersionEffective;isOutput=true]$releaseVersion"
+                name: deriveReleaseVersion
+                displayName: 'Export ReleaseVersion for downstream jobs'
 
               # ===== EXTRACT BAR BUILD ID =====
               - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
@@ -982,6 +965,7 @@ extends:
                         $barBuildId = $Matches[1]
                         Write-Host "✓ Extracted BAR Build ID: $barBuildId"
                         Write-Host "##vso[task.setvariable variable=BarBuildId]$barBuildId"
+                        Write-Host "##vso[task.setvariable variable=BarBuildId;isOutput=true]$barBuildId"
                       } else {
                         Write-Error "Could not find BAR ID tag in build $buildId. Tags found: $($response.value -join ', ')"
                         exit 1
@@ -990,13 +974,12 @@ extends:
                       Write-Error "Failed to fetch build tags: $_"
                       exit 1
                     }
+                  name: extractBarBuildId
                   displayName: 'Extract BAR Build ID'
                   env:
                     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
-              # ===== DOWNLOAD PACKAGES =====
-              # Artifacts are downloaded automatically via templateContext.inputs above
-
+              # Validate every selected payload before any publisher can start.
               - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
                 - task: UseDotNet@2
                   displayName: 'Install .NET 10 SDK'
@@ -1024,13 +1007,8 @@ extends:
                     Write-Host "==========================="
                   displayName: 'List Packages'
 
-                # ===== VERIFY SIGNATURES =====
-                # Verify packages in parallel via ForEach-Object -Parallel.
-                # Sequential verification was the single biggest time sink in
-                # this stage (~1.5s per package * ~80 packages). Throttle to
-                # 8 to avoid saturating the runner's CPU / network for the
-                # cert-revocation checks `dotnet nuget verify` performs. The
-                # runner ships PowerShell 7+, so -Parallel is available.
+                # Throttle parallel signature verification to avoid saturating certificate
+                # revocation checks. The PowerShell 7 runner supports ForEach-Object -Parallel.
                 - pwsh: |
                     $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
                     Write-Host "=== Verifying Package Signatures (parallel) ==="
@@ -1038,17 +1016,13 @@ extends:
                     $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
                     Write-Host "Found $($packages.Count) packages to verify"
 
-                    # ConcurrentBag is thread-safe; we collect failed package
-                    # names across runspaces without locking.
                     $failedVerification = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
 
                     $packages | ForEach-Object -ThrottleLimit 8 -Parallel {
                       $package = $_
                       $bag = $using:failedVerification
 
-                      # Prevent PowerShell from treating stderr writes from
-                      # the verify command as terminating errors inside the
-                      # parallel runspace.
+                      # Capture native stderr without terminating the parallel runspace.
                       $ErrorActionPreference = 'Continue'
                       $result = dotnet nuget verify $package.FullName 2>&1
                       $verifyExitCode = $LASTEXITCODE
@@ -1077,51 +1051,6 @@ extends:
                     Write-Host "✓ All $($packages.Count) packages passed signature verification"
                     Write-Host "==========================="
                   displayName: 'Verify Package Signatures'
-
-              # ===== PUBLISH TO NUGET =====
-              # Dry Run: List packages that would be published (skip actual publish)
-              - ${{ if and(eq(parameters.DryRun, true), eq(parameters.SkipNuGetPublish, false)) }}:
-                - powershell: |
-                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
-                    Write-Host "=== DRY RUN MODE ==="
-                    Write-Host "⚠️ The following packages would be published to NuGet.org:"
-                    Write-Host ""
-                    $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
-                    foreach ($pkg in $packages) {
-                      $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
-                      Write-Host "  - $($pkg.Name) ($sizeMB MB)"
-                    }
-                    Write-Host ""
-                    Write-Host "Total: $($packages.Count) packages"
-                    Write-Host "=== DRY RUN - No packages were actually published ==="
-                  displayName: 'Dry Run - List Packages (No Publish)'
-
-              # Actual Publish: Use 1ES.PublishNuget task (only when not dry run and not skipped)
-              # Pattern from dotnet-diagnostics-internal-components and dotnet-macios:
-              # - useDotNetTask: false (required - DotNetCoreCLI@2 doesn't support encrypted API keys)
-              # - nuGetFeedType: external + publishFeedCredentials for NuGet.org
-              - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNuGetPublish, false)) }}:
-                - task: 1ES.PublishNuget@1
-                  displayName: 'Push Packages to NuGet.org'
-                  inputs:
-                    useDotNetTask: false
-                    packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
-                    packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
-                    nuGetFeedType: external
-                    publishFeedCredentials: 'NuGet.org - dotnet/aspire'
-
-              # Skip message when SkipNuGetPublish is true
-              - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
-                - powershell: |
-                    Write-Host "=== Skipping NuGet Publishing (SkipNuGetPublish=true) ==="
-                  displayName: 'Skip NuGet Publish (flagged)'
-
-              # ===== PUBLISH TO npm =====
-              - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
-                - task: NodeTool@0
-                  displayName: 'Install Node.js for npm Validation'
-                  inputs:
-                    versionSpec: '22.x'
 
               - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
                 - powershell: |
@@ -1209,9 +1138,8 @@ extends:
                     Write-Host "npm validation summaries verified ($($validatedRids -join ', '), version $expectedVersion)."
 
                     # Surface the prepare-stage validated version to later steps in
-                    # this job so the pointer preflight can assert the package about
-                    # to be submitted to ESRP is the exact version that was install-
-                    # tested, not a different build that slipped into staging.
+                    # this job so the staged tarballs can be checked against the
+                    # exact version that was install-tested.
                     Write-Host "##vso[task.setvariable variable=NpmValidatedExpectedVersion]$expectedVersion"
                   displayName: 'Validate npm Prepare-Stage Summaries'
 
@@ -1330,9 +1258,7 @@ extends:
                     # Assert each staged tarball's OWN package.json version (the bytes
                     # npm will publish) matches the validated version. This runs BEFORE
                     # the RID packages are submitted to ESRP, because an npm publish is
-                    # unrevocable: a mismatch caught only at the pointer preflight (which
-                    # runs after RID publish) would already have leaked wrong-version RID
-                    # packages onto the public registry.
+                    # unrevocable, so a mismatch must fail before any submission.
                     Write-Host "=== Verifying staged npm package versions against '$validatedVersion' ==="
                     foreach ($tarball in $tarballs) {
                       $metadataRoot = Join-Path "$(Agent.TempDirectory)" "npm-version-check-$([Guid]::NewGuid().ToString('N'))"
@@ -1375,685 +1301,6 @@ extends:
                     Write-Host "All staged npm tarballs match validated version '$validatedVersion'."
                   displayName: 'Verify Staged npm Package Versions'
 
-              - ${{ if and(eq(parameters.DryRun, true), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false))) }}:
-                - powershell: |
-                    Write-Host "=== DRY RUN MODE ==="
-                    Write-Host "The following packages would be submitted to ESRP for npm publishing."
-                    Write-Host ""
-                    if ("${{ parameters.SkipNpmRidPublish }}" -eq "true") {
-                      Write-Host "RID package submission would be skipped because SkipNpmRidPublish=true."
-                    } else {
-                      Write-Host "RID packages would be submitted first:"
-                      Get-ChildItem -Path "$(Pipeline.Workspace)/npm/rid-packages" -Filter "*.tgz" -File | ForEach-Object {
-                        Write-Host "  - $($_.Name)"
-                      }
-                      Write-Host ""
-                      Write-Host "Then the pipeline would wait ${{ parameters.NpmRegistryPropagationDelayMinutes }} minute(s) for registry propagation."
-                    }
-                    Write-Host ""
-                    if ("${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
-                      Write-Host "Pointer package submission would be skipped because SkipNpmPointerPublish=true."
-                    } else {
-                      Write-Host "The pointer package would be submitted last:"
-                      Get-ChildItem -Path "$(Pipeline.Workspace)/npm/pointer-package" -Filter "*.tgz" -File | ForEach-Object {
-                        Write-Host "  - $($_.Name)"
-                      }
-                    }
-                    Write-Host ""
-                    Write-Host "=== DRY RUN - No npm packages were actually published ==="
-                  displayName: 'Dry Run - List npm Packages (No Publish)'
-
-                - pwsh: |
-                    $ErrorActionPreference = 'Stop'
-                    $pointerPackagePath = "$(Pipeline.Workspace)/npm/pointer-package"
-                    $pointerPackages = @(Get-ChildItem -Path $pointerPackagePath -Filter "*.tgz" -File)
-                    if ($pointerPackages.Count -ne 1) {
-                      Write-Error "Expected exactly one npm pointer package in '$pointerPackagePath', found $($pointerPackages.Count)."
-                      exit 1
-                    }
-
-                    $metadataRoot = Join-Path "$(Agent.TempDirectory)" "npm-pointer-package-$([Guid]::NewGuid().ToString('N'))"
-                    New-Item -ItemType Directory -Path $metadataRoot -Force | Out-Null
-                    try {
-                      tar -xzf $pointerPackages[0].FullName -C $metadataRoot
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Error "Failed to extract pointer package '$($pointerPackages[0].FullName)'."
-                        exit 1
-                      }
-
-                      $packageJsonPath = Join-Path $metadataRoot 'package/package.json'
-                      if (!(Test-Path -LiteralPath $packageJsonPath)) {
-                        Write-Error "Pointer package '$($pointerPackages[0].Name)' is missing package/package.json."
-                        exit 1
-                      }
-
-                      $packageJson = Get-Content -Raw -LiteralPath $packageJsonPath | ConvertFrom-Json
-                      $packageName = "$($packageJson.name)"
-                      $packageVersion = "$($packageJson.version)"
-                      if ([string]::IsNullOrWhiteSpace($packageName) -or [string]::IsNullOrWhiteSpace($packageVersion)) {
-                        Write-Error "Pointer package '$($pointerPackages[0].Name)' must include name and version in package.json."
-                        exit 1
-                      }
-
-                      $packageSpec = "$packageName@$packageVersion"
-                      Write-Host "Dry-run registry smoke target: $packageSpec"
-                    }
-                    finally {
-                      if (Test-Path -LiteralPath $metadataRoot) {
-                        Remove-Item -LiteralPath $metadataRoot -Recurse -Force
-                      }
-                    }
-
-                    Write-Host "node version: $(node --version)"
-                    Write-Host "npm version: $(npm --version)"
-                    $pingOutput = npm ping --registry=https://registry.npmjs.org/ --loglevel=warn 2>&1
-                    if ($LASTEXITCODE -ne 0) {
-                      Write-Host $pingOutput
-                      Write-Error "Unable to reach https://registry.npmjs.org/ from the release job."
-                      exit 1
-                    }
-
-                    Write-Host $pingOutput
-                    Write-Host "Dry run skipped installing '$packageSpec' because the package has not been published."
-                  displayName: 'Dry Run - Validate npm Registry Reachability'
-
-              - ${{ if and(eq(parameters.DryRun, false), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)), eq(parameters.IsPrerelease, false)) }}:
-                - pwsh: |
-                    $ErrorActionPreference = 'Stop'
-
-                    function Get-NpmTarballPackageIdentity([System.IO.FileInfo] $tarball) {
-                      $metadataRoot = Join-Path "$(Agent.TempDirectory)" "npm-already-published-$([Guid]::NewGuid().ToString('N'))"
-                      New-Item -ItemType Directory -Path $metadataRoot -Force | Out-Null
-                      try {
-                        tar -xzf $tarball.FullName -C $metadataRoot
-                        if ($LASTEXITCODE -ne 0) {
-                          Write-Error "Failed to extract npm package '$($tarball.FullName)'."
-                          exit 1
-                        }
-
-                        $packageJsonPath = Join-Path $metadataRoot 'package/package.json'
-                        if (!(Test-Path -LiteralPath $packageJsonPath)) {
-                          Write-Error "npm package '$($tarball.Name)' is missing package/package.json."
-                          exit 1
-                        }
-
-                        $packageJson = Get-Content -Raw -LiteralPath $packageJsonPath | ConvertFrom-Json
-                        $packageName = "$($packageJson.name)"
-                        $packageVersion = "$($packageJson.version)"
-                        if ([string]::IsNullOrWhiteSpace($packageName) -or [string]::IsNullOrWhiteSpace($packageVersion)) {
-                          Write-Error "npm package '$($tarball.Name)' must include name and version in package.json."
-                          exit 1
-                        }
-
-                        [PSCustomObject]@{
-                          Name = $packageName
-                          Version = $packageVersion
-                          Spec = "$packageName@$packageVersion"
-                          Tarball = $tarball.FullName
-                        }
-                      }
-                      finally {
-                        if (Test-Path -LiteralPath $metadataRoot) {
-                          Remove-Item -LiteralPath $metadataRoot -Recurse -Force
-                        }
-                      }
-                    }
-
-                    $scheduledPackageGroups = [System.Collections.Generic.List[object]]::new()
-
-                    if ("${{ parameters.SkipNpmRidPublish }}" -ne "true") {
-                      $scheduledPackageGroups.Add([PSCustomObject]@{
-                        Name = 'RID'
-                        Path = "$(Pipeline.Workspace)/npm/rid-packages"
-                      }) | Out-Null
-                    } else {
-                      Write-Host "Skipping already-published preflight for RID packages because SkipNpmRidPublish=true."
-                    }
-
-                    if ("${{ parameters.SkipNpmPointerPublish }}" -ne "true") {
-                      $scheduledPackageGroups.Add([PSCustomObject]@{
-                        Name = 'pointer'
-                        Path = "$(Pipeline.Workspace)/npm/pointer-package"
-                      }) | Out-Null
-                    } else {
-                      Write-Host "Skipping already-published preflight for pointer package because SkipNpmPointerPublish=true."
-                    }
-
-                    if ($scheduledPackageGroups.Count -eq 0) {
-                      Write-Host "No npm packages are scheduled for publishing; already-published preflight has nothing to check."
-                      exit 0
-                    }
-
-                    $scheduledPackages = [System.Collections.Generic.List[object]]::new()
-                    foreach ($group in $scheduledPackageGroups) {
-                      $tarballs = @(Get-ChildItem -Path $group.Path -Filter "*.tgz" -File)
-                      if ($tarballs.Count -eq 0) {
-                        Write-Error "No $($group.Name) npm tarballs were found under '$($group.Path)' for already-published preflight."
-                        exit 1
-                      }
-
-                      foreach ($tarball in $tarballs) {
-                        $scheduledPackages.Add((Get-NpmTarballPackageIdentity $tarball)) | Out-Null
-                      }
-                    }
-
-                    Write-Host "Checking $($scheduledPackages.Count) scheduled npm package(s) for version collisions on https://registry.npmjs.org/."
-                    $semverRegex = '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$'
-                    $stableSemverRegex = '^\d+\.\d+\.\d+$'
-
-                    if ("${{ parameters.SkipNpmPointerPublish }}" -ne "true") {
-                      $pointerPackages = @($scheduledPackages | Where-Object { $_.Name -eq '@microsoft/aspire-cli' })
-                      if ($pointerPackages.Count -ne 1) {
-                        Write-Error "Expected exactly one scheduled @microsoft/aspire-cli pointer package while checking the npm latest dist-tag, found $($pointerPackages.Count)."
-                        exit 1
-                      }
-
-                      $pointerPackage = $pointerPackages[0]
-                      if ($pointerPackage.Version -notmatch $stableSemverRegex) {
-                        Write-Error "Stable npm latest dist-tag validation expected a stable SemVer version, but scheduled pointer package version is '$($pointerPackage.Version)'."
-                        exit 1
-                      }
-
-                      $latestOutput = & npm view @microsoft/aspire-cli@latest version --registry=https://registry.npmjs.org/ --loglevel=warn 2>&1
-                      $latestExitCode = $LASTEXITCODE
-                      $latestText = ($latestOutput | ForEach-Object { "$_" }) -join "`n"
-                      if ($latestExitCode -eq 0) {
-                        $latestVersion = $latestOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ -match $stableSemverRegex } | Select-Object -First 1
-                        if ([string]::IsNullOrWhiteSpace($latestVersion)) {
-                          Write-Error "Unable to parse the current @microsoft/aspire-cli@latest version as stable SemVer. Output: $latestText"
-                          exit 1
-                        }
-
-                        if ([version]$pointerPackage.Version -lt [version]$latestVersion) {
-                          Write-Error "Publishing $($pointerPackage.Spec) would move the npm latest dist-tag backward from $latestVersion. Set SkipNpmRidPublish=true and SkipNpmPointerPublish=true for older servicing releases."
-                          exit 1
-                        }
-
-                        Write-Host "Scheduled pointer package $($pointerPackage.Version) will not move npm latest backward from $latestVersion."
-                      } elseif ($latestText -match '(?i)(\bE404\b|404 Not Found)') {
-                        Write-Host "@microsoft/aspire-cli@latest is not published yet; latest dist-tag guard has nothing to compare."
-                      } else {
-                        Write-Error "Unable to query @microsoft/aspire-cli@latest before publishing. Output: $latestText"
-                        exit 1
-                      }
-                    }
-
-                    $collisions = [System.Collections.Generic.List[string]]::new()
-                    $verificationFailures = [System.Collections.Generic.List[string]]::new()
-
-                    foreach ($package in $scheduledPackages) {
-                      $packageSpec = $package.Spec
-                      Write-Host "Checking npm registry for $packageSpec"
-                      $viewOutput = & npm view $packageSpec version --registry=https://registry.npmjs.org/ --loglevel=warn 2>&1
-                      $viewExitCode = $LASTEXITCODE
-                      $viewText = ($viewOutput | ForEach-Object { "$_" }) -join "`n"
-
-                      if ($viewExitCode -eq 0) {
-                        $resolvedVersion = $viewOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ -match $semverRegex } | Select-Object -First 1
-                        if ($resolvedVersion -eq $package.Version) {
-                          $collisions.Add($packageSpec) | Out-Null
-                        } elseif ([string]::IsNullOrWhiteSpace($resolvedVersion)) {
-                          $verificationFailures.Add("npm view $packageSpec succeeded but did not return a semver version. Output: $viewText") | Out-Null
-                        } else {
-                          $verificationFailures.Add("npm view $packageSpec returned unexpected version '$resolvedVersion'. Output: $viewText") | Out-Null
-                        }
-                      } elseif ($viewText -match '(?i)(\bE404\b|404 Not Found)') {
-                        Write-Host "  not published yet"
-                      } else {
-                        $verificationFailures.Add("npm view $packageSpec failed with exit code $viewExitCode. Output: $viewText") | Out-Null
-                      }
-                    }
-
-                    if ($verificationFailures.Count -gt 0) {
-                      Write-Error ("Unable to verify whether every scheduled npm package is unpublished. " + ($verificationFailures -join ' | '))
-                      exit 1
-                    }
-
-                    if ($collisions.Count -gt 0) {
-                      Write-Error ("The following scheduled npm package version(s) already exists on npm and cannot be published again: " + ($collisions -join ', ') + ". Set SkipNpmRidPublish=true only when all RID packages for this version are already published and should be skipped. Set SkipNpmPointerPublish=true only when the pointer package for this version is already published and should be skipped.")
-                      exit 1
-                    }
-
-                    Write-Host "No scheduled npm package versions already exist on npm."
-                    exit 0
-                  displayName: 'Verify npm Packages Are Not Already Published'
-
-                - ${{ if eq(parameters.SkipNpmRidPublish, false) }}:
-                  - template: MicroBuild.Publish.yml@MicroBuildTemplate
-                    parameters:
-                      intent: 'PackageDistribution'
-                      contentType: 'npm'
-                      contentSource: 'Folder'
-                      folderLocation: '$(Pipeline.Workspace)\npm\rid-packages'
-                      waitForReleaseCompletion: true
-                      owners: '$(NpmPublishOwnersEffective)'
-                      approvers: '$(NpmPublishApproversEffective)'
-
-                  - powershell: |
-                      $delayMinutes = [int]'${{ parameters.NpmRegistryPropagationDelayMinutes }}'
-                      if ($delayMinutes -le 0) {
-                        Write-Host "Skipping npm registry propagation delay because NpmRegistryPropagationDelayMinutes=$delayMinutes."
-                        exit 0
-                      }
-
-                      Write-Host "Waiting $delayMinutes minute(s) before publishing the pointer package so npm can observe the RID packages."
-                      Start-Sleep -Seconds ($delayMinutes * 60)
-                    displayName: 'Wait for npm RID Package Propagation'
-
-                - ${{ if eq(parameters.SkipNpmRidPublish, true) }}:
-                  - powershell: |
-                      Write-Host "Skipping npm RID package publish because SkipNpmRidPublish=true. The pointer package will still be submitted."
-                    displayName: 'Skip npm RID Publish (flagged)'
-
-                - ${{ if eq(parameters.SkipNpmPointerPublish, false) }}:
-                  # Preflight: the pointer package pins all RID packages via
-                  # optionalDependencies at the same version. If even one RID
-                  # tarball is missing from npm at this moment (operator set
-                  # SkipNpmRidPublish=true to re-run only the pointer, or only
-                  # a subset of RIDs landed in a prior attempt), the pointer
-                  # install at end-user time will silently succeed but the
-                  # launcher will throw "The Aspire CLI native package '…' was
-                  # not installed" on first invocation. The post-publish smoke
-                  # below only validates the publish pool's own RID, so a
-                  # missing linux-arm64 would otherwise reach customers
-                  # invisibly. Fail loudly here instead.
-                  #
-                  # Read the RID list from the pointer tarball's own
-                  # optionalDependencies so we don't drift if a RID is added or
-                  # removed.
-                  - pwsh: |
-                      $ErrorActionPreference = 'Stop'
-                      $pointerPackagePath = "$(Pipeline.Workspace)/npm/pointer-package"
-                      $pointerPackages = @(Get-ChildItem -Path $pointerPackagePath -Filter "*.tgz" -File)
-                      if ($pointerPackages.Count -ne 1) {
-                        Write-Error "Expected exactly one npm pointer package in '$pointerPackagePath', found $($pointerPackages.Count)."
-                        exit 1
-                      }
-
-                      $metadataRoot = Join-Path "$(Agent.TempDirectory)" "npm-pointer-preflight-$([Guid]::NewGuid().ToString('N'))"
-                      New-Item -ItemType Directory -Path $metadataRoot -Force | Out-Null
-                      try {
-                        tar -xzf $pointerPackages[0].FullName -C $metadataRoot
-                        if ($LASTEXITCODE -ne 0) {
-                          Write-Error "Failed to extract pointer package '$($pointerPackages[0].FullName)'."
-                          exit 1
-                        }
-
-                        $packageJsonPath = Join-Path $metadataRoot 'package/package.json'
-                        $packageJson = Get-Content -Raw -LiteralPath $packageJsonPath | ConvertFrom-Json
-                        $packageName = "$($packageJson.name)"
-                        $packageVersion = "$($packageJson.version)"
-
-                        # Fail closed if the pointer package about to be published
-                        # is not the exact version the prepare-stage install tests
-                        # validated. NpmValidatedExpectedVersion is set by the
-                        # 'Validate npm Prepare-Stage Summaries' step earlier in this
-                        # job; pointer publish never runs without that gate, so a
-                        # missing/empty/unexpanded token here is itself a signal that
-                        # the gate did not run and we must not publish.
-                        $validatedVersion = "$(NpmValidatedExpectedVersion)"
-                        if ([string]::IsNullOrWhiteSpace($validatedVersion) -or $validatedVersion -like '$(*)') {
-                          Write-Error "NpmValidatedExpectedVersion was not set by the prepare-stage validation gate (got '$validatedVersion'). Refusing to publish pointer package '$packageName' without a verified version."
-                          exit 1
-                        }
-
-                        if ($packageVersion -ne $validatedVersion) {
-                          Write-Error "Pointer package '$packageName' version '$packageVersion' does not match the prepare-stage validated version '$validatedVersion'. The staged packages differ from what was install-tested; refusing to publish."
-                          exit 1
-                        }
-
-                        $optionalDeps = $packageJson.optionalDependencies
-                        if ($null -eq $optionalDeps) {
-                          Write-Error "Pointer package '$packageName' has no optionalDependencies; nothing to preflight."
-                          exit 1
-                        }
-
-                        $depNames = @($optionalDeps.PSObject.Properties.Name)
-                        if ($depNames.Count -eq 0) {
-                          Write-Error "Pointer package '$packageName' has empty optionalDependencies."
-                          exit 1
-                        }
-
-                        $missing = New-Object System.Collections.Generic.List[string]
-                        # Same propagation tolerance as the post-publish smoke
-                        # below: npm CDN propagation of 7 freshly-published scoped
-                        # tarballs can exceed the fixed NpmRegistryPropagationDelayMinutes
-                        # wait, especially across multiple regions. A single-shot
-                        # `npm view` would fail closed on transient propagation lag
-                        # AFTER all 7 RID packages are already published, forcing a
-                        # manual re-run with SkipNpmRidPublish=true. Bound it with
-                        # the same 10×30s retry the post-publish smoke uses.
-                        $preflightAttempts = 10
-                        $preflightDelaySeconds = 30
-                        # Strict semver pattern (1.2.3, 1.2.3-prerelease, 1.2.3+build).
-                        # `npm view` with `--loglevel=warn` merges deprecation /
-                        # peer-dep / EBADENGINE warnings onto stderr; combining
-                        # stderr with stdout and taking `Select-Object -First 1`
-                        # could latch the warning line as the version. Filter to
-                        # the first line that matches a semver shape and only
-                        # then compare to the pinned version.
-                        $semverRegex = '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$'
-                        foreach ($depName in $depNames) {
-                          $depVersion = "$($optionalDeps.$depName)"
-                          $spec = "$depName@$depVersion"
-                          $resolvedVersion = $null
-                          $lastError = $null
-                          for ($preflightAttempt = 1; $preflightAttempt -le $preflightAttempts; $preflightAttempt++) {
-                            Write-Host "Checking npm registry for $spec (attempt $preflightAttempt/$preflightAttempts)"
-                            # Every other npm call in the release job explicitly pins
-                            # `--registry=https://registry.npmjs.org/`. The agent's
-                            # ambient registry is not guaranteed to be public npmjs
-                            # (an internal mirror may be configured via .npmrc or
-                            # npm_config_registry). Without the explicit pin, this
-                            # preflight could (a) spuriously fail after a successful
-                            # public publish if the mirror lacks the new package,
-                            # or (b) pass against a stale mirror and let a pointer
-                            # publish reference RIDs the public registry can't serve.
-                            $resolved = & npm view $spec version --registry=https://registry.npmjs.org/ 2>$null
-                            if ($LASTEXITCODE -eq 0 -and $resolved) {
-                              $candidate = $resolved | ForEach-Object { "$_".Trim() } | Where-Object { $_ -match $semverRegex } | Select-Object -First 1
-                              if ($candidate -eq $depVersion) {
-                                $resolvedVersion = $candidate
-                                Write-Host "  found: $resolvedVersion"
-                                break
-                              }
-                              $lastError = "npm view returned '$resolved' (no semver line matched pinned version '$depVersion')"
-                            } else {
-                              $lastError = "npm view exit $LASTEXITCODE for ${spec}: $resolved"
-                            }
-                            if ($preflightAttempt -lt $preflightAttempts) {
-                              Write-Warning "$lastError. Retrying in $preflightDelaySeconds second(s)."
-                              Start-Sleep -Seconds $preflightDelaySeconds
-                            }
-                          }
-                          if (-not $resolvedVersion) {
-                            Write-Warning "Preflight failed for ${spec}: $lastError"
-                            $missing.Add($spec) | Out-Null
-                          }
-                        }
-                        if ($missing.Count -gt 0) {
-                          Write-Error ("Refusing to publish pointer package '$packageName@$packageVersion' because the following RID packages are not yet available on npm: " + ($missing -join ', '))
-                          exit 1
-                        }
-                        Write-Host "All $($depNames.Count) RID packages are present on npm at the pointer's pinned versions. Safe to publish pointer."
-                      }
-                      finally {
-                        if (Test-Path -LiteralPath $metadataRoot) {
-                          Remove-Item -LiteralPath $metadataRoot -Recurse -Force
-                        }
-                      }
-                    displayName: 'Verify npm RID Packages Present Before Pointer Publish'
-                    # DryRun=true never reaches this step because the gating
-                    # parent `if eq(parameters.SkipNpmPointerPublish, false)`
-                    # is only entered in real publish runs (the pointer publish
-                    # step lives directly below this one and is what the gate
-                    # protects).
-
-                  - template: MicroBuild.Publish.yml@MicroBuildTemplate
-                    parameters:
-                      intent: 'PackageDistribution'
-                      contentType: 'npm'
-                      contentSource: 'Folder'
-                      folderLocation: '$(Pipeline.Workspace)\npm\pointer-package'
-                      waitForReleaseCompletion: true
-                      owners: '$(NpmPublishOwnersEffective)'
-                      approvers: '$(NpmPublishApproversEffective)'
-
-                - ${{ if eq(parameters.SkipNpmPointerPublish, true) }}:
-                  - powershell: |
-                      Write-Host "Skipping npm pointer package publish because SkipNpmPointerPublish=true. Registry validation will still install the selected source build's pointer package version from npm."
-                    displayName: 'Skip npm Pointer Publish (flagged)'
-
-                - pwsh: |
-                    $ErrorActionPreference = 'Stop'
-                    $pointerPackagePath = "$(Pipeline.Workspace)/npm/pointer-package"
-                    $pointerPackages = @(Get-ChildItem -Path $pointerPackagePath -Filter "*.tgz" -File)
-                    if ($pointerPackages.Count -ne 1) {
-                      Write-Error "Expected exactly one npm pointer package in '$pointerPackagePath', found $($pointerPackages.Count)."
-                      exit 1
-                    }
-
-                    $metadataRoot = Join-Path "$(Agent.TempDirectory)" "npm-pointer-package-$([Guid]::NewGuid().ToString('N'))"
-                    New-Item -ItemType Directory -Path $metadataRoot -Force | Out-Null
-                    try {
-                      tar -xzf $pointerPackages[0].FullName -C $metadataRoot
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Error "Failed to extract pointer package '$($pointerPackages[0].FullName)'."
-                        exit 1
-                      }
-
-                      $packageJsonPath = Join-Path $metadataRoot 'package/package.json'
-                      if (!(Test-Path -LiteralPath $packageJsonPath)) {
-                        Write-Error "Pointer package '$($pointerPackages[0].Name)' is missing package/package.json."
-                        exit 1
-                      }
-
-                      $packageJson = Get-Content -Raw -LiteralPath $packageJsonPath | ConvertFrom-Json
-                      $packageName = "$($packageJson.name)"
-                      $packageVersion = "$($packageJson.version)"
-                      if ([string]::IsNullOrWhiteSpace($packageName) -or [string]::IsNullOrWhiteSpace($packageVersion)) {
-                        Write-Error "Pointer package '$($pointerPackages[0].Name)' must include name and version in package.json."
-                        exit 1
-                      }
-
-                      $packageSpec = "$packageName@$packageVersion"
-                    }
-                    finally {
-                      if (Test-Path -LiteralPath $metadataRoot) {
-                        Remove-Item -LiteralPath $metadataRoot -Recurse -Force
-                      }
-                    }
-
-                    $npmRoot = Join-Path "$(Agent.TempDirectory)" "npm-registry-smoke-$([Guid]::NewGuid().ToString('N'))"
-                    $npmPrefix = Join-Path $npmRoot 'prefix'
-                    $npmCache = Join-Path $npmRoot 'cache'
-                    New-Item -ItemType Directory -Path $npmPrefix -Force | Out-Null
-                    New-Item -ItemType Directory -Path $npmCache -Force | Out-Null
-
-                    try {
-                      $env:npm_config_prefix = $npmPrefix
-                      $env:npm_config_cache = $npmCache
-                      $env:npm_config_registry = 'https://registry.npmjs.org/'
-
-                      Write-Host "node version: $(node --version)"
-                      Write-Host "npm version: $(npm --version)"
-                      Write-Host "Validating published npm package from registry: $packageSpec"
-
-                      $pingOutput = npm ping --registry=https://registry.npmjs.org/ --loglevel=warn 2>&1
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Host $pingOutput
-                        Write-Error "Unable to reach https://registry.npmjs.org/ from the release job."
-                        exit 1
-                      }
-
-                      $attempts = 10
-                      $delaySeconds = 30
-                      $available = $false
-                      $lastViewOutput = $null
-                      # Strict semver regex catches: 1.2.3, 1.2.3-prerelease, 1.2.3+build.
-                      # `npm view --loglevel=warn` merges deprecation / peer-dep /
-                      # EBADENGINE warnings onto stderr; combining stderr with
-                      # stdout via `2>&1` and taking `Select-Object -First 1`
-                      # could latch the warning line as the version, then burn
-                      # all 10 retries and fail the release even though publish
-                      # succeeded. Filter to the first line that matches a semver
-                      # shape and only then compare to the published version.
-                      $semverRegex = '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$'
-                      for ($attempt = 1; $attempt -le $attempts; $attempt++) {
-                        Write-Host "Checking npm registry metadata for $packageSpec (attempt $attempt/$attempts)..."
-                        $lastViewOutput = npm view $packageSpec version --registry=https://registry.npmjs.org/ --loglevel=warn 2>&1
-                        if ($LASTEXITCODE -eq 0) {
-                          $viewVersion = $lastViewOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ -match $semverRegex } | Select-Object -First 1
-                          if ($viewVersion -eq $packageVersion) {
-                            $available = $true
-                            break
-                          }
-                        }
-
-                        if ($attempt -lt $attempts) {
-                          Write-Warning "npm registry has not returned $packageSpec yet. Retrying in $delaySeconds second(s)."
-                          Start-Sleep -Seconds $delaySeconds
-                        }
-                      }
-
-                      if (!$available) {
-                        Write-Host $lastViewOutput
-                        Write-Error "npm registry did not return '$packageVersion' for '$packageSpec' after $attempts attempt(s)."
-                        exit 1
-                      }
-
-                      $installed = $false
-                      $lastInstallOutput = $null
-                      for ($attempt = 1; $attempt -le $attempts; $attempt++) {
-                        Write-Host "Installing $packageSpec from npm registry (attempt $attempt/$attempts)..."
-                        $lastInstallOutput = npm install -g --foreground-scripts=true --no-audit --no-fund --loglevel=warn --registry=https://registry.npmjs.org/ $packageSpec 2>&1
-                        if ($LASTEXITCODE -eq 0) {
-                          $installed = $true
-                          break
-                        }
-
-                        if ($attempt -lt $attempts) {
-                          Write-Host $lastInstallOutput
-                          Write-Warning "npm install failed while registry propagation may still be in progress. Retrying in $delaySeconds second(s)."
-                          Start-Sleep -Seconds $delaySeconds
-                        }
-                      }
-
-                      if (!$installed) {
-                        Write-Host $lastInstallOutput
-                        Write-Error "Failed to install '$packageSpec' from npm registry after $attempts attempt(s)."
-                        exit 1
-                      }
-
-                      Write-Host $lastInstallOutput
-
-                      $aspireCommand = if ($IsWindows) {
-                        Join-Path $npmPrefix 'aspire.cmd'
-                      } else {
-                        Join-Path $npmPrefix 'bin/aspire'
-                      }
-
-                      if (!(Test-Path -LiteralPath $aspireCommand)) {
-                        Write-Error "npm install succeeded but the Aspire CLI command was not found at '$aspireCommand'."
-                        exit 1
-                      }
-
-                      $versionOutput = & $aspireCommand --version 2>&1
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Host $versionOutput
-                        Write-Error "Installed Aspire CLI failed to run --version."
-                        exit 1
-                      }
-
-                      $versionLine = @($versionOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -First 1)
-                      # `@(...)` wraps to an empty array when no non-empty lines
-                      # are emitted; PowerShell's `-notmatch` against an empty
-                      # array silently returns an empty array (falsy), which
-                      # would let an `aspire --version` that exits 0 with empty
-                      # stdout slip past the version-pattern check. Reject the
-                      # empty case explicitly before the regex compare so the
-                      # smoke test actually validates what it claims to.
-                      if ($versionLine.Count -eq 0 -or [string]::IsNullOrWhiteSpace([string]$versionLine[0])) {
-                        Write-Host $versionOutput
-                        Write-Error "Installed Aspire CLI '$aspireCommand --version' produced no output."
-                        exit 1
-                      }
-                      $versionPattern = "^$([System.Text.RegularExpressions.Regex]::Escape($packageVersion))(\+.*)?$"
-                      if ($versionLine -notmatch $versionPattern) {
-                        Write-Host $versionOutput
-                        Write-Error "Installed Aspire CLI version '$versionLine' did not match expected npm package version '$packageVersion'."
-                        exit 1
-                      }
-
-                      Write-Host "aspire --version output matched the published npm package version: $versionLine"
-                    }
-                    finally {
-                      if (Test-Path -LiteralPath $npmRoot) {
-                        # Best-effort cleanup. On Windows, freshly extracted
-                        # binaries may still be held open briefly by AV / file
-                        # indexers, which can make Remove-Item throw EPERM /
-                        # IOException. Swallow those so a successful smoke
-                        # test isn't masked by a transient cleanup error.
-                        try {
-                          Remove-Item -LiteralPath $npmRoot -Recurse -Force -ErrorAction Stop
-                        } catch {
-                          Write-Warning "Best-effort cleanup of '$npmRoot' failed: $($_.Exception.Message)"
-                        }
-                      }
-                    }
-                  displayName: 'Validate Published npm Package from Registry'
-
-              - ${{ if and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true)) }}:
-                - powershell: |
-                    Write-Host "=== Skipping npm Publishing (SkipNpmRidPublish=true and SkipNpmPointerPublish=true) ==="
-                  displayName: 'Skip npm Packages (flagged)'
-
-              # ===== PROMOTE TO CHANNEL =====
-              - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
-                - powershell: |
-                    Write-Host "Installing darc CLI..."
-                    
-                    # Query Maestro API for the correct darc version
-                    $versionEndpoint = 'https://maestro.dot.net/api/assets/darc-version?api-version=2020-02-20'
-                    $darcVersion = (Invoke-WebRequest -Uri $versionEndpoint -UseBasicParsing).Content
-                    Write-Host "Darc version: $darcVersion"
-                    
-                    # Install darc as a .NET global tool
-                    $arcadeServicesSource = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json'
-                    Write-Host "Installing darc from $arcadeServicesSource..."
-                    
-                    dotnet tool install microsoft.dotnet.darc --version $darcVersion --add-source "$arcadeServicesSource" -g
-                    
-                    if ($LASTEXITCODE -ne 0) {
-                      Write-Error "Failed to install darc CLI"
-                      exit 1
-                    }
-                    
-                    Write-Host "✓ Darc CLI installed successfully"
-                  displayName: 'Install darc'
-
-                - task: AzureCLI@2
-                  displayName: 'Promote Build to Channel'
-                  inputs:
-                    azureSubscription: 'Darc: Maestro Production'
-                    scriptType: 'pscore'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      $barBuildId = "$(BarBuildId)"
-                      $channelName = "${{ parameters.GaChannelName }}"
-                      $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
-                      $azdoToken = $env:SYSTEM_ACCESSTOKEN
-
-                      Write-Host "=== Channel Promotion ==="
-                      Write-Host "BAR Build ID: $barBuildId"
-                      Write-Host "Target Channel: $channelName"
-
-                      if ($dryRun) {
-                        Write-Host "⚠️ DRY RUN MODE - Build will not actually be promoted"
-                        Write-Host "[DRY RUN] Would run: darc add-build-to-channel --id $barBuildId --channel '$channelName' --azdev-pat <token> --ci"
-                        exit 0
-                      }
-
-                      Write-Host "Promoting build $barBuildId to channel '$channelName'..."
-
-                      # darc is installed as a global tool, so it's available in PATH
-                      # --azdev-pat is required for darc to access Azure DevOps build artifacts
-                      darc add-build-to-channel `
-                        --id $barBuildId `
-                        --channel "$channelName" `
-                        --azdev-pat "$azdoToken" `
-                        --ci
-
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Error "Failed to promote build to channel"
-                        exit 1
-                      }
-
-                      Write-Host "✓ Build successfully promoted to '$channelName'"
-                      Write-Host "==========================="
-                  env:
-                    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-
               # ===== SUMMARY =====
               - powershell: |
                   Write-Host ""
@@ -2074,8 +1321,10 @@ extends:
                   Write-Host "║ NuGet Publish:  ${{ parameters.SkipNuGetPublish }}" -NoNewline
                   if ("${{ parameters.SkipNuGetPublish }}" -eq "true") {
                     Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (DRY RUN)"
                   } else {
-                    Write-Host " (EXECUTED)"
+                    Write-Host " (runs in parallel after validation)"
                   }
                   Write-Host "║ npm Publish:    RID skip=${{ parameters.SkipNpmRidPublish }}, pointer skip=${{ parameters.SkipNpmPointerPublish }}" -NoNewline
                   if ("${{ parameters.SkipNpmRidPublish }}" -eq "true" -and "${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
@@ -2085,11 +1334,11 @@ extends:
                   } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
                     Write-Host " (BLOCKED - prerelease requires non-latest npm dist-tag support)"
                   } elseif ("${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
-                    Write-Host " (PARTIAL - pointer publish skipped; registry smoke still ran)"
+                    Write-Host " (runs in parallel after validation; pointer publish skipped)"
                   } elseif ("${{ parameters.SkipNpmRidPublish }}" -eq "true") {
-                    Write-Host " (PARTIAL - RID publish skipped; pointer publish still ran)"
+                    Write-Host " (runs in parallel after validation; RID publish skipped)"
                   } else {
-                    Write-Host " (EXECUTED)"
+                    Write-Host " (runs in parallel after validation)"
                   }
                   Write-Host "║ npm RID Skip:   ${{ parameters.SkipNpmRidPublish }}"
                   Write-Host "║ npm Ptr Skip:   ${{ parameters.SkipNpmPointerPublish }}"
@@ -2097,7 +1346,7 @@ extends:
                   if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
                     Write-Host " (SKIPPED)"
                   } else {
-                    Write-Host " (EXECUTED)"
+                    Write-Host " (runs in parallel after validation)"
                   }
                   Write-Host "║ WinGet:         ${{ parameters.SkipWinGetPublish }}" -NoNewline
                   if ("${{ parameters.SkipWinGetPublish }}" -eq "true") {
@@ -2105,15 +1354,15 @@ extends:
                   } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
                     Write-Host " (SKIPPED - prerelease)"
                   } else {
-                    Write-Host " (runs in parallel after this job)"
+                    Write-Host " (runs after channel promotion)"
                   }
                   Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
                   if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
                     Write-Host " (SKIPPED)"
                   } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (dispatched after Release stage; dry_run=true forwarded)"
+                    Write-Host " (runs in parallel after validation; dry_run=true forwarded)"
                   } else {
-                    Write-Host " (dispatched after Release stage)"
+                    Write-Host " (runs in parallel after validation)"
                   }
                   Write-Host "║ Release Assets: ${{ parameters.SkipReleaseAssets }}" -NoNewline
                   if ("${{ parameters.SkipReleaseAssets }}" -eq "true") {
@@ -2129,9 +1378,9 @@ extends:
                   } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
                     Write-Host " (SKIPPED - prerelease)"
                   } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (dry-run dispatch after Release Assets job)"
+                    Write-Host " (dry-run dispatch after baseline branch creation)"
                   } else {
-                    Write-Host " (updates baseline PR after Release Assets job)"
+                    Write-Host " (runs after baseline branch creation; independent of asset upload)"
                   }
                   Write-Host "║ VS Code Ext:    ${{ parameters.SkipVSCodeExtensionPublish }}" -NoNewline
                   if ("${{ parameters.SkipVSCodeExtensionPublish }}" -eq "true") {
@@ -2140,13 +1389,283 @@ extends:
                     if ("${{ parameters.DryRun }}" -eq "true") {
                       Write-Host " (validated in dry-run)"
                     } else {
-                      Write-Host " (publish runs after this job)"
+                      Write-Host " (runs in parallel after validation)"
                     }
                   }
                   Write-Host "╚═══════════════════════════════════════════════════════════════╝"
                   Write-Host ""
                 displayName: 'Print Summary'
                 condition: always()
+
+          # ===== NUGET PUBLISHING =====
+          # All publishers wait for selected-payload integrity checks in ReleaseJob.
+          # Publication failures remain independent after that shared preflight.
+          - job: NuGetPublishJob
+            displayName: 'Publish NuGet Packages'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipNuGetPublish }}', 'false')
+              )
+            timeoutInMinutes: 90
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              # The auto-injected publish auth plugin must use the accessible dnceng mirror.
+              mb:
+                publish:
+                  feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: PackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+            steps:
+              - ${{ if eq(parameters.DryRun, true) }}:
+                - powershell: |
+                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    Write-Host "=== DRY RUN MODE ==="
+                    Write-Host "⚠️ The following packages would be published to NuGet.org:"
+                    Write-Host ""
+                    $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                    foreach ($pkg in $packages) {
+                      $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
+                      Write-Host "  - $($pkg.Name) ($sizeMB MB)"
+                    }
+                    Write-Host ""
+                    Write-Host "Total: $($packages.Count) packages"
+                    Write-Host "=== DRY RUN - No packages were actually published ==="
+                  displayName: 'Dry Run - List Packages (No Publish)'
+
+              # useDotNetTask: false is required for encrypted API keys.
+              # Omit the service-connection reference entirely on skipped reruns.
+              - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNuGetPublish, false)) }}:
+                - task: 1ES.PublishNuget@1
+                  displayName: 'Push Packages to NuGet.org'
+                  inputs:
+                    useDotNetTask: false
+                    packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
+                    packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+                    nuGetFeedType: external
+                    publishFeedCredentials: 'NuGet.org - dotnet/aspire'
+
+              - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
+                - powershell: |
+                    Write-Host "=== Skipping NuGet Publishing (SkipNuGetPublish=true) ==="
+                  displayName: 'Skip NuGet Packages (flagged)'
+
+          # ===== npm PUBLISHING =====
+          - job: NpmPublishJob
+            displayName: 'Publish npm Packages'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                or(eq('${{ parameters.SkipNpmRidPublish }}', 'false'), eq('${{ parameters.SkipNpmPointerPublish }}', 'false'))
+              )
+            timeoutInMinutes: 120
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              NpmPublishOwnersEffective: $[ dependencies.ReleaseJob.outputs['validateParameters.NpmPublishOwnersEffective'] ]
+              NpmPublishApproversEffective: $[ dependencies.ReleaseJob.outputs['validateParameters.NpmPublishApproversEffective'] ]
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              mb:
+                publish:
+                  feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: NpmRidPackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/npm/rid-packages'
+                - input: pipelineArtifact
+                  artifactName: NpmPointerPackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/npm/pointer-package'
+            steps:
+              - ${{ if and(eq(parameters.DryRun, true), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false))) }}:
+                - powershell: |
+                    Write-Host "=== DRY RUN MODE ==="
+                    Write-Host "The following packages would be submitted to ESRP for npm publishing."
+                    Write-Host ""
+                    if ("${{ parameters.SkipNpmRidPublish }}" -eq "true") {
+                      Write-Host "RID package submission would be skipped because SkipNpmRidPublish=true."
+                    } else {
+                      Write-Host "RID packages would be submitted first:"
+                      Get-ChildItem -Path "$(Pipeline.Workspace)/npm/rid-packages" -Filter "*.tgz" -File | ForEach-Object {
+                        Write-Host "  - $($_.Name)"
+                      }
+                      Write-Host ""
+                    }
+                    Write-Host ""
+                    if ("${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
+                      Write-Host "Pointer package submission would be skipped because SkipNpmPointerPublish=true."
+                    } else {
+                      Write-Host "The pointer package would be submitted last:"
+                      Get-ChildItem -Path "$(Pipeline.Workspace)/npm/pointer-package" -Filter "*.tgz" -File | ForEach-Object {
+                        Write-Host "  - $($_.Name)"
+                      }
+                    }
+                    Write-Host ""
+                    Write-Host "=== DRY RUN - No npm packages were actually published ==="
+                  displayName: 'Dry Run - List npm Packages (No Publish)'
+
+              - ${{ if and(eq(parameters.DryRun, false), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)), eq(parameters.IsPrerelease, false)) }}:
+                # ESRP owns registry validation and publish completion. Direct npm registry
+                # access is blocked by release-job network isolation.
+                - ${{ if eq(parameters.SkipNpmRidPublish, false) }}:
+                  - template: MicroBuild.Publish.yml@MicroBuildTemplate
+                    parameters:
+                      intent: 'PackageDistribution'
+                      contentType: 'npm'
+                      contentSource: 'Folder'
+                      folderLocation: '$(Pipeline.Workspace)\npm\rid-packages'
+                      waitForReleaseCompletion: true
+                      owners: '$(NpmPublishOwnersEffective)'
+                      approvers: '$(NpmPublishApproversEffective)'
+
+                - ${{ if eq(parameters.SkipNpmRidPublish, true) }}:
+                  - powershell: |
+                      Write-Host "Skipping npm RID package publish because SkipNpmRidPublish=true. The pointer package will still be submitted."
+                    displayName: 'Skip npm RID Publish (flagged)'
+
+                - ${{ if eq(parameters.SkipNpmPointerPublish, false) }}:
+                  - template: MicroBuild.Publish.yml@MicroBuildTemplate
+                    parameters:
+                      intent: 'PackageDistribution'
+                      contentType: 'npm'
+                      contentSource: 'Folder'
+                      folderLocation: '$(Pipeline.Workspace)\npm\pointer-package'
+                      waitForReleaseCompletion: true
+                      owners: '$(NpmPublishOwnersEffective)'
+                      approvers: '$(NpmPublishApproversEffective)'
+
+                - ${{ if eq(parameters.SkipNpmPointerPublish, true) }}:
+                  - powershell: |
+                      Write-Host "Skipping npm pointer package publish because SkipNpmPointerPublish=true."
+                    displayName: 'Skip npm Pointer Publish (flagged)'
+
+              - ${{ if and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true)) }}:
+                - powershell: |
+                    Write-Host "=== Skipping npm Publishing (SkipNpmRidPublish=true and SkipNpmPointerPublish=true) ==="
+                  displayName: 'Skip npm Packages (flagged)'
+
+          # ===== CHANNEL PROMOTION =====
+          # Promotion runs alongside the publishing jobs after the shared preflight.
+          - job: ChannelPromotionJob
+            displayName: 'Promote Build to Channel'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipChannelPromotion }}', 'false')
+              )
+            timeoutInMinutes: 45
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              BarBuildId: $[ dependencies.ReleaseJob.outputs['extractBarBuildId.BarBuildId'] ]
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              mb:
+                publish:
+                  enabled: false
+            steps:
+              - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
+                # The SDK is required for tool installation and supplies .NET 10.
+                # darc's net8.0 runtimeconfig permits major roll-forward.
+                - task: UseDotNet@2
+                  displayName: 'Install .NET 10 SDK for darc'
+                  inputs:
+                    packageType: 'sdk'
+                    version: '10.0.x'
+
+                - powershell: |
+                    $ErrorActionPreference = 'Stop'
+                    Write-Host "Installing darc CLI..."
+                    
+                    # Query Maestro API for the correct darc version
+                    $versionEndpoint = 'https://maestro.dot.net/api/assets/darc-version?api-version=2020-02-20'
+                    $darcVersion = (Invoke-WebRequest -Uri $versionEndpoint -UseBasicParsing).Content.Trim()
+                    Write-Host "Darc version: $darcVersion"
+                    
+                    # Match eng/common's isolated darc install; release jobs cannot check out
+                    # that helper. Do not rely on the image's global-tools PATH.
+                    $darcToolPath = "$(Agent.TempDirectory)\darc"
+                    $arcadeServicesSource = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json'
+                    Write-Host "Installing darc from $arcadeServicesSource..."
+                    
+                    dotnet tool install microsoft.dotnet.darc --version $darcVersion --source "$arcadeServicesSource" --tool-path "$darcToolPath"
+                    
+                    if ($LASTEXITCODE -ne 0) {
+                      Write-Error "Failed to install darc CLI"
+                      exit 1
+                    }
+                    
+                    Write-Host "##vso[task.setvariable variable=DarcExecutable]$darcToolPath\darc.exe"
+                    Write-Host "✓ Darc CLI installed successfully"
+                  displayName: 'Install darc'
+
+                - task: AzureCLI@2
+                  displayName: 'Promote Build to Channel'
+                  inputs:
+                    azureSubscription: 'Darc: Maestro Production'
+                    scriptType: 'pscore'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $darc = "$(DarcExecutable)"
+                      $barBuildId = "$(BarBuildId)"
+                      $channelName = "${{ parameters.GaChannelName }}"
+                      $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
+                      $azdoToken = $env:SYSTEM_ACCESSTOKEN
+
+                      Write-Host "=== Channel Promotion ==="
+                      Write-Host "BAR Build ID: $barBuildId"
+                      Write-Host "Target Channel: $channelName"
+
+                      # Probe the same executable in dry runs so a missing shim or
+                      # incompatible runtime fails before skipping the mutation.
+                      & $darc --version
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Error "darc startup failed with exit code $LASTEXITCODE"
+                        exit $LASTEXITCODE
+                      }
+
+                      if ($dryRun) {
+                        Write-Host "⚠️ DRY RUN MODE - Build will not actually be promoted"
+                        Write-Host "[DRY RUN] Would run: darc add-build-to-channel --id $barBuildId --channel '$channelName' --azdev-pat <token> --ci"
+                        exit 0
+                      }
+
+                      Write-Host "Promoting build $barBuildId to channel '$channelName'..."
+
+                      # --azdev-pat is required for darc to access Azure DevOps build artifacts
+                      & $darc add-build-to-channel `
+                        --id $barBuildId `
+                        --channel "$channelName" `
+                        --azdev-pat "$azdoToken" `
+                        --ci
+
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Error "Failed to promote build to channel"
+                        exit 1
+                      }
+
+                      Write-Host "✓ Build successfully promoted to '$channelName'"
+                      Write-Host "==========================="
+                  env:
+                    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
 
           # ===== VS CODE EXTENSION PUBLISHING =====
           - job: VSCodeExtensionJob
@@ -2315,10 +1834,13 @@ extends:
           # ===== WINGET PUBLISHING =====
           - job: WinGetJob
             displayName: 'Submit WinGet Release Manifests'
-            dependsOn: ReleaseJob
+            dependsOn:
+              - ReleaseJob
+              - ChannelPromotionJob
             condition: |
               and(
                 in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                in(dependencies.ChannelPromotionJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped'),
                 eq('${{ parameters.SkipWinGetPublish }}', 'false'),
                 eq('${{ parameters.IsPrerelease }}', 'false')
               )
@@ -2347,93 +1869,27 @@ extends:
                   packageIdentifier: Microsoft.Aspire
                   dryRun: ${{ parameters.DryRun }}
 
-      # ===== STAGE 3: GITHUB TASKS =====
-      # Three responsibilities, all running as (or against) the aspire-repo-bot
-      # GitHub App:
-      #
-      #   1. DispatchGitHubTasksJob — dispatches the release-github-tasks
-      #      GitHub Actions workflow (tag, DRAFT GitHub Release, merge-back PR,
-      #      baseline PR) and polls the run to completion. Fails the pipeline
-      #      if the workflow doesn't succeed.
-      #
-      #   2. PublishReleaseAssetsJob — downloads aspire-cli-* archives from
-      #      the signed source build's BlobArtifacts, verifies their SHA512s,
-      #      and uploads them as assets on the draft GitHub release that the
-      #      dispatch job just created. Asset upload against drafts is
-      #      supported by the Releases REST API.
-      #
-      #   3. UpdateNixPackageJob — dispatches the update-nix-cli-flake
-      #      GitHub Actions workflow. It reads the aspire-cli-*.tar.gz.sha512
-      #      checksums from the signed source build's BlobArtifacts and passes
-      #      them to the workflow as inputs, so the manifest is built from the
-      #      build (not the draft release, whose assets aren't publicly
-      #      downloadable). The workflow commits eng/nix/versions.json to the
-      #      update-baseline-<version> branch and opens the PR from that branch
-      #      (release-github-tasks.yml created only the branch via
-      #      defer_baseline_pr=true; PR creation is handled here).
-      #
-      # After these jobs succeed the release is a fully-prepared DRAFT — the
-      # release manager publishes it manually as a final step (see
-      # docs/release-process.md "Publish the draft release"). The draft-first
-      # flow is required for compatibility with GitHub's immutable releases
-      # (https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases):
-      # publishing the release locks assets + tag, so every mutation must
-      # happen before publish.
-      #
-      # Homebrew cask validation against the live GitHub release used to
-      # run as a fourth job in this stage. It now lives in
-      # .github/workflows/homebrew-validate-release.yml and runs on the
-      # `release: [published]` event, i.e. only once the release manager
-      # publishes the draft and the asset URLs become public. See that
-      # workflow for details.
-      #
-      # Each job has its own skip flag (SkipGitHubTasks / SkipReleaseAssets /
-      # SkipNixPackageUpdate) so partial-failure re-runs can recover any piece
-      # independently. Skipping all three skips the stage entirely.
-      #
-      # DryRun behavior: this stage still runs when DryRun=true. DryRun is
-      # propagated to the GH workflow as dry_run=true (keeps it from
-      # creating tags/releases/PRs) and to the asset script (downloads and
-      # verifies SHA512s but skips the gh release upload). The Nix workflow is
-      # dispatched with dry_run=true and intentionally does not read release
-      # assets in that mode because the AzDO dry-run path does not create/upload
-      # a live GitHub release.
-      - stage: GitHubTasks
-        displayName: 'Dispatch GitHub Release Tasks'
-        # PrepareArtifacts is listed explicitly (in addition to Release) so the
-        # jobs in this stage can resolve
-        # stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'].
-        # AzDO only exposes stageDependencies for stages named directly in dependsOn —
-        # the relationship is NOT transitive through Release. Without this, the
-        # ReleaseVersionEffective variable silently evaluates to empty and the GitHub
-        # workflow dispatch fails with HTTP 422 "Required input 'release_version' not provided".
-        dependsOn:
-          - Release
-          - PrepareArtifacts
-        condition: |
-          and(
-            in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues'),
-            or(
-              eq('${{ parameters.SkipGitHubTasks }}', 'false'),
-              eq('${{ parameters.SkipReleaseAssets }}', 'false'),
-              and(
-                eq('${{ parameters.SkipNixPackageUpdate }}', 'false'),
-                eq('${{ parameters.IsPrerelease }}', 'false')
-              )
-            )
-          )
-        jobs:
+          # ===== GITHUB TASKS =====
+          # These jobs run after ReleaseJob's validation barrier, in parallel with NuGet,
+          # npm, channel promotion, and VS Code publishing. Dispatch creates
+          # the tag/draft release/baseline branch; asset upload and Nix then fan out
+          # from that dispatch so Nix does not wait for draft asset upload.
           - job: DispatchGitHubTasksJob
             displayName: 'Dispatch and Wait for release-github-tasks workflow'
-            condition: eq('${{ parameters.SkipGitHubTasks }}', 'false')
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipGitHubTasks }}', 'false')
+              )
             timeoutInMinutes: 90
             pool:
               name: NetCore1ESPool-Internal
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
-              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
-              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+              # Pulled from the deriveReleaseVersion step in ReleaseJob.
+              ReleaseVersionEffective: $[ dependencies.ReleaseJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
             templateContext:
               # No ESRP publish in this job (dispatches a GitHub Actions workflow via GH App JWT
               # and polls for completion). Skip the auto-injected publish auth task.
@@ -2525,9 +1981,12 @@ extends:
           # when its sibling is skipped.
           - job: PublishReleaseAssetsJob
             displayName: 'Upload CLI Assets to GitHub Release'
-            dependsOn: DispatchGitHubTasksJob
+            dependsOn:
+              - ReleaseJob
+              - DispatchGitHubTasksJob
             condition: |
               and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
                 eq('${{ parameters.SkipReleaseAssets }}', 'false'),
                 in(dependencies.DispatchGitHubTasksJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
               )
@@ -2537,10 +1996,10 @@ extends:
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
-              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
+              # Pulled from the deriveReleaseVersion step in ReleaseJob.
               # Mapped here independently of DispatchGitHubTasksJob so this job still gets the
               # value when SkipGitHubTasks=true causes its sibling to be skipped.
-              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+              ReleaseVersionEffective: $[ dependencies.ReleaseJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
             templateContext:
               # No ESRP publish in this job (gh CLI upload to GitHub Release via App-token auth).
               # Skip the auto-injected publish auth task.
@@ -2658,18 +2117,22 @@ extends:
           # required for immutable releases. The updater commits
           # eng/nix/versions.json to the update-baseline-<version> branch created
           # by release-github-tasks.yml (which deferred PR creation via
-          # defer_baseline_pr=true) and opens the PR from that branch. dependsOn
-          # PublishReleaseAssetsJob is kept for ordering (branch creation +
-          # single release upload), and accepting 'Skipped' supports
-          # partial-failure re-runs where SkipReleaseAssets=true is used.
+          # defer_baseline_pr=true) and opens the PR from that branch.
+          # DispatchGitHubTasksJob is kept for ordering because it creates the
+          # baseline branch. Nix does not wait for release asset upload; accepting
+          # 'Skipped' supports partial-failure re-runs where SkipGitHubTasks=true
+          # is used after the branch already exists.
           - job: UpdateNixPackageJob
             displayName: 'Update baseline PR with Nix flake manifest'
-            dependsOn: PublishReleaseAssetsJob
+            dependsOn:
+              - ReleaseJob
+              - DispatchGitHubTasksJob
             condition: |
               and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
                 eq('${{ parameters.SkipNixPackageUpdate }}', 'false'),
                 eq('${{ parameters.IsPrerelease }}', 'false'),
-                in(dependencies.PublishReleaseAssetsJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+                in(dependencies.DispatchGitHubTasksJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
               )
             timeoutInMinutes: 45
             pool:
@@ -2677,10 +2140,11 @@ extends:
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
-              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
+              # Pulled from the deriveReleaseVersion step in ReleaseJob.
               # Mapped here independently of sibling jobs so this job still gets the value when
-              # SkipGitHubTasks/SkipReleaseAssets cause those siblings to be skipped.
-              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+              # SkipGitHubTasks=true skips the workflow dispatch but SkipReleaseAssets=false still
+              # uploads CLI assets to an already-created draft release.
+              ReleaseVersionEffective: $[ dependencies.ReleaseJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
             templateContext:
               # No ESRP publish in this job (dispatches a GitHub Actions workflow via GH App JWT
               # and polls for completion). Skip the auto-injected publish auth task.
