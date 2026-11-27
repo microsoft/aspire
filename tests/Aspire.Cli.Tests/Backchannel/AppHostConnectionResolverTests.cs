@@ -610,6 +610,91 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
     }
 
+    [Fact]
+    public async Task ResolveConnectionAsync_NonInteractiveFromSiblingDirectory_SelectsAppHostConfiguredInAspireConfig()
+    {
+        // `aspire start` from repo/sibling starts the AppHost configured in repo/aspire.config.json,
+        // so `aspire wait`/`describe`/`logs` from the same directory must resolve that AppHost too.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
+        var workingDirectory = workspace.WorkspaceRoot.CreateSubdirectory("sibling");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
+            homeDirectory: workspace.WorkspaceRoot);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory(Path.Combine("src", "MyApp.AppHost"));
+        var appHostPath = Path.Combine(appHostDirectory.FullName, "MyApp.AppHost.csproj");
+        File.WriteAllText(appHostPath, "<Project />");
+        var connection = CreateOutOfScopeConnection(appHostPath);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("socket-configured", connection);
+        var projectLocator = new TestProjectLocator
+        {
+            GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+        };
+
+        var resolver = new AppHostConnectionResolver(
+            monitor,
+            new TestInteractionService(),
+            projectLocator,
+            executionContext,
+            TestHelpers.CreateNonInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            TestConfigSourceServices.Create(executionContext));
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile: null,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Same(connection, result.Connection);
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_NonInteractiveFromSiblingDirectory_DoesNotSelectAppHostOtherThanConfiguredOne()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
+        var workingDirectory = workspace.WorkspaceRoot.CreateSubdirectory("sibling");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
+            homeDirectory: workspace.WorkspaceRoot);
+
+        var configuredAppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "src", "MyApp.AppHost", "MyApp.AppHost.csproj");
+        var otherAppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "src", "Other.AppHost", "Other.AppHost.csproj");
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("socket-other", CreateOutOfScopeConnection(otherAppHostPath));
+        var projectLocator = new TestProjectLocator
+        {
+            GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(new FileInfo(configuredAppHostPath))
+        };
+
+        var resolver = new AppHostConnectionResolver(
+            monitor,
+            new TestInteractionService(),
+            projectLocator,
+            executionContext,
+            TestHelpers.CreateNonInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            TestConfigSourceServices.Create(executionContext));
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile: null,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(SharedCommandStrings.AppHostNotRunning, result.ErrorMessage);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
+    }
+
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
         return TestExecutionContextHelper.CreateExecutionContext(
