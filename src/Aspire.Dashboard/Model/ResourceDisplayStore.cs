@@ -8,29 +8,193 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Dashboard.Model;
 
 /// <summary>
-/// Stores explicit resource and group moves per application in protected browser local storage.
+/// Stores how the user arranges resources per application in protected browser local storage: explicit resource and
+/// group moves, and which resources and groups are collapsed.
 /// </summary>
-public sealed class ResourceOrderStore
+/// <remarks>
+/// Every view of resources in a circuit shares this store, so a change made in one view, such as collapsing a resource
+/// in the resources pane, is published to the others.
+/// </remarks>
+public sealed class ResourceDisplayStore
 {
     // Bound the saved history so typical protected values fit within the dashboard's Blazor receive limit.
     private const int MaxSavedMoves = 50;
 
+    private readonly ILocalStorage _localStorage;
+    private readonly LocalStorageLocks _locks;
+    private readonly IDashboardClient _dashboardClient;
+    private readonly ILogger<ResourceDisplayStore> _logger;
     private readonly LocalStorageSetting<List<RelativeOrderMove>> _resourceOrder;
     private readonly LocalStorageSetting<Dictionary<string, List<RelativeOrderMove>>> _groupOrder;
+    private readonly Lock _collapsedStateLock = new();
+    private CollapsedState? _collapsedState;
 
-    public ResourceOrderStore(ILocalStorage localStorage, LocalStorageLocks locks, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
+    public ResourceDisplayStore(ILocalStorage localStorage, LocalStorageLocks locks, IDashboardClient dashboardClient, IOptions<DashboardOptions> options, ILogger<ResourceDisplayStore> logger)
     {
+        _localStorage = localStorage;
+        _locks = locks;
+        _dashboardClient = dashboardClient;
+        _logger = logger;
+
         var applicationName = options.Value.GetApplicationNameOrDefault();
         _resourceOrder = new(localStorage, locks, BrowserStorageKeys.ResourceOrderKey(applicationName), logger, protect: true,
-            NormalizeResourceOrder, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
+            NormalizeResourceOrder, (x, y) => x.SequenceEqual(y), OnChanged);
         _groupOrder = new(localStorage, locks, BrowserStorageKeys.GroupOrderKey(applicationName), logger, protect: true,
             NormalizeGroupOrder, (x, y) => x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var moves) && pair.Value.SequenceEqual(moves)),
-            () => Changed?.Invoke());
+            OnChanged);
     }
 
     public event Action? Changed;
 
-    public Task EnsureLoadedAsync() => Task.WhenAll(_resourceOrder.EnsureLoadedAsync(), _groupOrder.EnsureLoadedAsync());
+    /// <summary>
+    /// Loads the stored order and collapsed state with one browser call. Collapsed state is scoped to the resource
+    /// service's application name, so when the client is enabled this waits until it's connected.
+    /// </summary>
+    public async Task EnsureLoadedAsync()
+    {
+        if (_dashboardClient.IsEnabled)
+        {
+            await _dashboardClient.WhenConnected.ConfigureAwait(false);
+        }
+
+        var collapsedState = GetCollapsedState();
+        await ILocalStorageSetting.EnsureAllLoadedAsync(_localStorage,
+            [_resourceOrder, _groupOrder, collapsedState.ResourceNames, collapsedState.Groups]).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets whether the children of the resource with the specified <see cref="ResourceViewModel.PersistentKey"/> are collapsed.
+    /// </summary>
+    public bool IsResourceCollapsed(string persistentKey) =>
+        GetCollapsedState().ResourceNames.Read(names => names.Contains(persistentKey, StringComparers.ResourceName));
+
+    /// <summary>
+    /// Gets whether the group with the specified key is collapsed in the specified grouping. Resource pane sections use
+    /// their own grouping.
+    /// </summary>
+    public bool IsGroupCollapsed(string grouping, string key) =>
+        GetCollapsedState().Groups.Read(groups => IsGroupCollapsed(groups, grouping, key));
+
+    /// <summary>
+    /// Collapses or expands the children of the resources with the specified <see cref="ResourceViewModel.PersistentKey"/> values.
+    /// </summary>
+    /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
+    public async Task<bool> SetResourcesCollapsedAsync(IEnumerable<string> persistentKeys, bool collapsed)
+    {
+        var keys = persistentKeys.ToList();
+        if (keys.Count == 0)
+        {
+            return true;
+        }
+
+        // UpdateAsync reports no change without writing when the stored value already matches. The cached value isn't
+        // checked first because a previous change to the same keys can still be saving, and the cache doesn't include it
+        // until the save completes.
+        var result = await GetCollapsedState().ResourceNames.UpdateAsync(stored =>
+            SetCollapsed(stored, keys, collapsed, StringComparers.ResourceName) ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged).ConfigureAwait(false);
+        return result != SettingUpdateResult.NotSaved;
+    }
+
+    /// <summary>
+    /// Collapses the children of the resource with the specified <see cref="ResourceViewModel.PersistentKey"/> if they're
+    /// expanded, otherwise expands them.
+    /// </summary>
+    /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
+    public async Task<bool> ToggleResourceCollapsedAsync(string persistentKey)
+    {
+        // The new state is worked out from the stored value under the save lock instead of the cached value. The cache
+        // doesn't include a toggle that's still saving, so a second click would repeat that toggle instead of undoing it.
+        var result = await GetCollapsedState().ResourceNames.UpdateAsync(stored =>
+        {
+            SetCollapsed(stored, [persistentKey], !stored.Contains(persistentKey, StringComparers.ResourceName), StringComparers.ResourceName);
+            return SettingUpdateResult.Changed;
+        }).ConfigureAwait(false);
+        return result != SettingUpdateResult.NotSaved;
+    }
+
+    /// <summary>
+    /// Collapses the group with the specified key in the specified grouping if it's expanded, otherwise expands it.
+    /// </summary>
+    /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
+    public async Task<bool> ToggleGroupCollapsedAsync(string grouping, string key)
+    {
+        // Like ToggleResourceCollapsedAsync, the new state is worked out from the stored value under the save lock.
+        var result = await GetCollapsedState().Groups.UpdateAsync(groups =>
+        {
+            if (!groups.TryGetValue(grouping, out var keys))
+            {
+                groups.Add(grouping, keys = []);
+            }
+
+            SetCollapsed(keys, [key], !keys.Contains(key, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            if (keys.Count == 0)
+            {
+                groups.Remove(grouping);
+            }
+
+            return SettingUpdateResult.Changed;
+        }).ConfigureAwait(false);
+        return result != SettingUpdateResult.NotSaved;
+    }
+
+    private static bool IsGroupCollapsed(Dictionary<string, List<string>> groups, string grouping, string key) =>
+        groups.TryGetValue(grouping, out var keys) && keys.Contains(key, StringComparer.OrdinalIgnoreCase);
+
+    private static bool SetCollapsed(List<string> stored, List<string> keys, bool collapsed, StringComparer comparer)
+    {
+        var changed = false;
+        foreach (var key in keys)
+        {
+            if (collapsed && !stored.Contains(key, comparer))
+            {
+                stored.Add(key);
+                changed = true;
+            }
+            else if (!collapsed)
+            {
+                changed |= stored.RemoveAll(item => comparer.Equals(item, key)) > 0;
+            }
+        }
+
+        return changed;
+    }
+
+    private CollapsedState GetCollapsedState()
+    {
+        // The application name changes when the client connects and when another run is selected, and collapsed state
+        // follows it. The state for the previous name is dropped and loaded again if that name is selected again.
+        var applicationName = _dashboardClient.ApplicationName;
+        lock (_collapsedStateLock)
+        {
+            if (_collapsedState is null || !StringComparer.Ordinal.Equals(_collapsedState.ApplicationName, applicationName))
+            {
+                _collapsedState = new CollapsedState(
+                    applicationName,
+                    new(_localStorage, _locks, BrowserStorageKeys.CollapsedResourceNamesKey(applicationName), _logger, protect: true,
+                        stored => NormalizeCollapsedKeys(stored, StringComparers.ResourceName),
+                        (x, y) => CollapsedKeysEqual(x, y, StringComparers.ResourceName),
+                        OnChanged),
+                    new(_localStorage, _locks, BrowserStorageKeys.CollapsedResourceGroupsKey(applicationName), _logger, protect: true,
+                        NormalizeCollapsedGroups,
+                        (x, y) => x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var keys) && CollapsedKeysEqual(pair.Value, keys, StringComparer.OrdinalIgnoreCase)),
+                        OnChanged));
+            }
+
+            return _collapsedState;
+        }
+    }
+
+    private static List<string> NormalizeCollapsedKeys(List<string>? stored, StringComparer comparer) =>
+        stored?.OfType<string>().Distinct(comparer).ToList() ?? [];
+
+    private static bool CollapsedKeysEqual(List<string> x, List<string> y, StringComparer comparer) =>
+        x.Count == y.Count && x.ToHashSet(comparer).SetEquals(y);
+
+    private static Dictionary<string, List<string>> NormalizeCollapsedGroups(Dictionary<string, List<string>>? stored) =>
+        stored?.Select(pair => KeyValuePair.Create(pair.Key, NormalizeCollapsedKeys(pair.Value, StringComparer.OrdinalIgnoreCase)))
+            .Where(pair => pair.Value.Count > 0).ToDictionary(StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
+
+    private void OnChanged() => Changed?.Invoke();
 
     public List<ResourceViewModel> OrderResources(IEnumerable<ResourceViewModel> resources)
     {
@@ -261,6 +425,12 @@ public sealed class ResourceOrderStore
             }
         }
     }
+
+    // Groups maps a grouping to its collapsed keys, like the group order. For example:
+    //   { "Tags": ["frontend", ""], "State": ["Running"], "section": ["telemetry"] }
+    // An empty key is the untagged group.
+    private sealed record CollapsedState(string ApplicationName, LocalStorageSetting<List<string>> ResourceNames,
+        LocalStorageSetting<Dictionary<string, List<string>>> Groups);
 }
 
 /// <summary>

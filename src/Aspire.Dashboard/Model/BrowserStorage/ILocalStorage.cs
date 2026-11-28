@@ -3,13 +3,21 @@
 
 namespace Aspire.Dashboard.Model.BrowserStorage;
 
-public interface IUnprotectedLocalStorageSnapshot
+public interface ILocalStorageSnapshot
 {
     /// <summary>
-    /// Reads a value from the snapshot without accessing the browser.
+    /// Reads a protected value, written by <see cref="IBrowserStorage.SetAsync{TValue}(string, TValue)"/>, from the
+    /// snapshot without accessing the browser.
     /// </summary>
     /// <exception cref="ArgumentException">The key was not requested when the snapshot was loaded.</exception>
     StorageResult<TValue> Get<TValue>(string key);
+
+    /// <summary>
+    /// Reads an unprotected value, written by <see cref="ILocalStorage.SetUnprotectedAsync{TValue}(string, TValue)"/>,
+    /// from the snapshot without accessing the browser.
+    /// </summary>
+    /// <exception cref="ArgumentException">The key was not requested when the snapshot was loaded.</exception>
+    StorageResult<TValue> GetUnprotected<TValue>(string key);
 }
 
 public interface ILocalStorage : IBrowserStorage
@@ -19,9 +27,12 @@ public interface ILocalStorage : IBrowserStorage
     /// </summary>
     Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key);
     /// <summary>
-    /// Loads the requested keys from local storage in one browser call. Use only with non-sensitive data.
+    /// Loads the requested keys from local storage, in one browser call unless the values are too large to return
+    /// together. Values are decoded when read from the
+    /// snapshot: protected values with <see cref="ILocalStorageSnapshot.Get{TValue}(string)"/> and unprotected values
+    /// with <see cref="ILocalStorageSnapshot.GetUnprotected{TValue}(string)"/>.
     /// </summary>
-    Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys);
+    Task<ILocalStorageSnapshot> ReadSnapshotAsync(string[] keys);
 
     /// <summary>
     /// Set unprotected data to local storage. This must only be used with non-sensitive data.

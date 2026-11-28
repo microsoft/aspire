@@ -115,7 +115,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     {
         try
         {
-            var snapshot = await localStorage.ReadUnprotectedSnapshotAsync([
+            var snapshot = await localStorage.ReadSnapshotAsync([
                 BrowserStorageKeys.ResourceListDensity,
                 BrowserStorageKeys.GroupOverview
             ]).ConfigureAwait(false);
@@ -140,9 +140,9 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         }
     }
 
-    private async Task<ResourceListDensity> ReadDensityAsync(IUnprotectedLocalStorageSnapshot snapshot)
+    private async Task<ResourceListDensity> ReadDensityAsync(ILocalStorageSnapshot snapshot)
     {
-        var result = snapshot.Get<string>(BrowserStorageKeys.ResourceListDensity);
+        var result = snapshot.GetUnprotected<string>(BrowserStorageKeys.ResourceListDensity);
         // Rewrite the removed "Spacious" choice once so later loads don't need to migrate it again.
         if (result.Success && result.Value is "Spacious")
         {
@@ -153,9 +153,9 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         return result.Success && Enum.TryParse<ResourceListDensity>(result.Value, out var value) && Enum.IsDefined(value) ? value : DefaultDensity;
     }
 
-    private async Task<GroupOverview> ReadGroupOverviewAsync(IUnprotectedLocalStorageSnapshot snapshot)
+    private async Task<GroupOverview> ReadGroupOverviewAsync(ILocalStorageSnapshot snapshot)
     {
-        var result = snapshot.Get<string>(BrowserStorageKeys.GroupOverview);
+        var result = snapshot.GetUnprotected<string>(BrowserStorageKeys.GroupOverview);
         // Earlier layouts were stored as "Cards" or "Resources". Replace those removed choices once,
         // so another opening cannot attempt to restore a layout that no longer exists.
         if (result.Success && result.Value is "Cards" or "Resources")

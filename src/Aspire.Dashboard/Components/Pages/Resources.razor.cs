@@ -19,6 +19,7 @@ using Humanizer;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -47,7 +48,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private bool _hideResourceGraph;
     private ResourceViewKind _routeViewKind;
     private bool _isDisposing;
-    private string _collapsedResourceNamesKey = null!;
     private Dictionary<ResourceKey, int>? _resourceUnviewedErrorCounts;
 
     [Inject]
@@ -82,6 +82,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
     [Inject]
     public required ResourceTagStore TagStore { get; init; }
+    [Inject]
+    public required ResourceDisplayStore DisplayStore { get; init; }
+    [Inject]
+    public required Microsoft.FluentUI.AspNetCore.Components.INotificationService ToastService { get; init; }
+    [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
 
     public string BasePath => GetRouteViewKind() == ResourceViewKind.Graph ? DashboardUrls.GraphBasePath : DashboardUrls.ParametersBasePath;
     public string SessionStorageKey => GetRouteViewKind() == ResourceViewKind.Graph ? BrowserStorageKeys.GraphPageState : BrowserStorageKeys.ParametersPageState;
@@ -115,7 +121,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
     private readonly TaskCompletionSource _loadingTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _isFilterPopupVisible;
     private Task? _resourceSubscriptionTask;
@@ -221,20 +226,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         NavigationManager.LocationChanged += OnLocationChanged;
         TagStore.Changed += OnTagsChanged;
+        DisplayStore.Changed += OnDisplayChanged;
 
         _resourceUnviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
 
         var tagStoreTask = TagStore.EnsureLoadedAsync();
+        var displayStoreTask = DisplayStore.EnsureLoadedAsync();
         var showResourceTypeColumnTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowResourceTypes);
         var showHiddenResourcesTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
-
-        // Must wait until after the dashboard is connected so the application name is correct.
-        Task<StorageResult<List<string>>>? collapsedResultTask = null;
-        if (DashboardClient.WhenConnected.IsCompletedSuccessfully)
-        {
-            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
-            collapsedResultTask = LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
-        }
 
         await tagStoreTask;
 
@@ -251,26 +250,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
         UpdateMenuButtons();
 
-        StorageResult<List<string>> collapsedResult;
-        if (collapsedResultTask is not null)
-        {
-            collapsedResult = await collapsedResultTask;
-        }
-        else
-        {
-            // Must wait until after the dashboard is connected so the application name is correct.
-            await DashboardClient.WhenConnected;
-            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
-            collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
-        }
-
-        if (collapsedResult.Success)
-        {
-            foreach (var resourceName in collapsedResult.Value)
-            {
-                _collapsedResourceNames.Add(resourceName);
-            }
-        }
+        await displayStoreTask;
 
         await SubscribeResourcesAsync();
 
@@ -499,6 +479,19 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private void OnTagsChanged() => _ = InvokeAsync(UpdateResourceGraphResourcesAsync);
 
+    // Collapsed resources can change in another view of the circuit, such as the resources pane.
+    private void OnDisplayChanged() => _ = InvokeAsync(async () =>
+    {
+        if (_isDisposing)
+        {
+            return;
+        }
+
+        await _dataGrid.SafeRefreshDataAsync();
+        UpdateMenuButtons();
+        StateHasChanged();
+    });
+
     private Task ExportResourceGraphAsync()
     {
         return TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
@@ -577,7 +570,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // Rearrange resources based on parent information.
         // This must happen after resources are ordered so nested resources are in the right order.
         // Collapsed resources are filtered out of results.
-        var orderedResources = ResourceGridViewModel.OrderNestedResources(filteredResources.ToList(), r => _collapsedResourceNames.Contains(r.PersistentKey))
+        var orderedResources = ResourceGridViewModel.OrderNestedResources(filteredResources.ToList(), r => DisplayStore.IsResourceCollapsed(r.PersistentKey))
             .Where(r => !r.IsHidden)
             .ToList();
 
@@ -662,7 +655,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private bool HasCollapsedResources()
     {
-        return _resourceByName.Any(r => !r.Value.IsResourceHidden(PageViewModel.Filters.ShowHiddenResources) && _collapsedResourceNames.Contains(r.Value.PersistentKey));
+        return _resourceByName.Any(r => !r.Value.IsResourceHidden(PageViewModel.Filters.ShowHiddenResources) && DisplayStore.IsResourceCollapsed(r.Value.PersistentKey));
     }
 
     private void UpdateMaxHighlightedCount()
@@ -849,6 +842,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             PageViewModel.SelectedResource = resource;
 
             // Ensure that the selected resource is visible in the grid. All parents must be expanded.
+            var collapsedParents = new List<string>();
             var current = resource;
             while (current != null)
             {
@@ -856,12 +850,20 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 {
                     if (_resourceByName.TryGetValue(value, out current))
                     {
-                        _collapsedResourceNames.Remove(current.PersistentKey);
+                        if (DisplayStore.IsResourceCollapsed(current.PersistentKey))
+                        {
+                            collapsedParents.Add(current.PersistentKey);
+                        }
                         continue;
                     }
                 }
 
                 break;
+            }
+
+            if (collapsedParents.Count > 0)
+            {
+                await ShowSaveFailedIfNotSavedAsync(await DisplayStore.SetResourcesCollapsedAsync(collapsedParents, collapsed: false));
             }
 
             var resourceViewKind = GetVisibleViewKindForSelectedResource(PageViewModel.SelectedViewKind, resource);
@@ -957,22 +959,19 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task OnToggleCollapse(ResourceGridViewModel viewModel)
     {
-        // View model data is recreated if data updates.
-        // Persist the collapsed state in a separate list.
-        viewModel.IsCollapsed = !viewModel.IsCollapsed;
-
-        if (viewModel.IsCollapsed)
-        {
-            _collapsedResourceNames.Add(viewModel.Resource.PersistentKey);
-        }
-        else
-        {
-            _collapsedResourceNames.Remove(viewModel.Resource.PersistentKey);
-        }
-
-        await LocalStorage.SetAsync(_collapsedResourceNamesKey, _collapsedResourceNames.ToList());
+        // View model data is recreated if data updates, so the collapsed state is kept in the display store and the
+        // grid reads it from there when it refreshes.
+        await ShowSaveFailedIfNotSavedAsync(await DisplayStore.ToggleResourceCollapsedAsync(viewModel.Resource.PersistentKey));
         await _dataGrid.SafeRefreshDataAsync();
         UpdateMenuButtons();
+    }
+
+    private async Task ShowSaveFailedIfNotSavedAsync(bool saved)
+    {
+        if (!saved)
+        {
+            await ToastService.ShowWarningToastAsync(LayoutLoc[nameof(Dashboard.Resources.Layout.BrowserStorageSaveFailed)]);
+        }
     }
 
     private async Task OnToggleCollapseAll()
@@ -982,22 +981,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             .Where(r => _resourceByName.Values.Any(nested => nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName) == r.Name))
             .ToList();
 
-        if (HasCollapsedResources())
-        {
-            foreach (var resource in resourcesWithChildren)
-            {
-                _collapsedResourceNames.Remove(resource.PersistentKey);
-            }
-        }
-        else
-        {
-            foreach (var resource in resourcesWithChildren)
-            {
-                _collapsedResourceNames.Add(resource.PersistentKey);
-            }
-        }
-
-        await LocalStorage.SetAsync(_collapsedResourceNamesKey, _collapsedResourceNames.ToList());
+        await ShowSaveFailedIfNotSavedAsync(await DisplayStore.SetResourcesCollapsedAsync(resourcesWithChildren.Select(r => r.PersistentKey), collapsed: !HasCollapsedResources()));
         await _dataGrid.SafeRefreshDataAsync();
         UpdateMenuButtons();
     }
@@ -1197,6 +1181,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         _isDisposing = true;
         NavigationManager.LocationChanged -= OnLocationChanged;
         TagStore.Changed -= OnTagsChanged;
+        DisplayStore.Changed -= OnDisplayChanged;
         _resourcesInteropReference?.Dispose();
         _cts.Cancel();
         _logsSubscription?.Dispose();

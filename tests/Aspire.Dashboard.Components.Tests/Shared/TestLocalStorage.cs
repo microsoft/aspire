@@ -30,18 +30,28 @@ public sealed class TestLocalStorage : ILocalStorage
     public int SnapshotReadCount => _snapshotReadCount;
     private int _snapshotReadCount;
 
-    public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
+    public async Task<ILocalStorageSnapshot> ReadSnapshotAsync(string[] keys)
     {
         Interlocked.Increment(ref _snapshotReadCount);
-        // Match the browser snapshot: every key is requested before any of those reads completes.
-        var reads = keys.Select(key => (key, task: GetUnprotectedAsync<object>(key))).ToArray();
-        var values = new Dictionary<string, StorageResult<object>>(StringComparer.Ordinal);
-        foreach (var (key, task) in reads)
+
+        // The browser reads local storage when it's called and the read hooks simulate a slow response, so capture what's
+        // stored before running them. Later writes don't change the snapshot, like a browser. Both protections are
+        // captured because the protection a key is read with is only known when it's read from the snapshot. The
+        // OnGet* overrides are scripted responses for one protection, so they run when the key is read that way.
+        var items = new Dictionary<string, (StoredItem Protected, StoredItem Unprotected)>(StringComparer.Ordinal);
+        foreach (var key in keys)
         {
-            values[key] = await task;
+            items[key] = (CaptureStored(key, IsReadFailed, _protectedValues), CaptureStored(key, IsUnprotectedReadFailed, _unprotectedValues));
         }
 
-        return new UnprotectedSnapshot(values);
+        // Run the read hooks once for the whole snapshot, like the single browser call: every key is requested
+        // before any of those reads completes.
+        if (OnBeforeGetUnprotectedAsync is { } beforeCallback)
+        {
+            await Task.WhenAll(keys.Select(beforeCallback));
+        }
+
+        return new Snapshot(this, items);
     }
 
     public async Task<StorageResult<T>> GetAsync<T>(string key)
@@ -51,29 +61,7 @@ public sealed class TestLocalStorage : ILocalStorage
             await beforeCallback(key);
         }
 
-        if (IsReadFailed?.Invoke(key) == true)
-        {
-            return new StorageResult<T>(success: false, value: default) { ReadFailed = true };
-        }
-
-        if (OnGetAsync is { } callback)
-        {
-            var (success, value) = callback(key);
-            if (success)
-            {
-                return new StorageResult<T>(success: true, value: (T)(value ?? default(T))!);
-            }
-        }
-
-        lock (_protectedValues)
-        {
-            if (_protectedValues.TryGetValue(key, out var savedValue) && savedValue is T typedValue)
-            {
-                return new StorageResult<T>(success: true, value: typedValue);
-            }
-        }
-
-        return new StorageResult<T>(success: false, value: default);
+        return Read<T>(key, CaptureStored(key, IsReadFailed, _protectedValues), OnGetAsync);
     }
 
     public async Task<StorageResult<T>> GetUnprotectedAsync<T>(string key)
@@ -83,30 +71,47 @@ public sealed class TestLocalStorage : ILocalStorage
             await beforeCallback(key);
         }
 
-        if (IsUnprotectedReadFailed?.Invoke(key) == true)
+        return Read<T>(key, CaptureStored(key, IsUnprotectedReadFailed, _unprotectedValues), OnGetUnprotectedAsync);
+    }
+
+    private static StoredItem CaptureStored(string key, Func<string, bool>? isReadFailed, Dictionary<string, object?> savedValues)
+    {
+        if (isReadFailed?.Invoke(key) == true)
+        {
+            return new StoredItem(ReadFailed: true, HasValue: false, Value: null);
+        }
+
+        // Like a browser, return what was saved. Settings stores read the stored value before every save, so a
+        // storage that forgot saved values would make them drop their own changes.
+        lock (savedValues)
+        {
+            return savedValues.TryGetValue(key, out var savedValue)
+                ? new StoredItem(ReadFailed: false, HasValue: true, Value: savedValue)
+                : default;
+        }
+    }
+
+    private static StorageResult<T> Read<T>(string key, StoredItem stored, Func<string, (bool Success, object? Value)>? callback)
+    {
+        if (stored.ReadFailed)
         {
             return new StorageResult<T>(success: false, value: default) { ReadFailed = true };
         }
 
         // Callbacks return (false, null) for keys they don't provide, so those keys fall back to saved values. Use
-        // IsUnprotectedReadFailed to simulate a failed read.
-        if (OnGetUnprotectedAsync is { } callback)
+        // the read-failed hooks to simulate a failed read.
+        if (callback is not null)
         {
             var (success, value) = callback(key);
             if (success)
             {
-                return new StorageResult<T>(success: success, value: (T)(value ?? default(T))!);
+                return new StorageResult<T>(success: true, value: (T)(value ?? default(T))!);
             }
         }
 
-        // Like a browser, return what was saved. Settings stores read the stored value before every save, so a
-        // storage that forgot saved values would make them drop their own changes.
-        lock (_unprotectedValues)
+        if (stored.HasValue && stored.Value is T typedValue)
         {
-            if (_unprotectedValues.TryGetValue(key, out var savedValue) && savedValue is T typedValue)
-            {
-                return new StorageResult<T>(success: true, value: typedValue);
-            }
+            return new StorageResult<T>(success: true, value: typedValue);
         }
 
         return new StorageResult<T>(success: false, value: default);
@@ -137,20 +142,23 @@ public sealed class TestLocalStorage : ILocalStorage
         return Task.CompletedTask;
     }
 
-    private sealed class UnprotectedSnapshot(Dictionary<string, StorageResult<object>> values) : IUnprotectedLocalStorageSnapshot
+    private readonly record struct StoredItem(bool ReadFailed, bool HasValue, object? Value);
+
+    private sealed class Snapshot(TestLocalStorage storage, Dictionary<string, (StoredItem Protected, StoredItem Unprotected)> items)
+        : ILocalStorageSnapshot
     {
-        public StorageResult<T> Get<T>(string key)
+        public StorageResult<T> Get<T>(string key) => Read<T>(key, GetItem(key).Protected, storage.OnGetAsync);
+
+        public StorageResult<T> GetUnprotected<T>(string key) => Read<T>(key, GetItem(key).Unprotected, storage.OnGetUnprotectedAsync);
+
+        private (StoredItem Protected, StoredItem Unprotected) GetItem(string key)
         {
-            if (!values.TryGetValue(key, out var result))
+            if (!items.TryGetValue(key, out var item))
             {
                 throw new ArgumentException($"Key '{key}' was not requested when loading the snapshot.", nameof(key));
             }
 
-            return new StorageResult<T>(result.Success, (T)(result.Value ?? default(T))!)
-            {
-                ReadFailed = result.ReadFailed,
-                InvalidValue = result.InvalidValue
-            };
+            return item;
         }
     }
 }

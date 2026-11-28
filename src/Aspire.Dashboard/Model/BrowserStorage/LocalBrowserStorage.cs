@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 
@@ -12,16 +14,29 @@ namespace Aspire.Dashboard.Model.BrowserStorage;
 
 public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 {
+    // ProtectedLocalStorage stores IDataProtector.Protect(json) under the key, protected with a purpose derived from its
+    // type, store name and key:
+    //   Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage:localStorage:<key>
+    // Snapshots unprotect with the same purpose so they read values written by SetAsync. See
+    // https://github.com/dotnet/aspnetcore/blob/main/src/Components/Server/src/ProtectedBrowserStorage/ProtectedBrowserStorage.cs
+    private static readonly string s_protectedPurposePrefix = $"{typeof(ProtectedLocalStorage).FullName}:localStorage:";
+
     private readonly IJSRuntime _jsRuntime;
+    private readonly IDataProtectionProvider _dataProtectionProvider;
+    private readonly ConcurrentDictionary<string, IDataProtector> _protectorsByKey = new(StringComparer.Ordinal);
     private readonly JsonSerializerOptions _serializerOptions;
 
     public LocalBrowserStorage(
         IJSRuntime jsRuntime,
         ProtectedLocalStorage protectedLocalStorage,
+        IDataProtectionProvider dataProtectionProvider,
         ILogger<LocalBrowserStorage> logger,
         IOptions<CircuitOptions> circuitOptions) : base(protectedLocalStorage, logger)
     {
         _jsRuntime = jsRuntime;
+        _dataProtectionProvider = dataProtectionProvider;
+        // Match the options ProtectedLocalStorage serializes with, so protected values decoded from a snapshot
+        // deserialize the same way as with GetAsync.
         _serializerOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -39,16 +54,32 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 
     public Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key) => GetJsonAsync<TValue>(key);
 
-    public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
+    public async Task<ILocalStorageSnapshot> ReadSnapshotAsync(string[] keys)
     {
         keys = keys.ToArray();
         var result = await ReadAsync("local storage snapshot", async () =>
         {
-            var values = await _jsRuntime.InvokeAsync<string?[]>("getLocalStorageItems", (object)keys).ConfigureAwait(false);
+            // Usually every value fits in one response. getLocalStorageItems limits how much it returns so the response
+            // fits in a circuit message, and large values are returned over several calls, each starting with the
+            // first key the previous response left out.
+            var values = new string?[keys.Length];
+            var readCount = 0;
+            while (readCount < keys.Length)
+            {
+                var batch = await _jsRuntime.InvokeAsync<string?[]>("getLocalStorageItems", (object)keys[readCount..]).ConfigureAwait(false);
+                if (batch.Length == 0 || readCount + batch.Length > keys.Length)
+                {
+                    throw new JSException($"Expected between 1 and {keys.Length - readCount} local storage values but got {batch.Length}.");
+                }
+
+                batch.CopyTo(values, readCount);
+                readCount += batch.Length;
+            }
+
             return new StorageResult<string?[]>(true, values);
         }).ConfigureAwait(false);
 
-        return new UnprotectedSnapshot(this, keys, result);
+        return new Snapshot(this, keys, result);
     }
 
     private Task<StorageResult<TValue>> GetJsonAsync<TValue>(string key)
@@ -69,6 +100,20 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
         return new StorageResult<TValue>(true, JsonSerializer.Deserialize(json, typeInfo));
     }
 
+    private StorageResult<TValue> Unprotect<TValue>(string key, string? protectedJson)
+    {
+        if (protectedJson is null)
+        {
+            return new StorageResult<TValue>(false, default);
+        }
+
+        var protector = _protectorsByKey.GetOrAdd(
+            key,
+            static (key, provider) => provider.CreateProtector(s_protectedPurposePrefix + key),
+            _dataProtectionProvider);
+        return Deserialize<TValue>(protector.Unprotect(protectedJson));
+    }
+
     public async Task SetUnprotectedAsync<TValue>(string key, TValue value)
     {
         var typeInfo = (JsonTypeInfo<TValue>)_serializerOptions.GetTypeInfo(typeof(TValue));
@@ -80,10 +125,14 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
     private ValueTask SetJsonAsync(string key, string json)
         => _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, json);
 
-    private sealed class UnprotectedSnapshot(LocalBrowserStorage storage, string[] keys, StorageResult<string?[]> result)
-        : IUnprotectedLocalStorageSnapshot
+    private sealed class Snapshot(LocalBrowserStorage storage, string[] keys, StorageResult<string?[]> result)
+        : ILocalStorageSnapshot
     {
-        public StorageResult<TValue> Get<TValue>(string key)
+        public StorageResult<TValue> Get<TValue>(string key) => Read(key, storage.Unprotect<TValue>);
+
+        public StorageResult<TValue> GetUnprotected<TValue>(string key) => Read(key, (_, json) => storage.Deserialize<TValue>(json));
+
+        private StorageResult<TValue> Read<TValue>(string key, Func<string, string?, StorageResult<TValue>> decode)
         {
             var index = Array.IndexOf(keys, key);
             if (index < 0)
@@ -96,20 +145,8 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
                 return new StorageResult<TValue>(false, default) { ReadFailed = result.ReadFailed, InvalidValue = result.InvalidValue };
             }
 
-            try
-            {
-                return storage.Deserialize<TValue>(result.Value![index]);
-            }
-            catch (JsonException ex)
-            {
-                storage.Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
-                return new StorageResult<TValue>(false, default) { InvalidValue = true };
-            }
-            catch (NotSupportedException ex)
-            {
-                storage.Logger.LogWarning(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
-                return new StorageResult<TValue>(false, default) { InvalidValue = true };
-            }
+            var value = result.Value![index];
+            return storage.Read(key, () => decode(key, value));
         }
     }
 }

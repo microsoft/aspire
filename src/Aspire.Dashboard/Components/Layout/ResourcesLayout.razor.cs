@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -29,9 +29,9 @@ namespace Aspire.Dashboard.Components.Layout;
 /// </summary>
 /// <remarks>
 /// Blazor keeps a layout instance alive while navigating between pages that share it, so the resource list,
-/// its scroll position, filters and expanded state survive switching tabs or resources. The selected resource
-/// and tab are derived from the current URL, which keeps every view addressable and lets the browser's
-/// back/forward buttons work as expected.
+/// its scroll position, filters and expanded state survive switching tabs or resources. Collapsed resources and
+/// groups are also saved in browser storage for the current application. The selected resource and tab are
+/// derived from the current URL, which keeps every view addressable and lets the browser's back/forward buttons work as expected.
 /// </remarks>
 public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposable
 {
@@ -48,8 +48,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private const string TelemetrySectionKey = "section:telemetry";
 
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
-    private readonly HashSet<string> _collapsedGroups = new(StringComparer.OrdinalIgnoreCase);
     private ResourcePaneGrouping _grouping;
     private readonly CancellationTokenSource _cts = new();
     private readonly List<MenuButtonItem> _paneMenuItems = [];
@@ -80,7 +78,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private Dictionary<string, OtlpResource> _telemetryResourcesByName = new(StringComparers.ResourceName);
     private Dictionary<ResourceKey, ResourceSignalAvailability> _resourceSignalAvailability = [];
     private List<TelemetryOnlyResource> _telemetryOnlyResources = [];
-    private string? _collapsedResourceNamesKey;
     private bool _isLoaded;
     private bool _isPaneCollapsed;
     private bool _isDrawerOpen;
@@ -154,7 +151,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     public required ResourceTagStore TagStore { get; init; }
 
     [Inject]
-    public required ResourceOrderStore OrderStore { get; init; }
+    public required ResourceDisplayStore DisplayStore { get; init; }
 
     [Inject]
     public required Microsoft.FluentUI.AspNetCore.Components.INotificationService ToastService { get; init; }
@@ -308,40 +305,34 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // overlap that snapshot instead of waiting until each pane key has been applied.
         var viewPreferencesTask = ViewPreferences.EnsureLoadedAsync();
         var showHiddenResourcesTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
+        // The display store's order and collapsed state share one storage snapshot. When the AppHost client is
+        // already connected, the application name that scopes collapsed state is known now, so that snapshot joins
+        // the initial storage wave. Otherwise it's read once the client connects.
         var settingsLoaded = DashboardClient.IsEnabled
-            ? Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync())
-            : Task.CompletedTask;
+            ? Task.WhenAll(TagStore.EnsureLoadedAsync(), DisplayStore.EnsureLoadedAsync())
+            : DisplayStore.EnsureLoadedAsync();
 
-        // When the AppHost client is already connected, the application name is known now, so
-        // collapsed tree state can ride in the same initial storage wave.
-        Task<StorageResult<List<string>>>? collapsedResultTask = null;
-        if (DashboardClient.IsEnabled && DashboardClient.WhenConnected.IsCompletedSuccessfully)
-        {
-            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
-            collapsedResultTask = LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
-        }
-
-        var panePreferences = await LocalStorage.ReadUnprotectedSnapshotAsync([
+        var panePreferences = await LocalStorage.ReadSnapshotAsync([
             BrowserStorageKeys.ResourcePaneCollapsed,
             BrowserStorageKeys.ResourcePaneWidth,
             BrowserStorageKeys.ResourcePaneMode,
             BrowserStorageKeys.ResourcePaneGrouping,
             BrowserStorageKeys.ResourcePaneKinds
         ]);
-        var paneCollapsedResult = panePreferences.Get<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
+        var paneCollapsedResult = panePreferences.GetUnprotected<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
         if (paneCollapsedResult.Success)
         {
             _isPaneCollapsed = paneCollapsedResult.Value;
         }
 
-        var paneWidthResult = panePreferences.Get<int>(BrowserStorageKeys.ResourcePaneWidth);
+        var paneWidthResult = panePreferences.GetUnprotected<int>(BrowserStorageKeys.ResourcePaneWidth);
         if (paneWidthResult.Success)
         {
             _paneWidth = Math.Clamp(paneWidthResult.Value, MinimumPaneWidthPx, MaximumPaneWidthPx);
         }
         // The URL selects the mode when navigating from the main navigation. Other resource URLs, such as a row's
         // link, don't include it, so the last mode is remembered.
-        var paneModeResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneMode);
+        var paneModeResult = panePreferences.GetUnprotected<string>(BrowserStorageKeys.ResourcePaneMode);
         if (paneModeResult.Success)
         {
             _persistedPaneMode = paneModeResult.Value;
@@ -352,7 +343,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _grouping = storedPaneMode == ResourcePaneMode.Tags ? ResourcePaneGrouping.Tags : ResourcePaneGrouping.None;
             PaneState.SetMode(ResourcePaneMode.Resources);
         }
-        var groupingResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneGrouping);
+        var groupingResult = panePreferences.GetUnprotected<string>(BrowserStorageKeys.ResourcePaneGrouping);
         if (groupingResult.Success && Enum.TryParse<ResourcePaneGrouping>(groupingResult.Value, out var grouping) && Enum.IsDefined(grouping))
         {
             _grouping = grouping;
@@ -367,7 +358,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // types narrow them down), so only the telemetry sources entry still counts.
         if (_showTelemetryOnlyResources is null)
         {
-            var kindsResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneKinds);
+            var kindsResult = panePreferences.GetUnprotected<string>(BrowserStorageKeys.ResourcePaneKinds);
             _showTelemetryOnlyResources = !kindsResult.Success || kindsResult.Value is not { } storedKinds ||
                 storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Contains(TelemetrySourcesKind, StringComparer.Ordinal);
@@ -380,36 +371,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         TagStore.Changed += OnTagsChanged;
         ViewPreferences.Changed += OnViewPreferencesChanged;
-        OrderStore.Changed += OnOrderChanged;
+        DisplayStore.Changed += OnDisplayChanged;
 
         var showHiddenResources = await showHiddenResourcesTask;
         if (showHiddenResources.Success)
         {
             _filter.ShowHiddenResources = showHiddenResources.Value;
-        }
-
-        if (DashboardClient.IsEnabled)
-        {
-            StorageResult<List<string>> collapsedResult;
-            if (collapsedResultTask is not null)
-            {
-                collapsedResult = await collapsedResultTask;
-            }
-            else
-            {
-                // The application name is only correct once the dashboard is connected, and it scopes persisted tree state.
-                await DashboardClient.WhenConnected;
-                _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
-                collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
-            }
-
-            if (collapsedResult.Success)
-            {
-                foreach (var resourceName in collapsedResult.Value)
-                {
-                    _collapsedResourceNames.Add(resourceName);
-                }
-            }
         }
 
         // Don't subscribe after DisposeAsync has run: nothing would dispose these subscriptions.
@@ -453,6 +420,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Standalone resources come from OTLP. The disabled AppHost client cannot be awaited or subscribed to.
         if (!DashboardClient.IsEnabled)
         {
+            // Wait for the collapsed state before showing telemetry sources, so a collapsed section doesn't open first.
+            await settingsLoaded;
             _isLoaded = true;
             UpdateTelemetryOnlyResources();
             UpdateSelection();
@@ -460,7 +429,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        // Wait for stored tags and order before showing resources, so the list doesn't first appear in another order.
+        // Wait for stored tags, order and collapsed state before showing resources, so the list doesn't first appear in another arrangement.
         await settingsLoaded;
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
         foreach (var resource in snapshot)
@@ -1379,13 +1348,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
-        var filteredResources = OrderStore.OrderResources(GetOrderableResources())
+        var filteredResources = DisplayStore.OrderResources(GetOrderableResources())
             .Where(_filter.Matches)
             .Select(r => new ResourceGridViewModel { Resource = r })
             .ToList();
 
         // Nested resources are placed under their parent after sorting so children keep their order.
-        return ResourceGridViewModel.OrderNestedResources(filteredResources, r => _collapsedResourceNames.Contains(r.PersistentKey))
+        return ResourceGridViewModel.OrderNestedResources(filteredResources, r => DisplayStore.IsResourceCollapsed(r.PersistentKey))
             .Where(r => !r.IsHidden);
     }
 
@@ -1474,7 +1443,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             .ToList();
 
         // Replay before filtering so a hidden anchor still determines the order of the remaining groups.
-        return OrderStore.OrderGroups(_grouping.ToString(), groups, GetGroupOrderKey)
+        return DisplayStore.OrderGroups(_grouping.ToString(), groups, GetGroupOrderKey)
             .Where(group => !byTags || IsTagVisible(GetGroupOrderKey(group)))
             .Select(group =>
             {
@@ -1582,17 +1551,30 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsTagVisible(string tag) =>
         !_filter.ResourceTagsToVisibility.TryGetValue(tag, out var visible) || visible;
 
-    private bool IsGroupCollapsed(string key) => _collapsedGroups.Contains(key);
-
-    private void ToggleCollapsedGroup(string key)
+    private bool IsGroupCollapsed(string paneKey)
     {
-        if (!_collapsedGroups.Remove(key))
+        var (grouping, key) = SplitPaneKey(paneKey);
+        return DisplayStore.IsGroupCollapsed(grouping, key);
+    }
+
+    private async Task ToggleCollapsedGroupAsync(string paneKey)
+    {
+        var (grouping, key) = SplitPaneKey(paneKey);
+        if (!await DisplayStore.ToggleGroupCollapsedAsync(grouping, key))
         {
-            _collapsedGroups.Add(key);
+            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
         }
     }
 
     private string GetGroupKey(ResourceGroup group) => $"{_grouping}:{group.Value}";
+
+    // Pane keys are "{grouping}:{value}", for example "Tags:frontend", "Tags:" for the untagged group, or
+    // "section:telemetry". Values can contain ':', but grouping names and "section" can't, so split at the first one.
+    private static (string Grouping, string Key) SplitPaneKey(string paneKey)
+    {
+        var separator = paneKey.IndexOf(':');
+        return (paneKey[..separator], paneKey[(separator + 1)..]);
+    }
 
     private void OnTagsChanged() => _ = InvokeAsync(() =>
     {
@@ -1688,7 +1670,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _resourceByName.TryGetValue(targetName, out var target) &&
             MatchesResourceFilter(resource) && MatchesResourceFilter(target))
         {
-            switch (await OrderStore.MoveResourceAsync(resource, target, after, GetOrderableResources()))
+            switch (await DisplayStore.MoveResourceAsync(resource, target, after, GetOrderableResources()))
             {
                 case ResourceOrderMoveResult.Unchanged:
                     return false;
@@ -1709,7 +1691,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return false;
     }
 
-    private void OnOrderChanged() => _ = InvokeAsync(StateHasChanged);
+    // Collapsed state changes the pane's rows and its expand/collapse-all menu item.
+    private void OnDisplayChanged() => _ = InvokeAsync(() =>
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        UpdatePaneMenuItems();
+        StateHasChanged();
+    });
 
     [JSInvokable]
     public async Task<bool> ReorderGroupAsync(string grouping, string groupKey, string targetKey, bool after)
@@ -1720,7 +1712,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var target = groups.Find(group => StringComparers.ResourceName.Equals(GetGroupKey(group), targetKey));
         if (group is not null && target is not null)
         {
-            switch (await OrderStore.MoveGroupAsync(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after, groups.Select(GetGroupOrderKey)))
+            switch (await DisplayStore.MoveGroupAsync(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after, groups.Select(GetGroupOrderKey)))
             {
                 case ResourceOrderMoveResult.Unchanged:
                     return false;
@@ -1748,20 +1740,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        if (!_collapsedResourceNames.Remove(resource.PersistentKey))
+        if (!await DisplayStore.ToggleResourceCollapsedAsync(resource.PersistentKey))
         {
-            _collapsedResourceNames.Add(resource.PersistentKey);
-        }
-
-        await PersistCollapsedResourceNamesAsync();
-        UpdatePaneMenuItems();
-    }
-
-    private async Task PersistCollapsedResourceNamesAsync()
-    {
-        if (_collapsedResourceNamesKey is not null)
-        {
-            await LocalStorage.SetAsync(_collapsedResourceNamesKey, _collapsedResourceNames.ToList());
+            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
         }
     }
 
@@ -1819,28 +1800,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         if (resourcesWithChildren.Count > 0)
         {
-            var hasCollapsed = resourcesWithChildren.Any(r => _collapsedResourceNames.Contains(r.PersistentKey));
+            var hasCollapsed = resourcesWithChildren.Any(r => DisplayStore.IsResourceCollapsed(r.PersistentKey));
             _paneMenuItems.Add(new MenuButtonItem
             {
                 Text = hasCollapsed ? ResourcesLoc[nameof(Resources.Resources.ResourceExpandAllChildren)] : ResourcesLoc[nameof(Resources.Resources.ResourceCollapseAllChildren)],
                 Icon = hasCollapsed ? new Icons.Regular.Size16.Eye() : new Icons.Regular.Size16.EyeOff(),
                 OnClick = async () =>
                 {
-                    foreach (var resource in resourcesWithChildren)
+                    if (!await DisplayStore.SetResourcesCollapsedAsync(resourcesWithChildren.Select(r => r.PersistentKey), !hasCollapsed))
                     {
-                        if (hasCollapsed)
-                        {
-                            _collapsedResourceNames.Remove(resource.PersistentKey);
-                        }
-                        else
-                        {
-                            _collapsedResourceNames.Add(resource.PersistentKey);
-                        }
+                        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
                     }
-
-                    await PersistCollapsedResourceNamesAsync();
-                    UpdatePaneMenuItems();
-                    StateHasChanged();
                 }
             });
         }
@@ -3095,7 +3065,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _subscribedMainLayout?.ClearPageNavMenuEntries(_mobileNavMenuEntries);
         TagStore.Changed -= OnTagsChanged;
         ViewPreferences.Changed -= OnViewPreferencesChanged;
-        OrderStore.Changed -= OnOrderChanged;
+        DisplayStore.Changed -= OnDisplayChanged;
         _logsSubscription?.Dispose();
         _telemetryResourcesSubscription?.Dispose();
         _paneActivitySubscription?.Dispose();

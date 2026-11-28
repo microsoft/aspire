@@ -24,7 +24,7 @@ namespace Aspire.Dashboard.Tests;
 public class LocalBrowserStorageTests
 {
     [Fact]
-    public async Task ReadUnprotectedSnapshot_ReadsOnceAndDecodesEachPreferenceIndependently()
+    public async Task ReadSnapshot_ReadsOnceAndDecodesEachPreferenceIndependently()
     {
         var browser = new InMemoryBrowserLocalStorage();
         browser.Items[BrowserStorageKeys.ResourcePaneWidth] = "320";
@@ -33,7 +33,7 @@ public class LocalBrowserStorageTests
         browser.Items[BrowserStorageKeys.ResourcePaneKinds] = """["Project","Container"]""";
         browser.Items["Unrequested"] = "123";
 
-        var snapshot = await browser.Storage.ReadUnprotectedSnapshotAsync(
+        var snapshot = await browser.Storage.ReadSnapshotAsync(
         [
             BrowserStorageKeys.ResourcePaneWidth,
             BrowserStorageKeys.ResourcePaneCollapsed,
@@ -43,30 +43,73 @@ public class LocalBrowserStorageTests
         ]);
         browser.Items.Clear();
 
-        var width = snapshot.Get<int>(BrowserStorageKeys.ResourcePaneWidth);
+        var width = snapshot.GetUnprotected<int>(BrowserStorageKeys.ResourcePaneWidth);
         Assert.True(width.Success);
         Assert.Equal(320, width.Value);
-        Assert.True(snapshot.Get<bool>(BrowserStorageKeys.ResourcePaneCollapsed).Value);
-        Assert.True(snapshot.Get<string>(BrowserStorageKeys.ResourcePaneGrouping).InvalidValue);
-        Assert.Equal(["Project", "Container"], snapshot.Get<List<string>>(BrowserStorageKeys.ResourcePaneKinds).Value);
-        var missing = snapshot.Get<string>(BrowserStorageKeys.ResourcePaneMode);
+        Assert.True(snapshot.GetUnprotected<bool>(BrowserStorageKeys.ResourcePaneCollapsed).Value);
+        Assert.True(snapshot.GetUnprotected<string>(BrowserStorageKeys.ResourcePaneGrouping).InvalidValue);
+        Assert.Equal(["Project", "Container"], snapshot.GetUnprotected<List<string>>(BrowserStorageKeys.ResourcePaneKinds).Value);
+        var missing = snapshot.GetUnprotected<string>(BrowserStorageKeys.ResourcePaneMode);
         Assert.False(missing.Success);
         Assert.False(missing.ReadFailed);
         Assert.False(missing.InvalidValue);
-        Assert.Throws<ArgumentException>("key", () => snapshot.Get<int>("Unrequested"));
+        Assert.Throws<ArgumentException>("key", () => snapshot.GetUnprotected<int>("Unrequested"));
         Assert.Equal(1, browser.SnapshotReadCount);
     }
 
     [Fact]
-    public async Task ReadUnprotectedSnapshot_ReadFailureIsNotAnUnrequestedKey()
+    public async Task ReadSnapshot_LargeValuesAreReadOverSeveralCalls()
+    {
+        var browser = new InMemoryBrowserLocalStorage();
+        var large = new string('a', InMemoryBrowserLocalStorage.MaxSnapshotResponseBytes * 3 / 4);
+        var larger = new string('b', InMemoryBrowserLocalStorage.MaxSnapshotResponseBytes + 1);
+        browser.Items["Small"] = "1";
+        browser.Items["Large"] = $"\"{large}\"";
+        browser.Items["Larger"] = $"\"{larger}\"";
+        browser.Items["Last"] = "2";
+
+        var snapshot = await browser.Storage.ReadSnapshotAsync(["Small", "Large", "Larger", "Last", "Missing"]);
+
+        // Small and Large fit together, Larger exceeds the budget on its own, and the rest fit in the final call.
+        Assert.Equal(3, browser.SnapshotReadCount);
+        Assert.Equal(1, snapshot.GetUnprotected<int>("Small").Value);
+        Assert.Equal(large, snapshot.GetUnprotected<string>("Large").Value);
+        Assert.Equal(larger, snapshot.GetUnprotected<string>("Larger").Value);
+        Assert.Equal(2, snapshot.GetUnprotected<int>("Last").Value);
+        Assert.False(snapshot.GetUnprotected<int>("Missing").Success);
+    }
+
+    [Fact]
+    public async Task ReadSnapshot_ReadFailureIsNotAnUnrequestedKey()
     {
         var browser = new InMemoryBrowserLocalStorage { FailReads = true };
-        var snapshot = await browser.Storage.ReadUnprotectedSnapshotAsync([BrowserStorageKeys.ResourcePaneWidth]);
+        var snapshot = await browser.Storage.ReadSnapshotAsync([BrowserStorageKeys.ResourcePaneWidth]);
 
-        var width = snapshot.Get<int>(BrowserStorageKeys.ResourcePaneWidth);
+        var width = snapshot.GetUnprotected<int>(BrowserStorageKeys.ResourcePaneWidth);
         Assert.False(width.Success);
         Assert.True(width.ReadFailed);
-        Assert.Throws<ArgumentException>("key", () => snapshot.Get<int>(BrowserStorageKeys.ResourcePaneMode));
+        Assert.Throws<ArgumentException>("key", () => snapshot.GetUnprotected<int>(BrowserStorageKeys.ResourcePaneMode));
+    }
+
+    [Fact]
+    public async Task ReadSnapshot_GetUnprotectsValuesWrittenBySetAsync()
+    {
+        var browser = new InMemoryBrowserLocalStorage();
+        var namesKey = BrowserStorageKeys.CollapsedResourceNamesKey("App");
+        var groupsKey = BrowserStorageKeys.CollapsedResourceGroupsKey("App");
+        var missingKey = BrowserStorageKeys.CollapsedResourceGroupsKey("Other");
+        await browser.Storage.SetAsync(namesKey, new List<string> { "api", "cache" });
+        browser.Items[groupsKey] = "not-protected";
+
+        var snapshot = await browser.Storage.ReadSnapshotAsync([namesKey, groupsKey, missingKey]);
+
+        Assert.Equal(["api", "cache"], snapshot.Get<List<string>>(namesKey).Value);
+        Assert.Equal(["api", "cache"], (await browser.Storage.GetAsync<List<string>>(namesKey)).Value);
+        Assert.True(snapshot.Get<List<string>>(groupsKey).InvalidValue);
+        var missing = snapshot.Get<List<string>>(missingKey);
+        Assert.False(missing.Success);
+        Assert.False(missing.InvalidValue);
+        Assert.Equal(1, browser.SnapshotReadCount);
     }
 
     [Theory]
@@ -289,6 +332,7 @@ public class LocalBrowserStorageTests
         return new LocalBrowserStorage(
             testJsonRuntime,
             new ProtectedLocalStorage(testJsonRuntime, new TestDataProtector()),
+            new TestDataProtector(),
             logger ?? NullLogger<LocalBrowserStorage>.Instance,
             Options.Create(circuitOptions));
     }

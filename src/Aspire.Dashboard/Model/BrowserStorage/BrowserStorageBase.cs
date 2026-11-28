@@ -31,6 +31,34 @@ public abstract class BrowserStorageBase : IBrowserStorage
 
     protected async Task<StorageResult<TValue>> ReadAsync<TValue>(string key, Func<Task<StorageResult<TValue>>> getValue)
     {
+        try
+        {
+            return await getValue().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return HandleReadException<TValue>(key, ex);
+        }
+    }
+
+    /// <summary>
+    /// Decodes a value already loaded from the browser, such as an item from a snapshot, reporting failures the same
+    /// way as <see cref="ReadAsync{TValue}(string, Func{Task{StorageResult{TValue}}})"/>.
+    /// </summary>
+    protected StorageResult<TValue> Read<TValue>(string key, Func<StorageResult<TValue>> getValue)
+    {
+        try
+        {
+            return getValue();
+        }
+        catch (Exception ex)
+        {
+            return HandleReadException<TValue>(key, ex);
+        }
+    }
+
+    private StorageResult<TValue> HandleReadException<TValue>(string key, Exception ex)
+    {
         // Possible errors here:
         // - Client is disconnected from the server.
         // - Saved value in storage can't be deserialized to TValue.
@@ -39,37 +67,28 @@ public abstract class BrowserStorageBase : IBrowserStorage
         //   install location and so a different data protection key.
         //   It could also be caused by standalone dashboard, which creates a new key each run. Leaving the dashboard browser open
         //   while restarting the container will cause a new data protection key, even with session storage.
-        try
+        switch (ex)
         {
-            return await getValue().ConfigureAwait(false);
-        }
-        catch (JSDisconnectedException)
-        {
-            // A disconnected circuit cannot read browser storage; avoid recording it as a storage error.
-            return new StorageResult<TValue>(false, default) { ReadFailed = true };
-        }
-        catch (Exception ex) when (ex is JSException or OperationCanceledException)
-        {
-            // The browser failed or didn't answer in time. Reading again later can succeed.
-            Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+            case JSDisconnectedException:
+                // A disconnected circuit cannot read browser storage; avoid recording it as a storage error.
+                return new StorageResult<TValue>(false, default) { ReadFailed = true };
+            case JSException or OperationCanceledException:
+                // The browser failed or didn't answer in time. Reading again later can succeed.
+                Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
 
-            return new StorageResult<TValue>(false, default) { ReadFailed = true };
-        }
-        catch (Exception ex) when (ex is JsonException or CryptographicException)
-        {
-            // The stored value can't be deserialized, or was protected with another data protection key.
-            Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+                return new StorageResult<TValue>(false, default) { ReadFailed = true };
+            case JsonException or CryptographicException:
+                // The stored value can't be deserialized, or was protected with another data protection key.
+                Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
 
-            return new StorageResult<TValue>(false, default) { InvalidValue = true };
-        }
-        catch (Exception ex)
-        {
-            // Anything else, such as a type missing from the JSON serializer context, fails the same way on every read.
-            // It's reported as an invalid value rather than a transient failure so it isn't retried, and logged as a
-            // warning because it's a bug rather than something about the stored value.
-            Logger.LogWarning(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+                return new StorageResult<TValue>(false, default) { InvalidValue = true };
+            default:
+                // Anything else, such as a type missing from the JSON serializer context, fails the same way on every read.
+                // It's reported as an invalid value rather than a transient failure so it isn't retried, and logged as a
+                // warning because it's a bug rather than something about the stored value.
+                Logger.LogWarning(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
 
-            return new StorageResult<TValue>(false, default) { InvalidValue = true };
+                return new StorageResult<TValue>(false, default) { InvalidValue = true };
         }
     }
 

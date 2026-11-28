@@ -119,6 +119,12 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             var messageSize = protocol.GetMessageBytes(message).Length;
             Assert.InRange(messageSize, 32 * 1024 + 1, receiveLimit);
         }
+
+        // A local storage snapshot response fills its budget with the JSON array of values, so a full response must
+        // fit too. The closing bracket replaces the last value's separating comma counted by the budget.
+        var snapshotValues = JsonSerializer.Serialize(new[] { new string('s', InMemoryBrowserLocalStorage.MaxSnapshotResponseBytes - 3) });
+        var snapshotMessage = new InvocationMessage("EndInvokeJSFromDotNet", [1L, true, $"[1,true,{snapshotValues}]"]);
+        Assert.InRange(protocol.GetMessageBytes(snapshotMessage).Length, InMemoryBrowserLocalStorage.MaxSnapshotResponseBytes, receiveLimit);
     }
 
     [Fact]

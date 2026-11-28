@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class ResourceOrderStoreTests
+public sealed class ResourceDisplayStoreTests
 {
     private static readonly string s_resourceKey = BrowserStorageKeys.ResourceOrderKey("TestApp");
     private static readonly string s_groupKey = BrowserStorageKeys.GroupOrderKey("TestApp");
@@ -315,6 +315,135 @@ public sealed class ResourceOrderStoreTests
         Assert.Equal(["worker", "api"], GetNames(await CreateLoadedStoreAsync(), CreateResource("api"), CreateResource("worker")));
     }
 
+    [Fact]
+    public async Task Collapsed_LoadsWithOrderInOneSnapshotAndKeepsExistingValues()
+    {
+        await _browser.Storage.SetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceNamesKey("ClientApp"), ["api_0"]);
+        await _browser.Storage.SetAsync<Dictionary<string, List<string>>>(BrowserStorageKeys.CollapsedResourceGroupsKey("ClientApp"), new() { ["Tags"] = ["web"] });
+
+        var store = await CreateLoadedStoreAsync();
+
+        Assert.Equal(1, _browser.SnapshotReadCount);
+        Assert.True(store.IsResourceCollapsed("api_0"));
+        Assert.False(store.IsResourceCollapsed("worker_0"));
+        Assert.True(store.IsGroupCollapsed("Tags", "WEB"));
+        Assert.False(store.IsGroupCollapsed("State", "web"));
+    }
+
+    [Fact]
+    public async Task Collapsed_ChangesArePublishedSavedAndScopedToTheClientApplication()
+    {
+        var store = await CreateLoadedStoreAsync();
+        var changedCount = 0;
+        store.Changed += () => changedCount++;
+
+        Assert.True(await store.SetResourcesCollapsedAsync(["api_0", "worker_0"], collapsed: true));
+        Assert.True(await store.SetResourcesCollapsedAsync(["api_0"], collapsed: false));
+        Assert.True(await store.ToggleGroupCollapsedAsync("section", "telemetry"));
+        Assert.True(await store.ToggleGroupCollapsedAsync("Tags", ""));
+        Assert.True(await store.ToggleGroupCollapsedAsync("State", "Running"));
+        Assert.True(await store.ToggleGroupCollapsedAsync("State", "Running"));
+
+        Assert.Equal(6, changedCount);
+        Assert.Equal(["worker_0"], (await _browser.Storage.GetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceNamesKey("ClientApp"))).Value);
+        var storedGroups = (await _browser.Storage.GetAsync<Dictionary<string, List<string>>>(BrowserStorageKeys.CollapsedResourceGroupsKey("ClientApp"))).Value;
+        Assert.NotNull(storedGroups);
+        Assert.Collection(storedGroups.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+            pair =>
+            {
+                Assert.Equal("Tags", pair.Key);
+                Assert.Equal([""], pair.Value);
+            },
+            pair =>
+            {
+                Assert.Equal("section", pair.Key);
+                Assert.Equal(["telemetry"], pair.Value);
+            });
+
+        var reloaded = await CreateLoadedStoreAsync();
+        Assert.False(reloaded.IsResourceCollapsed("api_0"));
+        Assert.True(reloaded.IsResourceCollapsed("worker_0"));
+        Assert.True(reloaded.IsGroupCollapsed("section", "telemetry"));
+        Assert.True(reloaded.IsGroupCollapsed("Tags", ""));
+        Assert.False(reloaded.IsGroupCollapsed("State", "Running"));
+
+        var otherApplication = await CreateLoadedStoreAsync("OtherApp");
+        Assert.False(otherApplication.IsResourceCollapsed("worker_0"));
+        Assert.False(otherApplication.IsGroupCollapsed("section", "telemetry"));
+    }
+
+    [Fact]
+    public async Task Collapsed_ReturnsFalseWhenNotSavedAndKeepsTheCurrentValue()
+    {
+        var store = await CreateLoadedStoreAsync();
+        _browser.FailWrites = true;
+
+        Assert.False(await store.SetResourcesCollapsedAsync(["api_0"], collapsed: true));
+        Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False(await store.ToggleResourceCollapsedAsync("api_0"));
+        Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False(await store.ToggleGroupCollapsedAsync("Tags", "web"));
+        Assert.False(store.IsGroupCollapsed("Tags", "web"));
+    }
+
+    [Fact]
+    public async Task Collapsed_ChangeWhileThePreviousChangeIsSavingIsNotDropped()
+    {
+        var store = await CreateLoadedStoreAsync();
+
+        await RunWhileFirstWriteIsPendingAsync(
+            () => store.SetResourcesCollapsedAsync(["api_0"], collapsed: true),
+            () => store.SetResourcesCollapsedAsync(["api_0"], collapsed: false));
+
+        Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False((await CreateLoadedStoreAsync()).IsResourceCollapsed("api_0"));
+    }
+
+    [Fact]
+    public async Task Collapsed_ToggleWhileThePreviousToggleIsSavingUndoesIt()
+    {
+        var store = await CreateLoadedStoreAsync();
+
+        await RunWhileFirstWriteIsPendingAsync(
+            () => store.ToggleResourceCollapsedAsync("api_0"),
+            () => store.ToggleResourceCollapsedAsync("api_0"));
+        await RunWhileFirstWriteIsPendingAsync(
+            () => store.ToggleGroupCollapsedAsync("Tags", "web"),
+            () => store.ToggleGroupCollapsedAsync("Tags", "web"));
+
+        Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False(store.IsGroupCollapsed("Tags", "web"));
+        var reloaded = await CreateLoadedStoreAsync();
+        Assert.False(reloaded.IsResourceCollapsed("api_0"));
+        Assert.False(reloaded.IsGroupCollapsed("Tags", "web"));
+    }
+
+    // Starts the second change while the first change's write is still pending, then lets the first write finish.
+    private async Task RunWhileFirstWriteIsPendingAsync(Func<Task<bool>> first, Func<Task<bool>> second)
+    {
+        var firstWriteStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writeCount = 0;
+        _browser.OnAfterWriteAsync = () =>
+        {
+            if (Interlocked.Increment(ref writeCount) > 1)
+            {
+                return Task.CompletedTask;
+            }
+
+            firstWriteStarted.SetResult();
+            return releaseFirstWrite.Task;
+        };
+
+        var firstTask = first();
+        await firstWriteStarted.Task.DefaultTimeout();
+        var secondTask = second();
+        releaseFirstWrite.SetResult();
+        Assert.True(await firstTask.DefaultTimeout());
+        Assert.True(await secondTask.DefaultTimeout());
+        _browser.OnAfterWriteAsync = null;
+    }
+
     private static ResourceViewModel CreateResource(string name, string resourceType = "Project", int? order = null, string? parent = null, string? displayName = null)
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>();
@@ -332,16 +461,17 @@ public sealed class ResourceOrderStoreTests
         return ModelTestHelpers.CreateResource(name, displayName: displayName, resourceType: resourceType, properties: properties);
     }
 
-    private static string[] GetNames(ResourceOrderStore store, params ResourceViewModel[] resources) =>
+    private static string[] GetNames(ResourceDisplayStore store, params ResourceViewModel[] resources) =>
         store.OrderResources(resources).Select(resource => resource.Name).ToArray();
 
-    private static List<string> OrderGroups(ResourceOrderStore store, string grouping, params string[] groups) =>
+    private static List<string> OrderGroups(ResourceDisplayStore store, string grouping, params string[] groups) =>
         store.OrderGroups(grouping, groups.ToList(), key => key);
 
-    private async Task<ResourceOrderStore> CreateLoadedStoreAsync()
+    private async Task<ResourceDisplayStore> CreateLoadedStoreAsync(string clientApplicationName = "ClientApp")
     {
-        var store = new ResourceOrderStore(_browser.Storage, _locks,
-            Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceOrderStore>.Instance);
+        var store = new ResourceDisplayStore(_browser.Storage, _locks,
+            new TestDashboardClient(isEnabled: true, applicationName: clientApplicationName),
+            Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceDisplayStore>.Instance);
         await store.EnsureLoadedAsync().DefaultTimeout();
         return store;
     }

@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Serialization;
 using Aspire.Tests.Shared;
@@ -37,6 +40,7 @@ internal sealed class InMemoryBrowserLocalStorage
         Storage = new InterceptedLocalStorage(new LocalBrowserStorage(
             jsRuntime,
             scope.ServiceProvider.GetRequiredService<ProtectedLocalStorage>(),
+            scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>(),
             NullLogger<LocalBrowserStorage>.Instance,
             scope.ServiceProvider.GetRequiredService<IOptions<CircuitOptions>>()), this);
     }
@@ -91,7 +95,7 @@ internal sealed class InMemoryBrowserLocalStorage
                     {
                         throw new JSException("Local storage is unavailable.");
                     }
-                    return ((string[])call.Args![0]!).Select(key => Items.GetValueOrDefault(key)).ToArray();
+                    return GetLocalStorageItems((string[])call.Args![0]!);
                 case "localStorage.setItem":
                     if (FailWrites)
                     {
@@ -103,6 +107,46 @@ internal sealed class InMemoryBrowserLocalStorage
                     throw new NotSupportedException($"Unexpected JavaScript call '{call.Identifier}'.");
             }
         }
+    }
+
+    /// <summary>
+    /// Gets <c>maxLocalStorageItemsResponseBytes</c> from wwwroot/js/app.js, which the test project copies to its
+    /// output, so tests use the budget the browser applies. The constant is declared like
+    /// <c>const maxLocalStorageItemsResponseBytes = 60 * 1024;</c>, with an integer or a product of integers.
+    /// </summary>
+    public static int MaxSnapshotResponseBytes { get; } = ReadMaxSnapshotResponseBytes();
+
+    private static int ReadMaxSnapshotResponseBytes()
+    {
+        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "wwwroot", "js", "app.js"));
+        var match = Regex.Match(script, @"const maxLocalStorageItemsResponseBytes = ([\d\s*]+);");
+        if (!match.Success)
+        {
+            throw new InvalidOperationException("maxLocalStorageItemsResponseBytes wasn't found in app.js.");
+        }
+
+        return match.Groups[1].Value.Split('*').Aggregate(1, (product, factor) => product * int.Parse(factor.Trim(), CultureInfo.InvariantCulture));
+    }
+
+    // Mirrors getLocalStorageItems in wwwroot/js/app.js: returns the leading values whose JSON-encoded UTF-8 size fits
+    // in the budget, and always at least one. Sizes assume values without characters JSON escapes, which tests use.
+    private string?[] GetLocalStorageItems(string[] keys)
+    {
+        var values = new List<string?>();
+        var size = 0;
+        foreach (var key in keys)
+        {
+            var value = Items.GetValueOrDefault(key);
+            var valueSize = (value is null ? "null".Length : Encoding.UTF8.GetByteCount(value) + 2) + 1;
+            if (values.Count > 0 && size + valueSize > MaxSnapshotResponseBytes)
+            {
+                break;
+            }
+            values.Add(value);
+            size += valueSize;
+        }
+
+        return values.ToArray();
     }
 
     private sealed class InterceptedLocalStorage(ILocalStorage inner, InMemoryBrowserLocalStorage owner) : ILocalStorage
@@ -129,7 +173,7 @@ internal sealed class InMemoryBrowserLocalStorage
             return result;
         }
 
-        public Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys) => inner.ReadUnprotectedSnapshotAsync(keys);
+        public Task<ILocalStorageSnapshot> ReadSnapshotAsync(string[] keys) => inner.ReadSnapshotAsync(keys);
 
         public async Task SetAsync<TValue>(string key, TValue value)
         {

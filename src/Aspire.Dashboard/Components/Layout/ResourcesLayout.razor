@@ -355,7 +355,7 @@
                           role="button"
                           aria-expanded="@((!isCollapsed).ToString().ToLowerInvariant())"
                           aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTagGroupToggle)], groupName)"
-                          OnClick="@(() => ToggleCollapsedGroup(groupKey))">
+                          OnClick="@(() => ToggleCollapsedGroupAsync(groupKey))">
                 <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
             </FluentButton>
         </div>

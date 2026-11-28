@@ -281,7 +281,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
         context.Services.AddSingleton<LocalStorageLocks>();
         context.Services.AddScoped<ResourceTagStore>();
-        context.Services.AddScoped<ResourceOrderStore>();
+        context.Services.AddScoped<ResourceDisplayStore>();
         context.Services.AddScoped<MetricPinStore>();
         context.Services.AddScoped<ResourcePaneState>();
         context.Services.AddScoped<Aspire.Dashboard.Components.Layout.TerminalDockState>();
