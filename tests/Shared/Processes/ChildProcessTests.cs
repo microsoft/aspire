@@ -159,6 +159,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
                     new ChildProcessOptions
                     {
                         Lifetime = ChildProcessLifetime.OwnedTree,
+                        TemporaryStorage = TestTemporaryStorage.Create(),
                         CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo
                     });
                 await process.StartAsync(TestContext.Current.CancellationToken);
