@@ -3134,6 +3134,16 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -4771,6 +4781,16 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6204,6 +6224,16 @@ impl ContainerResource {
             args.insert("iconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withIconName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -8199,6 +8229,16 @@ impl DotnetToolResource {
             args.insert("iconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withIconName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -10205,6 +10245,16 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11199,6 +11249,16 @@ impl ExternalServiceResource {
             args.insert("iconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withIconName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -14874,6 +14934,16 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -16620,6 +16690,16 @@ impl ProjectResource {
             args.insert("iconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withIconName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -19100,6 +19180,16 @@ impl TestDatabaseResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -20809,6 +20899,16 @@ impl TestRedisResource {
             args.insert("iconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withIconName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -22742,6 +22842,16 @@ impl TestVaultResource {
             args.insert("iconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withIconName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Specifies a custom image to display for the resource in the dashboard.
+    pub fn with_resource_icon(&self, icon_path: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("iconPath".to_string(), serde_json::to_value(&icon_path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceIcon", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }

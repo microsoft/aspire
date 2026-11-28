@@ -3626,6 +3626,21 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -6347,6 +6362,23 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	return s
 }
 
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceIcon(iconPath string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.Err() != nil {
@@ -7863,6 +7895,21 @@ type CSharpAppResource interface {
 	//
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) CSharpAppResource
+
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) CSharpAppResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
@@ -10216,6 +10263,23 @@ func (s *cSharpAppResource) WithRequiredCommandValidation(command string, valida
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *cSharpAppResource) WithResourceIcon(iconPath string) CSharpAppResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -12744,6 +12808,21 @@ type ContainerRegistryResource interface {
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerRegistryResource
 
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) ContainerRegistryResource
+
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -14031,6 +14110,23 @@ func (s *containerRegistryResource) WithRequiredCommandValidation(command string
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *containerRegistryResource) WithResourceIcon(iconPath string) ContainerRegistryResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -15483,6 +15579,21 @@ type ContainerResource interface {
 	//
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerResource
+
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) ContainerResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
@@ -18197,6 +18308,23 @@ func (s *containerResource) WithRequiredCommandValidation(command string, valida
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *containerResource) WithResourceIcon(iconPath string) ContainerResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -21826,6 +21954,21 @@ type DotnetToolResource interface {
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) DotnetToolResource
 
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) DotnetToolResource
+
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -24216,6 +24359,23 @@ func (s *dotnetToolResource) WithRequiredCommandValidation(command string, valid
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *dotnetToolResource) WithResourceIcon(iconPath string) DotnetToolResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -27114,6 +27274,21 @@ type ExecutableResource interface {
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExecutableResource
 
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) ExecutableResource
+
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -29436,6 +29611,23 @@ func (s *executableResource) WithRequiredCommandValidation(command string, valid
 	return s
 }
 
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *executableResource) WithResourceIcon(iconPath string) ExecutableResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *executableResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource {
 	if s.Err() != nil {
@@ -30677,6 +30869,21 @@ type ExternalServiceResource interface {
 	//
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExternalServiceResource
+
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) ExternalServiceResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
@@ -31992,6 +32199,23 @@ func (s *externalServiceResource) WithRequiredCommandValidation(command string, 
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *externalServiceResource) WithResourceIcon(iconPath string) ExternalServiceResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -35392,6 +35616,21 @@ type ParameterResource interface {
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ParameterResource
 
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) ParameterResource
+
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -36804,6 +37043,23 @@ func (s *parameterResource) WithRequiredCommandValidation(command string, valida
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *parameterResource) WithResourceIcon(iconPath string) ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -39016,6 +39272,21 @@ type ProjectResource interface {
 	//
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ProjectResource
+
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) ProjectResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
@@ -41369,6 +41640,23 @@ func (s *projectResource) WithRequiredCommandValidation(command string, validati
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *projectResource) WithResourceIcon(iconPath string) ProjectResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -45392,6 +45680,21 @@ type TestDatabaseResource interface {
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestDatabaseResource
 
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) TestDatabaseResource
+
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -48110,6 +48413,23 @@ func (s *testDatabaseResource) WithRequiredCommandValidation(command string, val
 	return s
 }
 
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *testDatabaseResource) WithResourceIcon(iconPath string) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *testDatabaseResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource {
 	if s.Err() != nil {
@@ -50007,6 +50327,21 @@ type TestRedisResource interface {
 	//
 	// Returns: The resource builder.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestRedisResource
+
+	// WithResourceIcon specifies a custom image to display for the resource in the
+	// dashboard.
+	//
+	// The image is read during AppHost configuration and embedded in resource
+	// updates. Images retain their original colors and are not recolored by the
+	// dashboard. The maximum file size is 256 KiB. Calling this method or
+	// WithIconName replaces the previous icon configuration.
+	//
+	// Parameters:
+	//   - iconPath: A path to an SVG, PNG, JPEG, or ICO file, relative to the
+	//     AppHost directory or absolute.
+	//
+	// Returns: The resource builder.
+	WithResourceIcon(iconPath string) TestRedisResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
@@ -53168,6 +53503,23 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithResourceIcon specifies a custom image to display for the resource in the
+// dashboard.
+func (s *testRedisResource) WithResourceIcon(iconPath string) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["iconPath"] = serializeValue(iconPath)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceIcon", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
