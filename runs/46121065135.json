@@ -1,0 +1,169 @@
+{
+  "run_id": 46121065135,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/46121065135",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-28T08:04:10Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21945,
+    "title": "Fix ChildProcess completion-file race that stopped RemoteHost crash-loop recovery",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-childprocess-completion-race-21940",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21945",
+    "merged_at": "2026-11-28T07:24:22Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "9c76d2dd10240c6ed506a992f6cb26862b111040",
+    "failed_sha": "1f2f0595812667793824ec44266c7fe578fc7830",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "1f2f0595812667793824ec44266c7fe578fc7830",
+        "message": "Fix ChildProcess completion-file race that stopped RemoteHost crash-loop recovery (#21945) ## What failed `IntegrationHostProcessTests.CrashLoop_StopsTheSessionAfterThreeRestartAttempts` failed on `main` ([run 42493145199](https://github.com/microsoft/aspire/actions/runs/42493145199), Hosting.RemoteHost on windows-latest) in 889 ms. The \"failed after 3 restart attempts\" log line was missing because supervision stopped after the first crash, before it tried any restart: ``` Failed to clean up pro",
+        "html_url": "https://github.com/microsoft/aspire/commit/1f2f0595812667793824ec44266c7fe578fc7830",
+        "pull_request": {
+          "number": 21945,
+          "title": "Fix ChildProcess completion-file race that stopped RemoteHost crash-loop recovery",
+          "url": "https://github.com/microsoft/aspire/pull/21945",
+          "merged_at": "2026-11-28T07:24:22Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "id": 140905928063,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/46121065135/job/140905928063",
+      "classification": "main-repository-breakage",
+      "reason": "ChildProcessTests owned-tree test throws ArgumentException deterministically on every platform",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (ubuntu-latest)",
+      "id": 140905928408,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/46121065135/job/140905928408",
+      "classification": "main-repository-breakage",
+      "reason": "ChildProcessTests owned-tree test throws ArgumentException deterministically on every platform",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 140905942806,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/46121065135/job/140905942806",
+      "classification": "main-repository-breakage",
+      "reason": "ChildProcessTests owned-tree test throws ArgumentException deterministically on every platform",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 140905942916,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/46121065135/job/140905942916",
+      "classification": "main-repository-breakage",
+      "reason": "ChildProcessTests owned-tree test throws ArgumentException deterministically on every platform",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 140905943043,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/46121065135/job/140905943043",
+      "classification": "main-repository-breakage",
+      "reason": "ChildProcessTests owned-tree test throws ArgumentException deterministically on every platform",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "error": "System.ArgumentException : An owned tree requires either CompletionPath or TemporaryStorage. (Parameter 'options')",
+      "stack_trace": "   at Aspire.Shared.ChildProcess..ctor(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options, Boolean isWindows) in /_/src/Shared/ChildProcess.cs:line 64\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options) in /Users/runner/work/aspire/aspire/tests/Shared/Processes/ProcessTestFixture.cs:line 135\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ChildProcessOptions options) in /Users/runner/work/aspire/aspire/tests/Shared/Processes/ProcessTestFixture.cs:line 132\n   at Aspire.Shared.Tests.ChildProcessTests.<OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus>b__8_0(Int32 _) in /Users/runner/work/aspire/aspire/tests/Shared/Processes/ChildProcessTests.cs:line 158\n   at Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus() in /Users/runner/work/aspire/aspire/tests/Shared/Processes/ChildProcessTests.cs:line 154\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic ArgumentException in ChildProcess constructor: owned tree requires CompletionPath or TemporaryStorage",
+      "job_id": 140905942806,
+      "execution_id": "ef797683-927e-4fbe-a42e-dfd512749719",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "System.ArgumentException : An owned tree requires either CompletionPath or TemporaryStorage. (Parameter 'options')",
+      "stack_trace": "   at Aspire.Shared.ChildProcess..ctor(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options, Boolean isWindows) in /_/src/Shared/ChildProcess.cs:line 64\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options) in /home/runner/work/aspire/aspire/tests/Shared/Processes/ProcessTestFixture.cs:line 135\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ChildProcessOptions options) in /home/runner/work/aspire/aspire/tests/Shared/Processes/ProcessTestFixture.cs:line 132\n   at Aspire.Shared.Tests.ChildProcessTests.<OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus>b__8_0(Int32 _) in /home/runner/work/aspire/aspire/tests/Shared/Processes/ChildProcessTests.cs:line 158\n   at Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus() in /home/runner/work/aspire/aspire/tests/Shared/Processes/ChildProcessTests.cs:line 154\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic ArgumentException in ChildProcess constructor: owned tree requires CompletionPath or TemporaryStorage",
+      "job_id": 140905942916,
+      "execution_id": "affda202-3e87-4032-b665-b08160802b64",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.ArgumentException : An owned tree requires either CompletionPath or TemporaryStorage. (Parameter 'options')",
+      "stack_trace": "   at Aspire.Shared.ChildProcess..ctor(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options, Boolean isWindows) in /_/src/Shared/ChildProcess.cs:line 64\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ProcessTestFixture.cs:line 135\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ChildProcessOptions options) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ProcessTestFixture.cs:line 132\n   at Aspire.Shared.Tests.ChildProcessTests.<OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus>b__8_0(Int32 _) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 158\n   at Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus() in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 154\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic ArgumentException in ChildProcess constructor: owned tree requires CompletionPath or TemporaryStorage",
+      "job_id": 140905943043,
+      "execution_id": "95ffac70-3bbd-49f7-be67-e86ef6e86ace",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (ubuntu-latest)",
+      "error": "System.ArgumentException : An owned tree requires either CompletionPath or TemporaryStorage. (Parameter 'options')",
+      "stack_trace": "   at Aspire.Shared.ChildProcess..ctor(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options, Boolean isWindows) in /_/src/Shared/ChildProcess.cs:line 64\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options) in /home/runner/work/aspire/aspire/tests/Shared/Processes/ProcessTestFixture.cs:line 135\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ChildProcessOptions options) in /home/runner/work/aspire/aspire/tests/Shared/Processes/ProcessTestFixture.cs:line 132\n   at Aspire.Shared.Tests.ChildProcessTests.<OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus>b__8_0(Int32 _) in /home/runner/work/aspire/aspire/tests/Shared/Processes/ChildProcessTests.cs:line 158\n   at Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus() in /home/runner/work/aspire/aspire/tests/Shared/Processes/ChildProcessTests.cs:line 154\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic ArgumentException in ChildProcess constructor: owned tree requires CompletionPath or TemporaryStorage",
+      "job_id": 140905928408,
+      "execution_id": "295a7a7f-dd6e-4303-aded-41b15aeb5671",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "error": "System.ArgumentException : An owned tree requires either CompletionPath or TemporaryStorage. (Parameter 'options')",
+      "stack_trace": "   at Aspire.Shared.ChildProcess..ctor(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options, Boolean isWindows) in /_/src/Shared/ChildProcess.cs:line 64\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ILogger logger, ChildProcessOptions options) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ProcessTestFixture.cs:line 135\n   at Aspire.Shared.Tests.ProcessTestFixture.CreateProcess(ProcessStartInfo startInfo, ChildProcessOptions options) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ProcessTestFixture.cs:line 132\n   at Aspire.Shared.Tests.ChildProcessTests.<OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus>b__8_0(Int32 _) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 158\n   at Aspire.Shared.Tests.ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus() in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 154\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic ArgumentException in ChildProcess constructor: owned tree requires CompletionPath or TemporaryStorage",
+      "job_id": 140905928063,
+      "execution_id": "75ce9cc9-0bec-4217-926a-ce7170b77274",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "childprocess-ownedtree-requires-completionpath"
+  ]
+}

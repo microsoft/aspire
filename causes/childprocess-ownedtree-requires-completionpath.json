@@ -1,0 +1,15 @@
+{
+  "id": "childprocess-ownedtree-requires-completionpath",
+  "type": "main-repository-breakage",
+  "title": "ChildProcessTests.OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus throws ArgumentException on all platforms",
+  "error_pattern": "System.ArgumentException : An owned tree requires either CompletionPath or TemporaryStorage. (Parameter 'options')",
+  "occurrences": [
+    {
+      "run_id": 46121065135,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/46121065135",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest), Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (ubuntu-latest), Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest), Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest), Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "observed_at": "2026-11-28T08:04:10Z",
+      "pr_number": 0
+    }
+  ]
+}
