@@ -36,6 +36,7 @@ Aspire.Hosting.Docker.Resources.ComposeNodes/Network.ingress(context: Aspire.Hos
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.internal(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network) -> boolean
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.labels(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network) -> Aspire.Hosting/Dict<string,string>
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.name(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network) -> string
+Aspire.Hosting.Docker.Resources.ComposeNodes/Network.networkName(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network) -> string
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.setAttachable(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network, value: boolean) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.setDriver(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network, value: string) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.setDriverOpts(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network, value: Aspire.Hosting/Dict<string,string>) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network
@@ -44,6 +45,7 @@ Aspire.Hosting.Docker.Resources.ComposeNodes/Network.setIngress(context: Aspire.
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.setInternal(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network, value: boolean) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.setLabels(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network, value: Aspire.Hosting/Dict<string,string>) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network
 Aspire.Hosting.Docker.Resources.ComposeNodes/Network.setName(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network, value: string) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network
+Aspire.Hosting.Docker.Resources.ComposeNodes/Network.setNetworkName(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network, value: string) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Network
 Aspire.Hosting.Docker.Resources.ComposeNodes/Secret.external(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Secret) -> boolean
 Aspire.Hosting.Docker.Resources.ComposeNodes/Secret.file(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Secret) -> string
 Aspire.Hosting.Docker.Resources.ComposeNodes/Secret.labels(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Secret) -> Aspire.Hosting/Dict<string,string>
