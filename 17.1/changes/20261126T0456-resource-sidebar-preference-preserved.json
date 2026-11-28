@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Opening the full-page resource list no longer resets a collapsed sidebar. The preference is saved in browser local storage and restored on the same origin.",
-  "docsPrs": [],
+  "docsPrs": [
+    2260
+  ],
   "docsRequired": false,
   "emoji": "📌",
   "firstMergedAt": "2026-11-26T04:56:40Z",

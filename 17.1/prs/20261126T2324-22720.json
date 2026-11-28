@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Standard timestamps in dashboard tooltips",
+  "mergedAt": "2026-11-26T23:24:58Z",
+  "number": 22720,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "included",
+  "title": "Use standard timestamp formatting in dashboard tooltips"
+}

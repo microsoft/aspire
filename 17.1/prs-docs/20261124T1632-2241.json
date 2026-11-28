@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "No matching changelog entry (unrelated site/dependency change)",
+  "mergedAt": "2026-11-24T16:32:49Z",
+  "number": 2241,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "excluded",
+  "title": "Bump the nuget-selected group with 8 updates"
+}

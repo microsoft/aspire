@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The \"Welcome to the new Aspire dashboard\" banner no longer interrupts users when they open the dashboard. Existing notifications such as the unsecured-endpoint warning are unchanged.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔕",
+  "firstMergedAt": "2026-11-26T23:25:37Z",
+  "lastMergedAt": "2026-11-26T23:25:37Z",
+  "name": "Dashboard welcome banner removed",
+  "owner": "JamesNK",
+  "prs": [
+    22725
+  ]
+}

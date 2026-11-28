@@ -1,0 +1,9 @@
+{
+  "author": "danie-guenter-memx",
+  "comment": "External network names in Docker Compose",
+  "mergedAt": "2026-11-27T05:55:11Z",
+  "number": 22732,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "included",
+  "title": "Adjusted the docker network node to add ExternalName member"
+}

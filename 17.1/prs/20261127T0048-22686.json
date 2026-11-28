@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "E2E test-only change",
+  "mergedAt": "2026-11-27T00:48:58Z",
+  "number": 22686,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "excluded",
+  "title": "Disable product telemetry in E2E tests"
+}

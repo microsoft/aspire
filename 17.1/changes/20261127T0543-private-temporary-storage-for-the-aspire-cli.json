@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire CLI now keeps its temporary files in a private storage area under the CLI home directory instead of shared system temp locations.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🗄️",
+  "firstMergedAt": "2026-11-27T05:43:59Z",
+  "lastMergedAt": "2026-11-27T05:43:59Z",
+  "name": "Private temporary storage for the Aspire CLI",
+  "owner": "mitchdenny",
+  "prs": [
+    22688
+  ]
+}

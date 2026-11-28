@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Private temporary storage for the Aspire CLI",
+  "mergedAt": "2026-11-27T05:43:59Z",
+  "number": 22688,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "included",
+  "title": "Use a private temporary storage area for the Aspire CLI"
+}

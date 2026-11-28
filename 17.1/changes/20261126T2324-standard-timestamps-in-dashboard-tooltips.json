@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Relative-time tooltips for resource start/stop ages, health check runs, recordings, and capture pauses now use the dashboard's standard timestamp format with seconds, following the configured locale and 12/24-hour preference.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-11-26T23:24:58Z",
+  "lastMergedAt": "2026-11-26T23:24:58Z",
+  "name": "Standard timestamps in dashboard tooltips",
+  "owner": "JamesNK",
+  "prs": [
+    22720
+  ]
+}

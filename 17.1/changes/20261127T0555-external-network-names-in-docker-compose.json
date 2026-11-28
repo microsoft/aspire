@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@danie-guenter-memx"
+  ],
+  "description": "Docker Compose network definitions can now set an external network name, emitting a `name` entry so deployments can link to a pre-existing Docker network, for example through an environment variable.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌉",
+  "firstMergedAt": "2026-11-27T05:55:11Z",
+  "lastMergedAt": "2026-11-27T05:55:11Z",
+  "name": "External network names in Docker Compose",
+  "owner": "mitchdenny",
+  "prs": [
+    22732
+  ]
+}

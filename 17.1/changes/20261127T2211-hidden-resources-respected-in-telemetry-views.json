@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Metrics, Structured Logs, and Traces for All resources now honor the Show hidden resources setting and refresh when it changes, while mixed traces involving a visible resource stay intact.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🙈",
+  "firstMergedAt": "2026-11-27T22:11:51Z",
+  "lastMergedAt": "2026-11-27T22:11:51Z",
+  "name": "Hidden resources respected in telemetry views",
+  "owner": "JamesNK",
+  "prs": [
+    22656
+  ]
+}

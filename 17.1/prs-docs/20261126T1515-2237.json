@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #22533",
+  "mergedAt": "2026-11-26T15:15:17Z",
+  "number": 2237,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document telemetry API limit validation"
+}

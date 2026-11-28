@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test infrastructure change",
+  "mergedAt": "2026-11-27T00:12:38Z",
+  "number": 21811,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "excluded",
+  "title": "[automated] test: Replace the stapler retry JavaScript harness with C#"
+}

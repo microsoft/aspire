@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only stabilization",
+  "mergedAt": "2026-11-26T23:30:49Z",
+  "number": 22730,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "excluded",
+  "title": "[automated] Stabilize the dashboard activity localization test"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dropdowns, filter option counts, toolbar search width, interaction dialog buttons, and terminal size controls are now aligned and sized consistently across dashboard pages.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎚️",
+  "firstMergedAt": "2026-11-27T08:25:33Z",
+  "lastMergedAt": "2026-11-27T08:25:33Z",
+  "name": "Consistent dashboard filter and terminal controls",
+  "owner": "JamesNK",
+  "prs": [
+    22723
+  ]
+}

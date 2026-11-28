@@ -1,0 +1,9 @@
+{
+  "author": "4dwaffle",
+  "comment": "Faster dashboard initialization",
+  "mergedAt": "2026-11-27T22:18:14Z",
+  "number": 22568,
+  "runDate": "2026-11-28T00:10:00Z",
+  "status": "included",
+  "title": "Parallelize independent browser storage reads during Dashboard initialization"
+}
