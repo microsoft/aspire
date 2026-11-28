@@ -62,8 +62,10 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult [ExposeProperties]
@@ -206,6 +208,11 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation # A URL tha
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalOptions # Options for configuring a terminal session.
   Columns: number # Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 132.
   Rows: number # Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 50.
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestResult # Describes an individual result published by a framework-neutral resource collector.
+  Duration?: timespan # Gets the observed duration, or null when the framework does not provide one.
+  Message?: string # Gets an optional framework diagnostic, such as a failure or skip reason.
+  Name: string # Gets the framework-provided name of the result.
+  Outcome: enum:Aspire.Hosting.ApplicationModel.TestOutcome # Gets the observed outcome of the test.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapshot # Resource snapshot data exposed to polyglot command state callbacks.
   ExitCode?: number # The exit code of the resource.
   HealthStatus?: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # The current health status for the resource.
@@ -356,6 +363,7 @@ enum:Aspire.Hosting.ApplicationModel.ImagePullPolicy = Default | Always | Missin
 enum:Aspire.Hosting.ApplicationModel.ProbeType = Startup | Readiness | Liveness
 enum:Aspire.Hosting.ApplicationModel.ResourceCommandState = Enabled | Disabled | Hidden
 enum:Aspire.Hosting.ApplicationModel.ResourceCommandVisibility = None | UI | Api
+enum:Aspire.Hosting.ApplicationModel.TestOutcome = Failed | Passed | Skipped | Inconclusive | Error | TimedOut | Cancelled
 enum:Aspire.Hosting.ApplicationModel.UrlDisplayLocation = SummaryAndDetails | DetailsOnly
 enum:Aspire.Hosting.ApplicationModel.WaitBehavior = WaitOnResourceUnavailable | StopOnResourceUnavailable
 enum:Aspire.Hosting.DistributedApplicationOperation = Run | Publish
@@ -530,6 +538,7 @@ Aspire.Hosting.ApplicationModel/InitializeResourceEvent.resource(context: Aspire
 Aspire.Hosting.ApplicationModel/InitializeResourceEvent.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, value?: string, cancellationToken?: cancellationToken) -> void
 Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> string
+Aspire.Hosting.ApplicationModel/publishResult(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext, result: Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestResult) -> void
 Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.isEmpty(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder) -> boolean
 Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext, validationMessage: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult
@@ -544,6 +553,10 @@ Aspire.Hosting.ApplicationModel/ResourceReadyEvent.resource(context: Aspire.Host
 Aspire.Hosting.ApplicationModel/ResourceReadyEvent.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/ResourceStoppedEvent.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/ResourceStoppedEvent.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.ApplicationModel/ResourceTestingContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext) -> cancellationToken
+Aspire.Hosting.ApplicationModel/ResourceTestingContext.outputPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext) -> string
+Aspire.Hosting.ApplicationModel/ResourceTestingContext.resourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext) -> string
+Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext
 Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.log(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade
 Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
@@ -552,8 +565,10 @@ Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.add(context: Aspire.Hosting/A
 Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, url: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression, displayText?: string) -> void
 Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting.ApplicationModel/set(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor, name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> void
+Aspire.Hosting.ApplicationModel/TestingContext.outputPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext) -> string
 Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapshot
 Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.ApplicationModel/waitForCompletionAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext, cancellationToken?: cancellationToken) -> boolean
 Aspire.Hosting.ApplicationModel/warning(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade, message: string) -> void
 Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext) -> cancellationToken
 Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
@@ -888,6 +903,8 @@ Aspire.Hosting/withSerializedAnnotation(annotationId: string, json: string) -> A
 Aspire.Hosting/withSessionLifetime() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withTags(tags: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withTerminal(configure?: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withTesting(callback?: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withTestingTimeout(timeout: timespan) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withToolIgnoreExistingFeeds() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolIgnoreFailedSources() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolPackage(packageId: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource

@@ -24,6 +24,14 @@ Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.SharePointToolResource
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.WebSearchToolResource
 
 # DTO Types
+Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureFunctionToolOptions # Options that define an Azure Function tool and its Azure Storage queue bindings.
+  Description: string # Gets or initializes the description used by the agent to decide when to call the function.
+  FunctionName: string # Gets or initializes the name of the Azure Function.
+  InputQueueEndpoint: string # Gets or initializes the Azure Storage Queue endpoint for the input binding.
+  InputQueueName: string # Gets or initializes the queue name for the input binding.
+  OutputQueueEndpoint: string # Gets or initializes the Azure Storage Queue endpoint for the output binding.
+  OutputQueueName: string # Gets or initializes the queue name for the output binding.
+  ParametersJson: string # Gets or initializes the JSON schema defining the function parameters as a JSON string.
 Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel # Describes a model that can be deployed to Microsoft Foundry.
   Format: string # The format or provider of the model (e.g., OpenAI, Microsoft, xAi, Deepseek).
   Name: string # The name of the model.
@@ -277,7 +285,7 @@ FoundryModels.XAI.GrokCodeFast1: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.F
 
 # Capabilities
 Aspire.Hosting.Foundry/addAISearchTool(name: string, indexName?: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureAISearchToolResource
-Aspire.Hosting.Foundry/addAzureFunctionTool(name: string, functionName: string, description: string, parametersJson: string, inputQueueEndpoint: string, inputQueueName: string, outputQueueEndpoint: string, outputQueueName: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureFunctionToolResource
+Aspire.Hosting.Foundry/addAzureFunctionTool(name: string, options: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureFunctionToolOptions) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureFunctionToolResource
 Aspire.Hosting.Foundry/addBingGroundingConnection(name: string, bingResourceId: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.BingGroundingConnectionResource
 Aspire.Hosting.Foundry/addBingGroundingConnectionFromParameter(name: string, bingResourceId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.BingGroundingConnectionResource
 Aspire.Hosting.Foundry/addBingGroundingTool(name: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.BingGroundingToolResource
