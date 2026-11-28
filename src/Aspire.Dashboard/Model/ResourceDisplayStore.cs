@@ -96,32 +96,43 @@ public sealed class ResourceDisplayStore
     }
 
     /// <summary>
-    /// Collapses or expands the group with the specified key in the specified grouping.
+    /// Collapses the children of the resource with the specified <see cref="ResourceViewModel.PersistentKey"/> if they're
+    /// expanded, otherwise expands them.
     /// </summary>
     /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
-    public async Task<bool> SetGroupCollapsedAsync(string grouping, string key, bool collapsed)
+    public async Task<bool> ToggleResourceCollapsedAsync(string persistentKey)
     {
-        // Like SetResourcesCollapsedAsync, the cached value isn't checked first so a change made while a previous one
-        // is saving isn't dropped.
+        // The new state is worked out from the stored value under the save lock instead of the cached value. The cache
+        // doesn't include a toggle that's still saving, so a second click would repeat that toggle instead of undoing it.
+        var result = await GetCollapsedState().ResourceNames.UpdateAsync(stored =>
+        {
+            SetCollapsed(stored, [persistentKey], !stored.Contains(persistentKey, StringComparers.ResourceName), StringComparers.ResourceName);
+            return SettingUpdateResult.Changed;
+        }).ConfigureAwait(false);
+        return result != SettingUpdateResult.NotSaved;
+    }
+
+    /// <summary>
+    /// Collapses the group with the specified key in the specified grouping if it's expanded, otherwise expands it.
+    /// </summary>
+    /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
+    public async Task<bool> ToggleGroupCollapsedAsync(string grouping, string key)
+    {
+        // Like ToggleResourceCollapsedAsync, the new state is worked out from the stored value under the save lock.
         var result = await GetCollapsedState().Groups.UpdateAsync(groups =>
         {
             if (!groups.TryGetValue(grouping, out var keys))
             {
-                if (!collapsed)
-                {
-                    return SettingUpdateResult.Unchanged;
-                }
-
                 groups.Add(grouping, keys = []);
             }
 
-            var changed = SetCollapsed(keys, [key], collapsed, StringComparer.OrdinalIgnoreCase);
+            SetCollapsed(keys, [key], !keys.Contains(key, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             if (keys.Count == 0)
             {
                 groups.Remove(grouping);
             }
 
-            return changed ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged;
+            return SettingUpdateResult.Changed;
         }).ConfigureAwait(false);
         return result != SettingUpdateResult.NotSaved;
     }

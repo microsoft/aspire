@@ -339,10 +339,10 @@ public sealed class ResourceDisplayStoreTests
 
         Assert.True(await store.SetResourcesCollapsedAsync(["api_0", "worker_0"], collapsed: true));
         Assert.True(await store.SetResourcesCollapsedAsync(["api_0"], collapsed: false));
-        Assert.True(await store.SetGroupCollapsedAsync("section", "telemetry", collapsed: true));
-        Assert.True(await store.SetGroupCollapsedAsync("Tags", "", collapsed: true));
-        Assert.True(await store.SetGroupCollapsedAsync("State", "Running", collapsed: true));
-        Assert.True(await store.SetGroupCollapsedAsync("State", "Running", collapsed: false));
+        Assert.True(await store.ToggleGroupCollapsedAsync("section", "telemetry"));
+        Assert.True(await store.ToggleGroupCollapsedAsync("Tags", ""));
+        Assert.True(await store.ToggleGroupCollapsedAsync("State", "Running"));
+        Assert.True(await store.ToggleGroupCollapsedAsync("State", "Running"));
 
         Assert.Equal(6, changedCount);
         Assert.Equal(["worker_0"], (await _browser.Storage.GetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceNamesKey("ClientApp"))).Value);
@@ -380,12 +380,47 @@ public sealed class ResourceDisplayStoreTests
 
         Assert.False(await store.SetResourcesCollapsedAsync(["api_0"], collapsed: true));
         Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False(await store.ToggleResourceCollapsedAsync("api_0"));
+        Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False(await store.ToggleGroupCollapsedAsync("Tags", "web"));
+        Assert.False(store.IsGroupCollapsed("Tags", "web"));
     }
 
     [Fact]
     public async Task Collapsed_ChangeWhileThePreviousChangeIsSavingIsNotDropped()
     {
         var store = await CreateLoadedStoreAsync();
+
+        await RunWhileFirstWriteIsPendingAsync(
+            () => store.SetResourcesCollapsedAsync(["api_0"], collapsed: true),
+            () => store.SetResourcesCollapsedAsync(["api_0"], collapsed: false));
+
+        Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False((await CreateLoadedStoreAsync()).IsResourceCollapsed("api_0"));
+    }
+
+    [Fact]
+    public async Task Collapsed_ToggleWhileThePreviousToggleIsSavingUndoesIt()
+    {
+        var store = await CreateLoadedStoreAsync();
+
+        await RunWhileFirstWriteIsPendingAsync(
+            () => store.ToggleResourceCollapsedAsync("api_0"),
+            () => store.ToggleResourceCollapsedAsync("api_0"));
+        await RunWhileFirstWriteIsPendingAsync(
+            () => store.ToggleGroupCollapsedAsync("Tags", "web"),
+            () => store.ToggleGroupCollapsedAsync("Tags", "web"));
+
+        Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False(store.IsGroupCollapsed("Tags", "web"));
+        var reloaded = await CreateLoadedStoreAsync();
+        Assert.False(reloaded.IsResourceCollapsed("api_0"));
+        Assert.False(reloaded.IsGroupCollapsed("Tags", "web"));
+    }
+
+    // Starts the second change while the first change's write is still pending, then lets the first write finish.
+    private async Task RunWhileFirstWriteIsPendingAsync(Func<Task<bool>> first, Func<Task<bool>> second)
+    {
         var firstWriteStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseFirstWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var writeCount = 0;
@@ -400,28 +435,13 @@ public sealed class ResourceDisplayStoreTests
             return releaseFirstWrite.Task;
         };
 
-        var collapseResource = store.SetResourcesCollapsedAsync(["api_0"], collapsed: true);
+        var firstTask = first();
         await firstWriteStarted.Task.DefaultTimeout();
-        var expandResource = store.SetResourcesCollapsedAsync(["api_0"], collapsed: false);
+        var secondTask = second();
         releaseFirstWrite.SetResult();
-        Assert.True(await collapseResource.DefaultTimeout());
-        Assert.True(await expandResource.DefaultTimeout());
-
-        writeCount = 0;
-        firstWriteStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        releaseFirstWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var collapseGroup = store.SetGroupCollapsedAsync("Tags", "web", collapsed: true);
-        await firstWriteStarted.Task.DefaultTimeout();
-        var expandGroup = store.SetGroupCollapsedAsync("Tags", "web", collapsed: false);
-        releaseFirstWrite.SetResult();
-        Assert.True(await collapseGroup.DefaultTimeout());
-        Assert.True(await expandGroup.DefaultTimeout());
-
-        Assert.False(store.IsResourceCollapsed("api_0"));
-        Assert.False(store.IsGroupCollapsed("Tags", "web"));
-        var reloaded = await CreateLoadedStoreAsync();
-        Assert.False(reloaded.IsResourceCollapsed("api_0"));
-        Assert.False(reloaded.IsGroupCollapsed("Tags", "web"));
+        Assert.True(await firstTask.DefaultTimeout());
+        Assert.True(await secondTask.DefaultTimeout());
+        _browser.OnAfterWriteAsync = null;
     }
 
     private static ResourceViewModel CreateResource(string name, string resourceType = "Project", int? order = null, string? parent = null, string? displayName = null)

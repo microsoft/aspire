@@ -1560,7 +1560,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private async Task ToggleCollapsedGroupAsync(string paneKey)
     {
         var (grouping, key) = SplitPaneKey(paneKey);
-        if (!await DisplayStore.SetGroupCollapsedAsync(grouping, key, !DisplayStore.IsGroupCollapsed(grouping, key)))
+        if (!await DisplayStore.ToggleGroupCollapsedAsync(grouping, key))
         {
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
         }
@@ -1740,7 +1740,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        if (!await DisplayStore.SetResourcesCollapsedAsync([resource.PersistentKey], !DisplayStore.IsResourceCollapsed(resource.PersistentKey)))
+        if (!await DisplayStore.ToggleResourceCollapsedAsync(resource.PersistentKey))
         {
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
         }

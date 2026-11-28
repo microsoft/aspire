@@ -775,6 +775,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
             if (collapsedParents.Count > 0)
             {
+                // The legacy page doesn't report failed saves. It's kept working but isn't being improved.
                 await DisplayStore.SetResourcesCollapsedAsync(collapsedParents, collapsed: false);
             }
 
@@ -874,6 +875,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // View model data is recreated if data updates, so the collapsed state is kept in the display store.
         viewModel.IsCollapsed = !viewModel.IsCollapsed;
 
+        // The legacy page doesn't report failed saves. It's kept working but isn't being improved.
         await DisplayStore.SetResourcesCollapsedAsync([viewModel.Resource.PersistentKey], viewModel.IsCollapsed);
         await _dataGrid.SafeRefreshDataAsync();
         UpdateMenuButtons();
@@ -886,6 +888,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             .Where(r => _resourceByName.Values.Any(nested => nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName) == r.Name))
             .ToList();
 
+        // The legacy page doesn't report failed saves. It's kept working but isn't being improved.
         await DisplayStore.SetResourcesCollapsedAsync(resourcesWithChildren.Select(r => r.PersistentKey), collapsed: !HasCollapsedResources());
         await _dataGrid.SafeRefreshDataAsync();
         UpdateMenuButtons();

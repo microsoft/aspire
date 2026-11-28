@@ -19,6 +19,7 @@ using Humanizer;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -83,6 +84,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     public required ResourceTagStore TagStore { get; init; }
     [Inject]
     public required ResourceDisplayStore DisplayStore { get; init; }
+    [Inject]
+    public required Microsoft.FluentUI.AspNetCore.Components.INotificationService ToastService { get; init; }
+    [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
 
     public string BasePath => GetRouteViewKind() == ResourceViewKind.Graph ? DashboardUrls.GraphBasePath : DashboardUrls.ParametersBasePath;
     public string SessionStorageKey => GetRouteViewKind() == ResourceViewKind.Graph ? BrowserStorageKeys.GraphPageState : BrowserStorageKeys.ParametersPageState;
@@ -858,7 +863,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
             if (collapsedParents.Count > 0)
             {
-                await DisplayStore.SetResourcesCollapsedAsync(collapsedParents, collapsed: false);
+                await ShowSaveFailedIfNotSavedAsync(await DisplayStore.SetResourcesCollapsedAsync(collapsedParents, collapsed: false));
             }
 
             var resourceViewKind = GetVisibleViewKindForSelectedResource(PageViewModel.SelectedViewKind, resource);
@@ -954,12 +959,19 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task OnToggleCollapse(ResourceGridViewModel viewModel)
     {
-        // View model data is recreated if data updates, so the collapsed state is kept in the display store.
-        viewModel.IsCollapsed = !viewModel.IsCollapsed;
-
-        await DisplayStore.SetResourcesCollapsedAsync([viewModel.Resource.PersistentKey], viewModel.IsCollapsed);
+        // View model data is recreated if data updates, so the collapsed state is kept in the display store and the
+        // grid reads it from there when it refreshes.
+        await ShowSaveFailedIfNotSavedAsync(await DisplayStore.ToggleResourceCollapsedAsync(viewModel.Resource.PersistentKey));
         await _dataGrid.SafeRefreshDataAsync();
         UpdateMenuButtons();
+    }
+
+    private async Task ShowSaveFailedIfNotSavedAsync(bool saved)
+    {
+        if (!saved)
+        {
+            await ToastService.ShowWarningToastAsync(LayoutLoc[nameof(Dashboard.Resources.Layout.BrowserStorageSaveFailed)]);
+        }
     }
 
     private async Task OnToggleCollapseAll()
@@ -969,7 +981,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             .Where(r => _resourceByName.Values.Any(nested => nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName) == r.Name))
             .ToList();
 
-        await DisplayStore.SetResourcesCollapsedAsync(resourcesWithChildren.Select(r => r.PersistentKey), collapsed: !HasCollapsedResources());
+        await ShowSaveFailedIfNotSavedAsync(await DisplayStore.SetResourcesCollapsedAsync(resourcesWithChildren.Select(r => r.PersistentKey), collapsed: !HasCollapsedResources()));
         await _dataGrid.SafeRefreshDataAsync();
         UpdateMenuButtons();
     }
