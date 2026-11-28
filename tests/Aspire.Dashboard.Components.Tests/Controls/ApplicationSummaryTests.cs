@@ -592,27 +592,29 @@ public class ApplicationSummaryTests : DashboardTestContext
         var outlet = Render<SectionOutlet>(builder => builder.Add(p => p.SectionName, ResourcesLayout.HeaderActionsSectionName));
         var preferences = Services.GetRequiredService<DashboardViewPreferences>();
 
-        outlet.WaitForAssertion(() =>
+        // Keep header DOM reads on the dispatcher so a telemetry rerender cannot
+        // leave bUnit's node cache holding a replaced click handler.
+        await outlet.WaitForAssertionAsync(() =>
         {
             Assert.Equal("Layout", outlet.Find(".icon-toggle-group").GetAttribute("aria-label"));
             Assert.Equal(["Summary", "Graph"], outlet.FindAll(".icon-toggle").Select(button => button.GetAttribute("aria-label")));
             Assert.Equal(missingParameters ? 1 : 0, outlet.FindAll(".missing-parameters-link").Count);
             Assert.Equal("true", outlet.Find("[aria-label='Summary']").GetAttribute("aria-pressed"));
+            if (missingParameters)
+            {
+                Assert.Contains("parameter", outlet.Find(".missing-parameters-link").GetAttribute("href"));
+            }
         });
-        if (missingParameters)
-        {
-            Assert.Contains("parameter", outlet.Find(".missing-parameters-link").GetAttribute("href"));
-        }
 
         await outlet.InvokeAsync(() => outlet.Find("[aria-label='Graph']").ClickAsync());
         cut.WaitForAssertion(() => Assert.False(cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
         Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
-        Assert.Equal("true", outlet.Find("[aria-label='Graph']").GetAttribute("aria-pressed"));
+        await outlet.InvokeAsync(() => Assert.Equal("true", outlet.Find("[aria-label='Graph']").GetAttribute("aria-pressed")));
 
         await outlet.InvokeAsync(() => outlet.Find("[aria-label='Summary']").ClickAsync());
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home-hero")));
         Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
-        Assert.Equal("true", outlet.Find("[aria-label='Summary']").GetAttribute("aria-pressed"));
+        await outlet.InvokeAsync(() => Assert.Equal("true", outlet.Find("[aria-label='Summary']").GetAttribute("aria-pressed")));
     }
 
     [Fact]
