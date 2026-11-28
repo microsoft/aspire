@@ -1551,17 +1551,30 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsTagVisible(string tag) =>
         !_filter.ResourceTagsToVisibility.TryGetValue(tag, out var visible) || visible;
 
-    private bool IsGroupCollapsed(string key) => DisplayStore.IsGroupCollapsed(key);
-
-    private async Task ToggleCollapsedGroupAsync(string key)
+    private bool IsGroupCollapsed(string paneKey)
     {
-        if (!await DisplayStore.SetGroupCollapsedAsync(key, !IsGroupCollapsed(key)))
+        var (grouping, key) = SplitPaneKey(paneKey);
+        return DisplayStore.IsGroupCollapsed(grouping, key);
+    }
+
+    private async Task ToggleCollapsedGroupAsync(string paneKey)
+    {
+        var (grouping, key) = SplitPaneKey(paneKey);
+        if (!await DisplayStore.SetGroupCollapsedAsync(grouping, key, !DisplayStore.IsGroupCollapsed(grouping, key)))
         {
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
         }
     }
 
     private string GetGroupKey(ResourceGroup group) => $"{_grouping}:{group.Value}";
+
+    // Pane keys are "{grouping}:{value}", for example "Tags:frontend", "Tags:" for the untagged group, or
+    // "section:telemetry". Values can contain ':', but grouping names and "section" can't, so split at the first one.
+    private static (string Grouping, string Key) SplitPaneKey(string paneKey)
+    {
+        var separator = paneKey.IndexOf(':');
+        return (paneKey[..separator], paneKey[(separator + 1)..]);
+    }
 
     private void OnTagsChanged() => _ = InvokeAsync(() =>
     {

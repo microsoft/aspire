@@ -319,15 +319,15 @@ public sealed class ResourceDisplayStoreTests
     public async Task Collapsed_LoadsWithOrderInOneSnapshotAndKeepsExistingValues()
     {
         await _browser.Storage.SetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceNamesKey("ClientApp"), ["api_0"]);
-        await _browser.Storage.SetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceGroupsKey("ClientApp"), ["Tags:web"]);
+        await _browser.Storage.SetAsync<Dictionary<string, List<string>>>(BrowserStorageKeys.CollapsedResourceGroupsKey("ClientApp"), new() { ["Tags"] = ["web"] });
 
         var store = await CreateLoadedStoreAsync();
 
         Assert.Equal(1, _browser.SnapshotReadCount);
         Assert.True(store.IsResourceCollapsed("api_0"));
         Assert.False(store.IsResourceCollapsed("worker_0"));
-        Assert.True(store.IsGroupCollapsed("tags:WEB"));
-        Assert.False(store.IsGroupCollapsed("None:web"));
+        Assert.True(store.IsGroupCollapsed("Tags", "WEB"));
+        Assert.False(store.IsGroupCollapsed("State", "web"));
     }
 
     [Fact]
@@ -339,20 +339,37 @@ public sealed class ResourceDisplayStoreTests
 
         Assert.True(await store.SetResourcesCollapsedAsync(["api_0", "worker_0"], collapsed: true));
         Assert.True(await store.SetResourcesCollapsedAsync(["api_0"], collapsed: false));
-        Assert.True(await store.SetGroupCollapsedAsync("section:telemetry", collapsed: true));
+        Assert.True(await store.SetGroupCollapsedAsync("section", "telemetry", collapsed: true));
+        Assert.True(await store.SetGroupCollapsedAsync("Tags", "", collapsed: true));
+        Assert.True(await store.SetGroupCollapsedAsync("State", "Running", collapsed: true));
+        Assert.True(await store.SetGroupCollapsedAsync("State", "Running", collapsed: false));
 
-        Assert.Equal(3, changedCount);
+        Assert.Equal(6, changedCount);
         Assert.Equal(["worker_0"], (await _browser.Storage.GetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceNamesKey("ClientApp"))).Value);
-        Assert.Equal(["section:telemetry"], (await _browser.Storage.GetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceGroupsKey("ClientApp"))).Value);
+        var storedGroups = (await _browser.Storage.GetAsync<Dictionary<string, List<string>>>(BrowserStorageKeys.CollapsedResourceGroupsKey("ClientApp"))).Value;
+        Assert.NotNull(storedGroups);
+        Assert.Collection(storedGroups.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+            pair =>
+            {
+                Assert.Equal("Tags", pair.Key);
+                Assert.Equal([""], pair.Value);
+            },
+            pair =>
+            {
+                Assert.Equal("section", pair.Key);
+                Assert.Equal(["telemetry"], pair.Value);
+            });
 
         var reloaded = await CreateLoadedStoreAsync();
         Assert.False(reloaded.IsResourceCollapsed("api_0"));
         Assert.True(reloaded.IsResourceCollapsed("worker_0"));
-        Assert.True(reloaded.IsGroupCollapsed("section:telemetry"));
+        Assert.True(reloaded.IsGroupCollapsed("section", "telemetry"));
+        Assert.True(reloaded.IsGroupCollapsed("Tags", ""));
+        Assert.False(reloaded.IsGroupCollapsed("State", "Running"));
 
         var otherApplication = await CreateLoadedStoreAsync("OtherApp");
         Assert.False(otherApplication.IsResourceCollapsed("worker_0"));
-        Assert.False(otherApplication.IsGroupCollapsed("section:telemetry"));
+        Assert.False(otherApplication.IsGroupCollapsed("section", "telemetry"));
     }
 
     [Fact]

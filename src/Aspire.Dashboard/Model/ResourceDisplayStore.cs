@@ -69,52 +69,86 @@ public sealed class ResourceDisplayStore
         GetCollapsedState().ResourceNames.Read(names => names.Contains(persistentKey, StringComparers.ResourceName));
 
     /// <summary>
-    /// Gets whether the resource pane group or section with the specified key is collapsed.
+    /// Gets whether the group with the specified key is collapsed in the specified grouping. Resource pane sections use
+    /// their own grouping.
     /// </summary>
-    public bool IsGroupCollapsed(string groupKey) =>
-        GetCollapsedState().Groups.Read(groups => groups.Contains(groupKey, StringComparer.OrdinalIgnoreCase));
+    public bool IsGroupCollapsed(string grouping, string key) =>
+        GetCollapsedState().Groups.Read(groups => IsGroupCollapsed(groups, grouping, key));
 
     /// <summary>
     /// Collapses or expands the children of the resources with the specified <see cref="ResourceViewModel.PersistentKey"/> values.
     /// </summary>
     /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
-    public Task<bool> SetResourcesCollapsedAsync(IEnumerable<string> persistentKeys, bool collapsed) =>
-        SetCollapsedAsync(GetCollapsedState().ResourceNames, persistentKeys.ToList(), collapsed, StringComparers.ResourceName);
-
-    /// <summary>
-    /// Collapses or expands the resource pane group or section with the specified key.
-    /// </summary>
-    /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
-    public Task<bool> SetGroupCollapsedAsync(string groupKey, bool collapsed) =>
-        SetCollapsedAsync(GetCollapsedState().Groups, [groupKey], collapsed, StringComparer.OrdinalIgnoreCase);
-
-    private static async Task<bool> SetCollapsedAsync(LocalStorageSetting<List<string>> setting, List<string> keys, bool collapsed, StringComparer comparer)
+    public async Task<bool> SetResourcesCollapsedAsync(IEnumerable<string> persistentKeys, bool collapsed)
     {
+        var keys = persistentKeys.ToList();
+        var setting = GetCollapsedState().ResourceNames;
         // Skip the storage round trips when the value is already what's requested.
-        if (setting.Read(stored => keys.All(key => stored.Contains(key, comparer) == collapsed)))
+        if (setting.Read(stored => keys.All(key => stored.Contains(key, StringComparers.ResourceName) == collapsed)))
         {
             return true;
         }
 
         var result = await setting.UpdateAsync(stored =>
+            SetCollapsed(stored, keys, collapsed, StringComparers.ResourceName) ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged).ConfigureAwait(false);
+        return result != SettingUpdateResult.NotSaved;
+    }
+
+    /// <summary>
+    /// Collapses or expands the group with the specified key in the specified grouping.
+    /// </summary>
+    /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
+    public async Task<bool> SetGroupCollapsedAsync(string grouping, string key, bool collapsed)
+    {
+        var setting = GetCollapsedState().Groups;
+        if (setting.Read(groups => IsGroupCollapsed(groups, grouping, key) == collapsed))
         {
-            var changed = false;
-            foreach (var key in keys)
+            return true;
+        }
+
+        var result = await setting.UpdateAsync(groups =>
+        {
+            if (!groups.TryGetValue(grouping, out var keys))
             {
-                if (collapsed && !stored.Contains(key, comparer))
+                if (!collapsed)
                 {
-                    stored.Add(key);
-                    changed = true;
+                    return SettingUpdateResult.Unchanged;
                 }
-                else if (!collapsed)
-                {
-                    changed |= stored.RemoveAll(item => comparer.Equals(item, key)) > 0;
-                }
+
+                groups.Add(grouping, keys = []);
+            }
+
+            var changed = SetCollapsed(keys, [key], collapsed, StringComparer.OrdinalIgnoreCase);
+            if (keys.Count == 0)
+            {
+                groups.Remove(grouping);
             }
 
             return changed ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged;
         }).ConfigureAwait(false);
         return result != SettingUpdateResult.NotSaved;
+    }
+
+    private static bool IsGroupCollapsed(Dictionary<string, List<string>> groups, string grouping, string key) =>
+        groups.TryGetValue(grouping, out var keys) && keys.Contains(key, StringComparer.OrdinalIgnoreCase);
+
+    private static bool SetCollapsed(List<string> stored, List<string> keys, bool collapsed, StringComparer comparer)
+    {
+        var changed = false;
+        foreach (var key in keys)
+        {
+            if (collapsed && !stored.Contains(key, comparer))
+            {
+                stored.Add(key);
+                changed = true;
+            }
+            else if (!collapsed)
+            {
+                changed |= stored.RemoveAll(item => comparer.Equals(item, key)) > 0;
+            }
+        }
+
+        return changed;
     }
 
     private CollapsedState GetCollapsedState()
@@ -128,19 +162,29 @@ public sealed class ResourceDisplayStore
             {
                 _collapsedState = new CollapsedState(
                     applicationName,
-                    CreateCollapsedSetting(BrowserStorageKeys.CollapsedResourceNamesKey(applicationName), StringComparers.ResourceName),
-                    CreateCollapsedSetting(BrowserStorageKeys.CollapsedResourceGroupsKey(applicationName), StringComparer.OrdinalIgnoreCase));
+                    new(_localStorage, _locks, BrowserStorageKeys.CollapsedResourceNamesKey(applicationName), _logger, protect: true,
+                        stored => NormalizeCollapsedKeys(stored, StringComparers.ResourceName),
+                        (x, y) => CollapsedKeysEqual(x, y, StringComparers.ResourceName),
+                        OnChanged),
+                    new(_localStorage, _locks, BrowserStorageKeys.CollapsedResourceGroupsKey(applicationName), _logger, protect: true,
+                        NormalizeCollapsedGroups,
+                        (x, y) => x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var keys) && CollapsedKeysEqual(pair.Value, keys, StringComparer.OrdinalIgnoreCase)),
+                        OnChanged));
             }
 
             return _collapsedState;
         }
     }
 
-    private LocalStorageSetting<List<string>> CreateCollapsedSetting(string key, StringComparer comparer) =>
-        new(_localStorage, _locks, key, _logger, protect: true,
-            stored => stored?.OfType<string>().Distinct(comparer).ToList() ?? [],
-            (x, y) => x.Count == y.Count && x.ToHashSet(comparer).SetEquals(y),
-            OnChanged);
+    private static List<string> NormalizeCollapsedKeys(List<string>? stored, StringComparer comparer) =>
+        stored?.OfType<string>().Distinct(comparer).ToList() ?? [];
+
+    private static bool CollapsedKeysEqual(List<string> x, List<string> y, StringComparer comparer) =>
+        x.Count == y.Count && x.ToHashSet(comparer).SetEquals(y);
+
+    private static Dictionary<string, List<string>> NormalizeCollapsedGroups(Dictionary<string, List<string>>? stored) =>
+        stored?.Select(pair => KeyValuePair.Create(pair.Key, NormalizeCollapsedKeys(pair.Value, StringComparer.OrdinalIgnoreCase)))
+            .Where(pair => pair.Value.Count > 0).ToDictionary(StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
 
     private void OnChanged() => Changed?.Invoke();
 
@@ -374,7 +418,11 @@ public sealed class ResourceDisplayStore
         }
     }
 
-    private sealed record CollapsedState(string ApplicationName, LocalStorageSetting<List<string>> ResourceNames, LocalStorageSetting<List<string>> Groups);
+    // Groups maps a grouping to its collapsed keys, like the group order. For example:
+    //   { "Tags": ["frontend", ""], "State": ["Running"], "section": ["telemetry"] }
+    // An empty key is the untagged group.
+    private sealed record CollapsedState(string ApplicationName, LocalStorageSetting<List<string>> ResourceNames,
+        LocalStorageSetting<Dictionary<string, List<string>>> Groups);
 }
 
 /// <summary>
