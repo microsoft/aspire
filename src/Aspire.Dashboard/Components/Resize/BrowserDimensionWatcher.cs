@@ -8,6 +8,8 @@ namespace Aspire.Dashboard.Components.Resize;
 
 public class BrowserDimensionWatcher : ComponentBase, IDisposable
 {
+    private DotNetObjectReference<BrowserDimensionWatcher>? _dotNetRef;
+
     [Parameter]
     public ViewportInformation? ViewportInformation { get; set; }
 
@@ -26,14 +28,13 @@ public class BrowserDimensionWatcher : ComponentBase, IDisposable
         {
             try
             {
-                var viewportSize = await JS.InvokeAsync<ViewportSize>("window.getWindowDimensions");
+                _dotNetRef = DotNetObjectReference.Create(this);
+                var viewportSize = await JS.InvokeAsync<ViewportSize>("window.initializeWindowDimensions", _dotNetRef);
                 DimensionManager.InvokeOnViewportSizeChanged(viewportSize);
                 ViewportInformation = ViewportInformation.GetViewportInformation(viewportSize);
                 DimensionManager.InvokeOnViewportInformationChanged(ViewportInformation);
 
                 await ViewportInformationChanged.InvokeAsync(ViewportInformation);
-
-                await JS.InvokeVoidAsync("window.listenToWindowResize", DotNetObjectReference.Create(this));
             }
             catch (JSDisconnectedException)
             {
@@ -52,7 +53,8 @@ public class BrowserDimensionWatcher : ComponentBase, IDisposable
 
         var newViewportInformation = ViewportInformation.GetViewportInformation(viewportSize);
 
-        if (newViewportInformation.IsDesktop != ViewportInformation!.IsDesktop
+        if (ViewportInformation is null
+            || newViewportInformation.IsDesktop != ViewportInformation.IsDesktop
             || newViewportInformation.IsUltraLowHeight != ViewportInformation.IsUltraLowHeight
             || newViewportInformation.IsUltraLowWidth != ViewportInformation.IsUltraLowWidth)
         {
@@ -68,6 +70,7 @@ public class BrowserDimensionWatcher : ComponentBase, IDisposable
 
     public void Dispose()
     {
+        _dotNetRef?.Dispose();
     }
 }
 

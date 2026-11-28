@@ -657,6 +657,11 @@ window.listenToWindowResize = function(dotnetHelper) {
     window.addEventListener('resize', throttledResizeListener);
 }
 
+window.initializeWindowDimensions = function (dotnetHelper) {
+    window.listenToWindowResize(dotnetHelper);
+    return window.getWindowDimensions();
+};
+
 window.setCellTextClickHandler = function (id) {
     var cellTextElement = document.getElementById(id);
     if (!cellTextElement) {

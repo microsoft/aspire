@@ -19,6 +19,7 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _hasRendered;
     private bool _isDisposing;
 
     private bool _runSelectionChanged;
@@ -31,6 +32,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
     private IJSObjectReference? _jsModule;
+    private Task<IJSObjectReference>? _jsModuleTask;
     private IJSObjectReference? _keyboardHandlers;
     private DotNetObjectReference<ShortcutManager>? _shortcutManagerReference;
     private DotNetObjectReference<MainLayout>? _layoutReference;
@@ -133,7 +135,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         // Note that this event could be raised from a settings dialog opened in a different browser window.
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
         {
-            if (_jsModule is not null)
+            if (_hasRendered && !_isDisposing)
             {
                 var newValue = ThemeManager.SelectedTheme!;
                 await ApplyThemeAsync(newValue);
@@ -291,17 +293,88 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                Options.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured;
     }
 
+    private static ThemeMode GetThemeMode(string theme) => theme switch
+    {
+        ThemeManager.ThemeSettingDark => ThemeMode.Dark,
+        ThemeManager.ThemeSettingLight => ThemeMode.Light,
+        _ => ThemeMode.System
+    };
+
     private async Task ApplyThemeAsync(string theme)
     {
-        var mode = theme switch
-        {
-            ThemeManager.ThemeSettingDark => ThemeMode.Dark,
-            ThemeManager.ThemeSettingLight => ThemeMode.Light,
-            _ => ThemeMode.System
-        };
+        var setFluentThemeTask = FluentThemeService.SetThemeAsync(GetThemeMode(theme));
+        var moduleTask = GetThemeModuleAsync();
 
-        await FluentThemeService.SetThemeAsync(mode);
-        ThemeManager.EffectiveTheme = await _jsModule!.InvokeAsync<string>("updateTheme", theme);
+        await Task.WhenAll(setFluentThemeTask, moduleTask);
+        if (!_isDisposing && moduleTask.Result is { } module)
+        {
+            ThemeManager.EffectiveTheme = await module.InvokeAsync<string>("updateTheme", theme);
+        }
+    }
+
+    private async Task<IJSObjectReference?> GetThemeModuleAsync()
+    {
+        if (_jsModule is not null)
+        {
+            return _jsModule;
+        }
+
+        if (_isDisposing)
+        {
+            return null;
+        }
+
+        var moduleTask = _jsModuleTask ??= JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-theme.js"]}").AsTask();
+        try
+        {
+            var module = await moduleTask;
+            if (_isDisposing)
+            {
+                if (ReferenceEquals(_jsModuleTask, moduleTask))
+                {
+                    _jsModuleTask = null;
+                    await JSInteropHelpers.SafeDisposeAsync(module);
+                }
+                return null;
+            }
+
+            return _jsModule = module;
+        }
+        catch
+        {
+            if (ReferenceEquals(_jsModuleTask, moduleTask))
+            {
+                _jsModuleTask = null;
+            }
+            throw;
+        }
+    }
+
+    private async Task InitializeThemeAsync()
+    {
+        await ThemeManager.EnsureInitializedAsync();
+
+        // app-theme-bootstrap.js and app-theme.js already applied the initial theme and refreshed the
+        // theme cookie before Blazor booted, and ThemeManager.EnsureInitializedAsync() populated
+        // EffectiveTheme from the browser. Only Fluent's theme service needs the initial mode here;
+        // app-theme.js is imported lazily if the user later changes the theme in Settings.
+        await FluentThemeService.SetThemeAsync(GetThemeMode(ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem));
+    }
+
+    private async Task RegisterGlobalKeydownListenerAsync()
+    {
+        _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
+        _layoutReference = DotNetObjectReference.Create(this);
+        var keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
+        if (_isDisposing)
+        {
+            await JS.InvokeVoidAsync("window.unregisterGlobalKeydownListener", keyboardHandlers);
+            await JSInteropHelpers.SafeDisposeAsync(keyboardHandlers);
+            return;
+        }
+
+        _keyboardHandlers = keyboardHandlers;
+        ShortcutManager.AddGlobalKeydownListener(this);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -315,13 +388,10 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         {
             if (firstRender)
             {
-                _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-theme.js"]}");
-                await ThemeManager.EnsureInitializedAsync();
-                await ApplyThemeAsync(ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem);
-                _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
-                _layoutReference = DotNetObjectReference.Create(this);
-                _keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
-                ShortcutManager.AddGlobalKeydownListener(this);
+                _hasRendered = true;
+                await Task.WhenAll(
+                    InitializeThemeAsync(),
+                    RegisterGlobalKeydownListenerAsync());
             }
 
             if (_pendingReturnFocusElementId is { } elementId && _openPageDialog is null)

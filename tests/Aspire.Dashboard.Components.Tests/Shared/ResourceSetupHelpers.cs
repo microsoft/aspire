@@ -63,23 +63,14 @@ internal static class ResourceSetupHelpers
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Tabs.ObserveTabsChanged", _ => true).SetVoidResult();
         FluentUISetupHelpers.SetupFluentButton(context);
         var module = context.JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
+        module.Setup<bool>("initializeResourcesLayout", _ => true).SetResult(false);
+        module.SetupVoid("disposeResourcesLayout", _ => true).SetVoidResult();
         module.SetupVoid("registerPaneResizer", _ => true).SetVoidResult();
         module.SetupVoid("unregisterPaneResizer", _ => true).SetVoidResult();
-        module.Setup<bool>("usesCommandSelectionModifier", _ => true).SetResult(false);
-        module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
-        module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
-        module.SetupVoid("registerResourceContextMenu", _ => true).SetVoidResult();
-        module.SetupVoid("unregisterResourceContextMenu", _ => true).SetVoidResult();
-        module.SetupVoid("registerPaneActivityVisibility", _ => true).SetVoidResult();
-        module.SetupVoid("unregisterPaneActivityVisibility", _ => true).SetVoidResult();
         module.SetupVoid("setResourcePickerOpen", _ => true).SetVoidResult();
-        module.SetupVoid("unregisterResourcePicker", _ => true).SetVoidResult();
         module.SetupVoid("restoreResourceContextMenuFocus", _ => true).SetVoidResult();
         module.SetupVoid("startPaneSelectionReveal", _ => true).SetVoidResult();
         module.SetupVoid("focusPaneSelectionReveal", _ => true).SetVoidResult();
-        module.SetupVoid("cancelPaneSelectionReveal", _ => true).SetVoidResult();
-        module.SetupVoid("registerTabOverflow", _ => true).SetVoidResult();
-        module.SetupVoid("unregisterTabOverflow", _ => true).SetVoidResult();
     }
 
     public static void SetupResourceDetails(BunitContext context)

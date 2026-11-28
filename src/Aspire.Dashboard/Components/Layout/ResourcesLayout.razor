@@ -175,7 +175,7 @@
 
     <div class="resources-layout @(showCollapsedPane ? "pane-collapsed" : string.Empty) @(_isPaneFullCanvas ? "pane-full-canvas" : string.Empty) @(_animatePaneTransition ? "pane-motion-enabled" : string.Empty) @(_isPaneSelectionReveal ? "pane-selection-reveal" : string.Empty) @(!isDesktop && _isDrawerOpen ? "drawer-open" : string.Empty)"
          data-pane-location="@_lastLocation"
-         data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
+         data-pane-interactions-ready="@(_isLayoutInitialized ? "true" : "false")"
          data-home-pending="@(_homeNavigation is not null ? "true" : null)"
          data-list-home="@(IsResourceListShownAsHome ? "true" : null)"
          data-escape-home="@(CanEscapeGoHome ? "true" : null)"

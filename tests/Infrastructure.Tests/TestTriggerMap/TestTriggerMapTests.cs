@@ -575,6 +575,7 @@ public sealed class TestTriggerMapTests
     [InlineData("src/Aspire.Dashboard/Components/Controls/TerminalTitle.razor.js")]
     [InlineData("src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js")]
     [InlineData("src/Aspire.Dashboard/Components/Layout/ResourcesLayout.razor.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourcesLayoutInit.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalWindow.test.mjs")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalTitle.test.mjs")]

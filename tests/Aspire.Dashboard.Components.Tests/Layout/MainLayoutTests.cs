@@ -1186,6 +1186,134 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(initialUri, navigationManager.Uri);
     }
 
+    [Fact]
+    public async Task OnAfterRender_OverlapsThemeInitAndKeydownRegistrationAndLazilyImportsThemeModule()
+    {
+        var themeSettingsTcs = new TaskCompletionSource<Aspire.Dashboard.Model.ThemeSettings>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var themeResolver = new DeferredThemeResolver(themeSettingsTcs.Task);
+        SetupMainLayoutServices(themeResolver: themeResolver);
+
+        var initialThemeModeSetTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ =>
+        {
+            initialThemeModeSetTcs.TrySetResult();
+            return true;
+        }).SetVoidResult();
+        var themeModule = JSInterop.SetupModule("/js/app-theme.js");
+        themeModule.Setup<string>("updateTheme", _ => true).SetResult(ThemeManager.ThemeSettingLight);
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        // Keyboard listener registration starts without waiting for theme resolution to finish.
+        Assert.Single(JSInterop.Invocations["window.registerGlobalKeydownListener"]);
+        Assert.Empty(JSInterop.Invocations["Blazor.theme.setThemeMode"]);
+        Assert.Empty(JSInterop.Invocations["updateTheme"]);
+        Assert.Equal(0, JSInterop.Invocations["import"].Count(i => i.Arguments is ["/js/app-theme.js"]));
+
+        await cut.InvokeAsync(() => themeSettingsTcs.SetResult(new Aspire.Dashboard.Model.ThemeSettings(ThemeManager.ThemeSettingDark, ThemeManager.ThemeSettingDark)));
+        await initialThemeModeSetTcs.Task.DefaultTimeout();
+
+        Assert.Single(JSInterop.Invocations["Blazor.theme.setThemeMode"]);
+        // MainLayout skips its own duplicate initial import of app-theme.js and updateTheme
+        // (in production BrowserThemeResolver still imports app-theme.js inside EnsureInitializedAsync).
+        Assert.Empty(JSInterop.Invocations["updateTheme"]);
+        Assert.Equal(0, JSInterop.Invocations["import"].Count(i => i.Arguments is ["/js/app-theme.js"]));
+
+        var themeManager = Services.GetRequiredService<ThemeManager>();
+        Assert.Equal(ThemeManager.ThemeSettingDark, themeManager.EffectiveTheme);
+
+        // Changing the theme lazily imports app-theme.js and invokes updateTheme.
+        await cut.InvokeAsync(() => themeManager.RaiseThemeChangedAsync(ThemeManager.ThemeSettingLight));
+
+        Assert.Single(JSInterop.Invocations["import"], i => i.Arguments is ["/js/app-theme.js"]);
+        var updateInvocation = Assert.Single(JSInterop.Invocations["updateTheme"]);
+        Assert.Equal(ThemeManager.ThemeSettingLight, Assert.Single(updateInvocation.Arguments));
+        Assert.Equal(2, JSInterop.Invocations["Blazor.theme.setThemeMode"].Count);
+        Assert.Equal(ThemeManager.ThemeSettingLight, themeManager.EffectiveTheme);
+    }
+
+    [Fact]
+    public async Task Dispose_WhileKeydownRegistrationInFlight_UnregistersAndSkipsGlobalListener()
+    {
+        var registerTcs = new TaskCompletionSource<IJSObjectReference>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var registerStartedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Services.AddSingleton<IJSRuntime>(new InterceptingJSRuntime(JSInterop.JSRuntime, (identifier, _) =>
+        {
+            if (identifier == "window.registerGlobalKeydownListener")
+            {
+                registerStartedTcs.TrySetResult();
+                return new ValueTask<IJSObjectReference>(registerTcs.Task);
+            }
+
+            return null;
+        }));
+        SetupMainLayoutServices();
+        var unregisterTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        JSInterop.SetupVoid("window.unregisterGlobalKeydownListener", _ =>
+        {
+            unregisterTcs.TrySetResult();
+            return true;
+        }).SetVoidResult();
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        await registerStartedTcs.Task.DefaultTimeout();
+
+        await cut.Instance.DisposeAsync();
+
+        var fakeHandlers = new TrackingJSObjectReference();
+        registerTcs.SetResult(fakeHandlers);
+        await unregisterTcs.Task.DefaultTimeout();
+        await fakeHandlers.DisposedTask.DefaultTimeout();
+
+        var unregisterInvocation = Assert.Single(JSInterop.Invocations["window.unregisterGlobalKeydownListener"]);
+        Assert.Same(fakeHandlers, Assert.Single(unregisterInvocation.Arguments));
+        Assert.True(fakeHandlers.IsDisposed);
+        Assert.False(Services.GetRequiredService<ShortcutManager>().IsShortcutAvailable(AspireKeyboardShortcut.Help));
+    }
+
+    [Fact]
+    public async Task Dispose_WhileLazyThemeImportInFlight_DisposesImportedModuleWithoutUpdatingTheme()
+    {
+        var importTcs = new TaskCompletionSource<IJSObjectReference>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var importStartedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Services.AddSingleton<IJSRuntime>(new InterceptingJSRuntime(JSInterop.JSRuntime, (identifier, args) =>
+        {
+            if (identifier == "import" && args is ["/js/app-theme.js"])
+            {
+                importStartedTcs.TrySetResult();
+                return new ValueTask<IJSObjectReference>(importTcs.Task);
+            }
+
+            return null;
+        }));
+        SetupMainLayoutServices();
+        JSInterop.SetupVoid("window.unregisterGlobalKeydownListener", _ => true).SetVoidResult();
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        var themeManager = Services.GetRequiredService<ThemeManager>();
+        var raiseTask = cut.InvokeAsync(() => themeManager.RaiseThemeChangedAsync(ThemeManager.ThemeSettingLight));
+        await importStartedTcs.Task.DefaultTimeout();
+
+        await cut.Instance.DisposeAsync();
+
+        var fakeThemeModule = new TrackingJSObjectReference();
+        importTcs.SetResult(fakeThemeModule);
+        await raiseTask.DefaultTimeout();
+
+        Assert.True(fakeThemeModule.IsDisposed);
+        Assert.Empty(fakeThemeModule.InvokedIdentifiers);
+    }
+
     private void SetupMainLayoutServices(
         TestLocalStorage? localStorage = null,
         Action<DashboardOptions>? configureOptions = null,
@@ -1193,14 +1321,17 @@ public partial class MainLayoutTests : DashboardTestContext
         BrowserTimeProvider? browserTimeProvider = null,
         IDashboardRunStore? dashboardRunStore = null,
         ISessionStorage? sessionStorage = null,
-        TestDashboardClient? dashboardClient = null)
+        TestDashboardClient? dashboardClient = null,
+        IThemeResolver? themeResolver = null)
     {
+        var themeManager = themeResolver is not null ? new ThemeManager(themeResolver) : null;
         FluentUISetupHelpers.AddCommonDashboardServices(
             this,
             localStorage: localStorage,
             browserTimeProvider: browserTimeProvider,
             dashboardRunStore: dashboardRunStore,
-            sessionStorage: sessionStorage);
+            sessionStorage: sessionStorage,
+            themeManager: themeManager);
 
         if (dialogService is not null)
         {
@@ -1208,7 +1339,7 @@ public partial class MainLayoutTests : DashboardTestContext
         }
 
         Services.AddOptions();
-        Services.AddSingleton<IThemeResolver, TestThemeResolver>();
+        Services.AddSingleton<IThemeResolver>(themeResolver ?? new TestThemeResolver());
         dashboardClient ??= new TestDashboardClient();
         Services.AddSingleton<IDashboardClient>(dashboardClient);
         Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient);
@@ -1271,5 +1402,10 @@ public partial class MainLayoutTests : DashboardTestContext
         }
 
         public sealed record Invocation(string Identifier, object?[] Arguments);
+    }
+
+    private sealed class DeferredThemeResolver(Task<Aspire.Dashboard.Model.ThemeSettings> settingsTask) : IThemeResolver
+    {
+        public Task<Aspire.Dashboard.Model.ThemeSettings> GetThemeSettingsAsync(CancellationToken cancellationToken) => settingsTask;
     }
 }
