@@ -94,11 +94,12 @@ public partial class ResourcesTests : DashboardTestContext
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [resource], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var cut = Render<Components.Pages.Resources>(p => p.AddCascadingValue(viewport));
-        var column = Assert.Single(cut.FindComponents<AspirePropertyColumn<ResourceGridViewModel, string>>(),
+        var column = Assert.Single(cut.FindComponents<AspireTemplateColumn<ResourceGridViewModel>>(),
             column => column.Instance.Title == "Type").Instance;
         var row = new ResourceGridViewModel { Resource = resource };
+        var cell = Render(column.ChildContent!(row));
 
-        Assert.Equal(expectedType, column.Property!.Compile()(row));
+        Assert.Equal(expectedType, cell.Markup.Trim());
         Assert.Equal(expectedType, column.TooltipText!(row));
     }
 
@@ -261,6 +262,46 @@ public partial class ResourcesTests : DashboardTestContext
             result.Items,
             item => Assert.Equal("basketcache", item.Resource.Name),
             item => Assert.Equal("apigateway", item.Resource.Name));
+    }
+
+    [Theory]
+    [InlineData(DataGridSortDirection.Ascending)]
+    [InlineData(DataGridSortDirection.Descending)]
+    public async Task Resources_TypeColumnSorts(DataGridSortDirection direction)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("cache", "Container", "Running", null),
+            CreateResource("api", "Project", "Running", null),
+            CreateResource("db", "Container", "Running", null),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        var grid = cut.FindComponent<AspireFluentDataGrid<ResourceGridViewModel>>();
+        var typeColumn = Assert.Single(
+            cut.FindComponents<AspireTemplateColumn<ResourceGridViewModel>>(),
+            column => string.Equals(column.Instance.Title, "Type", StringComparison.Ordinal)).Instance;
+
+        await cut.InvokeAsync(() => grid.Instance.SortByColumnAsync(typeColumn, direction));
+
+        // Re-rendering must keep the column's in-memory sort. A Fluent UI GridSort substituted during
+        // parameter updates is rejected by EnumerableGridItemsProvider and disconnects the circuit.
+        cut.Render();
+
+        var ascending = direction == DataGridSortDirection.Ascending;
+        Assert.Equal(ascending, Assert.Single(grid.Instance.SortColumns).Ascending);
+
+        var request = new GridItemsProviderRequest<ResourceGridViewModel>
+        {
+            SortColumns = [new(typeColumn, Ascending: ascending)],
+        };
+        var result = await cut.InvokeAsync(() => cut.Instance.GetData(request).AsTask());
+
+        // Sorted by type, then by name.
+        string[] expected = ascending ? ["cache", "db", "api"] : ["api", "db", "cache"];
+        Assert.Equal(expected, result.Items.Select(item => item.Resource.Name));
     }
 
     [Fact]
