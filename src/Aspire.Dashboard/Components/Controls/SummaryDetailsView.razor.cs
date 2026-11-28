@@ -113,10 +113,10 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
                     _ => [BrowserStorageKeys.SplitterSizeKey(viewKey, Orientation)]
                 };
 
-                var snapshot = await LocalStore.ReadUnprotectedSnapshotAsync(keys);
+                var snapshot = await LocalStore.ReadSnapshotAsync(keys);
                 if (rememberOrientation)
                 {
-                    var orientationResult = snapshot.Get<Orientation>(orientationKey);
+                    var orientationResult = snapshot.GetUnprotected<Orientation>(orientationKey);
                     if (orientationResult.Success)
                     {
                         Orientation = orientationResult.Value;
@@ -127,7 +127,7 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
                 {
                     var sizeKey = BrowserStorageKeys.SplitterSizeKey(viewKey, Orientation);
                     var panel1FractionResult = keys.Contains(sizeKey, StringComparer.Ordinal)
-                        ? snapshot.Get<float>(sizeKey)
+                        ? snapshot.GetUnprotected<float>(sizeKey)
                         : await LocalStore.GetUnprotectedAsync<float>(sizeKey);
                     if (panel1FractionResult.Success)
                     {

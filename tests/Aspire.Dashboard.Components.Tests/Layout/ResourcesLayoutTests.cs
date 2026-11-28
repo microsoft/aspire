@@ -346,6 +346,52 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task CollapsedPane_PickerRemembersGroupCollapseAndExpansion()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project),
+                ModelTestHelpers.CreateResource("cache", resourceType: KnownResourceTypes.Container)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Services.GetRequiredService<ILocalStorage>();
+        await storage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneCollapsed, true);
+        await storage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, nameof(ResourcePaneGrouping.ResourceType));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceOverviewUrl("cache"));
+
+        const string toggle = ".resource-picker-popover [data-resource-group-key='ResourceType:Project'] .resource-row-toggle";
+        const string api = ".resource-picker-popover .resource-row-link[aria-label='api']";
+        const string cache = ".resource-picker-popover .resource-row-link[aria-label='cache']";
+
+        var cut = await RenderPickerAsync();
+        Assert.Single(cut.FindAll(api));
+        await cut.Find(toggle).ClickAsync(new MouseEventArgs());
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
+
+        var restored = await RenderPickerAsync();
+        Assert.Equal("false", restored.Find(toggle).GetAttribute("aria-expanded"));
+        Assert.Empty(restored.FindAll(api));
+        Assert.Single(restored.FindAll(cache));
+
+        await restored.Find(toggle).ClickAsync(new MouseEventArgs());
+        await DisposeOnRendererDispatcherAsync(DisposeComponentsAsync);
+
+        var expanded = await RenderPickerAsync();
+        Assert.Equal("true", expanded.Find(toggle).GetAttribute("aria-expanded"));
+        Assert.Single(expanded.FindAll(api));
+
+        async Task<IRenderedComponent<ResourcesLayout>> RenderPickerAsync()
+        {
+            var layout = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+            layout.WaitForAssertion(() => Assert.True(layout.Instance.IsLoaded));
+            await layout.Find("#resourcePanePickerButton").ClickAsync(new MouseEventArgs());
+            return layout;
+        }
+    }
+
+    [Fact]
     public async Task SelectedRow_ClickedAgain_KeepsSelection()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

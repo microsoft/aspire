@@ -157,13 +157,20 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         try
         {
+            // The layout's own local storage settings share one browser call. The dismissed keys are only needed
+            // when there is an unsecured endpoint message to show.
+            var unsecuredEndpointsMessage = GetUnsecuredEndpointsMessage();
+            var storedSettingsTask = LocalStorage.ReadSnapshotAsync(unsecuredEndpointsMessage is null
+                ? [BrowserStorageKeys.TimeFormat]
+                : [BrowserStorageKeys.TimeFormat, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey]);
+
             // Run independent browser storage and JS interop reads concurrently so Blazor Server
             // pipelines them in a single round-trip wave instead of awaiting each sequentially.
             await Task.WhenAll(
                 ViewPreferences.EnsureLoadedAsync(),
                 RestoreSelectedRunAsync(),
-                InitializeBrowserInfoAsync(),
-                DisplayStartupMessagesAsync());
+                InitializeBrowserInfoAsync(storedSettingsTask),
+                DisplayStartupMessagesAsync(unsecuredEndpointsMessage, storedSettingsTask));
         }
         catch (JSDisconnectedException ex)
         {
@@ -175,28 +182,24 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private async Task DisplayStartupMessagesAsync()
+    private async Task DisplayStartupMessagesAsync(string? unsecuredEndpointsMessage, Task<ILocalStorageSnapshot> storedSettingsTask)
     {
-        var unsecuredEndpointsMessage = GetUnsecuredEndpointsMessage();
         if (unsecuredEndpointsMessage is null)
         {
             return;
         }
 
         // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
-        var dismissedSnapshot = await LocalStorage.ReadUnprotectedSnapshotAsync([
-            BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey,
-            BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey
-        ]);
-        if (!IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey) &&
-            !IsDismissed(dismissedSnapshot, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey))
+        var storedSettings = await storedSettingsTask;
+        if (!IsDismissed(storedSettings, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey) &&
+            !IsDismissed(storedSettings, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey))
         {
             await ShowUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
         }
 
-        static bool IsDismissed(IUnprotectedLocalStorageSnapshot snapshot, string key)
+        static bool IsDismissed(ILocalStorageSnapshot snapshot, string key)
         {
-            var result = snapshot.Get<bool>(key);
+            var result = snapshot.GetUnprotected<bool>(key);
             return result.Success && result.Value;
         }
     }
@@ -229,17 +232,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private async Task InitializeBrowserInfoAsync()
+    private async Task InitializeBrowserInfoAsync(Task<ILocalStorageSnapshot> storedSettingsTask)
     {
-        var browserInfoTask = JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo").AsTask();
-        var timeFormatTask = LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
-
-        var result = await browserInfoTask;
+        var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
         TimeProvider.SetBrowserTimeZone(result.TimeZone);
         TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
         TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
 
-        var timeFormatResult = await timeFormatTask;
+        // Apply the stored time format after the browser's so the user's configured choice wins.
+        var timeFormatResult = (await storedSettingsTask).Get<TimeFormat>(BrowserStorageKeys.TimeFormat);
         if (timeFormatResult.Success)
         {
             TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);

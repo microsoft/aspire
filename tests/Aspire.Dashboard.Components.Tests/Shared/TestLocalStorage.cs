@@ -30,18 +30,19 @@ public sealed class TestLocalStorage : ILocalStorage
     public int SnapshotReadCount => _snapshotReadCount;
     private int _snapshotReadCount;
 
-    public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
+    public async Task<ILocalStorageSnapshot> ReadSnapshotAsync(string[] keys)
     {
         Interlocked.Increment(ref _snapshotReadCount);
-        // Match the browser snapshot: every key is requested before any of those reads completes.
-        var reads = keys.Select(key => (key, task: GetUnprotectedAsync<object>(key))).ToArray();
-        var values = new Dictionary<string, StorageResult<object>>(StringComparer.Ordinal);
-        foreach (var (key, task) in reads)
+
+        // Run the read hooks once for the whole snapshot, like the single browser call: every key is requested
+        // before any of those reads completes. Values are decoded when read from the snapshot because the
+        // requested type and protection are only known then.
+        if (OnBeforeGetUnprotectedAsync is { } beforeCallback)
         {
-            values[key] = await task;
+            await Task.WhenAll(keys.Select(beforeCallback));
         }
 
-        return new UnprotectedSnapshot(values);
+        return new Snapshot(this, keys.ToHashSet(StringComparer.Ordinal));
     }
 
     public async Task<StorageResult<T>> GetAsync<T>(string key)
@@ -51,6 +52,11 @@ public sealed class TestLocalStorage : ILocalStorage
             await beforeCallback(key);
         }
 
+        return ReadProtected<T>(key);
+    }
+
+    private StorageResult<T> ReadProtected<T>(string key)
+    {
         if (IsReadFailed?.Invoke(key) == true)
         {
             return new StorageResult<T>(success: false, value: default) { ReadFailed = true };
@@ -83,6 +89,11 @@ public sealed class TestLocalStorage : ILocalStorage
             await beforeCallback(key);
         }
 
+        return ReadUnprotected<T>(key);
+    }
+
+    private StorageResult<T> ReadUnprotected<T>(string key)
+    {
         if (IsUnprotectedReadFailed?.Invoke(key) == true)
         {
             return new StorageResult<T>(success: false, value: default) { ReadFailed = true };
@@ -137,20 +148,26 @@ public sealed class TestLocalStorage : ILocalStorage
         return Task.CompletedTask;
     }
 
-    private sealed class UnprotectedSnapshot(Dictionary<string, StorageResult<object>> values) : IUnprotectedLocalStorageSnapshot
+    private sealed class Snapshot(TestLocalStorage storage, HashSet<string> keys) : ILocalStorageSnapshot
     {
         public StorageResult<T> Get<T>(string key)
         {
-            if (!values.TryGetValue(key, out var result))
+            EnsureRequested(key);
+            return storage.ReadProtected<T>(key);
+        }
+
+        public StorageResult<T> GetUnprotected<T>(string key)
+        {
+            EnsureRequested(key);
+            return storage.ReadUnprotected<T>(key);
+        }
+
+        private void EnsureRequested(string key)
+        {
+            if (!keys.Contains(key))
             {
                 throw new ArgumentException($"Key '{key}' was not requested when loading the snapshot.", nameof(key));
             }
-
-            return new StorageResult<T>(result.Success, (T)(result.Value ?? default(T))!)
-            {
-                ReadFailed = result.ReadFailed,
-                InvalidValue = result.InvalidValue
-            };
         }
     }
 }

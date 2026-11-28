@@ -37,6 +37,7 @@ internal sealed class InMemoryBrowserLocalStorage
         Storage = new InterceptedLocalStorage(new LocalBrowserStorage(
             jsRuntime,
             scope.ServiceProvider.GetRequiredService<ProtectedLocalStorage>(),
+            scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>(),
             NullLogger<LocalBrowserStorage>.Instance,
             scope.ServiceProvider.GetRequiredService<IOptions<CircuitOptions>>()), this);
     }
@@ -129,7 +130,7 @@ internal sealed class InMemoryBrowserLocalStorage
             return result;
         }
 
-        public Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys) => inner.ReadUnprotectedSnapshotAsync(keys);
+        public Task<ILocalStorageSnapshot> ReadSnapshotAsync(string[] keys) => inner.ReadSnapshotAsync(keys);
 
         public async Task SetAsync<TValue>(string key, TValue value)
         {
