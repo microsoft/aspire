@@ -64,7 +64,7 @@ internal sealed class DcpConnectionTestProcess(
         using var control = new NamedPipeServerStream(
             $"{readinessName}-control", PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-        // The control pipe exchanges one line per phase: "continue", "completed", then "exit".
+        // The control pipe exchanges "continue" and "completed"; the test closes it after checking cleanup.
         using var reader = new StreamReader(control, leaveOpen: true);
         var standardOutputPath = Path.Combine(workingDirectory, StandardOutputFileName);
         var standardErrorPath = Path.Combine(workingDirectory, StandardErrorFileName);
@@ -163,12 +163,14 @@ internal sealed class DcpConnectionTestProcess(
             }
         }
 
-        using var completion = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        using var writer = new StreamWriter(control, leaveOpen: true) { AutoFlush = true };
-        await writer.WriteLineAsync("completed");
+        using (var writer = new StreamWriter(control, leaveOpen: true))
+        {
+            await writer.WriteLineAsync("completed");
+        }
 
-        // Keep the parent alive so session disposal cannot be mistaken for parent-exit monitoring.
-        Assert.Equal("exit", await reader.ReadLineAsync(completion.Token));
+        // Keep the parent alive until the test finishes its bounded checks. On failure it also
+        // closes the pipe, so a separate helper deadline cannot obscure the original assertion.
+        Assert.Null(await reader.ReadLineAsync());
     }
 
     internal static CliExecutionContext CreateExecutionContext(string workingDirectory)
