@@ -37,6 +37,14 @@ namespace Aspire.Hosting
         [AspireExport("withDotnetProjectReplicas", MethodName = "withReplicas")]
         public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithReplicas(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder, int replicas) { throw null; }
     }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static partial class MsTestHostingExtensions
+    {
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Dotnet.MsTestResource> AddMsTest(this IDistributedApplicationBuilder builder, string name, string projectPath, Dotnet.MsTestOptions? options = null) { throw null; }
+    }
 }
 
 namespace Aspire.Hosting.Dotnet
@@ -45,5 +53,27 @@ namespace Aspire.Hosting.Dotnet
     public partial class DotnetProjectResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource, ApplicationModel.IDotnetProgramResource
     {
         public DotnetProjectResource(string name, string workingDirectory) : base(default!, default!, default!) { }
+    }
+
+    [AspireDto]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class MsTestOptions
+    {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public string[]? Args { get { throw null; } init { } }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public string? Configuration { get { throw null; } init { } }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public string? TargetFramework { get { throw null; } init { } }
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public partial class MsTestResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource
+    {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public MsTestResource(string name, string workingDirectory) : base(default!, default!, default!) { }
     }
 }

@@ -29,11 +29,11 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> ConfigureRadiusInfrastructure(this ApplicationModel.IResourceBuilder<Radius.RadiusEnvironmentResource> builder, System.Action<Radius.Publishing.RadiusInfrastructureOptions> configure) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS057", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport]
+        [AspireExportIgnore(Reason = "The generic WithContainerImage overload exports this operation for all .NET program resources.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> WithContainerImage(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, string image) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERADIUS057", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("withDotnetProgramContainerImage", MethodName = "withContainerImage")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithContainerImage<T>(this ApplicationModel.IResourceBuilder<T> builder, string image)
             where T : ApplicationModel.IDotnetProgramResource { throw null; }
 

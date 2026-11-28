@@ -212,6 +212,9 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes
 
         [YamlDotNet.Serialization.YamlMember(Alias = "labels", DefaultValuesHandling = YamlDotNet.Serialization.DefaultValuesHandling.OmitEmptyCollections)]
         public System.Collections.Generic.Dictionary<string, string> Labels { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string? NetworkName { get { throw null; } set { } }
     }
 
     [AspireExport(ExposeProperties = true)]

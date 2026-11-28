@@ -410,6 +410,8 @@ namespace Aspire.TypeSystem
 
     public static partial class AttributeDataReader
     {
+        public static System.TimeSpan? GetAspireCallbackTimeout(System.Reflection.ParameterInfo parameter) { throw null; }
+
         public static AspireExportData? GetAspireExportData(System.Reflection.MethodInfo method) { throw null; }
 
         public static AspireExportData? GetAspireExportData(System.Reflection.PropertyInfo property) { throw null; }
@@ -495,6 +497,7 @@ namespace Aspire.TypeSystem
 
     public static partial class HostingTypeNames
     {
+        public const string AspireCallbackTimeoutAttribute = "Aspire.Hosting.AspireCallbackTimeoutAttribute";
         public const string AspireDtoAttribute = "Aspire.Hosting.AspireDtoAttribute";
         public const string AspireExportAttribute = "Aspire.Hosting.AspireExportAttribute";
         public const string AspireExportIgnoreAttribute = "Aspire.Hosting.AspireExportIgnoreAttribute";
