@@ -159,11 +159,8 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureAISearchToolResource> AddAISearchTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, string? indexName = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible. Use the string overload instead.")]
-        public static ApplicationModel.IResourceBuilder<Foundry.AzureFunctionToolResource> AddAzureFunctionTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, string functionName, string description, System.BinaryData parameters, string inputQueueEndpoint, string inputQueueName, string outputQueueEndpoint, string outputQueueName) { throw null; }
-
         [AspireExport]
-        public static ApplicationModel.IResourceBuilder<Foundry.AzureFunctionToolResource> AddAzureFunctionTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, string functionName, string description, string parametersJson, string inputQueueEndpoint, string inputQueueName, string outputQueueEndpoint, string outputQueueName) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Foundry.AzureFunctionToolResource> AddAzureFunctionTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, Foundry.AzureFunctionToolOptions options) { throw null; }
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Foundry.BingGroundingToolResource> AddBingGroundingTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name) { throw null; }
@@ -273,6 +270,24 @@ namespace Aspire.Hosting.Foundry
         public override void SetName(global::Azure.Provisioning.CognitiveServices.CognitiveServicesProject provisionableResource, global::Azure.Provisioning.BicepValue<string> name) { }
 
         public bool TryGetAppIdentityResource(out Azure.IAppIdentityResource? identity) { throw null; }
+    }
+
+    [AspireDto]
+    public sealed partial class AzureFunctionToolOptions
+    {
+        public required string Description { get { throw null; } init { } }
+
+        public required string FunctionName { get { throw null; } init { } }
+
+        public required string InputQueueEndpoint { get { throw null; } init { } }
+
+        public required string InputQueueName { get { throw null; } init { } }
+
+        public required string OutputQueueEndpoint { get { throw null; } init { } }
+
+        public required string OutputQueueName { get { throw null; } init { } }
+
+        public required string ParametersJson { get { throw null; } init { } }
     }
 
     [AspireExport]

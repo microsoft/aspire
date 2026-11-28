@@ -8,6 +8,14 @@
 //------------------------------------------------------------------------------
 namespace Aspire.Hosting
 {
+    [System.AttributeUsage(System.AttributeTargets.Parameter)]
+    public sealed partial class AspireCallbackTimeoutAttribute : System.Attribute
+    {
+        public AspireCallbackTimeoutAttribute(int millisecondsTimeout) { }
+
+        public int MillisecondsTimeout { get { throw null; } }
+    }
+
     [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
     public sealed partial class AspireDtoAttribute : System.Attribute
     {
@@ -1736,6 +1744,20 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IResource { throw null; }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static partial class TestResourceBuilderExtensions
+    {
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<T> WithTesting<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.ResourceTestingContext, System.Threading.Tasks.Task>? callback = null)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<T> WithTestingTimeout<T>(this ApplicationModel.IResourceBuilder<T> builder, System.TimeSpan timeout)
+            where T : ApplicationModel.IResource { throw null; }
+    }
+
     public static partial class VolumeNameGenerator
     {
         public static string Generate<T>(ApplicationModel.IResourceBuilder<T> builder, string suffix)
@@ -2593,7 +2615,6 @@ namespace Aspire.Hosting.ApplicationModel
 
         public string? Entrypoint { get { throw null; } set { } }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERSHELLEXECUTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public bool? ShellExecution { get { throw null; } set { } }
     }
 
@@ -4747,6 +4768,31 @@ namespace Aspire.Hosting.ApplicationModel
         public System.IServiceProvider Services { get { throw null; } }
     }
 
+    [AspireExport]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ResourceTestingContext
+    {
+        internal ResourceTestingContext() { }
+
+        [AspireExport]
+        public System.Threading.CancellationToken CancellationToken { get { throw null; } }
+
+        [AspireExport]
+        public string OutputPath { get { throw null; } }
+
+        [AspireExport]
+        public string ResourceName { get { throw null; } }
+
+        [AspireExport]
+        public TestingContext TestingContext { get { throw null; } }
+
+        [AspireExport]
+        public void PublishResult(TestResult result) { }
+
+        [AspireExport]
+        public System.Threading.Tasks.Task<bool> WaitForCompletionAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
+    }
+
     [System.Diagnostics.DebuggerDisplay("Url = {Url}, DisplayText = {DisplayText}")]
     [AspireDto]
     public sealed partial class ResourceUrlAnnotation : IResourceAnnotation
@@ -4857,6 +4903,47 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Threading.Tasks.ValueTask DisposeAsync() { throw null; }
 
         public bool TryGetTerminal(string terminalId, out AspireTerminal? terminal) { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class TestingAnnotation : IResourceAnnotation
+    {
+        public System.TimeSpan Timeout { get { throw null; } set { } }
+    }
+
+    [AspireExport]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class TestingContext
+    {
+        internal TestingContext() { }
+
+        [AspireExport]
+        public string OutputPath { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum TestOutcome
+    {
+        Failed = 0,
+        Passed = 1,
+        Skipped = 2,
+        Inconclusive = 3,
+        Error = 4,
+        TimedOut = 5,
+        Cancelled = 6
+    }
+
+    [AspireDto]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETESTING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class TestResult
+    {
+        public System.TimeSpan? Duration { get { throw null; } init { } }
+
+        public string? Message { get { throw null; } init { } }
+
+        public required string Name { get { throw null; } init { } }
+
+        public required TestOutcome Outcome { get { throw null; } init { } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRERESOURCETRAITS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
