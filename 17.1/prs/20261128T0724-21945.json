@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-stabilization/flaky-test fix with no clear user-facing impact",
+  "mergedAt": "2026-11-28T07:24:22Z",
+  "number": 21945,
+  "runDate": "2026-11-28T12:05:00Z",
+  "status": "excluded",
+  "title": "Fix ChildProcess completion-file race that stopped RemoteHost crash-loop recovery"
+}

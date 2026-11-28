@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-stabilization/flaky-test fix with no clear user-facing impact",
+  "mergedAt": "2026-11-28T07:25:03Z",
+  "number": 22750,
+  "runDate": "2026-11-28T12:05:00Z",
+  "status": "excluded",
+  "title": "Stabilize the dashboard layout toggle test"
+}
