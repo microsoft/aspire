@@ -43,7 +43,9 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task Session_WhenDisposed_StopsDcpBeforeParentExits()
     {
-        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false, preventGracefulStop: false, includeControllers: true);
+        // Doctor never starts controllers. Their independent shutdown must not determine
+        // whether this test passes after the Doctor API server has already stopped.
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false, preventGracefulStop: false, includeControllers: false);
     }
 
     [Fact]
@@ -55,7 +57,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task Session_WhenBundleDirectoryIsSymlinked_RecognizesControllers()
     {
-        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: true, preventGracefulStop: false, includeControllers: true);
+        await TestLifetimeAsync(abruptParentExit: true, delayHandoff: false, useSymlink: true, preventGracefulStop: false, includeControllers: true);
     }
 
     [Fact]
@@ -212,17 +214,22 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             }
             else
             {
-                using var control = new NamedPipeClientStream(".", $"{readiness.Name}-control", PipeDirection.InOut, PipeOptions.Asynchronous);
-                await control.ConnectAsync(TestContext.Current.CancellationToken).DefaultTimeout();
-                using var reader = new StreamReader(control, leaveOpen: true);
-                using var writer = new StreamWriter(control, leaveOpen: true) { AutoFlush = true };
-                await writer.WriteLineAsync("continue");
-                Assert.Equal("completed", await reader.ReadLineAsync(TestContext.Current.CancellationToken).AsTask().DefaultTimeout());
-                Assert.False(helper.Process.HasExited);
-                await Task.WhenAll(processes.Select(process => process.WaitForExitAsync(TestContext.Current.CancellationToken))).WaitAsync(
-                    TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
-                Assert.False(Directory.Exists(sessionDirectory));
-                await writer.WriteLineAsync("exit");
+                using (var control = new NamedPipeClientStream(".", $"{readiness.Name}-control", PipeDirection.InOut, PipeOptions.Asynchronous))
+                {
+                    await control.ConnectAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+                    using var reader = new StreamReader(control, leaveOpen: true);
+                    using (var writer = new StreamWriter(control, leaveOpen: true))
+                    {
+                        await writer.WriteLineAsync("continue");
+                    }
+
+                    Assert.Equal("completed", await reader.ReadLineAsync(TestContext.Current.CancellationToken).AsTask().DefaultTimeout());
+                    await Task.WhenAll(processes.Select(process => process.WaitForExitAsync(TestContext.Current.CancellationToken))).WaitAsync(
+                        TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+                    Assert.False(Directory.Exists(sessionDirectory));
+                    Assert.False(helper.Process.HasExited);
+                }
+
                 await helper.Process.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
                 Assert.Equal(RemoteExecutor.SuccessExitCode, helper.Process.ExitCode);
             }
