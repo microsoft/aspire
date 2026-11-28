@@ -1148,7 +1148,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(28);
             stage = "reinserted-reverse-order";
             await AssertGeometryAsync("Comfortable");
-            // OrderStore survives browser contexts; choose a movable child in the actual order.
+            // The saved resource order survives browser contexts; choose a movable child in the actual order.
             var siblings = page.Locator(".resource-row[data-resource-parent='api']");
             var expectedOrder = await siblings.EvaluateAllAsync<string[]>("rows => rows.map(row => row.dataset.resourceName)");
             Assert.True(expectedOrder.Length >= 2);

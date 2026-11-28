@@ -8,29 +8,141 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Dashboard.Model;
 
 /// <summary>
-/// Stores explicit resource and group moves per application in protected browser local storage.
+/// Stores how the user arranges resources per application in protected browser local storage: explicit resource and
+/// group moves, and which resources and groups are collapsed.
 /// </summary>
-public sealed class ResourceOrderStore
+/// <remarks>
+/// Every view of resources in a circuit shares this store, so a change made in one view, such as collapsing a resource
+/// in the resources pane, is published to the others.
+/// </remarks>
+public sealed class ResourceDisplayStore
 {
     // Bound the saved history so typical protected values fit within the dashboard's Blazor receive limit.
     private const int MaxSavedMoves = 50;
 
+    private readonly ILocalStorage _localStorage;
+    private readonly LocalStorageLocks _locks;
+    private readonly IDashboardClient _dashboardClient;
+    private readonly ILogger<ResourceDisplayStore> _logger;
     private readonly LocalStorageSetting<List<RelativeOrderMove>> _resourceOrder;
     private readonly LocalStorageSetting<Dictionary<string, List<RelativeOrderMove>>> _groupOrder;
+    private readonly Lock _collapsedStateLock = new();
+    private CollapsedState? _collapsedState;
 
-    public ResourceOrderStore(ILocalStorage localStorage, LocalStorageLocks locks, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
+    public ResourceDisplayStore(ILocalStorage localStorage, LocalStorageLocks locks, IDashboardClient dashboardClient, IOptions<DashboardOptions> options, ILogger<ResourceDisplayStore> logger)
     {
+        _localStorage = localStorage;
+        _locks = locks;
+        _dashboardClient = dashboardClient;
+        _logger = logger;
+
         var applicationName = options.Value.GetApplicationNameOrDefault();
         _resourceOrder = new(localStorage, locks, BrowserStorageKeys.ResourceOrderKey(applicationName), logger, protect: true,
-            NormalizeResourceOrder, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
+            NormalizeResourceOrder, (x, y) => x.SequenceEqual(y), OnChanged);
         _groupOrder = new(localStorage, locks, BrowserStorageKeys.GroupOrderKey(applicationName), logger, protect: true,
             NormalizeGroupOrder, (x, y) => x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var moves) && pair.Value.SequenceEqual(moves)),
-            () => Changed?.Invoke());
+            OnChanged);
     }
 
     public event Action? Changed;
 
-    public Task EnsureLoadedAsync() => Task.WhenAll(_resourceOrder.EnsureLoadedAsync(), _groupOrder.EnsureLoadedAsync());
+    /// <summary>
+    /// Loads the stored order and collapsed state with one browser call. Collapsed state is scoped to the resource
+    /// service's application name, so when the client is enabled this waits until it's connected.
+    /// </summary>
+    public async Task EnsureLoadedAsync()
+    {
+        if (_dashboardClient.IsEnabled)
+        {
+            await _dashboardClient.WhenConnected.ConfigureAwait(false);
+        }
+
+        var collapsedState = GetCollapsedState();
+        await ILocalStorageSetting.EnsureAllLoadedAsync(_localStorage,
+            [_resourceOrder, _groupOrder, collapsedState.ResourceNames, collapsedState.Groups]).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets whether the children of the resource with the specified <see cref="ResourceViewModel.PersistentKey"/> are collapsed.
+    /// </summary>
+    public bool IsResourceCollapsed(string persistentKey) =>
+        GetCollapsedState().ResourceNames.Read(names => names.Contains(persistentKey, StringComparers.ResourceName));
+
+    /// <summary>
+    /// Gets whether the resource pane group or section with the specified key is collapsed.
+    /// </summary>
+    public bool IsGroupCollapsed(string groupKey) =>
+        GetCollapsedState().Groups.Read(groups => groups.Contains(groupKey, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Collapses or expands the children of the resources with the specified <see cref="ResourceViewModel.PersistentKey"/> values.
+    /// </summary>
+    /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
+    public Task<bool> SetResourcesCollapsedAsync(IEnumerable<string> persistentKeys, bool collapsed) =>
+        SetCollapsedAsync(GetCollapsedState().ResourceNames, persistentKeys.ToList(), collapsed, StringComparers.ResourceName);
+
+    /// <summary>
+    /// Collapses or expands the resource pane group or section with the specified key.
+    /// </summary>
+    /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
+    public Task<bool> SetGroupCollapsedAsync(string groupKey, bool collapsed) =>
+        SetCollapsedAsync(GetCollapsedState().Groups, [groupKey], collapsed, StringComparer.OrdinalIgnoreCase);
+
+    private static async Task<bool> SetCollapsedAsync(LocalStorageSetting<List<string>> setting, List<string> keys, bool collapsed, StringComparer comparer)
+    {
+        // Skip the storage round trips when the value is already what's requested.
+        if (setting.Read(stored => keys.All(key => stored.Contains(key, comparer) == collapsed)))
+        {
+            return true;
+        }
+
+        var result = await setting.UpdateAsync(stored =>
+        {
+            var changed = false;
+            foreach (var key in keys)
+            {
+                if (collapsed && !stored.Contains(key, comparer))
+                {
+                    stored.Add(key);
+                    changed = true;
+                }
+                else if (!collapsed)
+                {
+                    changed |= stored.RemoveAll(item => comparer.Equals(item, key)) > 0;
+                }
+            }
+
+            return changed ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged;
+        }).ConfigureAwait(false);
+        return result != SettingUpdateResult.NotSaved;
+    }
+
+    private CollapsedState GetCollapsedState()
+    {
+        // The application name changes when the client connects and when another run is selected, and collapsed state
+        // follows it. The state for the previous name is dropped and loaded again if that name is selected again.
+        var applicationName = _dashboardClient.ApplicationName;
+        lock (_collapsedStateLock)
+        {
+            if (_collapsedState is null || !StringComparer.Ordinal.Equals(_collapsedState.ApplicationName, applicationName))
+            {
+                _collapsedState = new CollapsedState(
+                    applicationName,
+                    CreateCollapsedSetting(BrowserStorageKeys.CollapsedResourceNamesKey(applicationName), StringComparers.ResourceName),
+                    CreateCollapsedSetting(BrowserStorageKeys.CollapsedResourceGroupsKey(applicationName), StringComparer.OrdinalIgnoreCase));
+            }
+
+            return _collapsedState;
+        }
+    }
+
+    private LocalStorageSetting<List<string>> CreateCollapsedSetting(string key, StringComparer comparer) =>
+        new(_localStorage, _locks, key, _logger, protect: true,
+            stored => stored?.OfType<string>().Distinct(comparer).ToList() ?? [],
+            (x, y) => x.Count == y.Count && x.ToHashSet(comparer).SetEquals(y),
+            OnChanged);
+
+    private void OnChanged() => Changed?.Invoke();
 
     public List<ResourceViewModel> OrderResources(IEnumerable<ResourceViewModel> resources)
     {
@@ -261,6 +373,8 @@ public sealed class ResourceOrderStore
             }
         }
     }
+
+    private sealed record CollapsedState(string ApplicationName, LocalStorageSetting<List<string>> ResourceNames, LocalStorageSetting<List<string>> Groups);
 }
 
 /// <summary>

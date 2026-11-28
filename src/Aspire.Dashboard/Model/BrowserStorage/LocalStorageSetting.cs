@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Model.BrowserStorage;
 /// A failed read prevents writing a partial value. Failed saves are not retried.
 /// If the stored value is invalid for the selected protection mode, the next successful edit replaces it.
 /// </remarks>
-internal sealed class LocalStorageSetting<TValue> where TValue : class
+internal sealed class LocalStorageSetting<TValue> : ILocalStorageSetting where TValue : class
 {
     private static readonly TimeSpan s_saveLockTimeout = TimeSpan.FromSeconds(10);
 
@@ -55,7 +55,23 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         }
     }
 
-    public Task EnsureLoadedAsync()
+    public bool IsLoadStarted
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _loadTask is not null;
+            }
+        }
+    }
+
+    public Task EnsureLoadedAsync() => EnsureLoadedAsync(snapshot: null);
+
+    /// <summary>
+    /// Loads the value from <paramref name="snapshot"/>, which must include <see cref="Key"/>, unless a load has already started.
+    /// </summary>
+    public Task EnsureLoadedAsync(Task<ILocalStorageSnapshot>? snapshot)
     {
         TaskCompletionSource? loaded = null;
         Task loadTask;
@@ -72,7 +88,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         // Even when the browser answers synchronously, notify listeners outside the state lock.
         if (loaded is not null)
         {
-            _ = LoadAsync(loaded);
+            _ = LoadAsync(loaded, snapshot);
         }
 
         return loadTask;
@@ -136,7 +152,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         return result;
     }
 
-    private async Task LoadAsync(TaskCompletionSource loaded)
+    private async Task LoadAsync(TaskCompletionSource loaded, Task<ILocalStorageSnapshot>? snapshot)
     {
         try
         {
@@ -146,7 +162,9 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
                 loadVersion = _storageVersion;
             }
 
-            var result = await ReadStoredAsync().ConfigureAwait(false);
+            var result = snapshot is null
+                ? await ReadStoredAsync().ConfigureAwait(false)
+                : ReadStored(await snapshot.ConfigureAwait(false));
             if (result.ReadFailed)
             {
                 // Load again when another view asks, for example after the circuit reconnects.
@@ -183,6 +201,10 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         ? _localStorage.GetAsync<TValue>(Key)
         : _localStorage.GetUnprotectedAsync<TValue>(Key);
 
+    private StorageResult<TValue> ReadStored(ILocalStorageSnapshot snapshot) => _protect
+        ? snapshot.Get<TValue>(Key)
+        : snapshot.GetUnprotected<TValue>(Key);
+
     private bool Adopt(TValue value, long? loadVersion)
     {
         lock (_lock)
@@ -201,6 +223,29 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
             _value = value;
             return changed;
         }
+    }
+}
+
+internal interface ILocalStorageSetting
+{
+    string Key { get; }
+
+    bool IsLoadStarted { get; }
+
+    Task EnsureLoadedAsync(Task<ILocalStorageSnapshot>? snapshot);
+
+    /// <summary>
+    /// Loads the settings that haven't started loading with one browser call.
+    /// </summary>
+    static Task EnsureAllLoadedAsync(ILocalStorage localStorage, IReadOnlyList<ILocalStorageSetting> settings)
+    {
+        var pendingKeys = settings.Where(setting => !setting.IsLoadStarted).Select(setting => setting.Key).ToArray();
+        var snapshot = pendingKeys.Length > 0 ? localStorage.ReadSnapshotAsync(pendingKeys) : null;
+
+        // A setting that started loading since the check above ignores the snapshot. A setting that wasn't pending
+        // must not be given the snapshot, because its key wasn't requested.
+        return Task.WhenAll(settings.Select(setting =>
+            setting.EnsureLoadedAsync(pendingKeys.Contains(setting.Key, StringComparer.Ordinal) ? snapshot : null)));
     }
 }
 

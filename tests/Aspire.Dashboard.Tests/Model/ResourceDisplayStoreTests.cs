@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class ResourceOrderStoreTests
+public sealed class ResourceDisplayStoreTests
 {
     private static readonly string s_resourceKey = BrowserStorageKeys.ResourceOrderKey("TestApp");
     private static readonly string s_groupKey = BrowserStorageKeys.GroupOrderKey("TestApp");
@@ -315,6 +315,56 @@ public sealed class ResourceOrderStoreTests
         Assert.Equal(["worker", "api"], GetNames(await CreateLoadedStoreAsync(), CreateResource("api"), CreateResource("worker")));
     }
 
+    [Fact]
+    public async Task Collapsed_LoadsWithOrderInOneSnapshotAndKeepsExistingValues()
+    {
+        await _browser.Storage.SetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceNamesKey("ClientApp"), ["api_0"]);
+        await _browser.Storage.SetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceGroupsKey("ClientApp"), ["Tags:web"]);
+
+        var store = await CreateLoadedStoreAsync();
+
+        Assert.Equal(1, _browser.SnapshotReadCount);
+        Assert.True(store.IsResourceCollapsed("api_0"));
+        Assert.False(store.IsResourceCollapsed("worker_0"));
+        Assert.True(store.IsGroupCollapsed("tags:WEB"));
+        Assert.False(store.IsGroupCollapsed("None:web"));
+    }
+
+    [Fact]
+    public async Task Collapsed_ChangesArePublishedSavedAndScopedToTheClientApplication()
+    {
+        var store = await CreateLoadedStoreAsync();
+        var changedCount = 0;
+        store.Changed += () => changedCount++;
+
+        Assert.True(await store.SetResourcesCollapsedAsync(["api_0", "worker_0"], collapsed: true));
+        Assert.True(await store.SetResourcesCollapsedAsync(["api_0"], collapsed: false));
+        Assert.True(await store.SetGroupCollapsedAsync("section:telemetry", collapsed: true));
+
+        Assert.Equal(3, changedCount);
+        Assert.Equal(["worker_0"], (await _browser.Storage.GetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceNamesKey("ClientApp"))).Value);
+        Assert.Equal(["section:telemetry"], (await _browser.Storage.GetAsync<List<string>>(BrowserStorageKeys.CollapsedResourceGroupsKey("ClientApp"))).Value);
+
+        var reloaded = await CreateLoadedStoreAsync();
+        Assert.False(reloaded.IsResourceCollapsed("api_0"));
+        Assert.True(reloaded.IsResourceCollapsed("worker_0"));
+        Assert.True(reloaded.IsGroupCollapsed("section:telemetry"));
+
+        var otherApplication = await CreateLoadedStoreAsync("OtherApp");
+        Assert.False(otherApplication.IsResourceCollapsed("worker_0"));
+        Assert.False(otherApplication.IsGroupCollapsed("section:telemetry"));
+    }
+
+    [Fact]
+    public async Task Collapsed_ReturnsFalseWhenNotSavedAndKeepsTheCurrentValue()
+    {
+        var store = await CreateLoadedStoreAsync();
+        _browser.FailWrites = true;
+
+        Assert.False(await store.SetResourcesCollapsedAsync(["api_0"], collapsed: true));
+        Assert.False(store.IsResourceCollapsed("api_0"));
+    }
+
     private static ResourceViewModel CreateResource(string name, string resourceType = "Project", int? order = null, string? parent = null, string? displayName = null)
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>();
@@ -332,16 +382,17 @@ public sealed class ResourceOrderStoreTests
         return ModelTestHelpers.CreateResource(name, displayName: displayName, resourceType: resourceType, properties: properties);
     }
 
-    private static string[] GetNames(ResourceOrderStore store, params ResourceViewModel[] resources) =>
+    private static string[] GetNames(ResourceDisplayStore store, params ResourceViewModel[] resources) =>
         store.OrderResources(resources).Select(resource => resource.Name).ToArray();
 
-    private static List<string> OrderGroups(ResourceOrderStore store, string grouping, params string[] groups) =>
+    private static List<string> OrderGroups(ResourceDisplayStore store, string grouping, params string[] groups) =>
         store.OrderGroups(grouping, groups.ToList(), key => key);
 
-    private async Task<ResourceOrderStore> CreateLoadedStoreAsync()
+    private async Task<ResourceDisplayStore> CreateLoadedStoreAsync(string clientApplicationName = "ClientApp")
     {
-        var store = new ResourceOrderStore(_browser.Storage, _locks,
-            Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceOrderStore>.Instance);
+        var store = new ResourceDisplayStore(_browser.Storage, _locks,
+            new TestDashboardClient(isEnabled: true, applicationName: clientApplicationName),
+            Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceDisplayStore>.Instance);
         await store.EnsureLoadedAsync().DefaultTimeout();
         return store;
     }
