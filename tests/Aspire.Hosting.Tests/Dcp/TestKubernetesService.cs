@@ -37,7 +37,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     public string StoppedContainerState { get; set; } = ContainerState.Exited;
 
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
-    private readonly Func<CustomResource, string, bool?, Stream> _startStream;
+    private readonly Func<CustomResource, string, bool?, long?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private int _cleanupResourcesCallCount;
     private readonly Action<CustomResource>? _beforeCreate;
@@ -60,12 +60,15 @@ internal sealed class TestKubernetesService : IKubernetesService
         bool allocateServiceAddresses = true,
         Action<Type, int>? watchStarted = null,
         Func<WatchEventContext, CancellationToken, Task>? beforeWatchEventAsync = null,
-        Func<WatchEventContext, CancellationToken, Task>? afterWatchEventAsync = null)
+        Func<WatchEventContext, CancellationToken, Task>? afterWatchEventAsync = null,
+        Func<CustomResource, string, bool?, long?, Stream>? startStreamWithSkip = null)
     {
-        _startStream = startStreamWithFollow ??
-            (startStream is not null
-                ? (obj, logStreamType, follow) => startStream(obj, logStreamType)
-                : (obj, logStreamType, follow) => new MemoryStream(Encoding.UTF8.GetBytes($"Logs for {obj.Metadata.Name} ({logStreamType})")));
+        _startStream = startStreamWithSkip ??
+            (startStreamWithFollow is not null
+                ? (obj, logStreamType, follow, skip) => startStreamWithFollow(obj, logStreamType, follow)
+                : startStream is not null
+                    ? (obj, logStreamType, follow, skip) => startStream(obj, logStreamType)
+                    : (obj, logStreamType, follow, skip) => new MemoryStream(Encoding.UTF8.GetBytes($"Logs for {obj.Metadata.Name} ({logStreamType})")));
         _ignoreDeletes = ignoreDeletes;
         _beforeCreate = beforeCreate;
         _beforeCreateAsync = beforeCreateAsync;
@@ -380,7 +383,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         long? skip = null
     ) where T : CustomResource, IKubernetesStaticMetadata
     {
-        return Task.FromResult(_startStream(obj, logStreamType, follow));
+        return Task.FromResult(_startStream(obj, logStreamType, follow, skip));
     }
 
     public Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata

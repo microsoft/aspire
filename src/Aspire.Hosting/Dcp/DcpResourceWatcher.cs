@@ -502,7 +502,21 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             // process log stream to follow. Use a current snapshot there to avoid blocking terminal
             // state publication indefinitely. A later changed terminal notification retries the
             // snapshot because, unlike a completed follow stream, it cannot prove all logs were drained.
-            var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: follow);
+            //
+            // When this resource already has a live follow stream (the usual case, because the flush only
+            // runs for resources with active subscribers), every line it has delivered is already visible
+            // to subscribers. Skip those lines so the flush reads only the undelivered tail instead of the
+            // resource's entire log. Without this, the flush cost grows with total log size, and because it
+            // runs under the output semaphore, stopping N chatty resources serializes N full log re-reads.
+            // See https://github.com/microsoft/aspire/issues/22757.
+            //
+            // Lines the live stream has read but not yet delivered are not counted, so the flush reads them
+            // again. That overlap is the same one the pending follow-log deduplication below already handles.
+            var skipLineCounts = _logStreams.TryGetValue(resource.Metadata.Name, out var liveLogStream) &&
+                HasSameResourceIdentity(liveLogStream.ResourceUid, resource.Metadata.Uid)
+                    ? liveLogStream.GetDeliveredLineCounts()
+                    : null;
+            var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: follow, skipLineCounts: skipLineCounts);
 
             // Treat the flush as best-effort: logs collected before the timeout are still forwarded
             // below, then the terminal notification is allowed to proceed.
@@ -602,15 +616,15 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>? enumerable = null;
         if (_resourceState.ContainersMap.TryGetValue(resourceName, out var container))
         {
-            enumerable = new ResourceLogSource<Container>(_logger, _kubernetesService, container, follow: false);
+            enumerable = new ResourceLogSource<Container>(_logger, _kubernetesService, container, follow: false, skipLineCounts: null);
         }
         else if (_resourceState.ExecutablesMap.TryGetValue(resourceName, out var executable))
         {
-            enumerable = new ResourceLogSource<Executable>(_logger, _kubernetesService, executable, follow: false);
+            enumerable = new ResourceLogSource<Executable>(_logger, _kubernetesService, executable, follow: false, skipLineCounts: null);
         }
         else if (_resourceState.ContainerExecsMap.TryGetValue(resourceName, out var containerExec))
         {
-            enumerable = new ResourceLogSource<ContainerExec>(_logger, _kubernetesService, containerExec, follow: false);
+            enumerable = new ResourceLogSource<ContainerExec>(_logger, _kubernetesService, containerExec, follow: false, skipLineCounts: null);
         }
 
         if (enumerable != null)
@@ -649,9 +663,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     {
         IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>? enumerable = resource switch
         {
-            Container c when c.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true),
-            Executable e when e.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true),
-            ContainerExec e when e.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true),
+            Container c when c.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true, skipLineCounts: null),
+            Executable e when e.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true, skipLineCounts: null),
+            ContainerExec e when e.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true, skipLineCounts: null),
             _ => null
         };
 
@@ -698,7 +712,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                             await beforeLogBatchDeliveryAsync(logStream.ResourceUid).ConfigureAwait(false);
                         }
 
-                        logStream.TryDeliver(() =>
+                        logStream.TryDeliver(batch, () =>
                         {
                             logEntries = DeduplicateFollowBatch(resourceName, logStream, logEntries);
                             _loggerService.AddLogEntries(resourceName, logEntries, inMemorySource: false, skipExisting: false);
@@ -1156,6 +1170,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         private readonly object _lock = new();
         private readonly CancellationTokenSource _cancellation = new();
         private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Number of lines delivered to subscribers from each DCP log source, keyed by stream type.
+        // The live stream reads every source from the start of its capture file, so these are also
+        // the line offsets a later read of the same resource incarnation can skip.
+        private readonly Dictionary<string, long> _deliveredLineCounts = new(StringComparer.Ordinal);
         private bool _disposed;
 
         public CancellationToken CancellationToken
@@ -1177,7 +1195,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         // Access is guarded by the owning DcpResourceWatcher's pending-deduplication lock.
         public PendingFollowLogDeduplication? PendingDeduplication { get; set; }
 
-        public bool TryDeliver(Action deliver)
+        public bool TryDeliver(IReadOnlyList<ResourceLogEntry> batch, Action deliver)
         {
             lock (_lock)
             {
@@ -1189,7 +1207,28 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 // Cancellation takes this same lock, so reset cannot free the resource-name slot
                 // until a delivery that already started has finished publishing synchronously.
                 deliver();
+
+                // Count after delivery and under the same lock as GetDeliveredLineCounts so a terminal
+                // flush never skips a line that subscribers have not received yet. Entries removed by
+                // follow-log deduplication still count: the count is a position in DCP's capture file,
+                // not a number of lines added to the backlog.
+                foreach (var entry in batch)
+                {
+                    if (entry.StreamType is { } streamType)
+                    {
+                        _deliveredLineCounts[streamType] = _deliveredLineCounts.GetValueOrDefault(streamType) + 1;
+                    }
+                }
+
                 return true;
+            }
+        }
+
+        public Dictionary<string, long> GetDeliveredLineCounts()
+        {
+            lock (_lock)
+            {
+                return new(_deliveredLineCounts, StringComparer.Ordinal);
             }
         }
 
