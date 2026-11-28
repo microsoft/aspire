@@ -3036,6 +3036,128 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceLogging_TerminalLogFlushSkipsLinesDeliveredByLiveFollowStream()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        // The capture file DCP would hold for stdout once the container exits. The live follow stream
+        // delivers the first two lines before the exit; the third is written just before the exit.
+        string[] stdoutFileLines =
+        [
+            "2024-08-19T06:10:31.000000000Z line1",
+            "2024-08-19T06:10:32.000000000Z line2",
+            "2024-08-19T06:10:33.000000000Z line3"
+        ];
+        var liveStdOutPipe = new Pipe();
+        var terminalStdOutSkip = new TaskCompletionSource<long?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liveStdOutStreamCount = 0;
+        var kubernetesService = new TestKubernetesService(startStreamWithSkip: (obj, logStreamType, follow, skip) =>
+        {
+            if (logStreamType != Logs.StreamTypeStdOut)
+            {
+                return new MemoryStream();
+            }
+
+            if (obj is Container { Status.State: ContainerState.Exited })
+            {
+                terminalStdOutSkip.TrySetResult(skip);
+
+                // Mirror DCP: skip drops the first N newline-terminated lines of the capture file.
+                var remainingLines = stdoutFileLines.Skip((int)(skip ?? 0));
+                return new MemoryStream(Encoding.UTF8.GetBytes(string.Concat(remainingLines.Select(l => l + "\n"))));
+            }
+
+            // Only the first live follow stream reads the pipe; a pipe reader cannot be shared.
+            return Interlocked.Increment(ref liveStdOutStreamCount) == 1
+                ? liveStdOutPipe.Reader.AsStream()
+                : new MemoryStream();
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceLoggerService = new ResourceLoggerService();
+        var logLines = new List<LogLine>();
+        var logLinesLock = new object();
+        var terminalLogsAtNotification = new TaskCompletionSource<string[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? dcpResourceName = null;
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.DcpResourceName == dcpResourceName && context.Status.State == ContainerState.Exited)
+            {
+                lock (logLinesLock)
+                {
+                    terminalLogsAtNotification.TrySetResult([.. logLines.Where(IsStdOutLine).Select(GetMessage)]);
+                }
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, resourceLoggerService: resourceLoggerService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        dcpResourceName = container.Metadata.Name;
+
+        using var subscription = resourceLoggerService.Subscribe(dcpResourceName, batch =>
+        {
+            lock (logLinesLock)
+            {
+                logLines.AddRange(batch);
+            }
+        });
+
+        try
+        {
+            container.Status = new ContainerStatus { State = ContainerState.Running };
+            kubernetesService.PushResourceModified(container);
+
+            await liveStdOutPipe.Writer.WriteAsync(Encoding.UTF8.GetBytes(stdoutFileLines[0] + "\n" + stdoutFileLines[1] + "\n"));
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
+            {
+                lock (logLinesLock)
+                {
+                    return logLines.Count(IsStdOutLine) == 2;
+                }
+            },
+            "The live follow stream should deliver the lines written while the container runs.");
+
+            container.Status = new ContainerStatus { State = ContainerState.Exited };
+            kubernetesService.PushResourceModified(container);
+
+            // Only the undelivered tail is read back from DCP, and it is visible before the terminal state.
+            Assert.Equal(2, await terminalStdOutSkip.Task.DefaultTimeout());
+            Assert.Equal(["line1", "line2", "line3"], await terminalLogsAtNotification.Task.DefaultTimeout());
+
+            // The live stream then reaches the same line. It overlaps with the flush and must not be duplicated.
+            await liveStdOutPipe.Writer.WriteAsync(Encoding.UTF8.GetBytes(stdoutFileLines[2] + "\n"));
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => !appExecutor.ResourceWatcher.HasLogStreamPendingDeduplication(dcpResourceName),
+                "The live follow stream should consume the flushed overlap.");
+
+            lock (logLinesLock)
+            {
+                Assert.Equal(["line1", "line2", "line3"], logLines.Where(IsStdOutLine).Select(GetMessage));
+            }
+        }
+        finally
+        {
+            liveStdOutPipe.Writer.Complete();
+        }
+
+        // The subscriber also receives in-memory AppHost log lines for the resource; only DCP stdout is under test.
+        // Forwarded lines are formatted as "<timestamp> <message>", for example "2024-08-19T06:10:31.0000000Z line1".
+        static bool IsStdOutLine(LogLine logLine) => GetMessage(logLine).StartsWith("line", StringComparison.Ordinal);
+        static string GetMessage(LogLine logLine) => logLine.Content[(logLine.Content.IndexOf(' ') + 1)..];
+    }
+
+    [Fact]
     public async Task ResourceLogging_FollowStreamDeduplicatesOnlyPendingTerminalFlush()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions

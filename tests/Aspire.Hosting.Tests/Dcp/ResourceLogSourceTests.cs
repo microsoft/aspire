@@ -43,7 +43,8 @@ public sealed class ResourceLogSourceTests
             NullLogger.Instance,
             kubernetesService,
             executable,
-            follow: false);
+            follow: false,
+            skipLineCounts: null);
         var entries = new List<ResourceLogEntry>();
 
         await foreach (var batch in logSource)
@@ -86,7 +87,8 @@ public sealed class ResourceLogSourceTests
             NullLogger.Instance,
             kubernetesService,
             executable,
-            follow);
+            follow,
+            skipLineCounts: null);
         using var cancellationTokenSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
         var entries = new List<ResourceLogEntry>();
 
@@ -105,5 +107,46 @@ public sealed class ResourceLogSourceTests
         Assert.Equal(
             ["startup stderr", "startup stdout", "system"],
             entries.Select(entry => entry.Content).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task SkipLineCountsArePassedPerStreamAndEntriesAreTaggedWithTheirStream()
+    {
+        var executable = Executable.Create("app", "command");
+
+        var requestedSkips = new ConcurrentDictionary<string, long?>();
+        var kubernetesService = new TestKubernetesService(startStreamWithSkip: (_, streamType, _, skip) =>
+        {
+            requestedSkips[streamType] = skip;
+            return new MemoryStream(Encoding.UTF8.GetBytes(streamType + Environment.NewLine));
+        });
+        var logSource = new ResourceLogSource<Executable>(
+            NullLogger.Instance,
+            kubernetesService,
+            executable,
+            follow: false,
+            skipLineCounts: new Dictionary<string, long>
+            {
+                [Logs.StreamTypeStdOut] = 3,
+                [Logs.StreamTypeStdErr] = 0
+            });
+        var entries = new List<ResourceLogEntry>();
+
+        await foreach (var batch in logSource)
+        {
+            entries.AddRange(batch);
+        }
+
+        // DCP rejects skip values below 1, so streams with nothing to skip omit the option.
+        Assert.Equal(
+            [
+                new(Logs.StreamTypeStartupStdErr, null),
+                new(Logs.StreamTypeStartupStdOut, null),
+                new(Logs.StreamTypeStdErr, null),
+                new(Logs.StreamTypeStdOut, 3),
+                new(Logs.StreamTypeSystem, null)
+            ],
+            requestedSkips.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        Assert.All(entries, entry => Assert.Equal(entry.StreamType, entry.Content));
     }
 }

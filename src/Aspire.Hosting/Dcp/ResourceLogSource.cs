@@ -18,13 +18,19 @@ namespace Aspire.Hosting.Dcp;
 /// system log entries, where it includes the timestamp prefix so that exported lines retain their timestamps.
 /// For non-system entries, <see langword="null"/> indicates the caller should fall back to <see cref="Content"/>.
 /// </param>
-internal readonly record struct ResourceLogEntry(string Content, bool IsErrorMessage, DateTime? Timestamp = null, string? RawContent = null);
+/// <param name="StreamType">
+/// The DCP log source (for example <see cref="Logs.StreamTypeStdOut"/>) the entry was read from. Each entry is exactly
+/// one newline-delimited line of that source, so counting delivered entries per source gives the line offset to pass
+/// as DCP's <c>skip</c> option when reading the same source again.
+/// </param>
+internal readonly record struct ResourceLogEntry(string Content, bool IsErrorMessage, DateTime? Timestamp = null, string? RawContent = null, string? StreamType = null);
 
 internal sealed class ResourceLogSource<TResource>(
     ILogger logger,
     IKubernetesService kubernetesService,
     TResource resource,
-    bool follow) :
+    bool follow,
+    IReadOnlyDictionary<string, long>? skipLineCounts) :
     IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>
     where TResource : CustomResource, IKubernetesStaticMetadata
 {
@@ -60,7 +66,7 @@ internal sealed class ResourceLogSource<TResource>(
             ? [new("WorkingDirectory", executable.Spec.WorkingDirectory)]
             : null;
 
-        async Task StreamLogsAsync(Stream stream, bool isError, bool parseDcpLogs)
+        async Task StreamLogsAsync(Stream stream, string streamType, bool isError, bool parseDcpLogs)
         {
             try
             {
@@ -88,7 +94,7 @@ internal sealed class ResourceLogSource<TResource>(
                     {
                         line = NormalizeCarriageReturns(rawLine);
                     }
-                    var succeeded = channel.Writer.TryWrite(new ResourceLogEntry(line, lineIsError, timestamp, rawContent));
+                    var succeeded = channel.Writer.TryWrite(new ResourceLogEntry(line, lineIsError, timestamp, rawContent, streamType));
                     if (!succeeded)
                     {
                         logger.LogWarning("Failed to write log entry to channel. Logs for {Kind} {Name} may be incomplete", resource.Kind, resource.Metadata.Name);
@@ -112,13 +118,13 @@ internal sealed class ResourceLogSource<TResource>(
         {
             var streamTasks = new List<Task>();
 
-            var startupStderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-            var startupStdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+            var startupStderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdErr, cancellationToken, follow: follow, timestamps: true, skip: GetSkip(Logs.StreamTypeStartupStdErr)).ConfigureAwait(false);
+            var startupStdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdOut, cancellationToken, follow: follow, timestamps: true, skip: GetSkip(Logs.StreamTypeStartupStdOut)).ConfigureAwait(false);
 
-            var startupStdoutStreamTask = Task.Run(() => StreamLogsAsync(startupStdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
+            var startupStdoutStreamTask = Task.Run(() => StreamLogsAsync(startupStdoutStream, Logs.StreamTypeStartupStdOut, isError: false, parseDcpLogs: false), cancellationToken);
             streamTasks.Add(startupStdoutStreamTask);
 
-            var startupStderrStreamTask = Task.Run(() => StreamLogsAsync(startupStderrStream, isError: false, parseDcpLogs: false), cancellationToken);
+            var startupStderrStreamTask = Task.Run(() => StreamLogsAsync(startupStderrStream, Logs.StreamTypeStartupStdErr, isError: false, parseDcpLogs: false), cancellationToken);
             streamTasks.Add(startupStderrStreamTask);
 
             // Terminal-backed Executables bridge stdout/stderr through the PTY instead of DCP log files.
@@ -126,19 +132,19 @@ internal sealed class ResourceLogSource<TResource>(
             // https://github.com/microsoft/dcp/blob/main/internal/logs/stdiologs/stdio_log_streamer.go
             if (resource is not Executable { Spec.Terminal: not null })
             {
-                var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-                var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+                var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true, skip: GetSkip(Logs.StreamTypeStdOut)).ConfigureAwait(false);
+                var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true, skip: GetSkip(Logs.StreamTypeStdErr)).ConfigureAwait(false);
 
-                var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
+                var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, Logs.StreamTypeStdOut, isError: false, parseDcpLogs: false), cancellationToken);
                 streamTasks.Add(stdoutStreamTask);
 
-                var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, isError: true, parseDcpLogs: false), cancellationToken);
+                var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, Logs.StreamTypeStdErr, isError: true, parseDcpLogs: false), cancellationToken);
                 streamTasks.Add(stderrStreamTask);
             }
 
-            var systemStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeSystem, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+            var systemStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeSystem, cancellationToken, follow: follow, timestamps: true, skip: GetSkip(Logs.StreamTypeSystem)).ConfigureAwait(false);
 
-            var systemStreamTask = Task.Run(() => StreamLogsAsync(systemStream, isError: false, parseDcpLogs: true), cancellationToken);
+            var systemStreamTask = Task.Run(() => StreamLogsAsync(systemStream, Logs.StreamTypeSystem, isError: false, parseDcpLogs: true), cancellationToken);
             streamTasks.Add(systemStreamTask);
 
             // End the enumeration when all streams have been read to completion.
@@ -159,6 +165,17 @@ internal sealed class ResourceLogSource<TResource>(
         {
             ownedCts?.Dispose();
         }
+    }
+
+    private long? GetSkip(string streamType)
+    {
+        // DCP's skip option drops the first N newline-terminated lines of the source's capture file
+        // before streaming. KubernetesService.GetLogStreamAsync rejects values below 1, so omit the
+        // option when nothing should be skipped.
+        // https://github.com/microsoft/dcp/blob/main/pkg/io/timestamp_aware_reader.go (skipIfRequested)
+        return skipLineCounts is not null && skipLineCounts.TryGetValue(streamType, out var count) && count > 0
+            ? count
+            : null;
     }
 
     private static async IAsyncEnumerable<string> ReadLogLinesAsync(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken)
