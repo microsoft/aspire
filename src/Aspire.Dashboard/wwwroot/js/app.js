@@ -92,8 +92,29 @@ customElements.define = function (name, constructor, options) {
     }
 };
 
+// The most UTF-8 bytes of JSON-encoded values getLocalStorageItems returns in one call. The result is sent through the
+// Blazor circuit, which rejects messages over its 64 KiB receive limit (MaximumReceiveMessageSize in
+// DashboardWebApplication.cs). The rest of the limit leaves room for the message's own overhead.
+const maxLocalStorageItemsResponseBytes = 60 * 1024;
+const localStorageItemsEncoder = new TextEncoder();
+
+// Returns the stored values for the leading keys whose JSON-encoded UTF-8 size fits in
+// maxLocalStorageItemsResponseBytes, and always at least one. A single larger value is returned on its own, the same as
+// reading it with localStorage.getItem. The caller requests the keys after the returned values in another call.
 function getLocalStorageItems(keys) {
-    return keys.map(key => localStorage.getItem(key));
+    const values = [];
+    let size = 0;
+    for (const key of keys) {
+        const value = localStorage.getItem(key);
+        // Count the value as it's encoded in the JSON array, including its quotes, escapes and separating comma.
+        const valueSize = localStorageItemsEncoder.encode(JSON.stringify(value)).length + 1;
+        if (values.length > 0 && size + valueSize > maxLocalStorageItemsResponseBytes) {
+            break;
+        }
+        values.push(value);
+        size += valueSize;
+    }
+    return values;
 }
 
 function isElementTagName(element, tagName) {

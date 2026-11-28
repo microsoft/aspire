@@ -382,6 +382,48 @@ public sealed class ResourceDisplayStoreTests
         Assert.False(store.IsResourceCollapsed("api_0"));
     }
 
+    [Fact]
+    public async Task Collapsed_ChangeWhileThePreviousChangeIsSavingIsNotDropped()
+    {
+        var store = await CreateLoadedStoreAsync();
+        var firstWriteStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writeCount = 0;
+        _browser.OnAfterWriteAsync = () =>
+        {
+            if (Interlocked.Increment(ref writeCount) > 1)
+            {
+                return Task.CompletedTask;
+            }
+
+            firstWriteStarted.SetResult();
+            return releaseFirstWrite.Task;
+        };
+
+        var collapseResource = store.SetResourcesCollapsedAsync(["api_0"], collapsed: true);
+        await firstWriteStarted.Task.DefaultTimeout();
+        var expandResource = store.SetResourcesCollapsedAsync(["api_0"], collapsed: false);
+        releaseFirstWrite.SetResult();
+        Assert.True(await collapseResource.DefaultTimeout());
+        Assert.True(await expandResource.DefaultTimeout());
+
+        writeCount = 0;
+        firstWriteStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        releaseFirstWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var collapseGroup = store.SetGroupCollapsedAsync("Tags", "web", collapsed: true);
+        await firstWriteStarted.Task.DefaultTimeout();
+        var expandGroup = store.SetGroupCollapsedAsync("Tags", "web", collapsed: false);
+        releaseFirstWrite.SetResult();
+        Assert.True(await collapseGroup.DefaultTimeout());
+        Assert.True(await expandGroup.DefaultTimeout());
+
+        Assert.False(store.IsResourceCollapsed("api_0"));
+        Assert.False(store.IsGroupCollapsed("Tags", "web"));
+        var reloaded = await CreateLoadedStoreAsync();
+        Assert.False(reloaded.IsResourceCollapsed("api_0"));
+        Assert.False(reloaded.IsGroupCollapsed("Tags", "web"));
+    }
+
     private static ResourceViewModel CreateResource(string name, string resourceType = "Project", int? order = null, string? parent = null, string? displayName = null)
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>();

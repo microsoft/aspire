@@ -27,7 +27,8 @@ public interface ILocalStorage : IBrowserStorage
     /// </summary>
     Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key);
     /// <summary>
-    /// Loads the requested keys from local storage in one browser call. Values are decoded when read from the
+    /// Loads the requested keys from local storage, in one browser call unless the values are too large to return
+    /// together. Values are decoded when read from the
     /// snapshot: protected values with <see cref="ILocalStorageSnapshot.Get{TValue}(string)"/> and unprotected values
     /// with <see cref="ILocalStorageSnapshot.GetUnprotected{TValue}(string)"/>.
     /// </summary>

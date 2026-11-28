@@ -82,14 +82,15 @@ public sealed class ResourceDisplayStore
     public async Task<bool> SetResourcesCollapsedAsync(IEnumerable<string> persistentKeys, bool collapsed)
     {
         var keys = persistentKeys.ToList();
-        var setting = GetCollapsedState().ResourceNames;
-        // Skip the storage round trips when the value is already what's requested.
-        if (setting.Read(stored => keys.All(key => stored.Contains(key, StringComparers.ResourceName) == collapsed)))
+        if (keys.Count == 0)
         {
             return true;
         }
 
-        var result = await setting.UpdateAsync(stored =>
+        // UpdateAsync reports no change without writing when the stored value already matches. The cached value isn't
+        // checked first because a previous change to the same keys can still be saving, and the cache doesn't include it
+        // until the save completes.
+        var result = await GetCollapsedState().ResourceNames.UpdateAsync(stored =>
             SetCollapsed(stored, keys, collapsed, StringComparers.ResourceName) ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged).ConfigureAwait(false);
         return result != SettingUpdateResult.NotSaved;
     }
@@ -100,13 +101,9 @@ public sealed class ResourceDisplayStore
     /// <returns><see langword="false"/> if the change couldn't be saved to browser storage, otherwise <see langword="true"/>.</returns>
     public async Task<bool> SetGroupCollapsedAsync(string grouping, string key, bool collapsed)
     {
-        var setting = GetCollapsedState().Groups;
-        if (setting.Read(groups => IsGroupCollapsed(groups, grouping, key) == collapsed))
-        {
-            return true;
-        }
-
-        var result = await setting.UpdateAsync(groups =>
+        // Like SetResourcesCollapsedAsync, the cached value isn't checked first so a change made while a previous one
+        // is saving isn't dropped.
+        var result = await GetCollapsedState().Groups.UpdateAsync(groups =>
         {
             if (!groups.TryGetValue(grouping, out var keys))
             {

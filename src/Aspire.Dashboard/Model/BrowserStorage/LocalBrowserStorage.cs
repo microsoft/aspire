@@ -59,7 +59,23 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
         keys = keys.ToArray();
         var result = await ReadAsync("local storage snapshot", async () =>
         {
-            var values = await _jsRuntime.InvokeAsync<string?[]>("getLocalStorageItems", (object)keys).ConfigureAwait(false);
+            // Usually every value fits in one response. getLocalStorageItems limits how much it returns so the response
+            // fits in a circuit message, and large values are returned over several calls, each starting with the
+            // first key the previous response left out.
+            var values = new string?[keys.Length];
+            var readCount = 0;
+            while (readCount < keys.Length)
+            {
+                var batch = await _jsRuntime.InvokeAsync<string?[]>("getLocalStorageItems", (object)keys[readCount..]).ConfigureAwait(false);
+                if (batch.Length == 0 || readCount + batch.Length > keys.Length)
+                {
+                    throw new JSException($"Expected between 1 and {keys.Length - readCount} local storage values but got {batch.Length}.");
+                }
+
+                batch.CopyTo(values, readCount);
+                readCount += batch.Length;
+            }
+
             return new StorageResult<string?[]>(true, values);
         }).ConfigureAwait(false);
 

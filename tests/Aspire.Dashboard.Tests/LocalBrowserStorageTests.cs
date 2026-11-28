@@ -58,6 +58,28 @@ public class LocalBrowserStorageTests
     }
 
     [Fact]
+    public async Task ReadSnapshot_LargeValuesAreReadOverSeveralCalls()
+    {
+        var browser = new InMemoryBrowserLocalStorage();
+        var large = new string('a', InMemoryBrowserLocalStorage.MaxSnapshotResponseBytes * 3 / 4);
+        var larger = new string('b', InMemoryBrowserLocalStorage.MaxSnapshotResponseBytes + 1);
+        browser.Items["Small"] = "1";
+        browser.Items["Large"] = $"\"{large}\"";
+        browser.Items["Larger"] = $"\"{larger}\"";
+        browser.Items["Last"] = "2";
+
+        var snapshot = await browser.Storage.ReadSnapshotAsync(["Small", "Large", "Larger", "Last", "Missing"]);
+
+        // Small and Large fit together, Larger exceeds the budget on its own, and the rest fit in the final call.
+        Assert.Equal(3, browser.SnapshotReadCount);
+        Assert.Equal(1, snapshot.GetUnprotected<int>("Small").Value);
+        Assert.Equal(large, snapshot.GetUnprotected<string>("Large").Value);
+        Assert.Equal(larger, snapshot.GetUnprotected<string>("Larger").Value);
+        Assert.Equal(2, snapshot.GetUnprotected<int>("Last").Value);
+        Assert.False(snapshot.GetUnprotected<int>("Missing").Success);
+    }
+
+    [Fact]
     public async Task ReadSnapshot_ReadFailureIsNotAnUnrequestedKey()
     {
         var browser = new InMemoryBrowserLocalStorage { FailReads = true };
